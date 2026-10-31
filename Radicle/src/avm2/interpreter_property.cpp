@@ -356,7 +356,11 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
     }
     return fail(InterpreterStatus::CannotCall,
                 "no property " + property_text(multiname) + " on a " +
-                    object_kind_name(receiver.kind()));
+                    object_kind_name(receiver.kind()) +
+                    (receiver.kind() == ObjectKind::Class &&
+                             static_cast<const ClassObject&>(receiver).represented_class() != nullptr
+                         ? " (" + static_cast<const ClassObject&>(receiver).represented_class()->name + ")"
+                         : ""));
   }
   if (lookup.kind == LookupKind::Method) {
     if (lookup.trait == nullptr || lookup.trait->function == nullptr) {

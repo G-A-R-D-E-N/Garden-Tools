@@ -467,6 +467,8 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   if (runtime_movie->root_ == nullptr) {
     return fail("the root clip could not be built");
   }
+  // The document class constructor reads stage, so the root must be on the stage first.
+  stage->add_child(runtime_movie->root_);
   if (runtime_movie->root_class_ != nullptr) {
     runtime_movie->root_class_->apply_slot_defaults(*runtime_movie->root_);
     const ExecutionResult prepare_result =
@@ -491,7 +493,6 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   }
   runtime_movie->playing_ = options.start_playing;
   runtime_movie->root_->set_playing(runtime_movie->playing_);
-  stage->add_child(runtime_movie->root_);
   const ExecutionResult first_frame =
       runtime_movie->root_->goto_frame(interpreter, 1, runtime_movie->playing_);
   if (!first_frame.ok()) {

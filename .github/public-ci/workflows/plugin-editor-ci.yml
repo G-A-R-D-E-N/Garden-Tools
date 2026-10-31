@@ -1,40 +1,21 @@
 name: plugin-editor-ci
 
-# Managed (C#) tests for PluginEditTool. native-ci.yml covers the native/CTest build and ignores these paths.
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "PluginEditTool/FO4RecordEditor*/**"
-      - "PluginEditTool/Mutagen/**"
-      - "PluginEditTool/README.md"
-      - "PluginEditTool/docs/MCP_SETUP.md"
-      - "PluginEditTool/native/apps/fo4ide/McpTools.cpp"
-      - ".github/workflows/plugin-editor-ci.yml"
-  pull_request:
-    paths:
-      - "PluginEditTool/FO4RecordEditor*/**"
-      - "PluginEditTool/Mutagen/**"
-      - "PluginEditTool/README.md"
-      - "PluginEditTool/docs/MCP_SETUP.md"
-      - "PluginEditTool/native/apps/fo4ide/McpTools.cpp"
-      - ".github/workflows/plugin-editor-ci.yml"
-  workflow_dispatch:
+    branches: ["ci/**"]
 
 permissions:
   contents: read
 
-# A newer push cancels pull request and branch runs; main runs always finish.
 concurrency:
-  group: plugin-editor-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   windows:
     name: Managed tests (Windows)
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2022
     timeout-minutes: 60
     # GitVersion.MsBuild needs full git history, which the shallow checkout lacks; the tests do not use the version.
     env:
@@ -44,15 +25,12 @@ jobs:
         shell: cmd
         working-directory: PluginEditTool
     steps:
-      # Full URL gives this workflow its own action cache; the shared actions/checkout cache races with native-ci's Windows job (shallow.lock).
       - name: Check out repository
-        uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # The 10.0 SDK builds both targets; the 9.0 SDK supplies the exact 9.0.19 runtime the net9.0-windows test host needs.
       - name: Set up pinned .NET SDKs
-        uses: https://github.com/actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
-        env:
-          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet-10.0.401-9.0.317
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: |
             10.0.401
@@ -70,37 +48,20 @@ jobs:
       - name: Build FO4RecordEditor.Core.Tests
         run: dotnet build FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-restore
 
-      # The runner's home folder is a reparse point, which the archive path-safety checks refuse; keep temp files under the job's temp folder.
       - name: Test FO4RecordEditor.Tests
-        env:
-          TEMP: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
         run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=windows-tests.trx" --results-directory ../TestResults
 
       - name: Test FO4RecordEditor.Core.Tests
         if: ${{ !cancelled() }}
-        env:
-          TEMP: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
         run: dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=windows-core-tests.trx" --results-directory ../TestResults
 
       - name: Stop .NET build servers
         if: always()
         run: dotnet build-server shutdown
 
-      - name: Upload test results on failure
-        if: failure()
-        continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
-        with:
-          name: plugin-editor-windows-failure
-          path: TestResults/**
-          if-no-files-found: ignore
-          retention-days: 3
-
   linux:
     name: Core managed tests (Linux)
-    runs-on: [self-hosted, Linux, X64, garden]
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     # GitVersion.MsBuild needs full git history, which the shallow checkout lacks; the tests do not use the version.
     env:
@@ -111,12 +72,10 @@ jobs:
         working-directory: PluginEditTool
     steps:
       - name: Check out repository
-        uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up pinned .NET SDK
-        uses: https://github.com/actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
-        env:
-          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet-10.0.401
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 10.0.401
 
@@ -133,12 +92,28 @@ jobs:
         if: always()
         run: dotnet build-server shutdown
 
-      - name: Upload test results on failure
-        if: failure()
-        continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
+  report:
+    name: Report to the private PR
+    needs: [windows, linux]
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    environment: garden-tools-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          name: plugin-editor-linux-failure
-          path: TestResults/**
-          if-no-files-found: ignore
-          retention-days: 3
+          persist-credentials: false
+
+      - name: Post the result as a commit status on the private commit
+        env:
+          GH_TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          source=$(git log -1 --format=%B | sed -n 's/^Source-Commit: \([0-9a-f]\{40\}\)$/\1/p')
+          [ -n "$source" ] || { echo "::error::no Source-Commit trailer"; exit 1; }
+          failed=$(jq -r 'to_entries | map(select(.value.result != "success" and .value.result != "skipped") | .key) | join(", ")' <<<"$NEEDS")
+          if [ -n "$failed" ]; then state=failure; description="failed: $failed"; else state=success; description="passed"; fi
+          gh api "repos/G-A-R-D-E-N/GardenTools/statuses/$source" -f state="$state" \
+            -f context="public-ci/plugin-editor-ci" -f target_url="$RUN_URL" -f description="${description:0:140}" >/dev/null
+          echo "$state posted for plugin-editor-ci ($description)"

@@ -237,6 +237,7 @@ class MovieClip : public DisplayObjectContainer {
   std::uint32_t total_frames() const noexcept;
   bool playing() const noexcept { return playing_; }
   void set_playing(bool playing) noexcept { playing_ = playing; }
+  void set_frame_script(std::uint32_t frame, std::shared_ptr<FunctionObject> script);
 
   /* Requires a linked runtime; the result reports a failed frame script by status. */
   ExecutionResult goto_frame(Interpreter& interpreter, std::uint32_t frame, bool play);
@@ -254,6 +255,7 @@ class MovieClip : public DisplayObjectContainer {
   ExecutionResult run_frame_script(Interpreter& interpreter);
 
   std::shared_ptr<TimelineDefinition> timeline_;
+  std::map<std::uint32_t, std::shared_ptr<FunctionObject>> added_frame_scripts_;
   std::uint32_t current_frame_{1};
   bool playing_{true};
 };
