@@ -118,10 +118,22 @@ std::optional<std::string_view> stored_string(const Reader& reader, Signature si
   return *value;
 }
 
+// Tolerant link: a duplicate or non-4-byte RVIS must decode as absent instead of throwing.
+std::optional<FormKey> first_link(const Reader& reader, Signature signature) {
+  const Subrecord* found = nullptr;
+  for (const auto& sub : reader.ref().record->subrecords) {
+    if (sub.signature != signature) continue;
+    if (found != nullptr || sub.data.size() != 4) return std::nullopt;
+    found = &sub;
+  }
+  if (found == nullptr) return std::nullopt;
+  return reader.link_at(*found, 0);
+}
+
 void decode_cell_extras(const Reader& reader, CellData& data) {
   if (const auto* visi = reader.sized(k_visi, 2)) data.previs_timestamp = Reader::u16(*visi, 0);
   if (const auto* pcmb = reader.sized(k_pcmb, 2)) data.precombined_timestamp = Reader::u16(*pcmb, 0);
-  data.previs_root = reader.link(k_rvis);
+  data.previs_root = first_link(reader, k_rvis);
   data.regions = link_list(reader, k_xclr);
   data.previs_references = link_list(reader, k_xpri);
   data.acoustic_space = reader.link(k_xcas);

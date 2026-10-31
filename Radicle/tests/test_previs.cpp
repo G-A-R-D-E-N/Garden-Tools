@@ -658,6 +658,40 @@ TEST_F(PrevisLoadOrderTest, ArchiveEntryLosesToLooseFile) {
   EXPECT_EQ(data.summary().oc_nif_files, 1u);
 }
 
+// Regression: a malformed or duplicate RVIS must not make decode_cell throw for the water caller.
+TEST_F(PrevisLoadOrderTest, MalformedRvisStaysTolerantForWater) {
+  const auto odd_size = en::rec(
+      "CELL", 0x800,
+      {{"DATA", {std::byte{0x01}, std::byte{0x00}}},
+       {"VISI", {std::byte{0x34}, std::byte{0x12}}},
+       {"RVIS", {std::byte{0x01}}},
+       {"RVIS", en::bytes_of({0x801})}});
+  const auto duplicate = en::rec(
+      "CELL", 0x801,
+      {{"DATA", {std::byte{0x01}, std::byte{0x00}}},
+       {"VISI", {std::byte{0x34}, std::byte{0x12}}},
+       {"RVIS", en::bytes_of({0x802})},
+       {"RVIS", en::bytes_of({0x803})}});
+  const auto plugin_path = write(
+      "Tolerant.esp",
+      en::make_plugin({}, {en::top("CELL", {en::grp(0, 2, {en::grp(0, 3, {odd_size, duplicate})})})}));
+  const std::filesystem::path paths[]{plugin_path};
+  const auto env = fo4::env::Environment::load(paths);
+  const auto key = [&env](std::uint32_t local) {
+    return fo4::FormKey{env.plugins()[0].key, fo4::LocalFormId{local}};
+  };
+  EXPECT_NO_THROW(fo4::env::resolve_water(env, *env.winner(key(0x800))));
+  EXPECT_NO_THROW(fo4::env::resolve_water(env, *env.winner(key(0x801))));
+
+  const auto report = fo4::previs::diagnose_load_order(env, fo4::previs::LoadOrderIndexes{});
+  for (const auto local : {0x800u, 0x801u}) {
+    const auto* entry = find_cell(report, local);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_FALSE(entry->input.has_rvis);
+    EXPECT_FALSE(entry->status.broken);
+  }
+}
+
 namespace {
 
 std::vector<std::byte> make_xcri_version_plugin() {
