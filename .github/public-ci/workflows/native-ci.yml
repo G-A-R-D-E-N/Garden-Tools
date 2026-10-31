@@ -513,13 +513,7 @@ jobs:
           }
 
       - name: Native MCP smoke
-        shell: powershell
-        run: |
-          $cache = 'build\fo4ide-package\CMakeCache.txt'
-          $python = (Select-String -Path $cache -Pattern '^Python3_EXECUTABLE:FILEPATH=(.+)$').Matches.Groups[1].Value
-          if (-not $python) { throw "Python3_EXECUTABLE was not found in $cache" }
-          & $python PluginEditTool\native\tests\native_mcp_smoke.py build\fo4ide-package\bin\FO4RecordEditor.exe
-          exit $LASTEXITCODE
+        run: python PluginEditTool\native\tests\native_mcp_smoke.py build\fo4ide-package\bin\FO4RecordEditor.exe
 
       # The web build and the staging rules live in package.ps1; -BuildDir reuses
       # the tree built above instead of compiling a second Visual Studio tree.
