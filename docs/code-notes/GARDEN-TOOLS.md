@@ -2674,9 +2674,9 @@ The `garden-tools-ci` environment's branch rule must be `ci/**`: `ci/*` does not
 
 `WINDOWS_EXPORT_ALL_SYMBOLS` exports every external symbol in the objects, including unreferenced inline COMDATs. The first hosted FO4IDE package build failed with `LNK1189: library limit of 65535 objects exceeded` on MSVC 14.44, so `fo4` compiles with `/Zc:inline`, which drops those from each object. If the count reaches the limit again, export only the symbols the editor imports instead of all of them.
 
-## .github/public-ci/workflows/public-ci-cleanup.yml:delete-branch
+## .github/public-ci/workflows/public-ci-cleanup.yml:cleanup
 
-Public `ci/*` branches exist only while their runs do: `delete-branch` waits for every run of the pushed commit, then deletes the branch unless a newer export moved it. `cleanup` keeps a branch's newest runs for three days so failure logs stay readable.
+Public `ci/*` branches exist only while their runs do: `.github/workflows/delete-finished-ci-branches.yml` on public `main` deletes finished ones every 30 minutes. Never hold a runner to wait, because waiting jobs starve the org's 20 hosted slots. `cleanup` keeps a branch's newest runs for three days so failure logs stay readable.
 
 ## .github/scripts/fetch-private-fixtures.sh:Radicle/docs/FO4_PARITY.md
 
