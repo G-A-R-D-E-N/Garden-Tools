@@ -108,8 +108,7 @@ broken cells, which are true vanilla gaps, not false verdicts:
 - 14 cells have XCRI but no CDX row: Fallout4 3, DLCCoast 4, DLCNukaWorld 7.
 - 18 cells carry 538 XCRI OC ids with no `_OC.NIF`: Fallout4 3 ids,
   DLCCoast 8, DLCNukaWorld 527.
-- 18 cells have no CSG geometry as a consequence (the same three plus the
-  same five and nine cells).
+- 18 cells have no CSG geometry as a consequence (the same 18 cells).
 - 359 cells in 65 cluster roots have VISI plus RVIS but no tome: Fallout4 3
   (1 root), DLCCoast 94 (17 roots), DLCNukaWorld 262 (47 roots). Those
   clusters ship no `.uvd` at all, and their own cluster cells share the gap.

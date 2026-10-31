@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <filesystem>
 #include <string_view>
 
 namespace fo4ide::rpc {

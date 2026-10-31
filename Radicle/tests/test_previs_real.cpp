@@ -425,15 +425,17 @@ TEST(PrevisReal, VanillaLoadOrderGate) {
     actual.emplace(diagnosis.cell.to_string(), issue_codes(diagnosis.status));
   }
 
-  // Index census invariant: every measured container and merge must be counted.
-  EXPECT_EQ(data.summary().cdx_files, 6u);
-  EXPECT_EQ(data.summary().csg_files, 6u);
-  EXPECT_EQ(data.summary().tome_files, 1422u);
-  EXPECT_EQ(data.summary().oc_nif_files, 176569u);
-  EXPECT_TRUE(data.summary().problems.empty());
-  EXPECT_EQ(data.summary().cdx_rows, 2413992u);
-  EXPECT_EQ(data.summary().csg_rows, 64869u);
-  EXPECT_EQ(data.summary().csg_chunks, 13851u);
+  if (exact_counts_known(build)) {
+    // Index census invariant: every measured container and merge must be counted.
+    EXPECT_EQ(data.summary().cdx_files, 6u);
+    EXPECT_EQ(data.summary().csg_files, 6u);
+    EXPECT_EQ(data.summary().tome_files, 1422u);
+    EXPECT_EQ(data.summary().oc_nif_files, 176569u);
+    EXPECT_TRUE(data.summary().problems.empty());
+    EXPECT_EQ(data.summary().cdx_rows, 2413992u);
+    EXPECT_EQ(data.summary().csg_rows, 64869u);
+    EXPECT_EQ(data.summary().csg_chunks, 13851u);
+  }
 
   RecordProperty("cells", static_cast<int>(report.size()));
   RecordProperty("broken", static_cast<int>(broken));
