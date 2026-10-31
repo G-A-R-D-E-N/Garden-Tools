@@ -259,12 +259,12 @@ abc::AbcFile document_file(const std::string& super_package, const std::string& 
   return file;
 }
 
-fo4::avm2::Value global_value(fo4::avm2::Runtime& runtime, const std::string& name) {
+fo4::avm2::Value global_value(const fo4::avm2::Object& global, const std::string& name) {
   fo4::avm2::Multiname multiname;
   multiname.name = name;
   multiname.namespaces.push_back(fo4::avm2::Namespace{});
   fo4::avm2::Value value;
-  runtime.global_object()->read_value(multiname, value);
+  global.read_value(multiname, value);
   return value;
 }
 
@@ -281,7 +281,7 @@ TEST(Avm2DocumentClass, StageIsReadableInTheDocumentConstructor) {
   const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
       fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
   ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
-  const fo4::avm2::Value seen = global_value(runtime, "stageSeen");
+  const fo4::avm2::Value seen = global_value(*runtime.global_object(), "stageSeen");
   ASSERT_TRUE(seen.is_object());
   EXPECT_EQ(seen.as_object().get(), static_cast<fo4::avm2::Object*>(movie->stage().get()));
 }
@@ -346,7 +346,8 @@ TEST(Avm2DocumentClass, ScriptOfAnEarlierBlockCanNameAClassFromALaterBlock) {
   const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
       fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
   ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
-  const fo4::avm2::Value value = global_value(runtime, "laterSeen");
+  ASSERT_NE(runtime.scripts()[0].global, nullptr);
+  const fo4::avm2::Value value = global_value(*runtime.scripts()[0].global, "laterSeen");
   ASSERT_TRUE(value.is_object());
   ASSERT_EQ(value.as_object()->kind(), fo4::avm2::ObjectKind::Class);
   const fo4::avm2::Class* found =
@@ -396,7 +397,7 @@ TEST(Avm2DocumentClass, FrameOneChildrenExistWhenTheDocumentConstructorRuns) {
   ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
   const std::shared_ptr<fo4::avm2::DisplayObject> placed = movie->root()->child_by_name("List_mc");
   ASSERT_NE(placed, nullptr);
-  const fo4::avm2::Value seen = global_value(runtime, "childSeen");
+  const fo4::avm2::Value seen = global_value(*runtime.global_object(), "childSeen");
   ASSERT_TRUE(seen.is_object());
   EXPECT_EQ(seen.as_object().get(), static_cast<fo4::avm2::Object*>(placed.get()));
 }
@@ -415,7 +416,7 @@ TEST(Avm2DocumentClass, PlacedChildFillsADeclaredSlotOfTheSameName) {
   ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
   const std::shared_ptr<fo4::avm2::DisplayObject> placed = movie->root()->child_by_name("List_mc");
   ASSERT_NE(placed, nullptr);
-  const fo4::avm2::Value seen = global_value(runtime, "childSeen");
+  const fo4::avm2::Value seen = global_value(*runtime.global_object(), "childSeen");
   ASSERT_TRUE(seen.is_object());
   EXPECT_EQ(seen.as_object().get(), static_cast<fo4::avm2::Object*>(placed.get()));
 }
@@ -432,5 +433,5 @@ TEST(Avm2DocumentClass, PlacedChildIsNotStoredInASlotOfAnUnrelatedType) {
   const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
       fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
   ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
-  EXPECT_FALSE(global_value(runtime, "childSeen").is_object());
+  EXPECT_FALSE(global_value(*runtime.global_object(), "childSeen").is_object());
 }

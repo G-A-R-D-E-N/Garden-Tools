@@ -677,7 +677,8 @@ TEST(Avm2Events, BoundMethodFromACalledMethodKeepsItsReceiverAlive) {
   ASSERT_TRUE(interpreter.run_script(0).ok());
 
   Value bound;
-  ASSERT_TRUE(runtime.global_object()->read_value(public_name("bound"), bound));
+  ASSERT_NE(runtime.scripts()[0].global, nullptr);
+  ASSERT_TRUE(runtime.scripts()[0].global->read_value(public_name("bound"), bound));
   ASSERT_TRUE(bound.is_object());
   holder_property.value = Value::undefined();
   holder.reset();

@@ -1,5 +1,7 @@
 #include <fo4/avm2/runtime.hpp>
 
+#include "runtime_internal.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -36,26 +38,6 @@ NamespaceKind map_namespace_kind(abc::AbcNamespaceKind kind) {
   return NamespaceKind::Namespace;
 }
 
-TraitKind map_trait_kind(abc::AbcTraitKind kind) {
-  switch (kind) {
-    case abc::AbcTraitKind::Slot:
-      return TraitKind::Slot;
-    case abc::AbcTraitKind::Method:
-      return TraitKind::Method;
-    case abc::AbcTraitKind::Getter:
-      return TraitKind::Getter;
-    case abc::AbcTraitKind::Setter:
-      return TraitKind::Setter;
-    case abc::AbcTraitKind::Class:
-      return TraitKind::Class;
-    case abc::AbcTraitKind::Function:
-      return TraitKind::Function;
-    case abc::AbcTraitKind::Const:
-      return TraitKind::Const;
-  }
-  return TraitKind::Slot;
-}
-
 std::string class_key(NamespaceKind kind, std::string_view name_space, std::string_view local_name) {
   std::string key;
   key += static_cast<char>(static_cast<std::uint8_t>(kind));
@@ -79,34 +61,6 @@ std::string instance_key(const abc::AbcFile& file, std::uint32_t instance_index)
   key += '#';
   key += std::to_string(instance_index);
   return key;
-}
-
-Value trait_default_value(const abc::AbcFile& file, const abc::AbcTrait& trait) {
-  if (trait.value_index == 0) {
-    return Value::undefined();
-  }
-  return constant_value(file, trait.value_kind, trait.value_index);
-}
-
-void number_auto_slots(std::vector<Trait>& traits, std::uint32_t first) {
-  std::unordered_set<std::uint32_t> taken;
-  for (const Trait& trait : traits) {
-    if (trait.is_slot_like() && trait.slot_id != 0) {
-      taken.insert(trait.slot_id);
-    }
-  }
-  std::uint32_t next = first;
-  for (Trait& trait : traits) {
-    if (!trait.is_slot_like() || trait.slot_id != 0) {
-      continue;
-    }
-    while (taken.count(next) != 0) {
-      ++next;
-    }
-    trait.slot_id = next;
-    taken.insert(next);
-    ++next;
-  }
 }
 
 void assign_auto_slot_ids(Class& klass, std::unordered_set<Class*>& pending) {
@@ -263,6 +217,12 @@ RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, M
 }
 
 Runtime::Runtime() : global_object_(std::make_shared<Object>()) {}
+
+Runtime::~Runtime() {
+  for (const std::shared_ptr<FunctionObject>& function : script_functions_) {
+    function->captured_scope().clear();
+  }
+}
 
 std::uint32_t Runtime::register_sound(SoundResource resource) {
   const std::uint32_t id = next_sound_id_++;
@@ -616,65 +576,6 @@ void Runtime::register_class_global(Class& klass) {
     property.kind = PropertyKind::Value;
     property.value = Value::object(klass.class_object);
   }
-}
-
-RuntimeStatus Runtime::build_script_globals() {
-  for (FileState& state : files_) {
-    if (state.scripts_registered) {
-      continue;
-    }
-    state.scripts_registered = true;
-    const abc::AbcFile& file = *state.file;
-    for (std::uint32_t script_index = 0; script_index < file.scripts.size(); ++script_index) {
-      const abc::AbcScriptInfo& script = file.scripts[script_index];
-      scripts_.push_back(ScriptEntry{&file, script.init, script_index});
-      for (const abc::AbcTrait& source : script.traits) {
-        Trait trait;
-        if (resolve_multiname(file, source.name, trait.multiname) != RuntimeStatus::Ok) {
-          return RuntimeStatus::InvalidMultiname;
-        }
-        trait.kind = map_trait_kind(source.kind);
-        Value value = Value::undefined();
-        switch (trait.kind) {
-          case TraitKind::Class: {
-            const Class* nested = class_for_instance(file, source.class_index);
-            if (nested == nullptr) {
-              return RuntimeStatus::InvalidTrait;
-            }
-            value = Value::object(nested->class_object);
-            break;
-          }
-          case TraitKind::Function: {
-            std::shared_ptr<FunctionObject> function =
-                function_for_method(file, source.class_index,
-                                    file.method_name(source.class_index));
-            if (function == nullptr) {
-              return RuntimeStatus::InvalidTrait;
-            }
-            value = Value::object(function);
-            break;
-          }
-          case TraitKind::Slot:
-          case TraitKind::Const:
-            value = trait_default_value(file, source);
-            break;
-          default:
-            break;
-        }
-        if (!trait.multiname.has_fixed_name() || trait.multiname.namespaces.empty()) {
-          continue;
-        }
-        Property& property = global_object_->define_own_property(primary_key(trait.multiname));
-        property.kind = PropertyKind::Value;
-        property.value = value;
-      }
-    }
-  }
-  for (Class* klass : classes_) {
-    register_class_global(*klass);
-    klass->slot_count = klass->compute_slot_count();
-  }
-  return RuntimeStatus::Ok;
 }
 
 Class* Runtime::class_for_instance(const abc::AbcFile& file, std::uint32_t instance_index) const {

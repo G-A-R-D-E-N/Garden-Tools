@@ -53,12 +53,13 @@ struct ScriptEntry {
   const abc::AbcFile* file{nullptr};
   std::uint32_t init_method{0};
   std::uint32_t script_index{0};
+  std::shared_ptr<Object> global;
 };
 
 class Runtime {
  public:
   Runtime();
-  ~Runtime() = default;
+  ~Runtime();
 
   Runtime(const Runtime&) = delete;
   Runtime& operator=(const Runtime&) = delete;
@@ -164,6 +165,7 @@ class Runtime {
   std::unordered_map<std::string, Class*> class_by_instance_;
   std::unordered_map<const Class*, Class*> vector_classes_;
   std::vector<ScriptEntry> scripts_;
+  std::vector<std::shared_ptr<FunctionObject>> script_functions_;
   std::shared_ptr<Object> global_object_;
   std::shared_ptr<FontRegistry> fonts_{std::make_shared<FontRegistry>()};
   HostBridge host_;

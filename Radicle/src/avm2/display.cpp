@@ -257,12 +257,12 @@ ExecutionResult MovieClip::advance_frame(Interpreter& interpreter) {
 }
 
 ExecutionResult MovieClip::advance_timeline(Interpreter& interpreter, std::size_t depth) {
-  if (!playing_) {
-    return ExecutionResult{};
+  const bool stepping = playing_;
+  if (stepping) {
+    step_playhead();
   }
-  step_playhead();
   ExecutionResult placement = apply_frame_state(interpreter, depth, true);
-  if (!placement.ok()) {
+  if (!placement.ok() || !stepping) {
     return placement;
   }
   return run_frame_script(interpreter, depth);

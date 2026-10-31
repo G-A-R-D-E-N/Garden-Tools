@@ -580,4 +580,62 @@ TEST(Avm2StageEvents, SiblingCreatedByANestedGotoIsNotAdvancedOnItsCreationTick)
   EXPECT_EQ(static_cast<fo4::avm2::MovieClip&>(*created).current_frame(), 1u);
 }
 
+TEST(Avm2StageEvents, StoppedParentStepsItsPlayingChildOnceAndRerunsNoFrameScript) {
+  Scene scene;
+  const std::uint32_t stop_name = scene.script.multiname("stop");
+  avm2_test::CodeBuilder root_code;
+  log_tag(scene, root_code, "root.1,");
+  root_code.getlocal0();
+  root_code.callpropvoid(stop_name, 0);
+  root_code.returnvoid();
+  const std::uint32_t root_frame1 = scene.script.method("rootFrame1", root_code.bytes(), 1);
+  avm2_test::CodeBuilder child_code;
+  log_tag(scene, child_code, "child.2,");
+  child_code.returnvoid();
+  const std::uint32_t child_frame2 = scene.script.method("childFrame2", child_code.bytes(), 1);
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes());
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(child_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<DisplayObject> child = movie->root()->child_at(0);
+  ASSERT_NE(child, nullptr);
+  movie->root()->set_frame_script(1, std::make_shared<FunctionObject>("rootFrame1", &scene.file,
+                                                                      root_frame1));
+  static_cast<fo4::avm2::MovieClip&>(*child).set_frame_script(
+      2, std::make_shared<FunctionObject>("childFrame2", &scene.file, child_frame2));
+  ASSERT_TRUE(movie->root()->run_frame_actions(*scene.interpreter).ok());
+  ASSERT_FALSE(movie->root()->playing());
+
+  movie->advance(*scene.interpreter, 1.0 / 12.0);
+  EXPECT_EQ(movie->root()->current_frame(), 1u);
+  EXPECT_EQ(static_cast<fo4::avm2::MovieClip&>(*child).current_frame(), 2u);
+  EXPECT_EQ(scene.log(), "root.1,child.2,");
+}
+
+TEST(Avm2StageEvents, StoppedParentDoesNotResetAChildTheScriptMoved) {
+  Scene scene;
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes());
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(child_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<DisplayObject> child = movie->root()->child_at(0);
+  ASSERT_NE(child, nullptr);
+  movie->root()->set_playing(false);
+  child->set_x(99.0);
+
+  movie->advance(*scene.interpreter, 1.0 / 12.0);
+  EXPECT_EQ(static_cast<fo4::avm2::MovieClip&>(*child).current_frame(), 2u);
+  EXPECT_EQ(child->x(), 99.0);
+}
+
 }  // namespace

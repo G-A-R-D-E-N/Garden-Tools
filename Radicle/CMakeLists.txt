@@ -417,6 +417,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/class.cpp
   src/avm2/runtime.cpp
   src/avm2/runtime_link.cpp
+  src/avm2/runtime_traits.cpp
   src/avm2/domain.cpp
   src/avm2/interpreter.cpp
   src/avm2/interpreter_ops.cpp

@@ -139,6 +139,9 @@ class SwfTimelineClip : public MovieClip {
  protected:
   ExecutionResult apply_frame_state(Interpreter& interpreter, std::size_t depth,
                                     bool advance_children) override {
+    if (advance_children && !playing()) {
+      return advance_child_clips(interpreter, depth, {}, true);
+    }
     if (rows_ == nullptr) {
       return ExecutionResult{};
     }
@@ -226,6 +229,13 @@ class SwfTimelineClip : public MovieClip {
         return added;
       }
     }
+    return advance_child_clips(interpreter, depth, just_created, advance_children);
+  }
+
+ private:
+  ExecutionResult advance_child_clips(Interpreter& interpreter, std::size_t depth,
+                                      const std::vector<std::uint16_t>& just_created,
+                                      bool advance_children) {
     std::vector<std::pair<std::uint16_t, std::shared_ptr<DisplayObject>>> sprites;
     for (const auto& [layer, object] : objects_) {
       if (sprite_clips_.count(layer) != 0) {
@@ -255,7 +265,6 @@ class SwfTimelineClip : public MovieClip {
     return ExecutionResult{};
   }
 
- private:
   ExecutionResult detach(Interpreter& interpreter, std::uint16_t layer, std::size_t depth) {
     const auto found = objects_.find(layer);
     if (found == objects_.end()) {

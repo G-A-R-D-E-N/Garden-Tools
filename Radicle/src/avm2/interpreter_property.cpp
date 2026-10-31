@@ -310,6 +310,10 @@ ExecutionResult Interpreter::set_property(Frame& frame, const std::shared_ptr<Ob
     if (!multiname.has_fixed_name()) {
       return fail(InterpreterStatus::TypeError, "initproperty needs a fixed property name");
     }
+    if (lookup.kind == LookupKind::Slot && lookup.slot < object.slots().size()) {
+      object.slots()[lookup.slot] = value;
+      return ExecutionResult{};
+    }
     Property& property = object.define_own_property(primary_key(multiname));
     property.kind = PropertyKind::Value;
     property.value = value;
@@ -347,6 +351,19 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
   for (auto current = frame.scopes.rbegin(); current != frame.scopes.rend(); ++current) {
     if (*current != nullptr && scope_has_property(*this, **current, multiname)) {
       owner = *current;
+      found = true;
+      return InterpreterStatus::Ok;
+    }
+  }
+  const std::shared_ptr<Object>& registry = runtime_.global_object_shared();
+  if (registry != nullptr && scope_has_property(*this, *registry, multiname)) {
+    owner = registry;
+    found = true;
+    return InterpreterStatus::Ok;
+  }
+  for (const ScriptEntry& script : runtime_.scripts()) {
+    if (script.global != nullptr && scope_has_property(*this, *script.global, multiname)) {
+      owner = script.global;
       found = true;
       return InterpreterStatus::Ok;
     }

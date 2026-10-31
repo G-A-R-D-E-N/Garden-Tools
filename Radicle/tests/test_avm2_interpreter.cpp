@@ -198,7 +198,8 @@ TEST(Avm2Interpreter, WritesAndReadsAGlobalThroughTheScopeChain) {
   global_name.name = "counter";
   global_name.namespaces.push_back(Namespace{NamespaceKind::Package, ""});
   Value stored;
-  ASSERT_TRUE(runtime.global_object()->read_value(global_name, stored));
+  ASSERT_NE(runtime.scripts()[0].global, nullptr);
+  ASSERT_TRUE(runtime.scripts()[0].global->read_value(global_name, stored));
   EXPECT_EQ(stored.as_int32(), 5);
 }
 
@@ -293,7 +294,8 @@ TEST(Avm2Interpreter, HandsTheGlobalObjectToAScriptInitializer) {
   const ExecutionResult result = interpreter.run_script(0);
   ASSERT_TRUE(result.ok()) << result.message;
   ASSERT_TRUE(result.value.is_object());
-  EXPECT_EQ(result.value.as_object().get(), runtime.global_object());
+  ASSERT_NE(runtime.scripts()[0].global, nullptr);
+  EXPECT_EQ(result.value.as_object().get(), runtime.scripts()[0].global.get());
 }
 
 TEST(Avm2Interpreter, CreatesAnExternalClassForAnUnresolvedPackageName) {

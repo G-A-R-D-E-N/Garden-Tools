@@ -212,21 +212,24 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
       return fail(bound, std::move(message));
     }
   }
-  if (scopes.empty()) {
-    if (!function.captured_scope().empty()) {
-      frame.scopes = function.captured_scope();
-    } else {
-      const std::shared_ptr<Object>& global = runtime_.global_object_shared();
-      if (global != nullptr) {
-        frame.scopes.push_back(global);
-      }
-    }
-  } else {
+  const bool class_scoped =
+      frame.owner_class != nullptr && frame.owner_class->class_object != nullptr;
+  if (!scopes.empty()) {
     frame.scopes = scopes;
+  } else if (!function.captured_scope().empty()) {
+    frame.scopes = function.captured_scope();
+  } else if (!class_scoped) {
+    const std::shared_ptr<Object>& global = runtime_.global_object_shared();
+    if (global != nullptr) {
+      frame.scopes.push_back(global);
+    }
   }
-  if (frame.owner_class != nullptr && frame.owner_class->class_object != nullptr) {
-    if (frame.scopes.empty() || frame.scopes.front().get() != runtime_.global_object()) {
-      frame.scopes.insert(frame.scopes.begin(), runtime_.global_object_shared());
+  if (class_scoped) {
+    const std::shared_ptr<Object> script = frame.owner_class->script_global != nullptr
+                                               ? frame.owner_class->script_global
+                                               : runtime_.global_object_shared();
+    if (frame.scopes.empty() || frame.scopes.front() != script) {
+      frame.scopes.insert(frame.scopes.begin(), script);
     }
     frame.scopes.push_back(frame.owner_class->class_object);
   }
@@ -384,10 +387,7 @@ ExecutionResult Interpreter::run_script(std::size_t script_index) {
   }
   FunctionObject initializer(script.file->method_name(script.init_method), script.file,
                              script.init_method);
-  Object* global = runtime_.global_object();
-  const Value this_value =
-      global == nullptr ? Value::undefined() : Value::object(runtime_.global_object_shared());
-  return invoke(initializer, this_value, {}, {}, 0);
+  return invoke(initializer, Value::object(script.global), {}, {script.global}, 0);
 }
 
 ExecutionResult Interpreter::run_function(const FunctionObject& function, Value this_value,
