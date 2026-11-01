@@ -34,6 +34,17 @@ std::vector<std::pair<std::string, std::vector<std::byte>>> subrecords_of(const 
   return out;
 }
 
+std::size_t nth_efid(const std::vector<std::pair<std::string, std::vector<std::byte>>>& subrecords,
+                     std::size_t wanted) {
+  std::size_t seen = 0;
+  for (std::size_t i = 0; i < subrecords.size(); ++i) {
+    if (subrecords[i].first != "EFID") continue;
+    if (seen == wanted) return i;
+    ++seen;
+  }
+  return subrecords.size();
+}
+
 void write_effect(fo4::test::ByteWriter& out,
                   std::uint32_t effect,
                   float magnitude,
@@ -73,6 +84,18 @@ std::vector<std::byte> effects_plugin() {
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::end_record(out, tes4);
 
+  const auto mgef_group = fo4::test::begin_group(out, "MGEF", 0);
+  auto fire = fo4::test::begin_record(out, "MGEF", 0, 0x00000801, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view("FireDamage"));
+  fo4::test::end_record(out, fire);
+  auto frost = fo4::test::begin_record(out, "MGEF", 0, 0x00000802, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view("FrostDamage"));
+  fo4::test::end_record(out, frost);
+  auto shock = fo4::test::begin_record(out, "MGEF", 0, 0x00000803, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view("ShockDamage"));
+  fo4::test::end_record(out, shock);
+  fo4::test::end_group(out, mgef_group);
+
   const auto spel_group = fo4::test::begin_group(out, "SPEL", 0);
   auto spell = fo4::test::begin_record(out, "SPEL", 0, 0x00000800, 131);
   fo4::test::write_subrecord(out, "EDID", std::string_view("Spell"));
@@ -97,6 +120,9 @@ std::vector<std::byte> effects_plugin() {
   write_effect(out, 0x00000801, 1.0f, 0, 0);
   write_effect(out, 0x00000802, 3.0f, 0, 0);
   fo4::test::end_record(out, potion);
+  auto empty_potion = fo4::test::begin_record(out, "ALCH", 0, 0x00000811, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view("EmptyPotion"));
+  fo4::test::end_record(out, empty_potion);
   fo4::test::end_group(out, alch_group);
 
   const auto ench_group = fo4::test::begin_group(out, "ENCH", 0);
@@ -126,6 +152,29 @@ std::vector<std::byte> spell_plugin(const std::function<void(fo4::test::ByteWrit
   const auto spel_group = fo4::test::begin_group(out, "SPEL", 0);
   auto spell = fo4::test::begin_record(out, "SPEL", 0, 0x00000800, 131);
   body(out);
+  fo4::test::end_record(out, spell);
+  fo4::test::end_group(out, spel_group);
+  return out.bytes;
+}
+
+std::vector<std::byte> master_owned_effect_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0xB00);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.u32(0);
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto spel_group = fo4::test::begin_group(out, "SPEL", 0);
+  auto spell = fo4::test::begin_record(out, "SPEL", 0, 0x01000800, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view("MasterSpell"));
   fo4::test::end_record(out, spell);
   fo4::test::end_group(out, spel_group);
   return out.bytes;
@@ -328,4 +377,277 @@ TEST(MagicEffects, ReplaceWithTheSameEntriesKeepsConditionSubrecordsIdentical) {
   EXPECT_EQ(fo4::forms::set_magic_effects(plugin, key, entries),
             fo4::forms::EffectListWrite::written);
   EXPECT_EQ(subrecords_of(plugin, "000800:Fx.esp"), before);
+}
+
+TEST(MagicEffects, AddsEffectToRecordWithNoEffects) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000811:Fx.esp");
+  const auto before = subrecords_of(plugin, "000811:Fx.esp");
+  ASSERT_EQ(nth_efid(before, 0), before.size());
+
+  std::size_t index = 99;
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key,
+                                         {fo4::FormKey::parse("000803:Fx.esp"), 2.0f, 1u, 4u, {}},
+                                         &index),
+            fo4::forms::EffectListWrite::written);
+  EXPECT_EQ(index, 0u);
+
+  const auto* potion = fo4::find_record(plugin, key);
+  ASSERT_NE(potion, nullptr);
+  const auto effects = fo4::forms::read_magic_effects(plugin, *potion);
+  ASSERT_EQ(effects.size(), 1u);
+  EXPECT_EQ(effects[0].effect, fo4::FormKey::parse("000803:Fx.esp"));
+  EXPECT_FLOAT_EQ(effects[0].magnitude, 2.0f);
+  EXPECT_EQ(effects[0].area, 1u);
+  EXPECT_EQ(effects[0].duration, 4u);
+  EXPECT_TRUE(effects[0].conditions.empty());
+
+  const auto after = subrecords_of(plugin, "000811:Fx.esp");
+  ASSERT_EQ(after.size(), before.size() + 2);
+  EXPECT_EQ(std::vector(after.begin(), after.begin() + static_cast<std::ptrdiff_t>(before.size())),
+            before);
+  EXPECT_EQ(after[before.size()].first, "EFID");
+  EXPECT_EQ(after.back().first, "EFIT");
+}
+
+TEST(MagicEffects, AddsThirdEffectAndKeepsEarlierEntriesIdentical) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+  const auto before = subrecords_of(plugin, "000800:Fx.esp");
+  const auto second_before = nth_efid(before, 1);
+  ASSERT_LT(second_before, before.size());
+
+  std::size_t index = 99;
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key,
+                                         {fo4::FormKey::parse("000803:Fx.esp"), 7.0f, 3u, 8u, {}},
+                                         &index),
+            fo4::forms::EffectListWrite::written);
+  EXPECT_EQ(index, 2u);
+
+  const auto* spell = fo4::find_record(plugin, key);
+  ASSERT_NE(spell, nullptr);
+  const auto effects = fo4::forms::read_magic_effects(plugin, *spell);
+  ASSERT_EQ(effects.size(), 3u);
+  EXPECT_EQ(effects[2].effect, fo4::FormKey::parse("000803:Fx.esp"));
+  EXPECT_FLOAT_EQ(effects[2].magnitude, 7.0f);
+  EXPECT_EQ(effects[2].area, 3u);
+  EXPECT_EQ(effects[2].duration, 8u);
+
+  const auto after = subrecords_of(plugin, "000800:Fx.esp");
+  ASSERT_EQ(after.size(), before.size() + 2);
+  EXPECT_EQ(nth_efid(after, 1), second_before);
+  EXPECT_EQ(std::vector(after.begin(), after.begin() + static_cast<std::ptrdiff_t>(before.size())),
+            before);
+}
+
+TEST(MagicEffects, SetReplacesOnlyTheChosenEntry) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+  const auto before = subrecords_of(plugin, "000800:Fx.esp");
+  const auto second_before = nth_efid(before, 1);
+  ASSERT_LT(second_before, before.size());
+
+  EXPECT_EQ(fo4::forms::set_magic_effect(
+                plugin, key, 0, {fo4::FormKey::parse("000803:Fx.esp"), 9.0f, 0u, 1u, {}}),
+            fo4::forms::EffectListWrite::written);
+
+  const auto after = subrecords_of(plugin, "000800:Fx.esp");
+  EXPECT_EQ(after.front(), before.front());
+  const auto second_after = nth_efid(after, 1);
+  ASSERT_LT(second_after, after.size());
+  EXPECT_EQ(std::vector(after.begin() + static_cast<std::ptrdiff_t>(second_after), after.end()),
+            std::vector(before.begin() + static_cast<std::ptrdiff_t>(second_before), before.end()));
+
+  const auto* spell = fo4::find_record(plugin, key);
+  ASSERT_NE(spell, nullptr);
+  const auto effects = fo4::forms::read_magic_effects(plugin, *spell);
+  ASSERT_EQ(effects.size(), 2u);
+  EXPECT_EQ(effects[0].effect, fo4::FormKey::parse("000803:Fx.esp"));
+  EXPECT_FLOAT_EQ(effects[0].magnitude, 9.0f);
+  EXPECT_EQ(effects[0].duration, 1u);
+  EXPECT_TRUE(effects[0].conditions.empty());
+  EXPECT_EQ(effects[1].effect, fo4::FormKey::parse("000802:Fx.esp"));
+  ASSERT_EQ(effects[1].conditions.size(), 1u);
+  EXPECT_EQ(effects[1].conditions[0].function, 72u);
+}
+
+TEST(MagicEffects, RemoveDropsOnlyTheChosenEntryAndShiftsTheRest) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+  const auto before = subrecords_of(plugin, "000800:Fx.esp");
+  const auto second_before = nth_efid(before, 1);
+  ASSERT_LT(second_before, before.size());
+
+  EXPECT_EQ(fo4::forms::remove_magic_effect(plugin, key, 0),
+            fo4::forms::EffectListWrite::written);
+
+  auto expected = before;
+  expected.erase(expected.begin() + 1,
+                 expected.begin() + static_cast<std::ptrdiff_t>(second_before));
+  EXPECT_EQ(subrecords_of(plugin, "000800:Fx.esp"), expected);
+
+  const auto* spell = fo4::find_record(plugin, key);
+  ASSERT_NE(spell, nullptr);
+  const auto effects = fo4::forms::read_magic_effects(plugin, *spell);
+  ASSERT_EQ(effects.size(), 1u);
+  EXPECT_EQ(effects[0].effect, fo4::FormKey::parse("000802:Fx.esp"));
+  EXPECT_FLOAT_EQ(effects[0].magnitude, 2.5f);
+  EXPECT_EQ(effects[0].duration, 10u);
+  ASSERT_EQ(effects[0].conditions.size(), 1u);
+  EXPECT_EQ(effects[0].conditions[0].function, 72u);
+}
+
+TEST(MagicEffects, RefusesIndexOutsideTheListWithoutMutation) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+  const auto before = fo4::write_plugin(plugin);
+  const auto subrecords_before = subrecords_of(plugin, "000800:Fx.esp");
+
+  EXPECT_EQ(fo4::forms::set_magic_effect(
+                plugin, key, 2, {fo4::FormKey::parse("000803:Fx.esp"), 1.0f, 0u, 0u, {}}),
+            fo4::forms::EffectListWrite::index_out_of_range);
+  EXPECT_EQ(fo4::forms::set_magic_effect(
+                plugin, key, 99, {fo4::FormKey::parse("000803:Fx.esp"), 1.0f, 0u, 0u, {}}),
+            fo4::forms::EffectListWrite::index_out_of_range);
+  EXPECT_EQ(fo4::forms::remove_magic_effect(plugin, key, 2),
+            fo4::forms::EffectListWrite::index_out_of_range);
+  EXPECT_EQ(fo4::forms::remove_magic_effect(plugin, key, 99),
+            fo4::forms::EffectListWrite::index_out_of_range);
+
+  EXPECT_EQ(subrecords_of(plugin, "000800:Fx.esp"), subrecords_before);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(MagicEffects, RefusesEffectsThatAreNotMagicEffectsWithoutMutation) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+  const auto before = fo4::write_plugin(plugin);
+  const auto subrecords_before = subrecords_of(plugin, "000800:Fx.esp");
+
+  const fo4::forms::MagicEffectEntry enchantment{fo4::FormKey::parse("000820:Fx.esp"), 1.0f, 0u, 0u,
+                                                 {}};
+  const fo4::forms::MagicEffectEntry weapon{fo4::FormKey::parse("000830:Fx.esp"), 1.0f, 0u, 0u, {}};
+  const fo4::forms::MagicEffectEntry zero{fo4::FormKey{}, 1.0f, 0u, 0u, {}};
+  const fo4::forms::MagicEffectEntry foreign{fo4::FormKey::parse("000801:Other.esm"), 1.0f, 0u, 0u,
+                                             {}};
+
+  std::size_t index = 77;
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key, enchantment, &index),
+            fo4::forms::EffectListWrite::effect_not_magic_effect);
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key, weapon, &index),
+            fo4::forms::EffectListWrite::effect_not_magic_effect);
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key, zero, &index),
+            fo4::forms::EffectListWrite::effect_not_magic_effect);
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key, foreign, &index),
+            fo4::forms::EffectListWrite::effect_not_magic_effect);
+  EXPECT_EQ(fo4::forms::set_magic_effect(plugin, key, 0, zero),
+            fo4::forms::EffectListWrite::effect_not_magic_effect);
+  EXPECT_EQ(fo4::forms::set_magic_effect(plugin, key, 1, weapon),
+            fo4::forms::EffectListWrite::effect_not_magic_effect);
+  EXPECT_EQ(index, 77u);
+
+  EXPECT_EQ(subrecords_of(plugin, "000800:Fx.esp"), subrecords_before);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(MagicEffects, RefusesMissingUnsupportedAndMalformedRecordsWithoutMutation) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto before = fo4::write_plugin(plugin);
+  const auto weapon_before = subrecords_of(plugin, "000830:Fx.esp");
+  const auto malformed_before = subrecords_of(plugin, "000840:Fx.esp");
+  const fo4::forms::MagicEffectEntry entry{fo4::FormKey::parse("000803:Fx.esp"), 1.0f, 0u, 0u, {}};
+
+  std::size_t index = 5;
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, fo4::FormKey::parse("000999:Fx.esp"), entry, &index),
+            fo4::forms::EffectListWrite::record_missing);
+  EXPECT_EQ(fo4::forms::set_magic_effect(plugin, fo4::FormKey::parse("000999:Fx.esp"), 0, entry),
+            fo4::forms::EffectListWrite::record_missing);
+  EXPECT_EQ(fo4::forms::remove_magic_effect(plugin, fo4::FormKey::parse("000999:Fx.esp"), 0),
+            fo4::forms::EffectListWrite::record_missing);
+
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, fo4::FormKey::parse("000830:Fx.esp"), entry, &index),
+            fo4::forms::EffectListWrite::unsupported_record);
+  EXPECT_EQ(fo4::forms::set_magic_effect(plugin, fo4::FormKey::parse("000830:Fx.esp"), 0, entry),
+            fo4::forms::EffectListWrite::unsupported_record);
+  EXPECT_EQ(fo4::forms::remove_magic_effect(plugin, fo4::FormKey::parse("000830:Fx.esp"), 0),
+            fo4::forms::EffectListWrite::unsupported_record);
+
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, fo4::FormKey::parse("000840:Fx.esp"), entry, &index),
+            fo4::forms::EffectListWrite::unexpected_layout);
+  EXPECT_EQ(fo4::forms::set_magic_effect(plugin, fo4::FormKey::parse("000840:Fx.esp"), 0, entry),
+            fo4::forms::EffectListWrite::unexpected_layout);
+  EXPECT_EQ(fo4::forms::remove_magic_effect(plugin, fo4::FormKey::parse("000840:Fx.esp"), 0),
+            fo4::forms::EffectListWrite::unexpected_layout);
+  EXPECT_EQ(index, 5u);
+
+  EXPECT_EQ(subrecords_of(plugin, "000830:Fx.esp"), weapon_before);
+  EXPECT_EQ(subrecords_of(plugin, "000840:Fx.esp"), malformed_before);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(MagicEffects, EditedListSurvivesSaveAndReload) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+
+  std::size_t index = 99;
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key,
+                                         {fo4::FormKey::parse("000803:Fx.esp"), 4.0f, 1u, 6u, {}},
+                                         &index),
+            fo4::forms::EffectListWrite::written);
+  EXPECT_EQ(index, 2u);
+  EXPECT_EQ(fo4::forms::set_magic_effect(
+                plugin, key, 0, {fo4::FormKey::parse("000802:Fx.esp"), 5.0f, 2u, 4u, {}}),
+            fo4::forms::EffectListWrite::written);
+  EXPECT_EQ(fo4::forms::remove_magic_effect(plugin, key, 1),
+            fo4::forms::EffectListWrite::written);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Fx.esp");
+  const auto* spell = fo4::find_record(reread, key);
+  ASSERT_NE(spell, nullptr);
+  const auto effects = fo4::forms::read_magic_effects(reread, *spell);
+  ASSERT_EQ(effects.size(), 2u);
+  EXPECT_EQ(effects[0].effect, fo4::FormKey::parse("000802:Fx.esp"));
+  EXPECT_FLOAT_EQ(effects[0].magnitude, 5.0f);
+  EXPECT_EQ(effects[0].area, 2u);
+  EXPECT_EQ(effects[0].duration, 4u);
+  EXPECT_TRUE(effects[0].conditions.empty());
+  EXPECT_EQ(effects[1].effect, fo4::FormKey::parse("000803:Fx.esp"));
+  EXPECT_FLOAT_EQ(effects[1].magnitude, 4.0f);
+  EXPECT_EQ(effects[1].area, 1u);
+  EXPECT_EQ(effects[1].duration, 6u);
+  EXPECT_TRUE(effects[1].conditions.empty());
+}
+
+TEST(MagicEffects, AcceptsMasterOwnedEffectWithItsMasterIndexAndRefusesUndeclaredOwner) {
+  auto plugin = fo4::read_plugin(master_owned_effect_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+
+  std::size_t index = 99;
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key,
+                                         {fo4::FormKey::parse("000801:Fallout4.esm"), 2.0f, 0u, 3u, {}},
+                                         &index),
+            fo4::forms::EffectListWrite::written);
+  EXPECT_EQ(index, 0u);
+  const auto subrecords = subrecords_of(plugin, "000800:Fx.esp");
+  const auto efid = nth_efid(subrecords, 0);
+  ASSERT_LT(efid, subrecords.size());
+  EXPECT_EQ(subrecords[efid].second, (std::vector<std::byte>{std::byte{0x01}, std::byte{0x08},
+                                                             std::byte{0x00}, std::byte{0x00}}));
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Fx.esp");
+  const auto* spell = fo4::find_record(reread, key);
+  ASSERT_NE(spell, nullptr);
+  const auto effects = fo4::forms::read_magic_effects(reread, *spell);
+  ASSERT_EQ(effects.size(), 1u);
+  EXPECT_EQ(effects[0].effect, fo4::FormKey::parse("000801:Fallout4.esm"));
+  EXPECT_EQ(effects[0].duration, 3u);
+
+  const auto before = fo4::write_plugin(plugin);
+  const fo4::forms::MagicEffectEntry foreign{fo4::FormKey::parse("000801:Other.esm"), 1.0f, 0u, 0u,
+                                             {}};
+  std::size_t refused = 77;
+  EXPECT_EQ(fo4::forms::add_magic_effect(plugin, key, foreign, &refused),
+            fo4::forms::EffectListWrite::effect_not_magic_effect);
+  EXPECT_EQ(refused, 77u);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }

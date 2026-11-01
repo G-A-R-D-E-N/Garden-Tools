@@ -3,6 +3,7 @@
 #include <functional>
 #include <istream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <ostream>
 #include <shared_mutex>
@@ -27,6 +28,9 @@ struct ToolDefinition {
 
     nlohmann::json toJson() const;
 };
+
+std::optional<std::string> argumentError(const nlohmann::json& inputSchema,
+                                         const nlohmann::json& arguments);
 
 struct ToolResult {
     std::string text;
@@ -78,10 +82,13 @@ public:
     Result<void> registerTool(std::shared_ptr<Tool> tool);
     nlohmann::json definitions() const;
     ToolResult call(std::string_view name, const nlohmann::json& arguments) const;
+    void setBeforeFirstCall(std::function<std::optional<std::string>()> hook);
 
 private:
     mutable std::shared_mutex mutex_;
     std::unordered_map<std::string, std::shared_ptr<Tool>> tools_;
+    mutable std::mutex hookMutex_;
+    mutable std::function<std::optional<std::string>()> beforeFirstCall_;
 };
 
 class StdioServer {
