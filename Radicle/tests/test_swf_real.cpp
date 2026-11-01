@@ -681,9 +681,10 @@ TEST(SwfRealData, InterfaceCorpusDoActionCountAndNoLzmaCompression) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
   }
-  record_game_build(detect_game_build(dir));
-  const auto archive_path =
-      std::filesystem::path(dir) / "Fallout4 - Interface.ba2";
+  const std::filesystem::path data_dir(dir);
+  const GameBuild build = detect_game_build(data_dir);
+  record_game_build(build);
+  const auto archive_path = data_dir / "Fallout4 - Interface.ba2";
   if (!std::filesystem::exists(archive_path)) {
     GTEST_SKIP() << "no Fallout4 - Interface.ba2 in FO4_DATA_DIR";
   }
@@ -723,7 +724,11 @@ TEST(SwfRealData, InterfaceCorpusDoActionCountAndNoLzmaCompression) {
   RecordProperty("do_action_tags", std::to_string(do_action_tags));
   EXPECT_GT(movies, 0u);
   EXPECT_EQ(lzma_movies, 0u);
-  EXPECT_EQ(do_action_tags, 82u);
+  if (exact_counts_known(build)) {
+    EXPECT_EQ(do_action_tags, 82u);
+  } else {
+    RecordProperty("do_action_tags_unverified", std::to_string(do_action_tags));
+  }
 }
 
 TEST(SwfRealData, ExportsEveryShapeToWellFormedSvg) {

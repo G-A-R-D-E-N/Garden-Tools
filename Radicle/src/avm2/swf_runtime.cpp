@@ -338,6 +338,7 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
     broadcast_frame_event(interpreter, stage_, "enterFrame");
     const ExecutionResult result = root_->advance_timeline(interpreter);
     if (!result.ok()) {
+      frame_error_ = result.message;
       playing_ = false;
       break;
     }
@@ -347,6 +348,7 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
         if (clip != nullptr) {
           const ExecutionResult clip_result = clip->advance_timeline(interpreter);
           if (!clip_result.ok()) {
+            frame_error_ = clip_result.message;
             playing_ = false;
             break;
           }

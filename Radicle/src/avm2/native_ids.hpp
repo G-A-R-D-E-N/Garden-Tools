@@ -238,6 +238,13 @@ enum class Id : std::uint32_t {
   xml_to_xml_string,
   xml_text,
   xml_copy,
+  bgs_notify_scripts,
+  bgs_get_text_replace_id,
+  bgs_get_text_replace_value,
+  bgs_play_action_anim,
+  bgs_play_left_anim,
+  bgs_play_right_anim,
+  bgs_execute_command,
 };
 
 }  // namespace fo4::avm2::native

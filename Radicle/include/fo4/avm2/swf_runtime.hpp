@@ -144,6 +144,7 @@ class SwfRuntime {
   void char_event(Interpreter& interpreter, std::uint32_t char_code);
   void set_playing(bool playing);
   bool playing() const;
+  const std::string& frame_error() const noexcept { return frame_error_; }
 
   const std::shared_ptr<MovieClip>& root() const noexcept { return root_; }
   const std::shared_ptr<DisplayObjectContainer>& stage() const noexcept { return stage_; }
@@ -167,6 +168,7 @@ class SwfRuntime {
   std::weak_ptr<DisplayObject> mouse_down_;
   bool playing_{true};
   bool started_{false};
+  std::string frame_error_;
 };
 
 }  // namespace fo4::avm2
