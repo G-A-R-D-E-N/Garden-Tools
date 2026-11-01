@@ -132,19 +132,15 @@ Result<nlohmann::json> RadiclePluginBackend::createMergedPatch(const nlohmann::j
                 std::to_string(selectedPresent.size()) + "."});
     }
 
-    // A record is contested when two or more selected plugins touch it; the
-    // winner is the selected plugin highest in load order (versions() is
-    // ascending). graph_.conflicts() is keyed order (sorted FormKey), so the
-    // result is deterministic.
     struct Contest {
         fo4::FormKey key;
         std::string winner;
     };
     std::vector<Contest> contested;
-    for (const auto& key : graph_.conflicts()) {
+    for (const auto& key : (*graph_).conflicts()) {
         int selectedCount = 0;
         std::string winner;
-        for (const auto& version : graph_.versions(key)) {
+        for (const auto& version : (*graph_).versions(key)) {
             const auto name = std::string(version.plugin.filename());
             if (!isSelected(name)) continue;
             ++selectedCount;
@@ -282,8 +278,8 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
     std::vector<Revert> reverts;
     int overridesFound = 0;
     int skipped = 0;
-    for (const auto& key : graph_.conflicts()) {
-        const auto& versions = graph_.versions(key);
+    for (const auto& key : (*graph_).conflicts()) {
+        const auto& versions = (*graph_).versions(key);
         if (versions.size() < 2) continue;
 
         std::optional<std::size_t> badIndex;
