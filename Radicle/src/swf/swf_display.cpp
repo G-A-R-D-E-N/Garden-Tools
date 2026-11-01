@@ -248,8 +248,11 @@ std::optional<SwfColorTransform> compose_color(const std::optional<SwfColorTrans
 }
 
 detail::FrameControls controls_for(const std::vector<SwfTag>& tags, std::size_t frames,
-                                   bool apply) {
-  return apply ? detail::collect_frame_controls(tags) : detail::FrameControls(frames);
+                                   bool apply, std::size_t& budget) {
+  if (!apply) {
+    return detail::FrameControls(frames);
+  }
+  return detail::collect_frame_controls(tags, {}, budget);
 }
 
 std::uint32_t displayed_frame(const LocalTimeline& timeline, std::uint32_t age) {
@@ -399,6 +402,9 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
   std::map<std::uint16_t, std::vector<std::vector<Operation>>> sprite_operations;
   std::map<std::uint16_t, std::size_t> sprite_tag_indices;
   std::map<std::uint16_t, detail::FrameControls> sprite_controls;
+  const std::map<std::uint16_t, detail::InitActionStreams> init_actions =
+      detail::collect_init_actions(file.tags);
+  std::size_t inline_budget = detail::kInlineActionBudget;
   for (std::size_t tag_index = 0; tag_index < file.tags.size(); ++tag_index) {
     const SwfTag& tag = file.tags[tag_index];
     if (tag.shape) {
@@ -411,8 +417,15 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
     if (!collect_operations(tag.children, frames, out.message)) {
       return out;
     }
-    detail::FrameControls controls =
-        controls_for(tag.children, frames.size(), options.apply_frame_control);
+    // A sprite must run its init actions with its first frame, when control applies.
+    const auto found_init = init_actions.find(*tag.sprite_id);
+    static const detail::InitActionStreams kNoInit;
+    detail::FrameControls controls = detail::FrameControls(frames.size());
+    if (options.apply_frame_control) {
+      controls = detail::collect_frame_controls(
+          tag.children, found_init == init_actions.end() ? kNoInit : found_init->second,
+          inline_budget);
+    }
     if (!sprite_operations.emplace(*tag.sprite_id, std::move(frames)).second) {
       out.message = "duplicate sprite definition";
       return out;
@@ -433,8 +446,9 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
   for (const auto& entry : sprite_operations) {
     ticks = std::max(ticks, static_cast<std::uint32_t>(entry.second.size()));
   }
-  root.playhead = detail::simulate_playhead(
-      controls_for(file.tags, root.frames.size(), options.apply_frame_control), ticks);
+  detail::FrameControls root_controls = controls_for(file.tags, root.frames.size(),
+                                                    options.apply_frame_control, inline_budget);
+  root.playhead = detail::simulate_playhead(root_controls, ticks);
   std::map<std::uint16_t, LocalTimeline> sprites;
   for (const auto& entry : sprite_operations) {
     LocalTimeline timeline;

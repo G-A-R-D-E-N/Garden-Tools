@@ -1,5 +1,6 @@
 #include <fo4/avm2/hit_test.hpp>
 
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/snapshot.hpp>
 
 #include <algorithm>
@@ -31,6 +32,41 @@ bool has_size(const DisplayObject& object) {
 bool inside_bounds(const DisplayObject& object, double x, double y) {
   return has_size(object) && x >= object.origin_x() && x <= object.origin_x() + object.width() &&
          y >= object.origin_y() && y <= object.origin_y() + object.height();
+}
+
+bool own_shape_or_box_hit(const DisplayObject& object, const ShapeGeometry& geometry, double x,
+                          double y) {
+  // A leaf without geometry must keep its box, since text and empty shapes still hit it.
+  return shape_contains(geometry, x, y) ||
+         (!object.is_container() && geometry.edges.empty() && inside_bounds(object, x, y));
+}
+
+bool hits_shape_or_bounds(const DisplayObject& object, double x, double y, bool shape_flag) {
+  if (!shape_flag) {
+    return inside_bounds(object, x, y);
+  }
+  // The flag must test the drawing and the children, so no empty box claims and no child fill misses.
+  if (own_shape_or_box_hit(object, *effective_shape_geometry(object), x, y)) {
+    return true;
+  }
+  if (!object.is_container()) {
+    return false;
+  }
+  const auto& children = static_cast<const DisplayObjectContainer&>(object).children();
+  for (const auto& child : children) {
+    if (child == nullptr || !child->visible()) {
+      continue;
+    }
+    double child_x = 0.0;
+    double child_y = 0.0;
+    if (!inverse_map(local_matrix(*child), x, y, child_x, child_y)) {
+      continue;
+    }
+    if (hits_shape_or_bounds(*child, child_x, child_y, true)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool chain_visible(const DisplayObject& object) {
@@ -81,29 +117,51 @@ StageBounds stage_bounds(const DisplayObject& object) {
   return bounds;
 }
 
-std::shared_ptr<DisplayObject> deepest_at(const std::shared_ptr<DisplayObject>& node, double x,
-                                          double y) {
+struct Pick {
+  std::shared_ptr<DisplayObject> target;
+  bool hit{false};
+};
+
+// Requires need_hit to be true wherever the caller reads the returned hit flag.
+Pick pick_at(const std::shared_ptr<DisplayObject>& node, double x, double y, bool need_hit) {
   if (!node->visible()) {
-    return nullptr;
+    return {};
   }
   double local_x = 0.0;
   double local_y = 0.0;
   if (!inverse_map(local_matrix(*node), x, y, local_x, local_y)) {
-    return nullptr;
+    return {};
   }
-  if (node->is_container() && node->mouse_children()) {
+  const bool need_child_hits = need_hit || !node->mouse_children();
+  bool child_hit = false;
+  std::shared_ptr<DisplayObject> child_target;
+  if (node->is_container()) {
     const auto& children = static_cast<const DisplayObjectContainer&>(*node).children();
     for (auto child = children.rbegin(); child != children.rend(); ++child) {
-      std::shared_ptr<DisplayObject> hit = deepest_at(*child, local_x, local_y);
-      if (hit != nullptr) {
-        return hit;
+      if (*child == nullptr) {
+        continue;
+      }
+      const Pick picked = pick_at(*child, local_x, local_y, need_child_hits);
+      // The walk must stop at the first target only where no caller reads this subtree's hit flag.
+      if (picked.target != nullptr && !need_child_hits) {
+        return {picked.target, false};
+      }
+      child_hit = child_hit || picked.hit;
+      if (child_target == nullptr) {
+        child_target = picked.target;
       }
     }
   }
-  if (node->mouse_enabled() && inside_bounds(*node, local_x, local_y)) {
-    return node;
+  // A subtree must be walked once per pick, so the hit flag and the target come from the same walk.
+  const bool hit = child_hit || own_shape_or_box_hit(*node, *effective_shape_geometry(*node),
+                                                     local_x, local_y);
+  if (node->is_container() && node->mouse_children() && child_target != nullptr) {
+    return {child_target, hit};
   }
-  return nullptr;
+  if (node->mouse_enabled() && hit) {
+    return {node, hit};
+  }
+  return {nullptr, hit};
 }
 
 }  // namespace
@@ -128,10 +186,14 @@ bool stage_to_local(const DisplayObject& object, double x, double y, double& loc
 }
 
 bool hit_test_point(const DisplayObject& object, double x, double y) {
+  return hit_test_point(object, x, y, false);
+}
+
+bool hit_test_point(const DisplayObject& object, double x, double y, bool shape_flag) {
   double local_x = 0.0;
   double local_y = 0.0;
   return chain_visible(object) && stage_to_local(object, x, y, local_x, local_y) &&
-         inside_bounds(object, local_x, local_y);
+         hits_shape_or_bounds(object, local_x, local_y, shape_flag);
 }
 
 bool hit_test_object(const DisplayObject& first, const DisplayObject& second) {
@@ -148,7 +210,7 @@ std::shared_ptr<DisplayObject> mouse_target_at(const std::shared_ptr<DisplayObje
   if (root == nullptr) {
     return nullptr;
   }
-  return deepest_at(root, x, y);
+  return pick_at(root, x, y, false).target;
 }
 
 }  // namespace fo4::avm2

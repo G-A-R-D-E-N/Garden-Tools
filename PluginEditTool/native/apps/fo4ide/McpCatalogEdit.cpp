@@ -1,0 +1,59 @@
+#include "McpCatalog.hpp"
+
+namespace fo4ide::app {
+namespace {
+
+const CatalogTool kTools[] = {
+    {"set_components", "backend", "SetComponents", "plugin:string,form_key:string,components_json:string", "Editor operation: set components. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"set_quest_aliases", "backend", "SetQuestAliases", "plugin:string,form_key:string,aliases_json:string", "Editor operation: set quest aliases. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"set_quest_stages", "backend", "SetQuestStages", "plugin:string,form_key:string,stages_json:string", "Editor operation: set quest stages. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"set_conditions", "backend", "SetConditions", "plugin:string,form_key:string,conditions_json:string", "Editor operation: set conditions. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"add_list_item", "backend", "AddListItem", "plugin:string,form_key:string,field:string,value:string", "Editor operation: add list item. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"remove_list_item", "backend", "RemoveListItem", "plugin:string,form_key:string,field:string,value:string", "Editor operation: remove list item. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"delete_record", "backend", "DeleteRecord", "plugin:string,form_key:string", "Editor operation: delete record. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"copy_as_override", "backend", "CopyAsOverride", "source_plugin:string,form_key:string,patch_plugin:string,overwrite:boolean,allow_losing:boolean?", "Editor operation: copy as override. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"copy_as_override_many", "backend", "CopyAsOverrideMany", "items_json:string,patch_plugin:string,overwrite:boolean,allow_losing:boolean?", "Editor operation: copy as override many. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"revert_overrides", "backend", "RevertOverrides", "bad_plugin:string,patch_plugin:string,signature:string?,contains_component:string?,apply:boolean?,limit:integer?", "Editor operation: revert overrides. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"compact_to_esl", "backend", "CompactToEsl", "plugin:string", "Editor operation: compact to esl. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"clean_unused_masters", "backend", "CleanUnusedMasters", "plugin:string,apply:boolean", "Editor operation: clean unused masters. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"check_for_errors", "backend", "CheckForErrors", "plugin:string,limit:integer?", "Editor query: check for errors. Same RPC the desktop editor uses."},
+    {"find_unreachable", "backend", "FindUnreachable", "plugin:string,limit:integer?", "Editor query: find unreachable. Same RPC the desktop editor uses."},
+    {"loot_cleaning_report", "backend", "LootCleaningReport", "plugin:string", "Editor query: loot cleaning report. Same RPC the desktop editor uses."},
+    {"update_onam", "backend", "UpdateOnam", "plugin:string", "Editor operation: update onam. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"copy_as_disabled_override", "backend", "CopyAsDisabledOverride", "source_plugin:string,form_key:string,patch_plugin:string,overwrite:boolean", "Editor operation: copy as disabled override. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"copy_as_wrapper", "backend", "CopyAsWrapper", "source_plugin:string,form_key:string,patch_plugin:string,editor_id:string", "Editor operation: copy as wrapper. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"check_esl_eligibility", "backend", "CheckEslEligibility", "plugin:string", "Editor query: check esl eligibility. Same RPC the desktop editor uses."},
+    {"clean_plugin", "backend", "CleanPlugin", "plugin:string", "Editor operation: clean plugin. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"renumber_form_id", "backend", "RenumberFormId", "plugin:string,form_key:string,new_id:string", "Editor operation: renumber form id. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"add_element", "backend", "AddElement", "plugin:string,form_key:string,path:string,template:string?", "Editor operation: add element. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"remove_element", "backend", "RemoveElement", "plugin:string,form_key:string,path:string", "Editor operation: remove element. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"move_element", "backend", "MoveElement", "plugin:string,form_key:string,path:string,delta:integer", "Editor operation: move element. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"clear_element", "backend", "ClearElement", "plugin:string,form_key:string,path:string", "Editor operation: clear element. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"copy_element_to_selected", "backend", "CopyElementToSelected", "source_plugin:string,source_form_key:string,element_path:string,targets_json:string", "Editor operation: copy element to selected. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"remove_element_from_selected", "backend", "RemoveElementFromSelected", "element_path:string,targets_json:string", "Editor operation: remove element from selected. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"set_conditions_at", "backend", "SetConditionsAt", "plugin:string,form_key:string,path:string,conditions_json:string", "Editor operation: set conditions at. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"resolve_form_key_labels", "backend", "ResolveFormKeyLabels", "form_keys_csv:string", "Editor query: resolve form key labels. Same RPC the desktop editor uses."},
+    {"copy_as_new_record", "backend", "CopyAsNewRecord", "source_plugin:string,form_key:string,target_plugin:string,new_editor_id:string", "Editor operation: copy as new record. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"remove_identical_to_master", "backend", "RemoveIdenticalToMaster", "plugin:string,apply:boolean?,limit:integer?", "Editor operation: remove identical to master. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"create_merged_patch", "backend", "CreateMergedPatch", "plugins:string,patch_plugin:string,apply:boolean?", "Editor operation: create merged patch. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"renumber_plugin_form_ids", "backend", "RenumberPluginFormIds", "plugin:string,start:string,apply:boolean?", "Editor operation: renumber plugin form ids. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"inject_forms_into_master", "backend", "InjectFormsIntoMaster", "plugin:string,master:string,start:string,apply:boolean?", "Editor operation: inject forms into master. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"create_seq_file", "backend", "CreateSeqFile", "plugin:string,output_dir:string", "Editor operation: create seq file. Same RPC the desktop editor uses; writes the seq file to disk at once, not through save_plugin."},
+    {"check_circular_leveled_lists", "backend", "CheckCircularLeveledLists", "plugin:string?,limit:integer?", "Editor query: check circular leveled lists. Same RPC the desktop editor uses."},
+    {"deep_copy_as_override", "backend", "DeepCopyAsOverride", "source_plugin:string,form_key:string,patch_plugin:string,apply:boolean?,overwrite:boolean?,max_records:integer?,allow_losing:boolean?", "Editor operation: deep copy as override. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"change_referencing_records", "backend", "ChangeReferencingRecords", "from:string,to:string,patch_plugin:string,apply:boolean?", "Editor operation: change referencing records. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"resolve_conflict", "backend", "ResolveConflict", "form_key:string,winner:string,patch:string,allow_losing:boolean?", "Editor operation: resolve conflict. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"scan_conflicts", "appInterop", "ScanConflicts", "", "Editor query: scan conflicts. Same RPC the desktop editor uses."},
+    {"scan_broken_refs", "appInterop", "ScanBrokenRefs", "", "Editor query: scan broken refs. Same RPC the desktop editor uses."},
+    {"fix", "nif", "Fix", "nif_path:string,out_nif:string", "Editor operation: fix. Same RPC the desktop editor uses; writes out_nif to disk at once, not through save_plugin."},
+    {"reorder", "masters", "Reorder", "plugin:string,order_json:string", "Editor operation: reorder. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"set_light", "masters", "SetLight", "plugin:string,light:boolean", "Editor operation: set light. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"clean_unused", "masters", "CleanUnused", "plugin:string,apply:boolean", "Editor operation: clean unused. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
+    {"set_placed_reference_transform", "cell", "SetPlacedReferenceTransform", "form_key:string,patch_plugin:string,x:number,y:number,z:number,rx:number,ry:number,rz:number", "Editor operation: set placed reference transform. Placed-reference or cell operation."},
+};
+
+}
+
+std::span<const CatalogTool> editCatalogTools() { return kTools; }
+
+}

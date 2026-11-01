@@ -449,6 +449,16 @@ Result<nlohmann::json> RadiclePluginBackend::addElement(
             stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json("Added " + path->signature.to_string() + " in " + pluginName + ".");
         }
+        const auto templateText = elementStringArgument(arguments, 3);
+        if (templateText.size() == 4) {
+            const auto signature = fo4::Signature::from_string(templateText);
+            auto mutated = loaded->plugin;
+            const auto status = fo4::add_record_subrecord(mutated, *keyResult, signature);
+            if (const auto error = authoringStatusError(status)) return std::unexpected(*error);
+            if (status == fo4::SubrecordAddStatus::already_present) return nlohmann::json("Subrecord is already present.");
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+            return nlohmann::json("Added " + signature.to_string() + " in " + pluginName + ".");
+        }
         std::string error;
         const auto resolved = resolveElementPath(*record, requestedPath, error);
         if (!resolved.has_value()) return std::unexpected(Error{"ElementPathUnsupported", std::move(error)});

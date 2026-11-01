@@ -20,6 +20,8 @@ add_library(
     plugin/RadiclePluginScalar.cpp
     plugin/RadiclePluginFields.cpp
     plugin/RadiclePluginArmor.cpp
+    plugin/RadiclePluginGraphCache.cpp
+    plugin/RadiclePluginEffects.cpp
     plugin/RadiclePluginFormLinkList.cpp
     plugin/RadiclePluginComponents.cpp
     plugin/RadiclePluginQuest.cpp
@@ -57,6 +59,7 @@ add_library(
     plugin/RadiclePluginSound.cpp
     plugin/RadiclePluginPackage.cpp
     plugin/RadiclePluginScripts.cpp
+    plugin/RadiclePluginMemory.cpp
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )

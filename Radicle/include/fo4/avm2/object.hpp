@@ -29,6 +29,7 @@ enum class ObjectKind : std::uint8_t {
   Display,
   Event,
   ByteArray,
+  Xml,
 };
 
 const char* object_kind_name(ObjectKind kind) noexcept;
@@ -76,7 +77,7 @@ struct EventListener {
   std::int32_t priority{0};
 };
 
-class Object {
+class Object : public std::enable_shared_from_this<Object> {
  public:
   Object() = default;
   explicit Object(ObjectKind kind);
@@ -104,6 +105,11 @@ class Object {
 
   std::vector<EventListener>& event_listeners() noexcept { return event_listeners_; }
   const std::vector<EventListener>& event_listeners() const noexcept { return event_listeners_; }
+
+  std::unordered_map<const FunctionObject*, std::weak_ptr<FunctionObject>>&
+  bound_methods() noexcept {
+    return bound_methods_;
+  }
 
   const std::vector<Value>& slots() const noexcept { return slots_; }
   std::vector<Value>& slots() noexcept { return slots_; }
@@ -137,6 +143,7 @@ class Object {
   std::shared_ptr<Object> prototype_;
   std::vector<Value> slots_;
   std::vector<EventListener> event_listeners_;
+  std::unordered_map<const FunctionObject*, std::weak_ptr<FunctionObject>> bound_methods_;
   std::unordered_map<Key, Property, KeyHash> properties_;
 };
 
@@ -169,6 +176,9 @@ class FunctionObject : public Object {
   }
   std::vector<std::shared_ptr<Object>>& captured_scope() noexcept { return captured_scope_; }
 
+  const std::shared_ptr<Object>& bound_receiver() const noexcept { return bound_receiver_; }
+  void bind_receiver(std::shared_ptr<Object> receiver) { bound_receiver_ = std::move(receiver); }
+
  private:
   std::string name_;
   const abc::AbcFile* file_{nullptr};
@@ -176,6 +186,7 @@ class FunctionObject : public Object {
   std::uint32_t native_id_{kNoNative};
   Class* owner_class_{nullptr};
   std::vector<std::shared_ptr<Object>> captured_scope_;
+  std::shared_ptr<Object> bound_receiver_;
 };
 
 class ClassObject : public Object {

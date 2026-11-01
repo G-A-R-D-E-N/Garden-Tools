@@ -367,6 +367,17 @@ public unsafe struct PlacedRef
     public IntPtr Internal;
     public int HasEmittance;
     public FormKey Emittance;
+    public int HasRadius;
+    public float Radius;
+    public int HasLightData;
+    public float LightFov;
+    public float LightFade;
+    public float LightEndDistanceCap;
+    public float LightShadowDepthBias;
+    public int HasLightNearClip;
+    public float LightNearClip;
+    public int HasLightVolumetricIntensity;
+    public float LightVolumetricIntensity;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -494,6 +505,18 @@ public unsafe struct LightInfo
     public IntPtr Gobo;
     public FormKey Lens;
     public FormKey GodRays;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct AddOnNodeInfo
+{
+    public int HasNodeIndex;
+    public uint NodeIndex;
+    public FormKey Light;
+    public IntPtr Model;
+    public int HasDnam;
+    public ushort MasterParticleCap;
+    public ushort Flags;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -3277,6 +3300,9 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_light_get_info")]
     public static extern Status LightGetInfo(IntPtr env, IntPtr record, LightInfo* out_info);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_add_on_node_get_info")]
+    public static extern Status AddOnNodeGetInfo(IntPtr env, IntPtr record, AddOnNodeInfo* out_info);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_bendable_spline_get_info")]
     public static extern Status BendableSplineGetInfo(IntPtr env, IntPtr record, BendableSplineInfo* out_info);
 
@@ -4008,6 +4034,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_for_block")]
     public static extern Status NifNodeForBlock(IntPtr nif, uint block, int* out_node);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_value")]
+    public static extern Status NifNodeValue(IntPtr nif, nuint index, int* out_has_value, int* out_value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_count")]
     public static extern Status NifShapeCount(IntPtr nif, nuint* out_count);

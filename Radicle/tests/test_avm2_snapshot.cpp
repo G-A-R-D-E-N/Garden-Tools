@@ -123,6 +123,16 @@ TEST(Avm2Snapshot, FlattensTheDisplayTreeWithComposedTransforms) {
   EXPECT_EQ(snapshot.entries[0].path, "");
   EXPECT_EQ(snapshot.entries[1].path, "/0");
   EXPECT_EQ(snapshot.entries[2].path, "/0/0");
+  const std::shared_ptr<DisplayObject> sprite = fo4::avm2::make_display_object(
+      harness.runtime,
+      *const_cast<fo4::avm2::Class*>(harness.runtime.find_class("flash.display::Sprite")));
+  ASSERT_NE(sprite, nullptr);
+  sprite->set_name("added_to_stage");
+  ASSERT_TRUE(movie->stage()->add_child(sprite));
+  const FrameSnapshot with_stage_child = movie->take_snapshot();
+  ASSERT_EQ(with_stage_child.entries.size(), 4u);
+  EXPECT_EQ(with_stage_child.entries[3].path, "/stage/1");
+  EXPECT_EQ(with_stage_child.entries[3].name, "added_to_stage");
   EXPECT_EQ(snapshot.entries[1].name, "loader");
   EXPECT_EQ(snapshot.entries[2].name, "shape");
   EXPECT_EQ(snapshot.entries[1].character_id, 10u);

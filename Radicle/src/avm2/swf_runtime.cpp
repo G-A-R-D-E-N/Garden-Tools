@@ -21,6 +21,7 @@
 #include <numbers>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -72,9 +73,68 @@ std::vector<std::shared_ptr<DisplayObject>> display_chain(
     const std::shared_ptr<DisplayObject>& node) {
   std::vector<std::shared_ptr<DisplayObject>> chain;
   for (DisplayObject* current = node.get(); current != nullptr; current = current->parent()) {
-    chain.push_back(current->shared_from_this());
+    chain.push_back(std::static_pointer_cast<DisplayObject>(current->shared_from_this()));
   }
   return chain;
+}
+
+void collect_frame_targets(const std::shared_ptr<DisplayObjectContainer>& container,
+                           std::vector<std::shared_ptr<DisplayObject>>& out) {
+  out.push_back(container);
+  for (const auto& child : container->children()) {
+    if (auto nested = std::dynamic_pointer_cast<DisplayObjectContainer>(child)) {
+      collect_frame_targets(nested, out);
+    } else {
+      out.push_back(child);
+    }
+  }
+}
+
+FrameSnapshot stage_snapshot(const DisplayObject* root, const DisplayObjectContainer* stage) {
+  FrameSnapshot snapshot = root == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root);
+  if (stage == nullptr) {
+    return snapshot;
+  }
+  const auto& children = stage->children();
+  for (std::size_t index = 0; index < children.size(); ++index) {
+    if (children[index] == nullptr || children[index].get() == root) {
+      continue;
+    }
+    FrameSnapshot content = build_frame_snapshot(*children[index]);
+    for (SnapshotEntry& entry : content.entries) {
+      entry.path = "/stage/" + std::to_string(index) + entry.path;
+      snapshot.entries.push_back(std::move(entry));
+    }
+  }
+  return snapshot;
+}
+
+void broadcast_frame_event(Interpreter& interpreter,
+                           const std::shared_ptr<DisplayObjectContainer>& stage, const char* type) {
+  if (stage == nullptr) {
+    return;
+  }
+  std::vector<std::shared_ptr<DisplayObject>> targets;
+  collect_frame_targets(stage, targets);
+  Runtime& runtime = interpreter.runtime();
+  const std::vector<std::shared_ptr<DisplayObject>> tracked = runtime.frame_listener_objects();
+  for (const auto& object : tracked) {
+    sync_frame_listener(runtime, object);
+  }
+  std::unordered_set<const DisplayObject*> seen;
+  for (const auto& target : targets) {
+    seen.insert(target.get());
+  }
+  for (const auto& object : runtime.frame_listener_objects()) {
+    if (object->stage() == nullptr && seen.insert(object.get()).second) {
+      targets.push_back(object);
+    }
+  }
+  for (const auto& target : targets) {
+    if (will_trigger(target, type)) {
+      dispatch_event(interpreter, target, type, false, 0);
+    }
+  }
 }
 
 void dispatch_pointer(Interpreter& interpreter, const char* type,
@@ -125,265 +185,7 @@ void update_roll(Interpreter& interpreter, std::vector<std::weak_ptr<DisplayObje
   }
 }
 
-std::shared_ptr<TimelineDefinition> timeline_from_rows(const SwfTimelineRows& rows) {
-  auto timeline = std::make_shared<TimelineDefinition>();
-  timeline->frame_count = std::max<std::uint32_t>(1, rows.frame_count);
-  timeline->labels = rows.labels;
-  return timeline;
-}
-
-Class* resolve_character_class(Runtime& runtime, const SwfMovieData& data,
-                               std::uint16_t character_id) {
-  const auto symbol = data.symbol_classes.find(character_id);
-  if (symbol != data.symbol_classes.end() && !symbol->second.empty()) {
-    if (Class* klass = const_cast<Class*>(runtime.find_class(symbol->second))) {
-      return klass;
-    }
-  }
-  if (data.sprites.find(character_id) != data.sprites.end()) {
-    return const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
-  }
-  if (data.text_fields.find(character_id) != data.text_fields.end()) {
-    return const_cast<Class*>(runtime.find_class("flash.text::TextField"));
-  }
-  if (data.static_texts.find(character_id) != data.static_texts.end()) {
-    return const_cast<Class*>(runtime.find_class("flash.text::StaticText"));
-  }
-  if (Class* shape = const_cast<Class*>(runtime.find_class("flash.display::Shape"))) {
-    return shape;
-  }
-  return const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
-}
-
-void apply_character_definition(DisplayObject& object, const SwfMovieData& data,
-                                std::uint16_t character_id) {
-  const auto bounds = data.character_bounds.find(character_id);
-  if (bounds != data.character_bounds.end()) {
-    object.set_origin(bounds->second.origin_x, bounds->second.origin_y);
-    object.set_width(bounds->second.width);
-    object.set_height(bounds->second.height);
-  }
-  const auto static_text = data.static_texts.find(character_id);
-  if (static_text != data.static_texts.end() && object.is_static_text()) {
-    auto& static_object = static_cast<StaticTextObject&>(object);
-    static_object.set_font_owner(data.font_owner);
-    static_object.set_records(static_text->second);
-  }
-  const auto text = data.text_fields.find(character_id);
-  if (text == data.text_fields.end() || !object.is_text_field()) {
-    return;
-  }
-  auto& field = static_cast<TextFieldObject&>(object);
-  field.set_font_owner(data.font_owner);
-  field.set_format(text->second.format);
-  field.set_word_wrap(text->second.word_wrap);
-  field.set_multiline(text->second.multiline);
-  field.set_auto_size(text->second.auto_size);
-  if (text->second.html) {
-    field.set_html_text(text->second.text);
-  } else {
-    field.set_text(text->second.text);
-  }
-}
-
-void apply_matrix(DisplayObject& object, const SwfPlacementRow& row) {
-  object.set_x(row.translate_x);
-  object.set_y(row.translate_y);
-  if (row.rotate_skew0 == 0.0 && row.rotate_skew1 == 0.0) {
-    object.set_rotation(0.0);
-    object.set_scale_x(row.scale_x);
-    object.set_scale_y(row.scale_y);
-    return;
-  }
-  const double determinant = row.scale_x * row.scale_y - row.rotate_skew0 * row.rotate_skew1;
-  object.set_rotation(std::atan2(row.rotate_skew0, row.scale_x) * 180.0 / std::numbers::pi);
-  object.set_scale_x(std::hypot(row.scale_x, row.rotate_skew0));
-  object.set_scale_y(std::copysign(std::hypot(row.rotate_skew1, row.scale_y), determinant));
-}
-
-void apply_placement_state(DisplayObject& object, const SwfPlacementRow& row) {
-  if (row.has_ratio || !row.move) {
-    object.set_ratio(row.has_ratio ? std::optional<std::uint16_t>{row.ratio} : std::nullopt);
-  }
-  if (row.has_blend_mode || !row.move) {
-    object.set_blend_mode(row.has_blend_mode ? row.blend_mode : std::uint8_t{0});
-  }
-  if (row.has_visible || !row.move) {
-    object.set_visible(row.has_visible ? row.visible : true);
-  }
-  if (row.has_bitmap_cache || !row.move) {
-    object.set_cache_as_bitmap(row.has_bitmap_cache && row.bitmap_cache);
-  }
-  if (row.has_filters || !row.move) {
-    object.set_placed_filters(row.filters);
-  }
-}
-
-class SwfTimelineClip : public MovieClip {
- public:
-  SwfTimelineClip(Class* display_class, std::shared_ptr<SwfMovieData> data,
-                  const SwfTimelineRows* rows, std::uint16_t character_id)
-      : MovieClip(display_class),
-        data_(std::move(data)),
-        rows_(rows),
-        character_id_(character_id) {
-    if (display_class != nullptr && display_class->prototype_object != nullptr) {
-      set_prototype(display_class->prototype_object);
-    }
-    if (rows_ != nullptr) {
-      set_timeline(timeline_from_rows(*rows_));
-    }
-    set_dynamic(true);
-  }
-
-  std::uint16_t character_id() const noexcept { return character_id_; }
-
- protected:
-  ExecutionResult apply_frame_state(Interpreter& interpreter) override {
-    if (rows_ == nullptr) {
-      return ExecutionResult{};
-    }
-    const std::uint32_t frame = current_frame();
-    if (frame == 0 || frame > rows_->frames.size()) {
-      return ExecutionResult{};
-    }
-    Runtime& runtime = interpreter.runtime();
-    std::vector<std::uint16_t> just_created;
-    for (const SwfPlacementRow& row : rows_->frames[frame - 1]) {
-      if (row.kind == SwfPlacementRow::Kind::Remove) {
-        const auto found = objects_.find(row.depth);
-        if (found != objects_.end()) {
-          remove_child(found->second);
-          sprite_clips_.erase(row.depth);
-          objects_.erase(found);
-        }
-        continue;
-      }
-      Class* klass = nullptr;
-      if (row.has_character) {
-        klass = resolve_character_class(runtime, *data_, row.character_id);
-        if (klass == nullptr) {
-          continue;
-        }
-      }
-      std::shared_ptr<DisplayObject> object;
-      const auto found = objects_.find(row.depth);
-      if (!row.has_character) {
-        if (found == objects_.end()) {
-          continue;
-        }
-        object = found->second;
-      } else if (found != objects_.end() && found->second->display_class() == klass &&
-                 found->second->character_id() == row.character_id) {
-        object = found->second;
-      } else {
-        if (found != objects_.end()) {
-          remove_child(found->second);
-          sprite_clips_.erase(row.depth);
-          objects_.erase(found);
-        }
-        const auto sprite = data_->sprites.find(row.character_id);
-        if (sprite != data_->sprites.end()) {
-          auto clip = std::make_shared<SwfTimelineClip>(klass, data_, &sprite->second,
-                                                        row.character_id);
-          object = clip;
-          sprite_clips_[row.depth] = clip.get();
-        } else {
-          object = make_display_object(runtime, *klass);
-        }
-        if (object == nullptr) {
-          continue;
-        }
-        apply_character_definition(*object, *data_, row.character_id);
-        add_child(object);
-        objects_[row.depth] = object;
-        just_created.push_back(row.depth);
-      }
-      if (row.has_matrix || !row.move) {
-        apply_matrix(*object, row);
-      }
-      if (row.has_character) {
-        object->set_character_id(row.character_id);
-      }
-      if (row.has_color_transform) {
-        object->set_color_multiply(row.color_multiply);
-        object->set_color_add(row.color_add);
-      }
-      if (row.has_clip_depth || !row.move) {
-        object->set_clip_depth(row.has_clip_depth ? static_cast<std::int32_t>(row.clip_depth) : 0);
-      }
-      apply_placement_state(*object, row);
-      if (!row.name.empty()) {
-        object->set_name(row.name);
-      }
-    }
-    order_children_by_depth();
-    for (const auto& [depth, clip] : sprite_clips_) {
-      if (clip == nullptr) {
-        continue;
-      }
-      const bool created = std::find(just_created.begin(), just_created.end(), depth) !=
-                           just_created.end();
-      ExecutionResult result =
-          created ? clip->goto_frame(interpreter, 1, true) : clip->advance_frame(interpreter);
-      if (!result.ok()) {
-        return result;
-      }
-    }
-    return ExecutionResult{};
-  }
-
- private:
-  void order_children_by_depth() {
-    std::vector<std::shared_ptr<DisplayObject>> expected;
-    expected.reserve(objects_.size());
-    for (const auto& entry : objects_) {
-      expected.push_back(entry.second);
-    }
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-      if (index >= children().size() || children()[index] != expected[index]) {
-        const auto found = std::find(children().begin(), children().end(), expected[index]);
-        if (found != children().end()) {
-          set_child_index(expected[index].get(), index);
-        }
-      }
-    }
-  }
-
-  std::shared_ptr<SwfMovieData> data_;
-  const SwfTimelineRows* rows_{nullptr};
-  std::uint16_t character_id_{0};
-  std::map<std::uint16_t, std::shared_ptr<DisplayObject>> objects_;
-  std::map<std::uint16_t, SwfTimelineClip*> sprite_clips_;
-};
-
 }  // namespace
-
-std::shared_ptr<MovieClip> build_movie_root(Runtime& runtime,
-                                            const std::shared_ptr<SwfMovieData>& data,
-                                            Class** out_root_class) {
-  if (data == nullptr) {
-    return nullptr;
-  }
-  Class* root_class = const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
-  if (!data->root_class_name.empty()) {
-    Class* document_class = const_cast<Class*>(runtime.find_class(data->root_class_name));
-    Class* movie_clip_class = const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
-    if (document_class != nullptr && movie_clip_class != nullptr &&
-        document_class->is_subclass_of(movie_clip_class)) {
-      root_class = document_class;
-    }
-  }
-  if (root_class == nullptr) {
-    return nullptr;
-  }
-  if (out_root_class != nullptr) {
-    out_root_class[0] = root_class;
-  }
-  auto root = std::make_shared<SwfTimelineClip>(root_class, data, &data->root, std::uint16_t{0});
-  root->set_playing(true);
-  return root;
-}
 
 const std::string& SwfRuntime::last_error() { return g_create_error; }
 
@@ -447,13 +249,13 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
     if (!runtime.link_added_file(runtime.file_count() - 1).ok()) {
       return fail("the movie ABC file did not link");
     }
-    while (runtime_movie->next_script_ < runtime.scripts().size()) {
-      const ExecutionResult script_result =
-          interpreter.run_script(static_cast<std::uint32_t>(runtime_movie->next_script_));
-      ++runtime_movie->next_script_;
-      if (!script_result.ok()) {
-        return fail("a movie script initializer failed: " + script_result.message);
-      }
+  }
+  while (runtime_movie->next_script_ < runtime.scripts().size()) {
+    const ExecutionResult script_result =
+        interpreter.run_script(static_cast<std::uint32_t>(runtime_movie->next_script_));
+    ++runtime_movie->next_script_;
+    if (!script_result.ok()) {
+      return fail("a movie script initializer failed: " + script_result.message);
     }
   }
   runtime_movie->stage_ = stage;
@@ -462,10 +264,16 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   if (runtime_movie->root_ == nullptr) {
     return fail("the root clip could not be built");
   }
-  // The document class constructor reads stage, so the root must be on the stage first.
   stage->add_child(runtime_movie->root_);
   if (runtime_movie->root_class_ != nullptr) {
     runtime_movie->root_class_->apply_slot_defaults(*runtime_movie->root_);
+  }
+  const ExecutionResult placed =
+      runtime_movie->root_->place_frame(interpreter, 1, options.start_playing);
+  if (!placed.ok()) {
+    return fail("frame 1 failed: " + placed.message);
+  }
+  if (runtime_movie->root_class_ != nullptr) {
     const ExecutionResult prepare_result =
         interpreter.prepare_class(*runtime_movie->root_class_, 0);
     if (!prepare_result.ok()) {
@@ -488,8 +296,7 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   }
   runtime_movie->playing_ = options.start_playing;
   runtime_movie->root_->set_playing(runtime_movie->playing_);
-  const ExecutionResult first_frame =
-      runtime_movie->root_->goto_frame(interpreter, 1, runtime_movie->playing_);
+  const ExecutionResult first_frame = runtime_movie->root_->run_frame_actions(interpreter);
   if (!first_frame.ok()) {
     return fail("frame 1 failed: " + first_frame.message);
   }
@@ -528,8 +335,10 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
   const double fps = data_ != nullptr && data_->frame_rate > 0.0 ? data_->frame_rate : 24.0;
   accumulator_ += dt_seconds * fps;
   while (accumulator_ >= 1.0) {
-    const ExecutionResult result = root_->advance_frame(interpreter);
+    broadcast_frame_event(interpreter, stage_, "enterFrame");
+    const ExecutionResult result = root_->advance_timeline(interpreter);
     if (!result.ok()) {
+      frame_error_ = result.message;
       playing_ = false;
       break;
     }
@@ -537,13 +346,18 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
       const std::vector<std::shared_ptr<MovieClip>> clips = runtime_->movie_clips();
       for (const auto& clip : clips) {
         if (clip != nullptr) {
-          const ExecutionResult clip_result = clip->advance_frame(interpreter);
+          const ExecutionResult clip_result = clip->advance_timeline(interpreter);
           if (!clip_result.ok()) {
+            frame_error_ = clip_result.message;
             playing_ = false;
             break;
           }
         }
       }
+    }
+    broadcast_frame_event(interpreter, stage_, "exitFrame");
+    if (runtime_ != nullptr && runtime_->take_render_request()) {
+      broadcast_frame_event(interpreter, stage_, "render");
     }
     accumulator_ -= 1.0;
   }
@@ -618,7 +432,7 @@ SoundEventQueue& SwfRuntime::sound_events() {
 }
 
 FrameSnapshot SwfRuntime::take_snapshot() {
-  FrameSnapshot snapshot = root_ == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root_);
+  FrameSnapshot snapshot = stage_snapshot(root_.get(), stage_.get());
   if (runtime_ != nullptr) {
     runtime_->sound_events().append_to(snapshot.sounds);
   }
@@ -626,7 +440,7 @@ FrameSnapshot SwfRuntime::take_snapshot() {
 }
 
 FrameSnapshot SwfRuntime::snapshot() const {
-  return root_ == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root_);
+  return stage_snapshot(root_.get(), stage_.get());
 }
 
 void SwfRuntime::mouse_move(Interpreter& interpreter, double x, double y) {

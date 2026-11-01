@@ -15,6 +15,33 @@ nlohmann::json ToolDefinition::toJson() const {
     };
 }
 
+std::optional<std::string> argumentError(const nlohmann::json& inputSchema,
+                                         const nlohmann::json& arguments) {
+    if (!arguments.is_object()) return "Arguments must be an object";
+    const auto properties = inputSchema.value("properties", nlohmann::json::object());
+    for (const auto& [name, value] : arguments.items()) {
+        static_cast<void>(value);
+        if (!properties.contains(name)) return "Unknown argument: " + name;
+    }
+    for (const auto& field : inputSchema.value("required", nlohmann::json::array())) {
+        const auto name = field.get<std::string>();
+        if (!arguments.contains(name)) return "Missing argument: " + name;
+    }
+    for (const auto& [name, schema] : properties.items()) {
+        const auto value = arguments.find(name);
+        if (value == arguments.end()) continue;
+        const auto type = schema.value("type", std::string{});
+        const bool valid = (type == "string" && value->is_string()) ||
+                           (type == "object" && value->is_object()) ||
+                           (type == "array" && value->is_array()) ||
+                           (type == "integer" && value->is_number_integer()) ||
+                           (type == "number" && value->is_number()) ||
+                           (type == "boolean" && value->is_boolean());
+        if (!valid) return name + " must be " + type;
+    }
+    return std::nullopt;
+}
+
 FunctionTool::FunctionTool(ToolDefinition definition, Handler handler)
     : definition_(std::move(definition)), handler_(std::move(handler)) {}
 
@@ -109,7 +136,19 @@ ToolResult Registry::call(std::string_view name, const nlohmann::json& arguments
         if (it == tools_.end()) return {"Unknown MCP tool: " + std::string(name), true};
         tool = it->second;
     }
+    {
+        std::lock_guard lock(hookMutex_);
+        if (beforeFirstCall_) {
+            if (auto error = beforeFirstCall_()) return {std::move(*error), true};
+            beforeFirstCall_ = nullptr;
+        }
+    }
     return tool->call(arguments);
+}
+
+void Registry::setBeforeFirstCall(std::function<std::optional<std::string>()> hook) {
+    std::lock_guard lock(hookMutex_);
+    beforeFirstCall_ = std::move(hook);
 }
 
 StdioServer::StdioServer(Registry& registry) : registry_(registry) {}

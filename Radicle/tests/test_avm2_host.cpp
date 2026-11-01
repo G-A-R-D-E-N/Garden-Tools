@@ -124,9 +124,28 @@ TEST(Avm2Host, GetDefinitionByNameResolvesABuiltinClass) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder code;
   const std::uint32_t definition = script.multiname("getDefinitionByName");
-  code.pushnull();
   code.getlex(definition);
+  code.pushnull();
   code.pushstring(script.string_of("flash.display::Sprite"));
+  code.call(1);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_object());
+  EXPECT_EQ(result.value.as_object()->kind(), fo4::avm2::ObjectKind::Class);
+  const auto& class_object = static_cast<const fo4::avm2::ClassObject&>(*result.value.as_object());
+  ASSERT_NE(class_object.represented_class(), nullptr);
+  EXPECT_EQ(class_object.represented_class()->name, "flash.display::Sprite");
+}
+
+TEST(Avm2Host, GetDefinitionByNameAcceptsADottedName) {
+  HostHarness harness;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t definition = script.multiname("getDefinitionByName");
+  code.getlex(definition);
+  code.pushnull();
+  code.pushstring(script.string_of("flash.display.Sprite"));
   code.call(1);
   code.returnvalue();
   const ExecutionResult result = harness.run(script, code);
@@ -144,8 +163,8 @@ TEST(Avm2Host, QualifiedClassNameReportsTheClass) {
   avm2_test::CodeBuilder code;
   const std::uint32_t qualified = script.multiname("getQualifiedClassName");
   const std::uint32_t sprite = script.multiname("Sprite", "flash.display");
-  code.pushnull();
   code.getlex(qualified);
+  code.pushnull();
   code.getlex(sprite);
   code.call(1);
   code.returnvalue();
@@ -186,6 +205,106 @@ TEST(Avm2Host, UrlLoaderReadsThroughTheAssetResolver) {
   ASSERT_TRUE(result.value.is_string());
   EXPECT_EQ(result.value.as_string(), "hello");
   EXPECT_EQ(harness.runtime.host().stats().asset_requests, 1u);
+}
+
+TEST(Avm2Host, AFailingCompleteHandlerOfAUrlLoaderIsRecorded) {
+  HostHarness harness;
+  harness.assets["config.xml"] = std::vector<std::uint8_t>{'h', 'i'};
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder throw_code;
+  throw_code.pushbyte(7);
+  throw_code.throw_op();
+  throw_code.returnvoid();
+  const std::uint32_t throw_method = script.method("onComplete", throw_code.bytes(), 2);
+  avm2_test::CodeBuilder code;
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t loader_class = script.multiname("URLLoader", "flash.net");
+  const std::uint32_t url_name = script.multiname("url");
+  const std::uint32_t load_name = script.multiname("load");
+  const std::uint32_t listen_name = script.multiname("addEventListener");
+  code.getlex(request_class);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlocal(1);
+  code.pushstring(script.string_of("config.xml"));
+  code.setproperty(url_name);
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(2);
+  code.getlocal(2);
+  code.pushstring(script.string_of("complete"));
+  code.newfunction(throw_method);
+  code.callproperty(listen_name, 2);
+  code.pop();
+  code.getlocal(2);
+  code.getlocal(1);
+  code.callproperty(load_name, 1);
+  code.pop();
+  code.returnvoid();
+  const ExecutionResult result = harness.run(script, code, 3);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(harness.interpreter.handler_failures().count, 1u);
+  EXPECT_EQ(harness.interpreter.handler_failures().first_message, "uncaught exception: 7");
+}
+
+TEST(Avm2Host, UrlRequestConstructorArgumentIsTheRequestUrl) {
+  HostHarness harness;
+  harness.assets["config.xml"] = std::vector<std::uint8_t>{'h', 'e', 'l', 'l', 'o'};
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t loader_class = script.multiname("URLLoader", "flash.net");
+  const std::uint32_t data_name = script.multiname("data");
+  const std::uint32_t load_name = script.multiname("load");
+  code.getlex(request_class);
+  code.pushstring(script.string_of("config.xml"));
+  code.construct(1);
+  code.setlocal(1);
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(2);
+  code.getlocal(2);
+  code.getlocal(1);
+  code.callproperty(load_name, 1);
+  code.pop();
+  code.getlocal(2);
+  code.getproperty(data_name);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 3);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "hello");
+}
+
+TEST(Avm2Host, UrlRequestWithoutAUrlHasANullUrl) {
+  HostHarness harness;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t url_name = script.multiname("url");
+  code.getlex(request_class);
+  code.construct(0);
+  code.getproperty(url_name);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_TRUE(result.value.is_null());
+}
+
+TEST(Avm2Host, UrlRequestWithANullUrlHasANullUrl) {
+  HostHarness harness;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t url_name = script.multiname("url");
+  code.getlex(request_class);
+  code.pushnull();
+  code.construct(1);
+  code.getproperty(url_name);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_TRUE(result.value.is_null());
 }
 
 TEST(Avm2Host, SoundPlayQueuesASnapshotSoundEvent) {

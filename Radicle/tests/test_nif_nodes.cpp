@@ -175,3 +175,57 @@ TEST(NifSkin, DropsTheWeightsOfASkinThatListsNoBones) {
   EXPECT_TRUE(shapes[0].bone_indices.empty());
   EXPECT_NE(shapes[0].warning.find("lists no bones"), std::string::npos);
 }
+
+namespace {
+
+std::vector<std::byte> value_trailer(std::uint32_t value, std::uint8_t flags) {
+  Writer w;
+  w.u32(value);
+  w.u8(flags);
+  return w.bytes();
+}
+
+}  // namespace
+
+TEST(NifNodes, ReadsTheValueOfABSValueNodeFromItsFiveByteTrailer) {
+  const auto nif = fo4::nif::read_nif(
+      build_nif({"node"}, {named_node_block("BSValueNode", 0, Transform{}, {}, value_trailer(0x01020304, 1))}, {0}));
+  ASSERT_EQ(nif.nodes().size(), 1U);
+  ASSERT_TRUE(nif.nodes()[0].value.has_value());
+  EXPECT_EQ(*nif.nodes()[0].value, 0x01020304);
+}
+
+TEST(NifNodes, KeepsAZeroValueAsPresent) {
+  const auto nif = fo4::nif::read_nif(
+      build_nif({"node"}, {named_node_block("BSValueNode", 0, Transform{}, {}, value_trailer(0, 0))}, {0}));
+  ASSERT_EQ(nif.nodes().size(), 1U);
+  ASSERT_TRUE(nif.nodes()[0].value.has_value());
+  EXPECT_EQ(*nif.nodes()[0].value, 0);
+}
+
+TEST(NifNodes, NeverGivesANiNodeAValueEvenWithTheSameTrailingBytes) {
+  const auto nif = fo4::nif::read_nif(
+      build_nif({"node"}, {named_node_block("NiNode", 0, Transform{}, {}, value_trailer(817, 1))}, {0}));
+  ASSERT_EQ(nif.nodes().size(), 1U);
+  EXPECT_FALSE(nif.nodes()[0].value.has_value());
+}
+
+TEST(NifNodes, ReadsABSValueNodeWithNoTrailerAsHavingNoValue) {
+  const auto nif = fo4::nif::read_nif(build_nif({"node"}, {named_node_block("BSValueNode", 0, Transform{}, {})}, {0}));
+  ASSERT_EQ(nif.nodes().size(), 1U);
+  EXPECT_FALSE(nif.nodes()[0].value.has_value());
+}
+
+TEST(NifNodes, ReadsAValueFromFourBytesAndNoneFromThree) {
+  Writer four;
+  four.u32(7);
+  const auto with_value = fo4::nif::read_nif(
+      build_nif({"node"}, {named_node_block("BSValueNode", 0, Transform{}, {}, four.bytes())}, {0}));
+  ASSERT_EQ(with_value.nodes().size(), 1U);
+  EXPECT_EQ(with_value.nodes()[0].value, 7);
+
+  const auto without_value = fo4::nif::read_nif(
+      build_nif({"node"}, {named_node_block("BSValueNode", 0, Transform{}, {}, std::vector<std::byte>(3))}, {0}));
+  ASSERT_EQ(without_value.nodes().size(), 1U);
+  EXPECT_FALSE(without_value.nodes()[0].value.has_value());
+}

@@ -3,14 +3,14 @@
         if (multiname == nullptr) {
           return fail(InterpreterStatus::TypeError, "finddef has an invalid multiname");
         }
-        Object* owner = nullptr;
+        std::shared_ptr<Object> owner;
         bool found = false;
         status = find_scope_binding(frame, *multiname, false, owner, found, message);
         if (status != InterpreterStatus::Ok) {
           break;
         }
         if (found) {
-          push_value(borrowed_object(*owner));
+          push_value(Value::object(owner));
         } else {
           push_value(Value::null());
         }
@@ -57,7 +57,7 @@
                           value_kind_name(object.kind()));
         }
         ExecutionResult nested =
-            set_property(frame, *object.as_object(), *multiname, value, false, depth);
+            set_property(frame, object.as_object(), *multiname, value, false, depth);
         if (!nested.ok()) {
           return nested;
         }

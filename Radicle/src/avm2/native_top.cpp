@@ -155,7 +155,8 @@ bool try_top_native(Interpreter& interpreter, native::Id id, const Value& self,
       return true;
     }
     case native::Id::to_string_value:
-      out = native_value(Value::string(to_string(argument_at(arguments, 0))));
+      out = native_value(
+          Value::string(arguments.empty() ? std::string{} : to_string(arguments[0])));
       return true;
     case native::Id::to_number_value:
       out = native_value(Value::number(to_number(argument_at(arguments, 0))));

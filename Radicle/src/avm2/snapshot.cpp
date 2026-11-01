@@ -99,6 +99,7 @@ SnapshotEntry make_entry(const DisplayObject& object, const std::string& path,
   entry.ratio = object.ratio();
   entry.cache_as_bitmap = object.cache_as_bitmap();
   entry.placed_filters = object.placed_filters();
+  entry.geometry = effective_shape_geometry(object);
   if (object.is_text_field()) {
     const auto& text_field = static_cast<const TextFieldObject&>(object);
     for (const TextRun& run : text_field.runs()) {
@@ -240,6 +241,18 @@ std::uint64_t snapshot_hash(const FrameSnapshot& snapshot) {
     hasher.u32(static_cast<std::uint32_t>(entry.placed_filters.size()));
     for (const swf::SwfFilter& filter : entry.placed_filters) {
       hash_filter(hasher, filter);
+    }
+    static const ShapeGeometry kNoEdges;
+    const ShapeGeometry& geometry = entry.geometry ? *entry.geometry : kNoEdges;
+    hasher.u32(static_cast<std::uint32_t>(geometry.edges.size()));
+    for (const ShapeEdge& edge : geometry.edges) {
+      hasher.u32(edge.fill0);
+      hasher.u32(edge.fill1);
+      hasher.u32(static_cast<std::uint32_t>(edge.points.size()));
+      for (const ShapePoint& point : edge.points) {
+        hasher.f64(point.x);
+        hasher.f64(point.y);
+      }
     }
     hasher.u32(static_cast<std::uint32_t>(entry.runs.size()));
     for (const SnapshotTextRun& run : entry.runs) {

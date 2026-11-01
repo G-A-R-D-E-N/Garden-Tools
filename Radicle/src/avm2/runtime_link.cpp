@@ -1,5 +1,7 @@
 #include <fo4/avm2/runtime.hpp>
 
+#include "runtime_internal.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -38,10 +40,14 @@ std::string instance_key(const abc::AbcFile& file, std::uint32_t instance_index)
 
 }  // namespace
 
-RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
+RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file,
+                                              const std::shared_ptr<ApplicationDomainObject>& domain) {
   if (file.instances.size() != file.classes.size()) {
     return RuntimeStatus::InvalidTrait;
   }
+  // A file without a domain must record its classes on the root, keeping them parent-visible.
+  const std::shared_ptr<ApplicationDomainObject> table =
+      domain != nullptr ? domain : current_domain();
   for (std::uint32_t index = 0; index < file.instances.size(); ++index) {
       Multiname name_multiname;
       if (resolve_multiname(file, file.instances[index].name, name_multiname) !=
@@ -68,6 +74,7 @@ RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
         const auto existing = class_by_key_.find(key);
         if (existing != class_by_key_.end()) {
           class_by_instance_[instance_key(file, index)] = existing->second;
+          table->define_local_definition(owned->name, existing->second);
           continue;
         }
         class_by_key_.emplace(key, klass);
@@ -77,6 +84,7 @@ RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
       }
     class_by_instance_[instance_key(file, index)] = klass;
     classes_.push_back(klass);
+    table->define_local_definition(owned->name, klass);
     owned_classes_.push_back(std::move(owned));
   }
   return RuntimeStatus::Ok;
@@ -84,7 +92,7 @@ RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
 
 RuntimeStatus Runtime::build_class_shells() {
   for (const FileState& state : files_) {
-    if (build_shells_for_file(*state.file) != RuntimeStatus::Ok) {
+    if (build_shells_for_file(*state.file, state.domain) != RuntimeStatus::Ok) {
       return RuntimeStatus::InvalidTrait;
     }
   }
@@ -109,7 +117,7 @@ RuntimeLoad Runtime::link_added_file(std::size_t file_index) {
     result.message = "file is already linked";
     return result;
   }
-  if (build_shells_for_file(*state.file) != RuntimeStatus::Ok) {
+  if (build_shells_for_file(*state.file, state.domain) != RuntimeStatus::Ok) {
     result.status = RuntimeStatus::DuplicateClass;
     result.message = "a class name is defined twice";
     return result;
@@ -132,6 +140,92 @@ RuntimeLoad Runtime::link_added_file(std::size_t file_index) {
     return result;
   }
   return result;
+}
+
+RuntimeStatus Runtime::build_script_globals() {
+  for (FileState& state : files_) {
+    if (state.scripts_registered) {
+      continue;
+    }
+    state.scripts_registered = true;
+    const abc::AbcFile& file = *state.file;
+    for (std::uint32_t script_index = 0; script_index < file.scripts.size(); ++script_index) {
+      const abc::AbcScriptInfo& script = file.scripts[script_index];
+      owned_classes_.push_back(std::make_unique<Class>());
+      Class* scope_class = owned_classes_.back().get();
+      std::shared_ptr<Object> global = std::make_shared<Object>();
+      global->set_instance_class(scope_class);
+      std::vector<Trait> traits;
+      for (const abc::AbcTrait& source : script.traits) {
+        const TraitKind kind = map_trait_kind(source.kind);
+        if (kind != TraitKind::Slot && kind != TraitKind::Const && kind != TraitKind::Class &&
+            kind != TraitKind::Method && kind != TraitKind::Function) {
+          continue;
+        }
+        Trait trait;
+        if (resolve_multiname(file, source.name, trait.multiname) != RuntimeStatus::Ok) {
+          return RuntimeStatus::InvalidMultiname;
+        }
+        if (source.slot_id > kMaxSlotIndex) {
+          return RuntimeStatus::InvalidTrait;
+        }
+        trait.file = &file;
+        trait.kind = kind == TraitKind::Slot ? TraitKind::Slot : TraitKind::Const;
+        trait.slot_id = source.slot_id;
+        trait.has_default = true;
+        switch (kind) {
+          case TraitKind::Class: {
+            Class* nested = class_for_instance(file, source.class_index);
+            if (nested == nullptr || nested->class_object == nullptr) {
+              return RuntimeStatus::InvalidTrait;
+            }
+            if (nested->script_global == nullptr) {
+              nested->script_global = global;
+            }
+            trait.default_value = Value::object(nested->class_object);
+            break;
+          }
+          case TraitKind::Method:
+          case TraitKind::Function: {
+            const std::uint32_t method_index =
+                kind == TraitKind::Method ? source.method_index : source.class_index;
+            std::shared_ptr<FunctionObject> function =
+                function_for_method(file, method_index, file.method_name(method_index));
+            if (function == nullptr) {
+              return RuntimeStatus::InvalidTrait;
+            }
+            function->captured_scope().push_back(global);
+            script_functions_.push_back(function);
+            trait.default_value = Value::object(function);
+            if (trait.multiname.has_fixed_name() && !trait.multiname.namespaces.empty()) {
+              Property& property =
+                  global_object_->define_own_property(primary_key(trait.multiname));
+              property.kind = PropertyKind::Value;
+              property.value = trait.default_value;
+            }
+            break;
+          }
+          default:
+            trait.default_value = trait_default_value(file, source);
+            break;
+        }
+        if (!trait.multiname.has_fixed_name() || trait.multiname.namespaces.empty()) {
+          continue;
+        }
+        traits.push_back(std::move(trait));
+      }
+      number_auto_slots(traits, 0);
+      scope_class->instance_traits = std::move(traits);
+      scope_class->slot_count = scope_class->compute_slot_count();
+      scope_class->apply_slot_defaults(*global);
+      scripts_.push_back(ScriptEntry{&file, script.init, script_index, global});
+    }
+  }
+  for (Class* klass : classes_) {
+    register_class_global(*klass);
+    klass->slot_count = klass->compute_slot_count();
+  }
+  return RuntimeStatus::Ok;
 }
 
 }  // namespace fo4::avm2
