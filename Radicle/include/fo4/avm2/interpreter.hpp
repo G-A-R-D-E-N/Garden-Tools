@@ -65,6 +65,12 @@ struct ExecutionResult {
   bool ok() const noexcept { return status == InterpreterStatus::Ok; }
 };
 
+/* Invariant: first_message is the text of the first counted failure. */
+struct HandlerFailures {
+  std::size_t count{0};
+  std::string first_message;
+};
+
 /* The interpreter must stay single threaded and clock free, so equal inputs give equal results. */
 class Interpreter {
  public:
@@ -110,6 +116,9 @@ class Interpreter {
   void advance_host_time(double dt_ms);
   ExecutionResult call_native_id(std::uint32_t native_id, const Value& self,
                                  const std::vector<Value>& arguments, std::size_t depth);
+  /* Requires the result of one handler call; a success is ignored. */
+  void record_handler_failure(const ExecutionResult& result);
+  const HandlerFailures& handler_failures() const noexcept { return handler_failures_; }
 
  private:
   struct Frame {
@@ -160,23 +169,32 @@ class Interpreter {
   InterpreterStatus jump_to_offset(Frame& frame, std::int32_t offset, std::string& message);
   std::uint32_t instruction_index_at(const Frame& frame, std::int32_t offset) const;
 
-  ExecutionResult get_property(Frame& frame, Object& object, const Multiname& multiname,
+  ExecutionResult get_property(Frame& frame, const std::shared_ptr<Object>& owner,
+                               const Multiname& multiname, std::size_t depth);
+  ExecutionResult set_property(Frame& frame, const std::shared_ptr<Object>& owner,
+                               const Multiname& multiname, const Value& value, bool define,
                                std::size_t depth);
-  ExecutionResult set_property(Frame& frame, Object& object, const Multiname& multiname,
-                               const Value& value, bool define, std::size_t depth);
   InterpreterStatus find_scope_binding(Frame& frame, const Multiname& multiname,
-                                       bool create_on_global, Object*& owner, bool& found,
-                                       std::string& message);
-  ExecutionResult call_property(Frame& frame, Object& receiver, const Multiname& multiname,
-                                const std::vector<Value>& arguments, std::size_t depth);
+                                       bool create_on_global, std::shared_ptr<Object>& owner,
+                                       bool& found, std::string& message);
+  ExecutionResult call_property(Frame& frame, const std::shared_ptr<Object>& owner,
+                                const Multiname& multiname, const std::vector<Value>& arguments,
+                                std::size_t depth);
   ExecutionResult construct(Frame& frame, const ClassObject& class_object,
                             const std::vector<Value>& arguments, std::size_t depth);
+  ExecutionResult call_class(const ClassObject& class_object, const std::vector<Value>& arguments,
+                             std::size_t depth);
   ExecutionResult ensure_class_initialized(Class& klass, std::size_t depth);
   ExecutionResult initialize_class_value(const Value& value, std::size_t depth);
   bool is_instance_of(const Value& value, const Value& type) const;
   std::vector<Key>& enumeration_keys(Frame& frame, Object& object);
   InterpreterStatus coerce_value(const Multiname& multiname, Value& value,
                                  std::string& message);
+  InterpreterStatus coerce_parameter(const abc::AbcFile& file, std::uint32_t type_index,
+                                     Value& value, std::string& message);
+  InterpreterStatus bind_arguments(Frame& frame, const abc::AbcMethodInfo& info,
+                                   const std::string& name, std::vector<Value>& arguments,
+                                   std::string& message);
   InterpreterStatus array_property(Object& object, const Multiname& multiname, bool write,
                                    Value& value, bool& handled, std::string& message);
   InterpreterStatus domain_memory_load(std::uint8_t opcode, const Value& address, Value& value,
@@ -190,6 +208,7 @@ class Interpreter {
   std::size_t frames_{0};
   std::uint64_t random_state_{0x9E3779B97F4A7C15ULL};
   HostClock host_clock_;
+  HandlerFailures handler_failures_;
   std::uint8_t current_opcode_{0};
   std::uint32_t current_offset_{0};
   std::map<std::pair<const abc::AbcFile*, std::uint32_t>, Multiname> multinames_;

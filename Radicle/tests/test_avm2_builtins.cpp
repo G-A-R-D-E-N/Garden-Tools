@@ -85,8 +85,8 @@ TEST(Avm2Builtins, StringConversionOfAnIntProducesItsDecimalText) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t string_class = script.multiname("String");
   avm2_test::CodeBuilder code;
-  code.pushnull();
   code.getlex(string_class);
+  code.pushnull();
   code.pushbyte(41);
   code.call(1);
   code.returnvalue();
@@ -113,8 +113,8 @@ TEST(Avm2Builtins, BooleanConversionOfZeroIsFalse) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t boolean_class = script.multiname("Boolean");
   avm2_test::CodeBuilder code;
-  code.pushnull();
   code.getlex(boolean_class);
+  code.pushnull();
   code.pushbyte(0);
   code.call(1);
   code.returnvalue();
@@ -128,8 +128,8 @@ TEST(Avm2Builtins, TopLevelIsNaNRecognisesNonNumericText) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t is_nan = script.multiname("isNaN");
   avm2_test::CodeBuilder code;
-  code.pushnull();
   code.getlex(is_nan);
+  code.pushnull();
   code.pushstring(script.string_of("not a number"));
   code.call(1);
   code.returnvalue();
@@ -315,8 +315,8 @@ TEST(Avm2Builtins, ErrorConversionCarriesTheMessage) {
   const std::uint32_t error_class = script.multiname("Error");
   const std::uint32_t to_string = script.multiname("toString");
   avm2_test::CodeBuilder code;
-  code.pushnull();
   code.getlex(error_class);
+  code.pushnull();
   code.pushstring(script.string_of("boom"));
   code.call(1);
   code.callproperty(to_string, 0);
@@ -332,8 +332,8 @@ TEST(Avm2Builtins, TypeErrorConstructionKeepsTheSubclassName) {
   const std::uint32_t type_error = script.multiname("TypeError");
   const std::uint32_t to_string = script.multiname("toString");
   avm2_test::CodeBuilder code;
-  code.pushnull();
   code.getlex(type_error);
+  code.pushnull();
   code.pushstring(script.string_of("bad value"));
   code.call(1);
   code.callproperty(to_string, 0);
@@ -499,6 +499,48 @@ TEST(Avm2Builtins, ArrayConstructorWithOneNumberSetsLength) {
   ASSERT_TRUE(result.ok()) << result.message;
   ASSERT_TRUE(result.value.is_number_like());
   EXPECT_EQ(result.value.as_number(), 3.0);
+}
+
+TEST(Avm2Builtins, CallingTheArrayClassWithOneNumberSetsLength) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t array_class = script.multiname("Array");
+  const std::uint32_t length = script.multiname("length");
+  avm2_test::CodeBuilder code;
+  code.findpropstrict(array_class);
+  code.pushbyte(3);
+  code.callproperty(array_class, 1);
+  code.getproperty(length);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_number_like());
+  EXPECT_EQ(result.value.as_number(), 3.0);
+}
+
+TEST(Avm2Builtins, CallingStringWithNoArgumentGivesTheEmptyString) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t string_class = script.multiname("String");
+  avm2_test::CodeBuilder code;
+  code.findpropstrict(string_class);
+  code.callproperty(string_class, 0);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "");
+}
+
+TEST(Avm2Builtins, CallingNumberWithNoArgumentGivesZero) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t number_class = script.multiname("Number");
+  avm2_test::CodeBuilder code;
+  code.findpropstrict(number_class);
+  code.callproperty(number_class, 0);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_number_like());
+  EXPECT_EQ(result.value.as_number(), 0.0);
 }
 
 }  // namespace

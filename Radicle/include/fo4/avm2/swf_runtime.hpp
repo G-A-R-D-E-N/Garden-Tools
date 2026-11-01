@@ -2,6 +2,7 @@
 
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/fonts.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/snapshot.hpp>
 #include <fo4/avm2/text.hpp>
 #include <fo4/avm2/interpreter.hpp>
@@ -84,6 +85,8 @@ struct SwfMovieData {
   std::map<std::uint16_t, std::string> symbol_classes;
   /* Invariant: a character appears here only when its definition tag carries drawn bounds. */
   std::map<std::uint16_t, SwfCharacterBounds> character_bounds;
+  /* Invariant: a character appears here only when its shape tag carries fill edges. */
+  std::map<std::uint16_t, ShapeGeometry> character_shapes;
   std::map<std::uint16_t, SwfTextFieldData> text_fields;
   std::map<std::uint16_t, std::vector<StaticTextRecord>> static_texts;
   /* Invariant: font_owner is unique per created movie and never 0. */
@@ -141,6 +144,7 @@ class SwfRuntime {
   void char_event(Interpreter& interpreter, std::uint32_t char_code);
   void set_playing(bool playing);
   bool playing() const;
+  const std::string& frame_error() const noexcept { return frame_error_; }
 
   const std::shared_ptr<MovieClip>& root() const noexcept { return root_; }
   const std::shared_ptr<DisplayObjectContainer>& stage() const noexcept { return stage_; }
@@ -164,6 +168,7 @@ class SwfRuntime {
   std::weak_ptr<DisplayObject> mouse_down_;
   bool playing_{true};
   bool started_{false};
+  std::string frame_error_;
 };
 
 }  // namespace fo4::avm2

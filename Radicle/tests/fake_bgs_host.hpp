@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <map>
 #include <optional>
 #include <set>
@@ -29,7 +30,7 @@ class FakeBgsHost {
       return found->second;
     }
     if (name == "setHighscore") {
-      highscores_[argument(arguments, 0)] = argument(arguments, 1);
+      store_if_greater(argument(arguments, 0), argument(arguments, 1));
       return std::nullopt;
     }
     if (name == "getSaveData") {
@@ -71,6 +72,14 @@ class FakeBgsHost {
  private:
   static std::string argument(const std::vector<std::string>& arguments, std::size_t index) {
     return index < arguments.size() ? arguments[index] : std::string{};
+  }
+
+  void store_if_greater(const std::string& key, const std::string& score) {
+    const auto found = highscores_.find(key);
+    if (found == highscores_.end() ||
+        std::strtod(score.c_str(), nullptr) > std::strtod(found->second.c_str(), nullptr)) {
+      highscores_[key] = score;
+    }
   }
 
   std::vector<Call> calls_;

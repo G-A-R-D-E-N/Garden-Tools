@@ -9,6 +9,13 @@
 #include <cstdint>
 #include <string>
 
+namespace fo4::avm2 {
+
+bool lookup_class_traits(Class* start, bool static_traits, const Multiname& multiname,
+                         const std::vector<Value>* slots, PropertyLookup& result);
+
+}  // namespace fo4::avm2
+
 namespace fo4::avm2::detail {
 
 namespace op {
@@ -193,7 +200,7 @@ std::uint32_t double_operand(const abc::AbcInstruction& instruction);
 std::int32_t offset_operand(const abc::AbcInstruction& instruction);
 const abc::AbcDecodedOperand* switch_operand(const abc::AbcInstruction& instruction);
 
-Value borrowed_object(Object& object);
+std::shared_ptr<Object> owner_of(Object& object);
 std::string property_text(const Multiname& multiname);
 bool is_array_index(const std::string& name, std::uint32_t& out_index);
 std::string escape_xml_markup(const std::string& text, bool attribute);

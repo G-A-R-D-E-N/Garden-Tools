@@ -2,7 +2,9 @@
 
 #include <fo4/avm2/object.hpp>
 
+#include <map>
 #include <memory>
+#include <string>
 #include <utility>
 
 namespace fo4::avm2 {
@@ -16,6 +18,15 @@ class ApplicationDomainObject : public Object {
 
   const std::shared_ptr<ApplicationDomainObject>& parent() const noexcept { return parent_; }
 
+  /* A domain must keep its own class table, so sibling movies never see each other's classes. */
+  const Class* find_local_definition(const std::string& name) const {
+    const auto found = local_definitions_.find(name);
+    return found == local_definitions_.end() ? nullptr : found->second;
+  }
+  void define_local_definition(const std::string& name, const Class* defined) {
+    local_definitions_.emplace(name, defined);
+  }
+
   const std::shared_ptr<ByteArrayObject>& domain_memory() const noexcept { return domain_memory_; }
   void set_domain_memory(std::shared_ptr<ByteArrayObject> memory) noexcept {
     domain_memory_ = std::move(memory);
@@ -23,6 +34,7 @@ class ApplicationDomainObject : public Object {
 
  private:
   std::shared_ptr<ApplicationDomainObject> parent_;
+  std::map<std::string, const Class*> local_definitions_;
   std::shared_ptr<ByteArrayObject> domain_memory_;
 };
 

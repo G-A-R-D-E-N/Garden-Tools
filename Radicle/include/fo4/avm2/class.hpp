@@ -83,6 +83,7 @@ struct Class {
   std::size_t class_slot_count{0};
   std::shared_ptr<Object> prototype_object;
   std::shared_ptr<ClassObject> class_object;
+  std::shared_ptr<Object> script_global;
   bool linked{false};
   bool traits_built{false};
 

@@ -1,17 +1,22 @@
 #include <fo4/avm2/runtime.hpp>
 
+#include "runtime_internal.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace fo4::avm2 {
 
 namespace {
+
+constexpr std::string_view kAs3BuiltinNamespace = "http://adobe.com/AS3/2006/builtin";
 
 NamespaceKind map_namespace_kind(abc::AbcNamespaceKind kind) {
   switch (kind) {
@@ -31,26 +36,6 @@ NamespaceKind map_namespace_kind(abc::AbcNamespaceKind kind) {
       return NamespaceKind::StaticProtected;
   }
   return NamespaceKind::Namespace;
-}
-
-TraitKind map_trait_kind(abc::AbcTraitKind kind) {
-  switch (kind) {
-    case abc::AbcTraitKind::Slot:
-      return TraitKind::Slot;
-    case abc::AbcTraitKind::Method:
-      return TraitKind::Method;
-    case abc::AbcTraitKind::Getter:
-      return TraitKind::Getter;
-    case abc::AbcTraitKind::Setter:
-      return TraitKind::Setter;
-    case abc::AbcTraitKind::Class:
-      return TraitKind::Class;
-    case abc::AbcTraitKind::Function:
-      return TraitKind::Function;
-    case abc::AbcTraitKind::Const:
-      return TraitKind::Const;
-  }
-  return TraitKind::Slot;
 }
 
 std::string class_key(NamespaceKind kind, std::string_view name_space, std::string_view local_name) {
@@ -78,26 +63,38 @@ std::string instance_key(const abc::AbcFile& file, std::uint32_t instance_index)
   return key;
 }
 
-Value trait_default_value(const abc::AbcFile& file, const abc::AbcTrait& trait) {
-  if (trait.value_index == 0) {
-    return Value::undefined();
+void assign_auto_slot_ids(Class& klass, std::unordered_set<Class*>& pending) {
+  if (pending.erase(&klass) == 0) {
+    return;
   }
-  switch (trait.value_kind) {
+  if (klass.super != nullptr) {
+    assign_auto_slot_ids(*klass.super, pending);
+  }
+  const std::uint32_t inherited =
+      klass.super == nullptr ? 0u : static_cast<std::uint32_t>(klass.super->compute_slot_count());
+  number_auto_slots(klass.instance_traits, inherited);
+  number_auto_slots(klass.class_traits, 0u);
+}
+
+}  // namespace
+
+Value constant_value(const abc::AbcFile& file, abc::AbcValueKind kind, std::uint32_t index) {
+  switch (kind) {
     case abc::AbcValueKind::Utf8:
-      return Value::string(file.string_at(trait.value_index));
+      return Value::string(file.string_at(index));
     case abc::AbcValueKind::Int:
-      if (trait.value_index < file.pool.ints.size()) {
-        return Value::int32(file.pool.ints[trait.value_index]);
+      if (index < file.pool.ints.size()) {
+        return Value::int32(file.pool.ints[index]);
       }
       return Value::undefined();
     case abc::AbcValueKind::UInt:
-      if (trait.value_index < file.pool.uints.size()) {
-        return Value::uint32(file.pool.uints[trait.value_index]);
+      if (index < file.pool.uints.size()) {
+        return Value::uint32(file.pool.uints[index]);
       }
       return Value::undefined();
     case abc::AbcValueKind::Double:
-      if (trait.value_index < file.pool.doubles.size()) {
-        return Value::number(file.pool.doubles[trait.value_index]);
+      if (index < file.pool.doubles.size()) {
+        return Value::number(file.pool.doubles[index]);
       }
       return Value::undefined();
     case abc::AbcValueKind::True:
@@ -110,8 +107,6 @@ Value trait_default_value(const abc::AbcFile& file, const abc::AbcTrait& trait) 
       return Value::undefined();
   }
 }
-
-}  // namespace
 
 const char* runtime_status_name(RuntimeStatus status) noexcept {
   switch (status) {
@@ -150,6 +145,9 @@ RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, M
     const abc::AbcNamespace& entry = file.pool.namespaces[namespace_index];
     name_space.kind = map_namespace_kind(entry.kind);
     name_space.name = file.namespace_at(namespace_index);
+    if (entry.kind == abc::AbcNamespaceKind::Namespace && name_space.name == kAs3BuiltinNamespace) {
+      name_space = Namespace{};
+    }
     return true;
   };
   const auto resolve_set = [&file, &resolve_namespace](std::uint32_t set_index,
@@ -220,6 +218,13 @@ RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, M
 
 Runtime::Runtime() : global_object_(std::make_shared<Object>()) {}
 
+Runtime::~Runtime() {
+  frame_listener_objects_.clear();
+  for (const std::shared_ptr<FunctionObject>& function : script_functions_) {
+    function->captured_scope().clear();
+  }
+}
+
 std::uint32_t Runtime::register_sound(SoundResource resource) {
   const std::uint32_t id = next_sound_id_++;
   sound_table_.emplace(id, std::move(resource));
@@ -235,6 +240,27 @@ void Runtime::register_movie_clip(const std::shared_ptr<MovieClip>& clip) {
   if (clip != nullptr) {
     movie_clips_.push_back(clip);
   }
+}
+
+void Runtime::track_frame_listener(const std::shared_ptr<DisplayObject>& object) {
+  if (object == nullptr) {
+    return;
+  }
+  for (const std::shared_ptr<DisplayObject>& tracked : frame_listener_objects_) {
+    if (tracked == object) {
+      return;
+    }
+  }
+  frame_listener_objects_.push_back(object);
+}
+
+void Runtime::untrack_frame_listener(const DisplayObject* object) {
+  frame_listener_objects_.erase(
+      std::remove_if(frame_listener_objects_.begin(), frame_listener_objects_.end(),
+                     [object](const std::shared_ptr<DisplayObject>& tracked) {
+                       return tracked.get() == object;
+                     }),
+      frame_listener_objects_.end());
 }
 
 RuntimeLoad Runtime::add_file(const abc::AbcFile& file,
@@ -478,11 +504,13 @@ void Runtime::bind_function_class(FunctionObject& function) {
 }
 
 RuntimeStatus Runtime::build_traits() {
+  std::unordered_set<Class*> pending;
   for (Class* klass : classes_) {
     if (klass->external || klass->file == nullptr || klass->traits_built) {
       continue;
     }
     klass->traits_built = true;
+    pending.insert(klass);
     const abc::AbcFile& file = *klass->file;
     const auto build_trait = [this, &file, klass](const abc::AbcTrait& source, Trait& out) {
       if (resolve_multiname(file, source.name, out.multiname) != RuntimeStatus::Ok) {
@@ -558,6 +586,9 @@ RuntimeStatus Runtime::build_traits() {
       klass->class_traits.push_back(std::move(trait));
     }
   }
+  for (Class* klass : classes_) {
+    assign_auto_slot_ids(*klass, pending);
+  }
   return RuntimeStatus::Ok;
 }
 
@@ -567,65 +598,6 @@ void Runtime::register_class_global(Class& klass) {
     property.kind = PropertyKind::Value;
     property.value = Value::object(klass.class_object);
   }
-}
-
-RuntimeStatus Runtime::build_script_globals() {
-  for (FileState& state : files_) {
-    if (state.scripts_registered) {
-      continue;
-    }
-    state.scripts_registered = true;
-    const abc::AbcFile& file = *state.file;
-    for (std::uint32_t script_index = 0; script_index < file.scripts.size(); ++script_index) {
-      const abc::AbcScriptInfo& script = file.scripts[script_index];
-      scripts_.push_back(ScriptEntry{&file, script.init, script_index});
-      for (const abc::AbcTrait& source : script.traits) {
-        Trait trait;
-        if (resolve_multiname(file, source.name, trait.multiname) != RuntimeStatus::Ok) {
-          return RuntimeStatus::InvalidMultiname;
-        }
-        trait.kind = map_trait_kind(source.kind);
-        Value value = Value::undefined();
-        switch (trait.kind) {
-          case TraitKind::Class: {
-            const Class* nested = class_for_instance(file, source.class_index);
-            if (nested == nullptr) {
-              return RuntimeStatus::InvalidTrait;
-            }
-            value = Value::object(nested->class_object);
-            break;
-          }
-          case TraitKind::Function: {
-            std::shared_ptr<FunctionObject> function =
-                function_for_method(file, source.class_index,
-                                    file.method_name(source.class_index));
-            if (function == nullptr) {
-              return RuntimeStatus::InvalidTrait;
-            }
-            value = Value::object(function);
-            break;
-          }
-          case TraitKind::Slot:
-          case TraitKind::Const:
-            value = trait_default_value(file, source);
-            break;
-          default:
-            break;
-        }
-        if (!trait.multiname.has_fixed_name() || trait.multiname.namespaces.empty()) {
-          continue;
-        }
-        Property& property = global_object_->define_own_property(primary_key(trait.multiname));
-        property.kind = PropertyKind::Value;
-        property.value = value;
-      }
-    }
-  }
-  for (Class* klass : classes_) {
-    register_class_global(*klass);
-    klass->slot_count = klass->compute_slot_count();
-  }
-  return RuntimeStatus::Ok;
 }
 
 Class* Runtime::class_for_instance(const abc::AbcFile& file, std::uint32_t instance_index) const {
@@ -658,6 +630,9 @@ RuntimeLoad Runtime::link() {
   }
   if (install_bytearray_builtins() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::InvalidTrait, "the flash.utils classes do not install");
+  }
+  if (install_xml_builtins() != RuntimeStatus::Ok) {
+    return fail(RuntimeStatus::InvalidTrait, "the XML classes do not install");
   }
   if (build_class_shells() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::DuplicateClass, "a class name is defined twice");

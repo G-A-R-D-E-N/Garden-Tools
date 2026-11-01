@@ -63,6 +63,15 @@ bool try_system_native(Interpreter& interpreter, native::Id id, const Value& sel
 bool try_bytearray_native(Interpreter& interpreter, native::Id id, const Value& self,
                           const std::vector<Value>& arguments, std::size_t depth,
                           ExecutionResult& out);
+bool try_xml_native(Interpreter& interpreter, native::Id id, const Value& self,
+                    const std::vector<Value>& arguments, std::size_t depth, ExecutionResult& out);
+
+class XmlObject;
+
+Value read_xml_property(Interpreter& interpreter, const XmlObject& object,
+                        const Multiname& multiname);
+ExecutionResult write_xml_property(XmlObject& object, const Multiname& multiname,
+                                   const Value& value);
 
 /* Requires a named reachable property of the receiver; the name is a public package name. */
 Multiname builtin_name(std::string_view name);

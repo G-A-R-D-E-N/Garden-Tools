@@ -432,10 +432,12 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/class.cpp
   src/avm2/runtime.cpp
   src/avm2/runtime_link.cpp
+  src/avm2/runtime_traits.cpp
   src/avm2/domain.cpp
   src/avm2/interpreter.cpp
   src/avm2/interpreter_ops.cpp
   src/avm2/interpreter_property.cpp
+  src/avm2/interpreter_coerce.cpp
   src/avm2/interpreter_memory.cpp
   src/avm2/interpreter_xml_text.cpp
   src/avm2/interpreter_support.cpp
@@ -451,9 +453,11 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/native_display.cpp
   src/avm2/swf_movie_data.cpp
   src/avm2/swf_runtime.cpp
+  src/avm2/swf_timeline_clip.cpp
   src/avm2/snapshot.cpp
   src/avm2/display_snapshot.cpp
   src/avm2/hit_test.cpp
+  src/avm2/shape_geometry.cpp
   src/avm2/amf.cpp
   src/avm2/replay.cpp
   src/avm2/native_shared.cpp
@@ -468,6 +472,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/native_net.cpp
   src/avm2/native_system.cpp
   src/avm2/native_bytearray.cpp
+  src/avm2/xml.cpp
+  src/avm2/xml_parse.cpp
+  src/avm2/native_xml.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
@@ -1048,15 +1055,23 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_runtime.cpp
     tests/test_avm2_call_indexed.cpp
     tests/test_avm2_interpreter.cpp
+    tests/test_avm2_class_call.cpp
+    tests/test_avm2_xml.cpp
+    tests/test_avm2_types.cpp
+    tests/test_avm2_arguments.cpp
+    tests/test_avm2_stage_events.cpp
     tests/test_avm2_scope_depth.cpp
     tests/test_avm2_scripts_real.cpp
     tests/test_avm2_builtins.cpp
     tests/test_avm2_runtime_names.cpp
     tests/test_avm2_display.cpp
     tests/test_avm2_swf_runtime.cpp
+    tests/test_avm2_swf_shape_geometry.cpp
     tests/test_avm2_snapshot.cpp
     tests/test_avm2_host.cpp
     tests/test_avm2_bgs_bridge.cpp
+    tests/bgs_capture.cpp
+    tests/test_bgs_capture.cpp
     tests/test_avm2_domain.cpp
     tests/test_avm2_script.cpp
     tests/test_avm2_shared.cpp
@@ -1067,7 +1082,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_display_api.cpp
     tests/test_avm2_display_snapshot.cpp
     tests/test_avm2_document_class.cpp
+    tests/test_avm2_placed_construction.cpp
     tests/test_avm2_events.cpp
+    tests/test_avm2_handler_failures.cpp
+    tests/test_avm2_frame_listeners.cpp
     tests/test_avm2_focus_events.cpp
     tests/test_avm2_text.cpp
     tests/test_avm2_string_utf16.cpp

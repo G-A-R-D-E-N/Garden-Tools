@@ -169,7 +169,7 @@
         if (frame.scopes.empty() || frame.scopes.front() == nullptr) {
           return fail(InterpreterStatus::ScopeUnderflow, "no global scope");
         }
-        push_value(borrowed_object(*frame.scopes.front()));
+        push_value(Value::object(frame.scopes.front()));
         break;
       case op::k_getscopeobject: {
         const std::uint32_t index = count_operand(instruction);
@@ -177,7 +177,7 @@
           return fail(InterpreterStatus::ScopeUnderflow, "scope " + std::to_string(index) +
                                                              " is out of range");
         }
-        push_value(borrowed_object(*frame.scopes[index]));
+        push_value(Value::object(frame.scopes[index]));
         break;
       }
       case op::k_pushscope:
@@ -669,7 +669,7 @@
         Value type;
         const Class* target = runtime_.find_class(*multiname);
         if (target != nullptr) {
-          type = borrowed_object(*target->class_object);
+          type = Value::object(target->class_object);
         }
         bool matches = false;
         if (!target) {
