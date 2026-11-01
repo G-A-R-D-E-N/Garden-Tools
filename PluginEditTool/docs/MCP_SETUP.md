@@ -315,6 +315,8 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 |---|---|---|---|
 | `nif_inspect`, `nif_geometry` | `path` | no | Read a NIF: summary and geometry, in process through Radicle. |
 | `nif_verify`, `nif_tree` | `path` | no | Verification and block tree, in process through Radicle. |
+| `nif_fix` | `path`, `out_nif` | disk | Repairs a NIF in process and writes the result to `out_nif`. |
+| `nif_import` | `obj_path`, `out_nif` [`material`, `tex_diffuse`, `tex_normal`, `collision`, `from_blender`] | disk | Builds a NIF from an OBJ in process. `collision` adds a static box collision body around the mesh; a generated box has not been tested in the game. |
 | `material_inspect` | `path` | no | Reads a BGSM or BGEM material: `fileName`, `format`, `version` and its named `fields`. |
 | `material_set_fields` | `path`, `fields` [`output`] | disk | Sets named material fields (`fields` maps a name to a text value) and writes the result atomically to `output`, or back to `path` when no output is given. A conditional field such as `EmittanceColor` can be set only when its switch (`EmitEnabled`) is already true in the saved file: set the switch in one call and the field in the next. |
 | `audio_convert_to_xwm` | `source` [`output`, `bitrateBps`] | disk | Converts one audio or video file, or every supported file under a folder, to Fallout 4 XWM. Without `output` each `.xwm` goes next to its source; with a folder source, `output` is a folder that mirrors the layout. Needs xWMAEncode, plus ffmpeg for anything that is not PCM WAV. |
@@ -426,8 +428,9 @@ only feed the Creation Kit compiler route.
 - **The built-in engine reports every vanilla type as unknown.** It has no base script sources to
   resolve against. Set `PAPYRUS_BASE_IMPORTS` or pass `imports`, as described above.
 - **NIF commands need no external tool.** Fix, import (including box collision), inspect, geometry,
-  verify, tree and saving NIF edits all run in process. Fix repairs tangents, adds a missing BSX flag and
-  trims texture and material name whitespace; it does not change shader or BSX flags, and it leaves the
+  verify, tree and saving NIF edits all run in process. Fix repairs tangents, adds a missing BSX flag,
+  clears the BSX editor-marker bit and trims texture and material name whitespace; it does not change shader
+  flags or any other BSX bit, and it leaves the
   tangents of shapes without normal, tangent and UV attributes alone.
 - **`archive_pack` says `Archive2.exe is not configured`.** Install the Creation Kit or set
   `ARCHIVE2_PATH`.

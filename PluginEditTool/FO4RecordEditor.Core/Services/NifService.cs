@@ -60,14 +60,7 @@ public static class NifService
         Parallel.ForEach(unique, new ParallelOptions { MaxDegreeOfParallelism = degree }, rel =>
         {
             var resolved = TextureService.ResolveNif(rel);
-            if (resolved == null)
-            {
-                results[rel] = new { error = "Not found (loose or in any indexed archive)." };
-                Interlocked.Increment(ref GeoBatchDone);
-                return;
-            }
-
-            results[rel] = new { error = NoBackend };
+            results[rel] = new { error = resolved == null ? "Not found (loose or in any indexed archive)." : NoBackend };
             Interlocked.Increment(ref GeoBatchDone);
         });
 

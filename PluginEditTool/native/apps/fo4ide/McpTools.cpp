@@ -304,6 +304,30 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
              "nif", "Tree", {"path"})) return false;
     if (!add({"nif_geometry", "Return geometry data, read in-process", nifPathSchema},
              "nif", "Geo", {"path"})) return false;
+    if (!add({
+            "nif_fix",
+            "Repair a NIF in process and write the result to out_nif: tangents, a missing BSX flag, "
+            "the editor marker, and texture and material name whitespace.",
+            objectSchema({
+                {"path", {{"type", "string"}, {"description", "Path to the NIF file"}}},
+                {"out_nif", {{"type", "string"}, {"description", "Path to write the repaired NIF"}}}
+            }, nlohmann::json::array({"path", "out_nif"}))},
+            "nif", "Fix", {"path", "out_nif"})) return false;
+    if (!add({
+            "nif_import",
+            "Build a NIF from an OBJ in process. Set collision to add a static box collision body "
+            "around the mesh.",
+            objectSchema({
+                {"obj_path", {{"type", "string"}, {"description", "Path to the OBJ file"}}},
+                {"out_nif", {{"type", "string"}, {"description", "Path to write the NIF"}}},
+                {"material", {{"type", "string"}, {"description", "Optional BGSM or BGEM material path"}}},
+                {"tex_diffuse", {{"type", "string"}, {"description", "Optional diffuse texture path"}}},
+                {"tex_normal", {{"type", "string"}, {"description", "Optional normal texture path"}}},
+                {"collision", {{"type", "boolean"}, {"description", "Add a static box collision body. Default false."}}},
+                {"from_blender", {{"type", "boolean"}, {"description", "The OBJ was exported from Blender with Y up. Default false."}}}
+            }, nlohmann::json::array({"obj_path", "out_nif"}))},
+            "nif", "Import",
+            {"obj_path", "out_nif", "material", "tex_diffuse", "tex_normal", "collision", "from_blender"})) return false;
 
     if (!add({
             "audio_convert_to_xwm",

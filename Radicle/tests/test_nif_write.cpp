@@ -1,5 +1,6 @@
 #include "fo4/error.hpp"
 #include "fo4/nif/collision.hpp"
+#include "fo4/nif/describe.hpp"
 #include "fo4/nif/hknp_decode.hpp"
 #include "fo4/nif/hknp_encode.hpp"
 #include "fo4/nif/hknp_packfile.hpp"
@@ -604,6 +605,21 @@ TEST(NifFix, AddsTheMissingBsxFlagsToTheRoot) {
   const auto bsx = uint_at(root, 8);
   ASSERT_LT(bsx, nif.blocks().size());
   EXPECT_EQ(nif.blocks()[bsx].type, "BSXFlags");
+}
+
+// Regression: fix leaves the BSX editor-marker bit set, so a repaired mesh still fails the no-editor-markers check.
+TEST(NifFix, ClearsTheEditorMarkerAndKeepsTheOtherBsxBits) {
+  const auto fixed = fix_nif(read_nif(quad_with_wrong_frame_nif()));
+  const auto bsx = uint_at(block_bytes(fixed, read_nif(fixed), 0), 8);
+  const std::vector<Edit> edits{Edit{bsx, "flags", as_number(640.0f)}, Edit{bsx, "editorMarker", as_number(1.0f)}};
+  const auto marked = apply_edits(read_nif(fixed), edits);
+  const auto marker_fault = [](const std::vector<std::byte>& bytes) {
+    return fo4::nif::verify_nif(read_nif(bytes)).checks.at(2).failure;
+  };
+  ASSERT_NE(marker_fault(marked), "");
+  const auto repaired = fix_nif(read_nif(marked));
+  EXPECT_EQ(marker_fault(repaired), "");
+  EXPECT_EQ(fo4::nif::read_bsx_flags(read_nif(repaired), bsx), 640U);
 }
 
 TEST(NifFix, TrimsWhitespaceFromTexturePathsAndMaterialNames) {

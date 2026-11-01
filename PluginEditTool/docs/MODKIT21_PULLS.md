@@ -1,5 +1,7 @@
 # Feature-pull tracker
 
+> Correction: `niftool` was removed. NIF reading, editing, fixing, verifying and import run in process in Radicle (`Radicle/src/nif`). Where this document presents `niftool` as the current design, read that as history.
+
 Bryant-21/modkit21 (GPL-3.0) is a much larger FO4 modding tool built by a friend of this project's
 maintainer, who gave explicit permission to review its source and pull ideas into FO4RecordEditor.
 This doc tracks that ongoing comparison: what's been reviewed, what got pulled (as MCP tools), what

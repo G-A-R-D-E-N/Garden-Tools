@@ -1,5 +1,7 @@
 # houseCARL feature-pull evaluation
 
+> Correction: `niftool` was removed. NIF reading, editing, fixing, verifying and import run in process in Radicle (`Radicle/src/nif`). Where this document presents `niftool` as the current design, read that as history.
+
 houseCARL (`Avick3110/houseCARL`, GPL-3.0-only, cloned to `Tools/PluginEditTool/tools/houseCARL/`) is a
 sibling MCP tool built by the same maintainer's ecosystem, targeting Skyrim SE instead of Fallout 4,
 on the same Mutagen library. Same license family as our already-vendored Mutagen fork (see

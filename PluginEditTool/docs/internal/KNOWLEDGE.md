@@ -1,5 +1,7 @@
 # PluginEditTool Knowledge Base
 
+> Correction: `niftool` was removed. NIF reading, editing, fixing, verifying and import run in process in Radicle (`Radicle/src/nif`). Where this document presents `niftool` as the current design, read that as history.
+
 Knowledge accumulated across sessions. Read this before doing any plugin editing work.
 
 > **Location (2026-07-19):** this doc lives at `E:\F4SE OG\Tools\PluginEditTool\KNOWLEDGE.md`,

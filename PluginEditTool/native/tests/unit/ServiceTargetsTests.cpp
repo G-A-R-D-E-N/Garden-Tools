@@ -129,6 +129,51 @@ TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF") {
     CHECK_FALSE(parsed.contains("blocks"));
 }
 
+// Constraint: detects the Import RPC dropping the collision argument, which would save a NIF without the box the user asked for.
+TEST_CASE("NifTarget Import passes the collision argument to the service") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto obj = root / "quad.obj";
+    touch(obj, "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+
+    FakePlatform platform;
+    fo4ide::assets::NifService service;
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::app::NifTarget target(service, textures, platform);
+
+    const auto boxed = root / "boxed.nif";
+    auto result = target.invoke("Import", nlohmann::json::array({obj.string(), boxed.string(), "", "", "", true, false}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().starts_with("RESULT: import OK"));
+    std::ifstream written(boxed, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(written)), std::istreambuf_iterator<char>());
+    CHECK(bytes.find("bhkPhysicsSystem") != std::string::npos);
+
+    const auto plain = root / "plain.nif";
+    auto plainResult = target.invoke("Import", nlohmann::json::array({obj.string(), plain.string(), "", "", "", false, false}));
+    REQUIRE(plainResult.has_value());
+    std::ifstream plainFile(plain, std::ios::binary);
+    const std::string plainBytes((std::istreambuf_iterator<char>(plainFile)), std::istreambuf_iterator<char>());
+    CHECK(plainBytes.find("bhkPhysicsSystem") == std::string::npos);
+}
+
+// Regression: a stray non-UTF-8 byte in a path makes the error reply throw type_error.316 on the service thread.
+TEST_CASE("NifTarget Tree replaces a stray UTF-8 byte in its error reply") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto missing = root / std::string("missing\xFF.nif");
+
+    FakePlatform platform;
+    fo4ide::assets::NifService service;
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::app::NifTarget target(service, textures, platform);
+
+    auto result = target.invoke("Tree", nlohmann::json::array({missing.string()}));
+    REQUIRE(result.has_value());
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    CHECK(parsed.at("error").get<std::string>().find("missing") != std::string::npos);
+}
+
 TEST_CASE("NifTarget ApplyEdits takes the editor's JSON string and saves in-process") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

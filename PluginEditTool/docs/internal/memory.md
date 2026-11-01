@@ -1,5 +1,7 @@
 # Project memory
 
+> Correction: `niftool` was removed. NIF reading, editing, fixing, verifying and import run in process in Radicle (`Radicle/src/nif`). Where this document presents `niftool` as the current design, read that as history.
+
 ## FO4RecordEditor CI: self-hosted-only runners, the gated Windows leg, test-suite hardening
 _Condensed from the session on 2026-08-14._
 

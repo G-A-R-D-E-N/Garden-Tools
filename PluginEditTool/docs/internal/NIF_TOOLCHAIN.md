@@ -22,7 +22,7 @@ Blender ──OBJ──▶ fo4::nif::import_obj (Radicle) ──▶ FO4 .nif ─
                         │
    FO4RecordEditor (C#/WPF + React WebView2)
      • native host  NifService (PluginEditTool/native) → Radicle, JSON out
-     • MCP tools    nif_inspect / nif_verify / nif_tree / nif_geometry  → NifService
+     • MCP tools    nif_inspect / nif_verify / nif_tree / nif_geometry / nif_fix / nif_import  → NifService
      • GUI panel    View / Edit / Import / Inspect / Verify / Fix       → NifInterop → NifService
      • 3D viewport  (three.js) with DDS textures via Texconv
 ```
@@ -39,7 +39,7 @@ only argument parsing, the service surface and JSON.
 | `geometry` | `geometry_nif` | flat vert/tri/normal/uv arrays, texture slots, billboard mode; feeds the viewport |
 | `tree` | `describe_nif` | every block, grouped, with shader flags, per-material tail fields, alpha, BSX flags and the decoded vertex descriptor |
 | `verify` | `verify_nif` | the eight check names plus the vertex-descriptor/stride check |
-| `fix` | `fix_nif` | recomputes tangents and bitangents, adds a missing BSXFlags, trims texture and material whitespace; idempotent |
+| `fix` | `fix_nif` | recomputes tangents and bitangents, adds a missing BSXFlags, clears the BSX editor-marker bit, trims texture and material whitespace; idempotent |
 | `import` | `import_obj` | OBJ → `BSTriShape` + shader + texture set + BSX, with normals and tangents; `--from-blender` restores Z-up |
 | `set` | `apply_edits` / `apply_edits_json` | `{id,key,value}` edits; text, numbers, number lists and shader-flag name lists |
 
@@ -67,8 +67,10 @@ unknown or read-only key is a parse error and the file is left byte-identical.
 
 ## Limits
 
-- **Box collision import is not implemented.** `import` refuses it with `box collision is not
-  supported yet (needs the HKX writer, #1048)`. Reading and editing existing collision works.
+- **Box collision import writes one static box.** With the collision option, `import` writes a single
+  `bhkPhysicsSystem` body: an axis-aligned box around the mesh, centred and halved, with each half extent
+  at least 0.01 m. Compressed mesh, compound shapes, constraints, ragdolls and dynamic bodies are not
+  written, and a generated box has not been walked on in the game. Reading and editing existing collision works.
 - **No structural edits:** blocks cannot be added or removed yet (new shapes, deleting collision,
   adding a `NiAlphaProperty` to a shape that has none).
 - **Alpha blend and test functions are read-only;** the whole `flags` word can be set.

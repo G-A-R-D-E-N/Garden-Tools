@@ -40,6 +40,7 @@ constexpr std::size_t k_uv_bytes = 4;
 constexpr std::size_t k_extra_count_at = 4;
 constexpr std::size_t k_extra_refs_at = 8;
 constexpr std::size_t k_shader_name_at = 4;
+constexpr std::size_t k_bsx_flags_at = 4;
 constexpr std::string_view k_blanks = " \t\r\n";
 constexpr std::string_view k_bsx_type = "BSXFlags";
 constexpr std::string_view k_bsx_name = "BSX";
@@ -142,6 +143,14 @@ void trim_texture_set(Model& model, std::uint32_t block) {
   if (changed) model.blocks[block] = trimmed;
 }
 
+void clear_editor_marker(Model& model, std::uint32_t block) {
+  binary::Cursor cursor(model.blocks[block], 0);
+  cursor.read_i32();
+  const auto word = cursor.read_u32();
+  if ((word & k_bsx_editor_marker_bit) == 0) return;
+  write_int(model.blocks[block], k_bsx_flags_at, word & ~k_bsx_editor_marker_bit);
+}
+
 std::vector<std::int32_t> extra_refs(const Model& model, std::uint32_t block) {
   binary::Cursor cursor(model.blocks[block], 0);
   cursor.read_i32();
@@ -211,6 +220,7 @@ std::vector<std::byte> fix_nif(const NifFile& nif) {
     const auto& type = nif.blocks()[block].type;
     if (type == k_shader_type) trim_shader_name(model, block);
     if (type == k_texture_set_type) trim_texture_set(model, block);
+    if (type == k_bsx_type) clear_editor_marker(model, block);
   }
   if (!has_bsx(model, root)) attach_bsx(model, root);
   auto bytes = write_detail::serialize(model);

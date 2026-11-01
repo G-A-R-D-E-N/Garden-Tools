@@ -116,6 +116,7 @@ Edit read_edit(const nlohmann::json& raw) {
   if (raw_value.is_string()) {
     edit.value = raw_value.get<std::string>();
   } else if (raw_value.is_number()) {
+    if (is_boolean_key(edit.key)) throw parse_error(0, "key '" + edit.key + "' takes true or false, not a number");
     edit.value = exact_float(raw_value, edit.key);
   } else if (raw_value.is_boolean()) {
     if (!is_boolean_key(edit.key)) {

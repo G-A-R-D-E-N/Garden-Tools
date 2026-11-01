@@ -10,6 +10,8 @@ const stage = vi.fn<(name: string, base64: string) => Promise<string>>();
 const geo = vi.fn<(path: string) => Promise<string>>();
 const tree = vi.fn<(path: string) => Promise<string>>();
 const inspect = vi.fn<(path: string) => Promise<string>>();
+const importNif = vi.fn<(objPath: string, outNif: string, material: string, texDiffuse: string,
+  texNormal: string, collision: boolean, fromBlender: boolean) => Promise<string>>();
 
 function stubBridge() {
   vi.stubGlobal('chrome', {
@@ -17,7 +19,7 @@ function stubBridge() {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       hostObjects: {
-        nif: { StageDroppedFile: stage, Geo: geo, Tree: tree },
+        nif: { StageDroppedFile: stage, Geo: geo, Tree: tree, Import: importNif },
         material: { Inspect: inspect },
       },
     },
@@ -49,6 +51,7 @@ beforeEach(() => {
   geo.mockResolvedValue(JSON.stringify({ shapes: [] }));
   tree.mockResolvedValue(JSON.stringify({ blocks: [] }));
   inspect.mockResolvedValue(JSON.stringify({ fields: [] }));
+  importNif.mockResolvedValue('RESULT: import OK');
   stubBridge();
 });
 
@@ -134,5 +137,32 @@ describe('NIF drop failures', () => {
     render(<NifPanel onClose={() => {}} />);
     drop('mesh.nif');
     await screen.findByText(/dropped mesh\.nif/);
+  });
+});
+
+describe('NIF import box collision', () => {
+  function openImport() {
+    localStorage.setItem('nif.mode', 'import');
+    localStorage.setItem('nif.objPath', 'C:\\mods\\quad.obj');
+    localStorage.setItem('nif.outNif', 'C:\\mods\\quad.nif');
+    render(<NifPanel onClose={() => {}} />);
+  }
+
+  it('leaves box collision off and sends collision false by default', async () => {
+    // Regression: the box collision option defaults on, so every OBJ import gains a collision body the user did not ask for.
+    openImport();
+    expect((screen.getByLabelText(/Add box collision/) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /Author NIF/ }));
+    await waitFor(() => expect(importNif).toHaveBeenCalledWith(
+      'C:\\mods\\quad.obj', 'C:\\mods\\quad.nif', '', '', '', false, false));
+  });
+
+  it('sends collision true when the box is checked', async () => {
+    // Regression: the checked box is not passed to Import, so the NIF is written without the collision the user asked for.
+    openImport();
+    fireEvent.click(screen.getByLabelText(/Add box collision/));
+    fireEvent.click(screen.getByRole('button', { name: /Author NIF/ }));
+    await waitFor(() => expect(importNif).toHaveBeenCalledWith(
+      'C:\\mods\\quad.obj', 'C:\\mods\\quad.nif', '', '', '', true, false));
   });
 });

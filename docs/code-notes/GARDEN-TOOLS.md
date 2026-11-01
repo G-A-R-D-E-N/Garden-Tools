@@ -192,6 +192,8 @@ The `NifService::geometry` JSON is embedded as-is when it is a JSON object (mirr
 
 ## PluginEditTool/native/src/assets/NifRender.cpp:renderGeometry — in-process geo JSON, used when niftool does not resolve
 
+Retired: niftool was removed from the native host, so this section is history. Every NIF verb now runs in process; see `PluginEditTool/native/src/assets/NifService.cpp:NifService`.
+
 `renderGeometry` reads the NIF through Radicle's `fo4::nif` reader (`read_nif`, `read_shapes`, `billboard_mode`), so the 3D viewer and the cell geometry batch work with no niftool installed. `NifService::geometry` calls it only when niftool does not resolve (`PluginEditTool/native/src/assets/NifService.cpp:NifService::geometry`). The output keeps the `NifGeo` shape that `PluginEditTool/web/src/NifViewport.tsx` consumes: `{"fo4": bool, "shapes": [{name, verts, tris, normals, uvs, textures: [{slot, path}], skinned, billboard, billboardMode, bgsmPath}]}`. `textures` lists only non-empty slots. `billboard` and `billboardMode` appear only under an `NiBillboardNode` ancestor. `bgsmPath` is `Shape::material` when that ends in `.bgsm` (case-insensitive) and the emitted `textures` array is empty, which holds when every texture-set slot is empty.
 
 `verts` are shape-local: node transforms are not applied. Unverified: the niftool `geo` source is not in this tree, so whether it baked node transforms cannot be checked here. Multi-node meshes may place differently from the niftool output, and this shape-local path has not been checked against niftool on any multi-node NIF.
@@ -206,17 +208,23 @@ Keys follow `PluginEditTool/docs/internal/NIF_TOOLCHAIN.md`: `fo4`, `hasBSX` (a 
 
 ## PluginEditTool/native/src/assets/NifService.cpp:NifService::run — niftool-only authoring message
 
+Retired: niftool was removed from the native host, so this section is history. Every NIF verb now runs in process; see `PluginEditTool/native/src/assets/NifService.cpp:NifService`.
+
 `fix` always reaches `run`. `importObj` and `applyEdits` reach it only when the configured executable resolves; otherwise they run in-process (see `NifService::importObj` and `NifService::applyEdits`). `verify`, `tree`, `geometry` and `inspect` reach `run` only when the configured executable resolves; otherwise they read in-process. An empty executable path now reports `niftool not installed; fix needs it (set NIFTOOL_PATH or place niftool beside the application)`. A configured path that is missing is named in the error for `fix`. Before this change an empty path produced `niftool executable not found: ` with nothing after the colon, which reached the user as garbage text.
 
 ## PluginEditTool/native/src/assets/NifService.cpp:NifService::importObj — in-process import when niftool does not resolve
 
-`importObj` reads the OBJ and, when the configured executable does not resolve, calls `importInProcess`, which runs Radicle's `fo4::nif::import_obj` (`Radicle/src/nif/import_build.cpp:import_obj`). The bytes go to `<output>.niftmp` and are renamed over the output by `commitEditedNif`, then `renderVerify` reads the written file back. The reply starts with `RESULT: import OK (in-process)`, then `Saved:`, then the verify report. `NifPanel.tsx` enables the open-folder button on `RESULT: import OK`, so a verify that lists `[FAIL]` checks still shows as OK in the panel while the NIF stays on disk. Box collision is refused before anything is written, because the Radicle writer has no collision block. When niftool resolves, every import still goes to niftool with the same arguments, as `NifServiceTests.cpp` "NifService preserves import option ordering" pins.
+Retired: niftool was removed from the native host, so this section is history. Every NIF verb now runs in process; see `PluginEditTool/native/src/assets/NifService.cpp:NifService`.
+
+`importObj` reads the OBJ and, when the configured executable does not resolve, calls `importInProcess`, which runs Radicle's `fo4::nif::import_obj` (`Radicle/src/nif/import_build.cpp:import_obj`). The bytes go to `<output>.niftmp` and are renamed over the output by `commitEditedNif`, then `renderVerify` reads the written file back. The reply starts with `RESULT: import OK (in-process)`, then `Saved:`, then the verify report. `NifPanel.tsx` enables the open-folder button on `RESULT: import OK`, so a verify that lists `[FAIL]` checks still shows as OK in the panel while the NIF stays on disk. Box collision is written as one static box by the Radicle writer, which `PluginEditTool/docs/code-notes/PluginEditTool.md` describes. When niftool resolves, every import still goes to niftool with the same arguments, as `NifServiceTests.cpp` "NifService preserves import option ordering" pins.
 
 - `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService imports an OBJ in-process without niftool and the written NIF verifies`: regression: an in-process import writes a NIF that the verify rejects, or leaves a `.niftmp` file behind.
-- `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService refuses box collision in-process and writes no NIF`: regression: a box collision request is dropped, so the NIF is saved without the collision the user asked for.
+- `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService writes box collision in-process`: regression: a box collision request is dropped, so the NIF is saved without the collision the user asked for.
 - `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService in-process import rejects an OBJ without faces and writes no NIF`: regression: an OBJ with no faces is written as an empty shape instead of failing.
 
 ## PluginEditTool/native/src/assets/NifService.cpp:NifService::geometry — niftool when it resolves, in-process fallback
+
+Retired: niftool was removed from the native host, so this section is history. Every NIF verb now runs in process; see `PluginEditTool/native/src/assets/NifService.cpp:NifService`.
 
 `NifService::geometry` and `inspect` run niftool (`geo`, `inspect`) when the configured executable is a regular file, and read in-process otherwise. `niftoolResolves` in `NifService.cpp` makes that choice, so niftool users get the output they got before. A configured path that does not exist also falls back in-process, silently. The alternative is to return `niftool executable not found: <path>` from these two calls, a change to `geometry` and `inspect` only. This is a decision, not a verified result: whether niftool's `inspect` output (text or JSON) matches what the panel expects has not been checked.
 
@@ -225,6 +233,8 @@ Keys follow `PluginEditTool/docs/internal/NIF_TOOLCHAIN.md`: `fo4`, `hasBSX` (a 
 `Tree` and `Geo` return `{"error": ...}` JSON on failure through `serviceJsonText`, because `NifPanel.loadTree` and `NifPanel.loadGeo` JSON.parse the result and throw `parsed.error`. `Inspect` still uses `serviceText`, so its failure is the `Error: ...` text.
 
 ## PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService maps inspect onto the existing niftool command, NifService geometry maps onto the existing niftool geo command, NifService inspect reads an FO4 NIF in-process without niftool, NifService geometry returns the viewer contract for an FO4 NIF with niftool absent, NifService reads in-process when the configured niftool is missing, NifService geometry reports a truncated NIF as an error, NifService geometry names the BGSM material of an untextured shape, NifService authoring without niftool names the missing tool — NIF read and authoring regressions
+
+Retired: niftool was removed from the native host, so this section is history. Every NIF verb now runs in process; see `PluginEditTool/native/src/assets/NifService.cpp:NifService`.
 
 - Inspect with niftool configured: regresses if inspect stops running `inspect` through niftool when it resolves. The restored test also checks the arguments and the working directory.
 - Geometry with niftool configured: regresses if geometry stops running `geo` through niftool when it resolves, which the call count checks.
@@ -238,6 +248,8 @@ Keys follow `PluginEditTool/docs/internal/NIF_TOOLCHAIN.md`: `fo4`, `hasBSX` (a 
 Fixtures: `PluginEditTool/native/tests/helpers/NifFixture.hpp:nifFile` writes a BS version 130 file from a block list. `triangleNif` is one `BSTriShape` (three verts, one triangle), and `materialNif` adds a `BSLightingShaderProperty` that names a material and a `BSShaderTextureSet` with two empty slots. Both are generated in the test rather than committed, and the test-local copy avoids the gtest dependency of `nif_build.hpp`.
 
 ## PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:CellTarget geometry batch embeds the niftool geo JSON for a resolved mesh, CellTarget geometry batch embeds in-process geometry for a resolved mesh with niftool absent, CellTarget geometry batch isolates a truncated mesh from its neighbours, CellTarget geometry batch records a worker exception instead of terminating, NifTarget Tree reports a missing niftool as JSON the panel can show, NifTarget Geo reports a parse failure as JSON the panel can show — NIF batch, Tree and Geo regressions
+
+Retired: niftool was removed from the native host, so this section is history. Every NIF verb now runs in process; see `PluginEditTool/native/src/assets/NifService.cpp:NifService`.
 
 - Batch with niftool configured: regresses if a resolved mesh stops being handed to niftool `geo`, or its JSON stops being embedded.
 - Batch with niftool absent: regresses if the cell geometry batch depends on the niftool runner again, which left every mesh empty when niftool was missing.

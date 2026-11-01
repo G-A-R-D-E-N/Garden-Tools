@@ -24,6 +24,7 @@ using fo4::nif::EditValue;
 using fo4::nif::NifFile;
 using fo4::nif::read_nif;
 using nif_build::Block;
+using nif_build::expect_parse_error;
 using nif_build::Writer;
 
 constexpr std::uint32_t k_root = 0;
@@ -382,9 +383,19 @@ TEST(NifWriteBlocks, JsonRefusesABooleanForANumericKey) {
   EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"editorMarker","value":false}])"));
 }
 
+// Regression: a JSON number for a boolean key was stored as 1.0 or 0.0 and accepted, so editorMarker took 1 silently.
+TEST(NifWriteBlocks, JsonRefusesANumberForABooleanKeyByName) {
+  expect_parse_error([] { fo4::nif::read_edits_json(R"([{"id":1,"key":"editorMarker","value":1}])"); },
+                     "key 'editorMarker' takes true or false, not a number");
+  expect_parse_error([] { fo4::nif::read_edits_json(R"([{"id":1,"key":"alphaBlend","value":0}])"); },
+                     "key 'alphaBlend' takes true or false, not a number");
+}
+
 TEST(NifWriteBlocks, JsonRefusesANumberPastTheFloatRange) {
   // Invariant: a double past FLT_MAX is refused before the narrowing cast, which is undefined for it.
-  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":1e300}])"), fo4::parse_error);
-  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"uvScale","value":[-1e300,0.5]}])"), fo4::parse_error);
+  expect_parse_error([] { fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":1e300}])"); },
+                     "is outside the range of a 32-bit float");
+  expect_parse_error([] { fo4::nif::read_edits_json(R"([{"id":1,"key":"uvScale","value":[-1e300,0.5]}])"); },
+                     "is outside the range of a 32-bit float");
   EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":3.4e38}])"));
 }
