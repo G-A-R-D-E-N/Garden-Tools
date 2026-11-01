@@ -260,6 +260,11 @@ public:
         return std::unexpected(Error{"MemoryBackendUnavailable", "Memory trimming is unavailable"});
     }
 
+    // Constraint: script value writes must keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> setScriptValue(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script value writes are unavailable"});
+    }
+
     // Constraint: script structure writes keep the in-memory plugin unchanged on refusal.
     virtual Result<nlohmann::json> addScript(const nlohmann::json&) {
         return std::unexpected(Error{"ScriptBackendUnavailable", "Script writes are unavailable"});
@@ -281,6 +286,18 @@ public:
     }
     virtual Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json&) const {
         return std::unexpected(Error{"WeaponBackendUnavailable", "Weapon queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> getMagicEffects(const nlohmann::json&) const {
+        return std::unexpected(Error{"MagicEffectBackendUnavailable", "Magic effect queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> addMagicEffect(const nlohmann::json&) {
+        return std::unexpected(Error{"MagicEffectBackendUnavailable", "Magic effect writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setMagicEffect(const nlohmann::json&) {
+        return std::unexpected(Error{"MagicEffectBackendUnavailable", "Magic effect writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeMagicEffect(const nlohmann::json&) {
+        return std::unexpected(Error{"MagicEffectBackendUnavailable", "Magic effect writes are unavailable"});
     }
 };
 

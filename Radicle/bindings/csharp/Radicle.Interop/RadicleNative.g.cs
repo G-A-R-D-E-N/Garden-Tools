@@ -367,6 +367,17 @@ public unsafe struct PlacedRef
     public IntPtr Internal;
     public int HasEmittance;
     public FormKey Emittance;
+    public int HasRadius;
+    public float Radius;
+    public int HasLightData;
+    public float LightFov;
+    public float LightFade;
+    public float LightEndDistanceCap;
+    public float LightShadowDepthBias;
+    public int HasLightNearClip;
+    public float LightNearClip;
+    public int HasLightVolumetricIntensity;
+    public float LightVolumetricIntensity;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -494,6 +505,18 @@ public unsafe struct LightInfo
     public IntPtr Gobo;
     public FormKey Lens;
     public FormKey GodRays;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct AddOnNodeInfo
+{
+    public int HasNodeIndex;
+    public uint NodeIndex;
+    public FormKey Light;
+    public IntPtr Model;
+    public int HasDnam;
+    public ushort MasterParticleCap;
+    public ushort Flags;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -3028,7 +3051,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 95u;
+    public const uint CompiledAbiVersion = 102u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3332,6 +3355,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_light_get_info")]
     public static extern Status LightGetInfo(IntPtr env, IntPtr record, LightInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_add_on_node_get_info")]
+    public static extern Status AddOnNodeGetInfo(IntPtr env, IntPtr record, AddOnNodeInfo* out_info);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_bendable_spline_get_info")]
     public static extern Status BendableSplineGetInfo(IntPtr env, IntPtr record, BendableSplineInfo* out_info);
