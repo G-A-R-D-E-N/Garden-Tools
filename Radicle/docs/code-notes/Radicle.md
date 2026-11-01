@@ -10376,10 +10376,12 @@ summary, per-cell and per-issue accessors are pure reads, out-of-range indexes
 return NOT_FOUND and a bad argument INVALID_ARGUMENT. Issue codes are dense
 0..7; `radicle_previs_issue_name` range-checks them because a cast of 256 would
 wrap to a real enumerator and name a verdict that was never reported. The
-exports moved `RADICLE_ABI_VERSION` from 92 to 100, because 98 is claimed by
-`nomad/gt-swf-native-target` and 99 by `nomad/radicle-light-fields`; neither
-branch was merged here. The C# bindings and layout probe were regenerated from
-the headers, so `CompiledAbiVersion` and the two ABI assertions track 100.
+`Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is 104. The integration branch already ships
+100, and the open PRs above it claim 101 (#1045), 102 (#1041) and 103 (#1038),
+so a PR that adds a `c_api*.h` header has to move past the base and every open
+claim; the repository's ABI gate enforces that. The C# bindings and layout
+probe were regenerated, so `CompiledAbiVersion` and the two ABI assertions
+track 104.
 
 The `previs` RPC target serves `Scan(dataDir)` and `GetDataFolder()` for the
 panel. It builds the load order from the backend's plugin list and loads it

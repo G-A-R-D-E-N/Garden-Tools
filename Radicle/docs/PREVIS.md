@@ -168,7 +168,7 @@ opened archive alive, so memory scales with the load order plus BA2 table
 memory; a second concurrent scan would double that, so the RPC target allows
 one scan at a time and answers a second call with `PrevisScanBusy`.
 
-The C ABI (`include/fo4/c_api_previs.h`, ABI 100) exposes the report as an
+The C ABI (`include/fo4/c_api_previs.h`, ABI 104) exposes the report as an
 opaque handle with summary, per-cell and per-issue accessors; strings are
 borrowed until the report is destroyed and the report borrows its
 `radicle_env`. Issue names are range-checked: a wrapped code reports
