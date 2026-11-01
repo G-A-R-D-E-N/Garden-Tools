@@ -10773,7 +10773,7 @@ Tests: `Radicle/tests/test_avm2_frame_listeners.cpp` has `Avm2FrameListeners.Two
 
 With `FO4_DATA_DIR`, the test passes, and `ran` is 7. Its `R8_HASH` lines (program, frame hash, host-log hash, BGS calls) are AtomicCommand 15, GJ_Defrag 30, Grognak 2, PipFall 10, RedMenace 8, TurretHack 5 and ZetaInvaders 6. They are the same with and without the render dispatch. The test fails on any handler failure, and none occurred. `Radicle/testdata/swf/program_replay_pins.txt` has no rows, so the file does not pin these counts. TurretHack's 5 matches the round-5 note. The other six were compared only with this round's no-render baseline. `ComparesTheCapturedBgsSequenceForEachProgram` skips here, because it needs `FO4_SWF_CAPTURE_DIR` and this machine has no captures.
 
-## Radicle/include/fo4/math/interpolation.hpp:pchip, Radicle/include/fo4/texture/palette.hpp:palette_kmeans (generic maths, Bryant-21 intake row 31, Lane E)
+## Radicle/include/fo4/math/interpolation.hpp:pchip, Radicle/include/fo4/texture/palette.hpp:palette_kmeans (generic maths, intake row 31, Lane E)
 
 Two self-contained maths helpers the intake marks to-do because their `scientific` and `palette` crates have no Radicle counterpart: monotone cubic interpolation for terrain height resampling and k-means palette reduction for texture atlases. Both are implemented from the published algorithms, not from their code, and neither is wired to a consumer yet. C++ only, so `RADICLE_ABI_VERSION` is unchanged.
 
@@ -10783,9 +10783,9 @@ Two self-contained maths helpers the intake marks to-do because their `scientifi
 
 Measurement: none applies and none was invented. These are generic maths, not a Fallout 4 format, so no vanilla scan exists for them; what the tests pin are the mathematical invariants (exact linear reproduction, monotone/no-overshoot, clamping, the separated-cluster means, determinism and order independence, alpha separation) rather than measured game facts. No in-game check is meaningful for this slice.
 
-Licence: the Bryant-21 `scientific` and `palette` crates were read only to establish what the helpers are. The implementation follows the published Fritsch-Carlson interpolation and the standard farthest-point k-means initialization; no code, identifiers, comments, file structure or fixtures were reused.
+Licence: the upstream reference `scientific` and `palette` crates were read only to establish what the helpers are. The implementation follows the published Fritsch-Carlson interpolation and the standard farthest-point k-means initialization; no code, identifiers, comments, file structure or fixtures were reused.
 
-## Radicle/include/fo4/audio/sound_container.hpp:parse_sound_container (sound payload containers, Bryant-21 intake row 21, Lane E)
+## Radicle/include/fo4/audio/sound_container.hpp:parse_sound_container (sound payload containers, intake row 21, Lane E)
 
 The intake's audio row asks for Wwise WEM decode, which needs the Vorbis codebooks extracted from a 64-bit Wwise executable and is deliberately not attempted here: this slice is the container layer only and decodes no audio. Radicle had no audio-format reader at all, so `parse_sound_container` establishes what the shipped payloads are, refuses the shapes that never occur, and reports the header data a catalogue or batch tool needs (codec fields, packet count, payload span) without touching the samples. Their `audio/wwise_vorbis` decoder was read only far enough to learn that the codebooks are driver-supplied state; nothing about its container handling was reused.
 
@@ -10795,13 +10795,13 @@ Measured on the shipped game data (79 vanilla BA2 archives, read-only, independe
 
 Not done in this slice, and not claimed: audio decode of any kind (the Wwise Vorbis path stays to-do for the reason above), and parsing of the lip animation payload inside a `.fuz`, which is located and reported as a span but not interpreted. No in-game check applies: this reads shipped files, so the census above is the evidence.
 
-Licence: the Bryant-21 `audio` crate was read only to establish which formats the row covers (XWM, WEM, ATRAC9) and that the decoder needs caller-supplied codebooks. The container rules above were derived by measuring the shipped Fallout 4 files and the public RIFF/WMA definitions; no code, identifiers, comments, file structure or fixtures were reused, and no test comes from their fixtures.
+Licence: the upstream reference `audio` crate was read only to establish which formats the row covers (XWM, WEM, ATRAC9) and that the decoder needs caller-supplied codebooks. The container rules above were derived by measuring the shipped Fallout 4 files and the public RIFF/WMA definitions; no code, identifiers, comments, file structure or fixtures were reused, and no test comes from their fixtures.
 
 Tests: `Radicle/tests/test_sound_container.cpp` (`SoundContainer`), registered in `Radicle/CMakeLists.txt`. `ParsesABareXwmStream`, `ParsesAFuzeWrapperAndKeepsTheLipPrefixOffsets` and `ParsesAFuzeWrapperWithAnEmptyLip` pin the accepted shapes and reported spans; `RejectsAnUnsupportedFuzeVersion`, `RejectsAFuzeLipSizePastTheEnd`, `RejectsANonRiffPayload`, `RejectsANonXwmaRiffForm`, `RejectsARiffSizePastTheEnd`, `RejectsTrailingBytesAfterTheRiffStream`, `RejectsAWrongFormatTag`, `RejectsAZeroChannelCount`, `RejectsANon16BitSampleSize`, `RejectsAnOddDpdsPayload`, `RejectsAnEmptyDataChunk`, `RejectsAMissingFmtChunk`, `RejectsAMissingDpdsChunk`, `RejectsAMissingDataChunk`, `RejectsAnUnknownChunk`, `RejectsAChunkThatRunsPastTheStream`, `RejectsADuplicateFmtChunk` and `RejectsAnEmptyBuffer` pin each refusal. Built and run with GCC in WSL on this branch (not MSVC).
 
 Tests: `Radicle/tests/test_pchip.cpp` (`Pchip`) and `Radicle/tests/test_palette.cpp` (`Palette`), registered in `Radicle/CMakeLists.txt`. `InterpolatesALinearTableExactly`, `KeepsAMonotoneTableMonotone`, `ClampsOutsideTheSampleRange`, `InterpolatesTwoSamplesLinearly` and `RejectsInvalidTables` pin the interpolant; `FindsTwoSeparatedClusterMeans`, `PaletteIsDeterministicAndOrderIndependent`, `ReturnsTheDistinctColorsWhenFewerArePresent`, `HandlesEmptyRequests`, `SingleColorIsTheRoundedMean`, `SeparatesColorsThatDifferOnlyByAlpha` and `ZeroIterationsReturnsTheInitialCenters` pin the palette. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/cloth/cloth_profile.hpp:parse_cloth_profile (cloth bone scale profiles, Bryant-21 intake row 7, Lane E)
+## Radicle/include/fo4/cloth/cloth_profile.hpp:parse_cloth_profile (cloth bone scale profiles, intake row 7, Lane E)
 
 The intake's cloth row asks for cloth bone setups, baking and reverse engineering. Radicle had no cloth data at all, and the shipped `.sclp` files are the one cloth format in the vanilla data that is readable without any external asset: each is a JSON bone-scale profile that sits beside an outfit NIF. This slice reads and writes exactly that file; it does not touch the Havok cloth side, which stays flagged below.
 
@@ -10811,11 +10811,11 @@ Measured on the shipped game data (79 vanilla BA2 archives, read-only, independe
 
 Not done, and not claimed: cloth bone limits and constraints beyond scale, the Havok-side cloth data (`hcl*` in the mesh's HKX), and any baking or reverse engineering. Those need vanilla HKX cloth samples and the Havok cloth formats, which are not in the shipped `.sclp` files; the row stays open and is flagged as needing those samples rather than being silently dropped.
 
-Licence: the Bryant-21 `cloth` module was read only far enough to establish what the row covers. The format above was derived by measuring the shipped files; no code, identifiers, comments, file structure or fixtures were reused.
+Licence: the upstream reference `cloth` module was read only far enough to establish what the row covers. The format above was derived by measuring the shipped files; no code, identifiers, comments, file structure or fixtures were reused.
 
 Tests: `Radicle/tests/test_cloth_profile.cpp` (`ClothProfile`), registered in `Radicle/CMakeLists.txt`. `ParsesTheShippedShape`, `ReproducesTheShippedBytes`, `PreservesBoneOrder`, `SerializesAnEmptyProfileAsAnEmptyArray`, `AcceptsMixedCaseBoneNames` and `MapsAnOutfitNifPathToItsProfile` pin the accepted shape and the byte-identical writer; `RejectsPathsWithoutANifExtension`, `RejectsNonArrayDocuments`, `RejectsUnexpectedBoneKeys`, `RejectsAMissingScale`, `RejectsBadBoneNames`, `RejectsRepeatedBoneNames`, `RejectsBadScaleAxes`, `RejectsNonPositiveScales` and `RejectsMoreBonesThanTheReaderAccepts` pin the refusals. `Radicle/src/cloth/cloth_profile.cpp:compare_cloth_bones` reconciles a profile against a mesh's node names and reports the profile side and the mesh side separately in input order, skipping empty and repeated mesh names; the comparison is exact rather than case-folded, so a case difference shows up as a finding instead of being resolved silently, and `ReportsBothSidesInTheirInputOrder`, `ReportsACaseDifference`, `IgnoresEmptyAndRepeatedMeshNames` and `ReportsNothingForMatchingAndEverythingForDisjointSets` pin that. Compile status: `Radicle/src/cloth/cloth_profile.cpp` compiled in the Lane E MSVC build; the test translation unit was rejected there for a missing `fo4/error.hpp` include, which is fixed on this branch and the suite now passes under GCC in WSL (not MSVC).
 
-## Radicle/include/fo4/audio/voice_path.hpp:parse_voice_path (voice file paths, Bryant-21 intake row 16, Lane E)
+## Radicle/include/fo4/audio/voice_path.hpp:parse_voice_path (voice file paths, intake row 16, Lane E)
 
 The intake's row 16 names `voice_reference` as one of three modules with no Radicle counterpart. This slice covers the shipped voice-file naming convention without needing any plugin data: given a data-relative path it reports the plugin, voice type, optional language directory, the INFO form id, the response index and any variant tail, and it can build the same path back. Dialogue tooling can use it to find a line's recordings without guessing at the layout.
 
@@ -10825,11 +10825,11 @@ Measured on the shipped game data (read-only scan of all 79 vanilla BA2 name tab
 
 Not done: resolving the INFO form id or the voice type to a plugin record. That needs the loaded plugin, is the caller's job, and is not guessed here. The named-file exceptions are accepted but not modelled beyond keeping the stem.
 
-Licence: the Bryant-21 `esp/src/voice_reference` module was read only to establish that the row covers voice-file references. The convention above was derived from the shipped file names; no code, identifiers, comments, fixtures or structure were reused.
+Licence: the upstream reference `esp/src/voice_reference` module was read only to establish that the row covers voice-file references. The convention above was derived from the shipped file names; no code, identifiers, comments, fixtures or structure were reused.
 
 Tests: `Radicle/tests/test_voice_path.cpp` (`VoicePath`), registered in `Radicle/CMakeLists.txt`. `ParsesTheShippedHexStem`, `ParsesMixedCaseFormIdAndLanguageDirectory`, `ParsesTheSevenDigitFormIdAnomaly`, `ParsesCharacterNamedVoiceFiles`, `ParsesVariantSuffixes`, `ParsesForwardSlashSeparators`, `FormatsTheShippedSpelling`, `RoundTripsParsedPaths`, `CompanionSwapsExtension`, `NormalisesLowercaseAndSevenDigitFormIds` and `RejectsLeadingZeroResponseIndex` pin the accepted shapes and the writer; `RejectsPathsOutsideSoundVoice`, `RejectsUnknownExtensions`, `RejectsEmptyAndDotComponents`, `RejectsResponseIndexZero`, `RejectsMalformedDepth` and `RejectsUnformattableInputs` pin the refusals. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/audio/pitch_shift.hpp:pitch_shift (pitch shifting, Bryant-21 intake row 21, Lane E)
+## Radicle/include/fo4/audio/pitch_shift.hpp:pitch_shift (pitch shifting, intake row 21, Lane E)
 
 The remaining logic item in the audio row besides the codec decode is pitch shifting, which they implement in `audio/pitch_shift`. This slice is time-domain and needs no external asset: it stretches the signal with a normalised Hann overlap-add and then resamples the stretch back to the original length, so the pitch moves by the requested ratio while the duration stays fixed.
 
@@ -10837,11 +10837,11 @@ The remaining logic item in the audio row besides the codec decode is pitch shif
 
 Not done: real time-stretch quality (the alignment search covers only ±`window / 8` samples, so a period longer than twice that, below about 172 Hz at 44.1 kHz by that arithmetic and not measured, cannot be fully aligned, and transients still smear), formant preservation, and channel handling beyond mono sample vectors. The intake row's pitch-shift entry is therefore covered as a DSP helper, with quality left as a known limitation rather than claimed.
 
-Licence: the Bryant-21 `audio/pitch_shift` module was read only to establish that the row covers a pitch shifter. The implementation is the standard overlap-add stretch plus linear resample, written here; no code, identifiers, comments or fixtures were reused, and no test comes from their fixtures.
+Licence: the upstream reference `audio/pitch_shift` module was read only to establish that the row covers a pitch shifter. The implementation is the standard overlap-add stretch plus linear resample, written here; no code, identifiers, comments or fixtures were reused, and no test comes from their fixtures.
 
 Tests: `Radicle/tests/test_pitch_shift.cpp` (`PitchShift`), registered in `Radicle/CMakeLists.txt`. `ZeroSemitonesReturnsTheInputUnchanged`, `PreservesTheOutputLength`, `RaisesTheFrequencyByAnOctave` (440 Hz plus or minus 44 from a 220 Hz sine through crossing counts), `LowersTheFrequencyByAnOctave`, `KeepsAConstantSignalConstantInTheInterior`, `ProducesFiniteSamplesAtTheRangeLimits`, `ReturnsShortInputUnchanged`, `HandlesEmptyInput` and `RejectsInvalidSettings` pin the behaviour. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/land/heightmap.hpp:decode_land_heightmap (LAND height maps, Bryant-21 intake row 19, Lane E)
+## Radicle/include/fo4/land/heightmap.hpp:decode_land_heightmap (LAND height maps, intake row 19, Lane E)
 
 The intake's row 19 keeps LAND record generation as a to-do because Radicle has the LAND rows but no way to build the terrain grid. This slice is the encoding half, measured against every shipped LAND record, and it needs no external asset: `Radicle/src/land/heightmap.cpp:decode_land_heightmap` reads the 1096-byte `VHGT` payload, `land_heights` expands it to the 33x33 float grid, and `encode_land_heightmap`/`make_land_heightmap` write it back or build it from a caller-provided grid.
 
@@ -10851,7 +10851,7 @@ Measured with a read-only scan of `Fallout4.esm` (the master that carries the te
 
 Tests: `Radicle/tests/test_land_heightmap.cpp` (`LandHeightmap`), registered in `Radicle/CMakeLists.txt`. `DecodesTheMeasuredLayout`, `HeightsAccumulateAcrossRowBoundaries`, `RoundTripsEveryPayloadByte` (with the measured nonzero trailing bytes), `BuildsDeltasFromHeights`, `RoundsFractionalStepsToTheNearestByte` and `EncodesAFlatGridWithoutDeltas` pin the accepted encoding; `RejectsPayloadsOfAnotherWidth`, `RejectsNonFiniteOffset`, `RejectsHeightsWithTooLargeStep` and `RejectsNonFiniteHeights` pin the refusals. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/land/layers.hpp:parse_land_layer_header (LAND layers and colors, Bryant-21 intake row 19, Lane E)
+## Radicle/include/fo4/land/layers.hpp:parse_land_layer_header (LAND layers and colors, intake row 19, Lane E)
 
 The other half of the LAND terrain payloads is measurable even though the normals are not: the layer headers, the alpha-layer vertex lists and the vertex colors all have fixed, measured shapes. This slice reads and writes them, so a generator can carry real texture layers and colors instead of only the height grid.
 
@@ -10861,11 +10861,11 @@ Measured on `Fallout4.esm` (read-only): 37,020 LAND records carry a 4-byte `DATA
 
 Not written here: the `VNML` normals (see the height-map section, left unmeasured) and any policy about which quadrant or layer a generator should choose.
 
-Licence: the Bryant-21 `esp/src/land` module was read only to establish that the row covers LAND generation. The shapes come from the pinned xEdit definitions and were confirmed by measuring the shipped records; no code, identifiers, comments, fixtures or structure were reused.
+Licence: the upstream reference `esp/src/land` module was read only to establish that the row covers LAND generation. The shapes come from the pinned xEdit definitions and were confirmed by measuring the shipped records; no code, identifiers, comments, fixtures or structure were reused.
 
 Tests: `Radicle/tests/test_land_layers.cpp` (`LandLayers`), registered in `Radicle/CMakeLists.txt`. `ParsesTheMeasuredHeader`, `ParsesLayerVertices`, `HandlesAnEmptyVertexPayload` and `ParsesAndRoundTripsColors` pin the accepted shapes and byte-identical writers; `RejectsHeaderPayloadsOfAnotherWidth`, `RejectsVertexPayloadsThatAreNotWholeEntries`, `RejectsNonFiniteOpacity` and `RejectsColorPayloadsOfAnotherWidth` pin the refusals. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/anim/anim_text_data.hpp:parse_anim_file_list (animation text data, Bryant-21 intake row 30, Lane E)
+## Radicle/include/fo4/anim/anim_text_data.hpp:parse_anim_file_list (animation text data, intake row 30, Lane E)
 
 The Creation Kit writes its animation text data into `meshes\animtextdata\`, and the vanilla archives ship the CK's own output for the base game and the DLCs, so the format is measurable without the CK. Scanned all `*.ba2` in the vanilla `Data` folder (read-only): 17,130 `.txt` files under `meshes\animtextdata\`, in nine subdirectories, `animationfiledata` 3,764, `animationoffsets` 3,161, `animationspeedinfo` 3,734, `animationstancedata` 3,441, `animeventinfo` 148, `clipgeneratordata` 25, `dynamicidledata` 2,847, `syncanimdata` 9 and one single-file index `behaviorclipinformationandsubgraphanimationoffsetssinglefile.txt`. Only some of those are text: `animationfiledata`, `animeventinfo`, `dynamicidledata` and `syncanimdata` decode as UTF-8, while `animationoffsets` (3,056 of 3,161 fail UTF-8), `animationspeedinfo` (3,733 of 3,734), `animationstancedata` (3,432 of 3,441) and `clipgeneratordata` (12 of 25) store binary payloads. This slice covers `animationfiledata`, which has two text flavours and a directory index, `dynamicidledata` and `animeventinfo`.
 
@@ -10879,10 +10879,10 @@ The third text kind implemented is `animeventinfo`, measured on all 147 text fil
 
 `syncanimdata` is measured but deliberately not implemented; the reader would live beside `Radicle/include/fo4/anim/anim_text_data.hpp` once its header number is settled. It holds 9 files: one name index, three two-line empty tables (`V4` and `1`) and five populated tables. A populated table is `V4`, one decimal header number, then count-prefixed sections that alternate a list of four-line records and a list of single decimal numbers. A record is a clip name, a decimal id, three space-separated six-decimal offsets and four space-separated six-decimal quaternion components, for example `pa_PairedKill1HMBlunt2Hits`, `4201537311`, `-0.000101 0.000000 0.000008`, `1.000000 0.000000 0.000000 -0.000000`. Walking those sections consumes all five populated files exactly (1,399, 875, 2,386, 4,850 and 718 lines), and the section kinds never collide because a record list starts with a non-numeric clip name while a number list starts with digits. The header number is 6, 4, 8, 26 and 1 in those five files and equals the number of record/number pairs plus one in all five (5, 3, 7, 25 and 0 pairs), so it counts something beyond the pairs and its meaning is not measured. A writer would have to guess that number, so the format is left out rather than implemented on a guess; the measurement above is what the next pass needs.The four remaining subdirectories under `meshes\animtextdata\` are hybrid text/binary tables rather than plain text, and their opening shapes are measured on every shipped file even though their record payloads are not decoded yet. `animationoffsets` (3,161 files) starts with `V4`, a newline, then a one-byte length and a NUL-terminated path in 3,154 of them (3,151 begin `Actors\` and 3 begin `actors\`), leaving 7 that do not fit; `animationspeedinfo` (3,734) starts with two 32-bit values (6 and 24 in the sampled file) and then a one-byte length and NUL-terminated `...hkb/...` clip id in 3,733; `animationstancedata` (3,441) starts with the byte 23 and `AnimationBoneTransform` including its NUL in 3,440, then 32-bit 1 and 32-bit 4 and floating-point payload; `clipgeneratordata` (25) starts with `V4`, a newline and a one-byte-length NUL-terminated behavior path in all 25. Each directory also holds one name index. The `animationstancedata` payload is probed far enough to say what it is not: after the name, 32-bit 1 and a 32-bit count that is 0 in 8 files, 1 in 708, 2 in 105, 4 in 522, 10 in 173 and 12 in 1,924, the remaining bytes are a multiple of four in 3,278 of 3,440 files but not a whole number of 4-, 8-, 12- or 16-float records, and the first values of a sampled file read as a zero weight, a fraction, two four-component blocks of which the second is a unit quaternion, and a translation around 116 units, so the record carries mixed scalar and quaternion fields rather than a plain matrix. The file sizes collapse to 30 values, dominated by 29,932 bytes (1,736 files) and 124 bytes (605 files). Those headers come from `Radicle/include/fo4/anim/anim_text_data.hpp` measurement passes; the payloads after them are unmeasured, so no reader is claimed for these four. Not written here: the binary subdirectories (`animationoffsets`, `animationspeedinfo`, `animationstancedata`, `clipgeneratordata`), the `animeventinfo` and `syncanimdata` envelopes, and the bucket-file and behavior-index side of the row. Those need their own census first; the byte-level shapes are recorded above so the next slice knows which files are text.
 
-Licence: the Bryant-21 `ck/anim_text_data` module was read only to establish that the row covers CK-output generation and which files it touches. Every rule above comes from measuring the shipped vanilla archives; no code, identifiers, comments, fixtures or structure were reused.
+Licence: the upstream reference `ck/anim_text_data` module was read only to establish that the row covers CK-output generation and which files it touches. Every rule above comes from measuring the shipped vanilla archives; no code, identifiers, comments, fixtures or structure were reused.
 
 Tests: `Radicle/tests/test_anim_text_data.cpp` (`AnimTextData`), registered in `Radicle/CMakeLists.txt`. `RoundTripsAMeasuredNumericList`, `RoundTripsAMeasuredNamedList`, `RoundTripsAnEmptyNumericList` and `RoundTripsTheMeasuredDirList` pin byte-identical rebuilds of both flavours, the empty numeric list and the index, and the index refusals; `RefusesAListWhoseCountDisagreesWithItsLines`, `RefusesANamedListWithoutItsZeroLine`, `RefusesAFlavourOneNameThatIsNotADecimalId`, `RefusesARepeatedEntry`, `RefusesAMissingOrMixedLineEnding`, `RefusesAnUnknownVersionLine` and `RefusesToWriteAListItCouldNotReadBack` pin the refusals; `RoundTripsAMeasuredIdleList`, `RoundTripsAnEmptyIdleList` and `RefusesAnIdleListItCouldNotLoadBack` pin the idle lists, and `RoundTripsAMeasuredEventInfo`, `RoundTripsAnEventInfoWithAParentBehavior` and `RefusesAnEventInfoItCouldNotLoadBack` pin both event header variants and the event refusals. `Radicle/tests/test_anim_text_data_real.cpp` (`AnimTextDataRealData`) is the FO4_DATA_DIR suite: it walks every general BA2 in the data folder, rebuilds each of the three implemented families from its own bytes and requires the result to be identical, recording how many lists, index files, idle tables and event tables it covered and skipping the archives that are not general BA2 containers; the name index in each of the three directories follows the directory-index grammar too, measured at 2,994 names in `animationfiledata`, 2,811 in `dynamicidledata` and 122 in `animeventinfo`, all CRLF with a final ending and every name a `.txt`, so the suite rebuilds those as well. Built and run with GCC in WSL on this branch (not MSVC).
-## Radicle/include/fo4/as3/lexer.hpp:tokenize (ActionScript 3 lexer, Bryant-21 intake row 25, Lane D)
+## Radicle/include/fo4/as3/lexer.hpp:tokenize (ActionScript 3 lexer, intake row 25, Lane D)
 
 This is the first Lane D slice: the ActionScript 3 tokenizer that the rest of the AS3-to-ABC compiler will sit on. Radicle already has the ABC assembler, verifier and disassembler (`Radicle/src/abc/`) and the AVM2 interpreter (`Radicle/src/avm2/`), but it had no ActionScript source front end, so `Radicle/src/as3/lexer.cpp:tokenize` is new rather than a rewrite of anything in the tree. It is C++ only, so `RADICLE_ABI_VERSION` is unchanged.
 
@@ -10892,39 +10892,39 @@ Regular-expression literals are ambiguous with division in ActionScript. `Radicl
 
 Not implemented, and left out on purpose rather than guessed: E4X XML literals, attribute accessors (`@`/`::` are lexed as punctuation only, the parser will decide), the preprocessor directives above, and unicode escapes above `0xFFFF` (no surrogate-pair pairing yet). Nothing was measured for this slice: ActionScript source is not shipped in Fallout 4 data (the game ships compiled ABC inside SWF and PEX files), and the ABC and SWF reference corpora are not in this checkout, so the token grammar comes from the published ActionScript 3 / ECMA-262 3rd edition token grammar only and is not corpus-validated. That is the honest limit of this slice.
 
-Licence: the Bryant-21 `as3` crate was read only to establish that a source compiler was the missing feature. No code, identifiers, comments, file structure or fixtures were reused; the token grammar is the published language grammar.
+Licence: the upstream reference `as3` crate was read only to establish that a source compiler was the missing feature. No code, identifiers, comments, file structure or fixtures were reused; the token grammar is the published language grammar.
 
 Tests: `Radicle/tests/test_as3_lexer.cpp` (`As3Lexer`), registered in `Radicle/CMakeLists.txt`. `LexesKeywordsAndIdentifiers` and `KeepsContextualWordsAsIdentifiers` pin the reserved/contextual split; `LexesNumberForms` and `RejectsBadNumbers` pin the number grammar and its refusals; `DecodesStringEscapes` and `RejectsBadStrings` pin escapes and the four bad-string shapes; `SkipsComments` pins comments and the unterminated block; `LexesLongestPunctuators` pins longest-first matching; `UsesExpressionContextToTellRegexFromDivision` pins both sides of the regex/division decision; `TracksOffsetsAndLines` pins token locations; `RejectsDirectivesAndUnknownCharacters` pins the preprocessor and unknown-character errors; `EndsWithOneEndOfFileToken` pins the terminating token. The original lane reported a local run on its own branch, not re-run here: the full suite ran 5,062 tests with 4,559 passed, 503 skipped and 0 failed after the test helper lifetime fix.
 
-## Radicle/include/fo4/as3/parser.hpp:parse_expression (AS3 expression parser, Bryant-21 intake row 25, Lane D)
+## Radicle/include/fo4/as3/parser.hpp:parse_expression (AS3 expression parser, intake row 25, Lane D)
 
 The intake's row 25 is the AS3-to-AVM2 compiler, and the tokenizer was slice 1. This slice adds the expression half of the parser: it turns a token stream from `Radicle/include/fo4/as3/lexer.hpp:tokenize` into an AST covering literals, identifiers, `this`, member access, indexing, calls, `new`, unary operators, the full binary precedence ladder, the conditional operator, assignments, sequences, and array and object literals. Statements, declarations, functions and classes are not parsed yet, so this is not a compiler front end on its own.
 
-No AS3 source corpus ships with the game and the ABC and SWF reference corpora are not in this checkout, so the grammar is taken from the published ActionScript 3 / ECMAScript operator tables and the parser is tested against hand-written expressions rather than measured against real sources. Nothing here is derived from the Bryant-21 parser or from JPEXS; the AST shape, node kinds and precedence table are this branch's own design.
+No AS3 source corpus ships with the game and the ABC and SWF reference corpora are not in this checkout, so the grammar is taken from the published ActionScript 3 / ECMAScript operator tables and the parser is tested against hand-written expressions rather than measured against real sources. Nothing here is derived from the upstream reference parser or from JPEXS; the AST shape, node kinds and precedence table are this branch's own design.
 
 `Radicle/src/as3/parser_expr.cpp:parse_expression` runs the tokenizer first and reports any lexer error token as a failure with its offset and line, because a silently skipped error token would change what the rest of the expression means. The parser is recursive descent with a precedence-climbing binary layer: `||` binds loosest, then `&&`, `|`, `^`, `&`, the four equality operators, the relational operators including `in` and `instanceof`, the shifts, additive and multiplicative; the conditional operator sits between assignment and the logical ladder, assignment is right-associative, and a comma sequence is the loosest form. Unary operators are `!`, `~`, unary `+`/`-`, `typeof`, `void` and `delete`, and `new` builds a construct node whose first child is the type expression (member and index chains allowed, calls not, so `new a.b.C(1)` is one construct rather than a call of a construct). Member, index and call operators chain left to right after a primary, and the whole source must be consumed, so trailing input is an error.
 
 Not done: statements and declarations, function and class bodies, E4X XML literals, `++`/`--` (left out so no target-validity question is implied), object-literal getters and setters, array elisions, and any AST-to-ABC lowering. Those stay open for the later Lane D slices, and none of them is claimed here.
 
-Licence: the Bryant-21 `as3` parser and their JPEXS-derived decompiler were read only far enough to establish that the row covers a compiler and a decompiler. The parser was written from the published operator and production tables; no code, identifiers, comments, file structure or test fixtures were reused, and the tests are hand-written expressions, not their fixtures.
+Licence: the upstream reference `as3` parser and their JPEXS-derived decompiler were read only far enough to establish that the row covers a compiler and a decompiler. The parser was written from the published operator and production tables; no code, identifiers, comments, file structure or test fixtures were reused, and the tests are hand-written expressions, not their fixtures.
 
 Tests: `Radicle/tests/test_as3_parser.cpp` (`As3Parser`), registered in `Radicle/CMakeLists.txt`. `ParsesArithmeticPrecedence`, `ParsesAssignmentConditionalAndLogicalOperators`, `ParsesMemberIndexAndCallChains`, `ParsesNewExpressions`, `ParsesStringAndNumericLiterals`, `ParsesUnaryShiftAndRelationalOperators`, `ParsesArrayAndObjectLiterals`, `ParsesParenthesisedAndSequenceExpressions` and `RecordsSourcePositions` pin the accepted grammar and the node positions; `RejectsTrailingTokens`, `RejectsIncompleteExpressions`, `ReportsLexerErrors` and `RejectsReservedWordsAsExpressions` pin the refusals. Each test compares an s-expression of the whole tree, so a wrong precedence or association shows up as a different string rather than a passing shape check. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/as3/parser.hpp:parse_program (AS3 statements, Bryant-21 intake row 25, Lane D)
+## Radicle/include/fo4/as3/parser.hpp:parse_program (AS3 statements, intake row 25, Lane D)
 
 The expression parser was slice 2; this slice adds the statement layer so a source file can be parsed as a whole program: empty and expression statements, blocks, `var`/`const` declarations with optional type annotations and array suffixes, `if`/`else` chains, `while`, `do ... while`, `for` with an optional initialiser, condition and update, `return`, `break` and `continue`. Expressions are still handed to the slice-2 parser, so a statement only adds structure around them.
 
-No AS3 source corpus ships with the game and the ABC and SWF reference corpora are not in this checkout, so the grammar is taken from the published ActionScript 3 statement productions and the tests are hand-written programs rather than measured against real sources. Nothing here is derived from the Bryant-21 parser or from JPEXS; the statement shape is this branch's own design.
+No AS3 source corpus ships with the game and the ABC and SWF reference corpora are not in this checkout, so the grammar is taken from the published ActionScript 3 statement productions and the tests are hand-written programs rather than measured against real sources. Nothing here is derived from the upstream reference parser or from JPEXS; the statement shape is this branch's own design.
 
 `Radicle/src/as3/parser.cpp:parse_program` tokenises once, turns any lexer error token into a failure with its position, then parses statements until the end of the file, so a file is either a whole program or an error. Each statement records its offset and line. A loop or `if` body holds exactly one statement whether the source used a block or a single statement, and an `else if` is an `if_statement` in the alternate slot rather than a flattened chain, which keeps later codegen and diagnostics shape-preserving. A `var`/`const` declaration keeps one entry per binding, with the type text and the optional initialiser, and a qualified type such as `Foo.Bar` is refused rather than misread. A statement keyword the published grammar allows but this slice does not implement (`function`, `class`, `switch`, `throw`, `try`) is refused by name, not silently skipped.
 
 Not done: function and class declarations, `switch`, `throw`, `try`/`catch`/`finally`, `for ... in`/`for each ... in`, labels, directives and `package`/`import`, plus E4X XML literals and any AST-to-ABC lowering. Those stay open for later Lane D slices and none is claimed here.
 
-Licence: the Bryant-21 `as3` parser and their JPEXS-derived decompiler were read only far enough to establish that the row covers a compiler and a decompiler. The statement grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or test fixtures were reused, and the tests are hand-written programs, not their fixtures.
+Licence: the upstream reference `as3` parser and their JPEXS-derived decompiler were read only far enough to establish that the row covers a compiler and a decompiler. The statement grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or test fixtures were reused, and the tests are hand-written programs, not their fixtures.
 
 Tests: `Radicle/tests/test_as3_statements.cpp` (`As3Statements`), registered in `Radicle/CMakeLists.txt`. `ParsesVariableDeclarations`, `ParsesEmptyAndExpressionStatements`, `ParsesBlocks`, `ParsesIfElseChains`, `ParsesWhileAndDoWhileLoops`, `ParsesForLoops`, `ParsesReturnBreakAndContinue`, `ParsesAWholeProgramInOrder`, `RecordsStatementPositions` and `AcceptsAnEmptyProgram` pin the accepted grammar; `RejectsUnsupportedStatements` and `RejectsIncompleteStatements` pin the refusals. The tests compare an s-expression of the whole program, so a wrong body placement or a lost statement shows up as a different string. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/src/as3/parser.cpp:parse_function_declaration and the for-in branch (AS3 declarations and iteration, Bryant-21 intake row 25, Lane D)
+## Radicle/src/as3/parser.cpp:parse_function_declaration and the for-in branch (AS3 declarations and iteration, intake row 25, Lane D)
 
 The statement slice could not describe a real ActionScript 3 file, because every file is functions inside packages, so this slice adds function declarations and the two iteration forms the grammar carries outside a class: `for (... in ...)` and `for each (... in ...)`. Classes, interfaces and packages remain out.
 
@@ -10934,11 +10934,11 @@ The statement slice could not describe a real ActionScript 3 file, because every
 
 Not done: function expressions and closures, access modifiers, `get`/`set`, class/interface/package declarations, `switch`, `throw`, `try`, labels, E4X and AST-to-ABC lowering. The parser therefore still cannot accept a real F4 script file end to end, and that is stated here rather than implied.
 
-Licence: the Bryant-21 `as3` parser was read only far enough to establish that the row covers a compiler. The declaration and iteration grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or fixtures were reused.
+Licence: the upstream reference `as3` parser was read only far enough to establish that the row covers a compiler. The declaration and iteration grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or fixtures were reused.
 
 Tests: `Radicle/tests/test_as3_statements.cpp` gains `ParsesFunctionDeclarations`, `RejectsMalformedFunctions`, `ParsesForInAndForEach`, `RejectsInvalidForInHeaders` and `RejectsIncompleteForIn`, and `RejectsUnsupportedStatements` no longer lists `function` because it is now supported. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/src/as3/parser.cpp:parse_switch_statement (AS3 switch, Bryant-21 intake row 25, Lane D)
+## Radicle/src/as3/parser.cpp:parse_switch_statement (AS3 switch, intake row 25, Lane D)
 
 `switch` was the last statement form that common ActionScript 3 code uses before the declaration layer, so this slice adds it: `switch (expression) { case label: statements... default: statements... }`. Each case keeps its own label and statement list, so fallthrough is represented as a case with no statements and the following case with the statements, which is what later codegen needs; the `default` case is a case with the flag set rather than a separate field.
 
@@ -10946,11 +10946,11 @@ Tests: `Radicle/tests/test_as3_statements.cpp` gains `ParsesFunctionDeclarations
 
 Not done: duplicate `case` labels are not diagnosed (that is a semantic check, not grammar), `throw`, `try`/`catch`/`finally`, class/package declarations, E4X and AST-to-ABC lowering stay open. Statement parsing lives in `Radicle/src/as3/parser.cpp` at 880 lines; the class and package layer would push that past the 1000-line limit, so the parser must be split into translation units before declarations land.
 
-Licence: the Bryant-21 `as3` parser was read only far enough to establish that the row covers a compiler. The switch grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or fixtures were reused.
+Licence: the upstream reference `as3` parser was read only far enough to establish that the row covers a compiler. The switch grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or fixtures were reused.
 
 Tests: `Radicle/tests/test_as3_statements.cpp` gains `ParsesSwitchStatements` (fallthrough, empty switch) and `RejectsMalformedSwitches`, and `RejectsUnsupportedStatements` no longer lists `switch`. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/src/as3/parser.cpp:parse_class_declaration (AS3 packages, classes and imports, Bryant-21 intake row 25, Lane D)
+## Radicle/src/as3/parser.cpp:parse_class_declaration (AS3 packages, classes and imports, intake row 25, Lane D)
 
 A real Fallout 4 script file is `package { import ...; class ... }`, so this slice adds the declaration layer: `import` directives, `package` blocks and `class` declarations with modifiers, a base class, implemented interfaces and member declarations. It also splits the parser so the file-size rule keeps holding: the kind-name switches moved to `Radicle/src/as3/ast.cpp`, and the token predicates and the precedence table moved to `Radicle/src/as3/parser_helpers.cpp` behind a source-local `parser_helpers.hpp`, leaving `Radicle/src/as3/parser.cpp` at 966 lines.
 
@@ -10958,11 +10958,11 @@ A real Fallout 4 script file is `package { import ...; class ... }`, so this sli
 
 Not done: interfaces (refused by name), package-level `use namespace`, getters/setters, function expressions and closures, `throw`, `try`/`catch`/`finally`, E4X and AST-to-ABC lowering. With this slice a plain package/class/function script can be parsed, but the compiler stops at the AST; nothing is lowered to bytecode yet.
 
-Licence: the Bryant-21 `as3` parser and their decompiler were read only far enough to establish that the row covers a compiler and a decompiler. The declaration grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or fixtures were reused.
+Licence: the upstream reference `as3` parser and their decompiler were read only far enough to establish that the row covers a compiler and a decompiler. The declaration grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or fixtures were reused.
 
 Tests: `Radicle/tests/test_as3_statements.cpp` gains `ParsesImportsAndPackages`, `ParsesClassDeclarations`, `RejectsMalformedClasses` and `RejectsMalformedPackagesAndImports`, and `RejectsUnsupportedStatements` now lists only `interface`, `throw` and `try`. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/src/as3/parser.cpp:throw (AS3 throw statement, Bryant-21 intake row 25, Lane D)
+## Radicle/src/as3/parser.cpp:throw (AS3 throw statement, intake row 25, Lane D)
 
 `throw` is the last single-statement form before exception blocks, so this slice adds it: `throw expression;`. The statement keeps the thrown expression on the node, and a `throw` without an expression or without its semicolon is refused rather than parsed as an empty throw.
 
@@ -10970,10 +10970,10 @@ Tests: `Radicle/tests/test_as3_statements.cpp` gains `ParsesImportsAndPackages`,
 
 Not done: `try`/`catch`/`finally`, interfaces, getters/setters, E4X and AST-to-ABC lowering.
 
-Licence: the Bryant-21 `as3` parser was read only far enough to establish that the row covers a compiler. The grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or fixtures were reused.
+Licence: the upstream reference `as3` parser was read only far enough to establish that the row covers a compiler. The grammar comes from the published ActionScript 3 productions; no code, identifiers, comments, file structure or fixtures were reused.
 
 Tests: `Radicle/tests/test_as3_statements.cpp` gains `ParsesThrowStatements` and `RejectsMalformedThrows`, and `RejectsUnsupportedStatements` no longer lists `throw`. Built and run with GCC in WSL on this branch (not MSVC).
-## Radicle/include/fo4/lod/lod.hpp:parse_lod_settings, parse_lod_tile_path, check_lod_tile_placement, check_lod_tile_structure (LOD settings and tile addressing, Bryant-21 intake row 14, Lane C)
+## Radicle/include/fo4/lod/lod.hpp:parse_lod_settings, parse_lod_tile_path, check_lod_tile_placement, check_lod_tile_structure (LOD settings and tile addressing, intake row 14, Lane C)
 
 This is the first Lane C slice: the Fallout 4 LOD settings file and LOD tile addressing, plus the structural checks a tile must pass. Tile generation (meshing, atlases, terrain height sampling) is not in this slice. The module is a file-format helper, not a plugin record layer, and it is C++-only, so `RADICLE_ABI_VERSION` is unchanged.
 
@@ -10989,7 +10989,7 @@ Structure: measured per kind, BTR roots at `BSMultiBoundNode` in 8,271 of 8,271 
 
 What is not in this slice, and what stays unmeasured: tile generation (object merging, terrain meshing, atlases, height sampling) is not implemented; the BTO/BTR mesh payloads are read only through the existing `Radicle/include/fo4/nif/nif.hpp:NifFile` reader, not decoded further; `.BTT` cannot apply to Fallout 4 here because no vanilla Fallout 4 archive contains one (the six `.BTT` names in the intake belong to Skyrim-style generation in their `lodgen`, not to this game), so it is not accepted and not measured; and whether the engine actually enforces the root/shape/placement conventions is unproven in game, since those rules are vanilla invariants only. No in-game check was used.
 
-Licence: the Bryant-21 `lodgen` output writers and `terrain/docs/BTD4.md` were read only as leads for what the formats are. The layout above is derived from the pinned xEdit source and the vanilla bytes; no code, identifiers, comments, file structure or fixtures from their repositories were reused.
+Licence: the upstream reference `lodgen` output writers and `terrain/docs/BTD4.md` were read only as leads for what the formats are. The layout above is derived from the pinned xEdit source and the vanilla bytes; no code, identifiers, comments, file structure or fixtures from their repositories were reused.
 
 Tests: `Radicle/tests/test_lod.cpp` (`Lod`), registered in `Radicle/CMakeLists.txt`. `ReadsTheSixteenByteSettingsRecord` pins the measured Commonwealth values and the serialize round trip; `RejectsSettingsOfAnyOtherWidth` and `RejectsNonEncodableSettings` pin the read/write refusals; `LodSettingsPathAndWorldspaceRoundTrip` pins the resource name; `ParsesVanillaStyleTilePaths` and `FormatsTilePathsAndChecksTheMeasuredConvention` pin the measured path convention; `ChecksTilePlacementAgainstTheSouthwestOrigin` pins the block-grid rule; `AcceptsVanillaStyleTileStructures` and `RejectsTileStructuresWithTheWrongRootOrShape` pin the measured root and shape rules with one violating file per refusal. The original lane reported a local run on its own branch, not re-run here: after the fixture return-type fix in the same lane the full suite ran 5,059 tests with 4,556 passed, 503 skipped and 0 failed.
 
@@ -11003,11 +11003,11 @@ Measured with a read-only scan of all 9,073 shipped tiles (8,271 `.BTR` and 802 
 
 Not done: the bound's `BSMultiBoundAABB` payload values are not validated (only that the reference resolves to one), terrain LOD generation still needs `BTD4` heightmaps that the shipped data does not contain, and the object-merge/atlas half of generation is still open.
 
-Licence: the Bryant-21 `lodgen` writers were read only to establish that the row covers BTO/BTR/BTT and the settings record. The chain requirement was measured from the shipped tiles, not taken from their code; no code, identifiers, comments, fixtures or structure were reused, and the fixtures come from Radicle's own `nif_build.hpp`.
+Licence: the upstream reference `lodgen` writers were read only to establish that the row covers BTO/BTR/BTT and the settings record. The chain requirement was measured from the shipped tiles, not taken from their code; no code, identifiers, comments, fixtures or structure were reused, and the fixtures come from Radicle's own `nif_build.hpp`.
 
 Tests: `Radicle/tests/test_lod.cpp` gains `RejectsATileWithoutTheMultiBoundChain`, `RejectsABoundReferenceThatIsNotABound` and `RejectsABoundWhoseDataIsNotAnAabb`, and the shared `tile_nif` fixture now builds the measured chain so the accepted cases keep standing for real tiles. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/lod/tile_index.hpp:build_lod_tile_index (LOD tile grid index, Bryant-21 intake row 14, Lane C)
+## Radicle/include/fo4/lod/tile_index.hpp:build_lod_tile_index (LOD tile grid index, intake row 14, Lane C)
 
 Generation and coverage work both need to answer "which tiles exist, at which level, for which worldspace", so this slice turns a listing of tile paths into that index instead of re-parsing names at every call site. Nothing in it writes files, so it is usable while the writers are still open.
 
@@ -11017,11 +11017,11 @@ Measured on the shipped listing (read-only scan of the 79 BA2 archives): all 9,0
 
 Not done: no coverage comparison against `LodSettings` is bundled here (a caller can combine the index with `Radicle/src/lod/lod.cpp:check_lod_tile_placement`), and no level-32 object tiles are synthesised or explained; the shipped data simply has none in three worldspaces.
 
-Licence: the Bryant-21 `lodgen` source was read only to establish that the row covers object and terrain LOD output. The grouping and ordering were measured from the shipped file names; no code, identifiers, comments, fixtures or structure were reused.
+Licence: the upstream reference `lodgen` source was read only to establish that the row covers object and terrain LOD output. The grouping and ordering were measured from the shipped file names; no code, identifiers, comments, fixtures or structure were reused.
 
 Tests: `Radicle/tests/test_lod_tile_index.cpp` (`LodTileIndex`), registered in `Radicle/CMakeLists.txt`. `GroupsShippedPathsIntoOrderedGrids`, `SortsTilesByCoordinate`, `FindsGridsAndAnswersContainment`, `KeepsWorldspaceSpellingExact` and `HandlesAnEmptyListing` pin the accepted behaviour; `CountsUnparsablePaths` and `CountsDuplicateTilePaths` pin the two counters. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/lod/tile_summary.hpp:summarize_lod_tile (LOD tile content budget, Bryant-21 intake row 14, Lane C)
+## Radicle/include/fo4/lod/tile_summary.hpp:summarize_lod_tile (LOD tile content budget, intake row 14, Lane C)
 
 A generator has to know how much geometry the shipped tiles carry before it can decide a batching or atlas budget, so this slice reads those counts off a tile NIF without decoding any payload: shapes by family, sub-index shapes separately, and texture sets.
 
@@ -11033,11 +11033,11 @@ Unmeasured, and deliberately left out: triangle counts per tile. The scan tried 
 
 Not done: no triangle/vertex budget (unmeasured, above), no atlas packing, and no object-merge generation yet.
 
-Licence: the Bryant-21 `lodgen` source was read only to establish that the row covers object and terrain LOD output. The counts were measured from the shipped tiles; no code, identifiers, comments, fixtures or structure were reused.
+Licence: the upstream reference `lodgen` source was read only to establish that the row covers object and terrain LOD output. The counts were measured from the shipped tiles; no code, identifiers, comments, fixtures or structure were reused.
 
 Tests: `Radicle/tests/test_lod_tile_summary.cpp` (`LodTileSummary`), registered in `Radicle/CMakeLists.txt`. `CountsShapesAndTextureSets`, `IgnoresOtherBlocks` and `CountsTheMeasuredTileMaximum` pin the counting. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/include/fo4/lod/object_merge.hpp:plan_object_lod (object LOD batching, Bryant-21 intake row 14, Lane C)
+## Radicle/include/fo4/lod/object_merge.hpp:plan_object_lod (object LOD batching, intake row 14, Lane C)
 
 Object LOD generation starts by deciding which objects belong to which tile, and how many can share one merged tile before the batch has to split. This slice does that planning without writing any NIF: it maps each placed object's world position onto the measured cell-coordinate grid and groups the objects into batches capped at the measured shape budget.
 
@@ -11049,10 +11049,10 @@ Measured: the 12-shape cap and the one-texture-set-per-tile budget come from the
 
 Not done: no merged geometry, no per-object bounds or radius, no atlas assignment, no level selection by distance, and no BTT/BTO writer.
 
-Licence: the Bryant-21 `lodgen` source was read only to establish that the row covers object LOD output. The grid rule and the cap come from the shipped settings and tiles; no code, identifiers, comments, fixtures or structure were reused.
+Licence: the upstream reference `lodgen` source was read only to establish that the row covers object LOD output. The grid rule and the cap come from the shipped settings and tiles; no code, identifiers, comments, fixtures or structure were reused.
 
 Tests: `Radicle/tests/test_lod_object_merge.cpp` (`LodObjectPlan`), registered in `Radicle/CMakeLists.txt`. `MapsObjectsToTheMeasuredTileGrid`, `UsesFloorDivisionForNegativeOffsets`, `SplitsWhenTheBatchExceedsTheMeasuredCap`, `OrdersTilesAndKeepsObjectOrder`, `DropsNonFinitePositions`, `RejectsInvalidLevelsAndCaps` and `HandlesAnEmptyListing` pin the behaviour. Built and run with GCC in WSL on this branch (not MSVC).
-## Radicle/include/fo4/nif/nif_audit.hpp:audit_nif (Fallout 4 NIF audit, Bryant-21 intake row 13, Lane B)
+## Radicle/include/fo4/nif/nif_audit.hpp:audit_nif (Fallout 4 NIF audit, intake row 13, Lane B)
 
 `Radicle/include/fo4/nif/nif_audit.hpp:audit_nif` returns a list of `NifAuditFinding` rows for a `Radicle/include/fo4/nif/nif.hpp:NifFile` that `read_nif` already accepted, so the audit reports what the reader tolerates instead of throwing. It never throws on such a file: a block whose prefix it cannot decode is skipped. It is C++-only and adds no C export, so `RADICLE_ABI_VERSION` is unchanged on this branch.
 
@@ -11072,7 +11072,7 @@ Rules that were measured and rejected because vanilla violates them (so they wou
 
 Measurement method: an independent Python implementation of the same Fallout 4 layout `Radicle/src/nif/nif.cpp:read_nif` and `Radicle/src/nif/geometry.cpp:read_shapes` already encode, in throw-away read-only scripts (read-only over the vanilla `Data` folder, 226,586 `.nif` entries decoded with zero container parse errors). It is measurement code only and is not part of Radicle. The numeric counts above are what those runs printed on 2026-10-31; they are not derived from any other project's source.
 
-Licence: `nif_core/src/validation.rs` in the Bryant-21 clone was read only to learn which categories of check exist (34 audit groups; 144 finding call sites); none of its code, identifiers, comments, file structure or fixtures were reused. Its Oblivion/Skyrim/SSE-only rule families (Skyrim shader rules, SSE unsupported formats, legacy morph/particle rules) are out of scope by game, which is why every rule here is a Fallout 4 layout rule with a vanilla count.
+Licence: `nif_core/src/validation.rs` in the upstream reference clone was read only to learn which categories of check exist (34 audit groups; 144 finding call sites); none of its code, identifiers, comments, file structure or fixtures were reused. Its Oblivion/Skyrim/SSE-only rule families (Skyrim shader rules, SSE unsupported formats, legacy morph/particle rules) are out of scope by game, which is why every rule here is a Fallout 4 layout rule with a vanilla count.
 
 Tests: `Radicle/tests/test_nif_audit.cpp` (`NifAudit`), registered in `Radicle/CMakeLists.txt`, built from the existing `Radicle/tests/nif_build.hpp` builders. `CleanFallout4NifHasNoFindings` is the negative control; `DetectsZeroAndTwoRoots`, `DetectsRootThatIsNotANode`, `DetectsShapeOutsideAnyNode`, `DetectsExtraDataReferenceOutsideTheBlockTable`, `DetectsOlderGameGeometryBlock`, `DetectsShapeShaderThatIsNotFallout4`, `DetectsTextureSetWithAForeignSlotCount`, `DetectsShaderNameWithSurroundingWhitespace` and `DetectsTexturePathsThatAreNotRelativeDataPaths` each build one violating file and pin the rule id, block and message detail. The original lane reported a local run on its own branch, not re-run here: the full suite ran 5,060 tests with 4,557 passed, 503 skipped and 0 failed, and the scan above is the runtime evidence for the census claims.
 
@@ -11088,7 +11088,7 @@ One rule was deliberately narrowed: a child reference at or above the block coun
 
 Not done: the geometry-level rules that vanilla data itself violates (degenerate triangles, non-finite vertices, unreachable nodes, skin weight sums, unnamed nodes, duplicate node names, missing `BSXFlags`) stay out for the reasons recorded in the first slice, and no rule checks the bone transforms themselves: their count is audited, their values are not.
 
-Licence: the Bryant-21 NIF validation modules were read only to establish which checks exist. These rules were defined from the Fallout 4 file structure Radicle's reader already encodes and confirmed by the census above; no code, identifiers, comments, fixtures or structure were reused, and the test fixtures come from Radicle's own `nif_build.hpp`.
+Licence: the upstream reference NIF validation modules were read only to establish which checks exist. These rules were defined from the Fallout 4 file structure Radicle's reader already encodes and confirmed by the census above; no code, identifiers, comments, fixtures or structure were reused, and the test fixtures come from Radicle's own `nif_build.hpp`.
 
 Tests: `Radicle/tests/test_nif_audit.cpp` gains `DetectsAChildReferenceBelowTheNullSentinel`, `DetectsADuplicateChildReference`, `DetectsAChildCycle`, `DetectsMultipleParentsForOneBlock`, `DetectsShapeReferencesOutsideTheBlockTable`, `DetectsSkinBoneReferenceThatIsNotANode`, `DetectsSkinDataReferenceThatIsNotBoneData` and `DetectsSkinBoneCountMismatch`, each building one violating file with the existing builders and pinning the rule id and block; the clean-file control also covers the new rules. Built and run with GCC in WSL on this branch (not MSVC).
 
@@ -11102,15 +11102,15 @@ Measured with a read-only scan of all 226,586 shipped `.nif` entries: 1,207,427 
 
 Not done: shader property reference types other than the shape's shader (the texture-set and alpha targets are not type-checked yet), animation controller targets, and any geometry-level rule.
 
-Licence: the Bryant-21 NIF validation modules were read only to establish which checks exist. The rules were defined from Radicle's own reader layout and confirmed by the census; no code, identifiers, comments, fixtures or structure were reused.
+Licence: the upstream reference NIF validation modules were read only to establish which checks exist. The rules were defined from Radicle's own reader layout and confirmed by the census; no code, identifiers, comments, fixtures or structure were reused.
 
 Tests: `Radicle/tests/test_nif_audit.cpp` gains `AcceptsASkinReferenceToAnInstance`, `DetectsASkinReferenceThatIsNotAnInstance`, `AcceptsABoundChainWithObbData`, `DetectsABoundReferenceThatIsNotABound` and `DetectsBoundDataThatIsNotABoundDataBlock`, with local builders for the bound blocks. Built and run with GCC in WSL on this branch (not MSVC).
 
-## Radicle/src/as3/parser_state.hpp:Parser (AS3 parser split, Bryant-21 intake row 25, Lane D)
+## Radicle/src/as3/parser_state.hpp:Parser (AS3 parser split, intake row 25, Lane D)
 
 The AS3 parser is split by responsibility so that no file passes 750 lines. `Radicle/src/as3/parser_state.hpp:Parser` holds the token cursor, the error record, the node factories and the declarations of every parse method. `Radicle/src/as3/parser_expr.cpp` defines the expression methods and `parse_expression`; `Radicle/src/as3/parser.cpp` defines the statement, declaration and import methods and `parse_program`. The split is mechanical: the bodies moved unchanged apart from the `Parser::` qualifier. `Stmt::text` in `Radicle/include/fo4/as3/ast.hpp:Stmt` is the import path that `parse_import_directive` writes and `test_as3_statements.cpp` reads; it was missing from the header that the intake carried, so the import path would not compile.
 
-## Radicle/CMakeLists.txt (AS3 and LOD registration, Bryant-21 intake rows 14 and 25)
+## Radicle/CMakeLists.txt (AS3 and LOD registration, intake rows 14 and 25)
 
 The `src/as3/*` and `src/lod/*` sources and their `test_as3_*` and `test_lod*` suites were not registered. The cherry-pick that added the NIF audit (`13d039851`) replaced the four `src/lod` lines and the four `test_lod` lines in the list with `nif_audit`, and the AS3 entries were never on the branch, so those files compiled into nothing. They are registered again next to the other Radicle lanes, and `src/nif/nif_audit.cpp` is kept with them.
 

@@ -1,6 +1,6 @@
 # Feature-pull tracker
 
-Bryant-21/modkit21 (GPL-3.0) is a much larger FO4 modding tool built by a friend of this project's
+modkit21 (GPL-3.0) is a much larger FO4 modding tool built by a friend of this project's
 maintainer, who gave explicit permission to review its source and pull ideas into FO4RecordEditor.
 This doc tracks that ongoing comparison: what's been reviewed, what got pulled (as MCP tools), what
 was deliberately left out and why, and what's still open. It also now covers other external tools
@@ -109,8 +109,8 @@ that already has one, rather than being new AI/MCP-only tools first.
 ## Pass 4: py-creation-lib and bacup at the LIBRARY level (2026-08-06)
 
 Every earlier pass read modkit21's Python CLI. This one read the shared native engine underneath it,
-`Bryant-21/py-creation-lib` (GPL-3.0, v1.3.0, a submodule of both modkit21 and the newer
-`Bryant-21/bacup`), plus bacup itself. That engine is 20 Rust crates, ~300k lines, and it is a very
+`py-creation-lib` (GPL-3.0, v1.3.0, a submodule of both modkit21 and the newer
+`bacup`), plus bacup itself. That engine is 20 Rust crates, ~300k lines, and it is a very
 different proposition from the CLI: several crates do things nothing in the .NET/Mutagen ecosystem
 does at all.
 
