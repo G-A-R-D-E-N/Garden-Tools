@@ -8682,6 +8682,15 @@ Detects finddef pushing the global object or null when a pushed scope holds the 
 
 - `StructSet` lowers to `member(target, config member) = value`, the same shape as `IndexSet`. Before this change `buildPure` had `StructNew` and `StructGet`, and nothing lowered `StructSet`.
 
+## Radicle/tests/test_graph_lift.cpp:UniqueRoot
+
+- Each root is one flat folder named with the tag, process id and clock. ctest runs each test in its own process, in parallel.
+- It used to be `fo4re-lift-<tag>/<clock>`, and the destructor removed the shared parent. One process could remove the empty parent after another had created it and before that process created its child. Windows then reported "create_directories: The system cannot find the path specified" (hosted Windows runs for PRs 1030 and 1032). The cause comes from reading the code and those logs. 1,200 parallel runs on Linux did not reproduce it.
+
+## Radicle/tests/test_c_api_vmad_read.cpp:CApiVmadReadTest::SetUp
+
+- The folder name carries the process id because the clock alone can repeat across parallel test processes, and two tests sharing a folder would truncate each other's `Vmad.esp`. That is the probable, unproven cause of the "file too small" failure in `RejectsRecordsFromAnotherEnvironment` on PR 1043. About 75 other test fixtures still name temp folders from the clock alone.
+
 ## Radicle/tests/test_graph_lift.cpp:GraphLift.StructNewGetAndSetSurviveATripThroughTheGraph
 
 - Detects a lifter that refuses `new T` or a struct member read, and a linearizer that drops `StructSet`. Each would leave the regenerated pex without its `struct_create`, `struct_get` or `struct_set`, and the pex comparer reports the first difference.
