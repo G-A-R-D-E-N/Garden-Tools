@@ -562,7 +562,9 @@ TEST(PrevisReal, CApiReportSurface) {
   ASSERT_EQ(radicle_previs_report_summary(report, &summary), RADICLE_STATUS_OK);
   EXPECT_EQ(summary.cells, radicle_previs_report_cell_count(report));
   EXPECT_GT(summary.broken, 0u);
-  if (exact_counts_known(build)) EXPECT_EQ(summary.cells, 62393u);
+  if (exact_counts_known(build)) {
+    EXPECT_EQ(summary.cells, 62393u);
+  }
 
   bool saw_issue = false;
   for (std::size_t index = 0; index < summary.cells; ++index) {
