@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <map>
@@ -317,7 +318,6 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                 .loadedTime = readTime,
                 .trusted = true,
                 .plugin = std::move(plugin),
-                .originalPlugin = std::nullopt,
                 .dirty = false,
                 .stagedLocalization = std::nullopt,
             });
@@ -373,7 +373,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             stagedStrings_.clear();
         }
         trustedSaveRoots_ = std::move(roots);
-        rebuildGraphLocked();
+        markGraphDirtyLocked();
     }
 
     return nlohmann::json{
@@ -525,12 +525,11 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
             // Trust and save roots are untouched by ad hoc loads.
             existing->loadedTime = readTime;
             existing->plugin = std::move(plugin);
-            existing->originalPlugin.reset();
             existing->stagedLocalization.reset();
             existing->dirty = false;
         } else {
             plugins_.push_back({
-                name, filePath, {}, readTime, false, std::move(plugin), std::nullopt, false, std::nullopt
+                name, filePath, {}, readTime, false, std::move(plugin), false, std::nullopt
             });
         }
 
@@ -543,7 +542,7 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
             });
         }
         for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, knownKinds);
-        rebuildGraphLocked();
+        markGraphDirtyLocked();
         return nlohmann::json{{"ok", true}, {"plugin", name}}.dump();
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PluginReadFailed", error.what()});
@@ -625,20 +624,37 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
         }
         return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();
     }
-    if (!loaded->originalPlugin.has_value()) {
-        return std::unexpected(Error{
-            "PendingStateMissing",
-            "Plugin is dirty but has no recoverable original snapshot: " + name
-        });
+    if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
+    try {
+        std::error_code statEc;
+        const auto readTime = std::filesystem::last_write_time(loaded->path, statEc);
+        auto reloaded = fo4::read_plugin_file(loaded->path);
+#ifdef FO4IDE_TEST_HOOKS
+        if (loadReadWindowHook != nullptr) loadReadWindowHook();
+#endif
+        if (const auto stable = requirePluginUnchangedSince(loaded->path, readTime); !stable) {
+            return std::unexpected(stable.error());
+        }
+        std::vector<fo4::MasterDescriptor> knownKinds;
+        knownKinds.reserve(plugins_.size());
+        for (const auto& item : plugins_) {
+            knownKinds.push_back({
+                item.plugin.key,
+                fo4::classify_plugin_kind(item.plugin.header.tes4_flags, item.plugin.key),
+            });
+        }
+        fo4::apply_master_kinds(reloaded, knownKinds);
+        CommitScope commit;
+        loaded->plugin = std::move(reloaded);
+        loaded->loadedTime = readTime;
+        loaded->stagedLocalization.reset();
+        discardStagedStringTables(loaded->name);
+        loaded->dirty = false;
+        markGraphDirtyLocked();
+        return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"PluginReloadFailed", error.what()});
     }
-    CommitScope commit;
-    loaded->plugin = *loaded->originalPlugin;
-    loaded->originalPlugin.reset();
-    loaded->stagedLocalization.reset();
-    discardStagedStringTables(loaded->name);
-    loaded->dirty = false;
-    rebuildGraphLocked();
-    return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();
 }
 
 RadiclePluginBackend::LoadedPlugin* RadiclePluginBackend::findPlugin(std::string_view name) {
@@ -659,11 +675,22 @@ const RadiclePluginBackend::LoadedPlugin* RadiclePluginBackend::findPlugin(std::
     return it == plugins_.end() ? nullptr : &*it;
 }
 
-void RadiclePluginBackend::rebuildGraphLocked() {
+void RadiclePluginBackend::markGraphDirtyLocked() const {
+    std::scoped_lock lock(graphMutex_);
+    graphDirty_ = true;
+}
+
+std::shared_ptr<const fo4::ConflictGraph> RadiclePluginBackend::conflictGraph() const {
+    std::scoped_lock lock(graphMutex_);
+    graphLastUse_ = std::chrono::steady_clock::now();
+    if (!graphDirty_ && graphStorage_) return graphStorage_;
     std::vector<const fo4::Plugin*> loadOrder;
     loadOrder.reserve(plugins_.size());
     for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
-    graph_ = fo4::ConflictGraph::build(loadOrder);
+    graphStorage_.reset();
+    graphStorage_ = std::make_shared<const fo4::ConflictGraph>(fo4::ConflictGraph::build(loadOrder));
+    graphDirty_ = false;
+    return graphStorage_;
 }
 
 }
