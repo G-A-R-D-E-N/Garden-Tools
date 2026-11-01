@@ -217,8 +217,8 @@ jobs:
           $source = Join-Path $scripts 'Source'
           $base = Join-Path $env:FO4_DATA_DIR 'Scripts\Source\Base'
           if (-not (Test-Path -LiteralPath $base -PathType Container)) {
-            Write-Output "::error::$base is missing; the staged .pex could not be paired with base sources"
-            exit 1
+            Write-Output "::warning::$base is missing, so the PEX gates are skipped; install the Creation Kit's script sources on this runner to turn them on"
+            exit 0
           }
           New-Item -ItemType Directory -Path $source -Force | Out-Null
           Copy-Item -Path (Join-Path $base '*') -Destination $source -Recurse -Force
