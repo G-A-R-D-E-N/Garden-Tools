@@ -98,7 +98,7 @@ Bytes texture_set_bytes(const std::vector<std::string>& slots) {
   return bytes;
 }
 
-std::uint32_t share_or_copy(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t ref_at,
+std::uint32_t share_or_copy(const NifFile& nif, Model& model, std::uint32_t block, std::size_t ref_at,
                             std::size_t users) {
   check_field(nif, model, block, ref_at, 4);
   const auto ref = write_detail::read_int<std::int32_t>(model.blocks[block], ref_at);
