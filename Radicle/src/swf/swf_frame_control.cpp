@@ -8,8 +8,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <span>
+#include <string>
 #include <utility>
 #include <variant>
 
@@ -23,6 +25,11 @@ constexpr std::uint8_t kPlay = 0x06;
 constexpr std::uint8_t kStop = 0x07;
 constexpr std::uint8_t kGotoFrame = 0x81;
 constexpr std::uint8_t kGotoFrame2 = 0x9F;
+constexpr std::uint8_t kGoToLabel = 0x8C;
+constexpr std::uint8_t kCall = 0x9E;
+
+// A call must inline one level only, so a frame calling itself still terminates.
+constexpr std::size_t kMaxCallDepth = 1;
 
 constexpr std::array<std::uint8_t, 10> kUnmodelledFlow{0x20, 0x8A, 0x8B, 0x8D, 0x8E,
                                                        0x8F, 0x94, 0x99, 0x9B, 0x9D};
@@ -36,6 +43,7 @@ struct Cursor {
   bool playing{true};
   std::size_t recorded{0};
   std::size_t budget{0};
+  bool init_done{false};
 };
 
 bool has_unmodelled_flow(const std::vector<avm1::Avm1Action>& actions) {
@@ -65,7 +73,76 @@ std::optional<std::uint32_t> frame_number(double value) {
   return static_cast<std::uint32_t>(value);
 }
 
-void append_controls(const std::vector<avm1::Avm1Action>& actions, std::vector<FrameControl>& out) {
+using LabelMap = std::map<std::string, std::uint32_t>;
+
+struct CollectedTimeline {
+  std::vector<std::vector<avm1::Avm1Action>> frame_actions;
+  LabelMap labels;
+};
+
+std::string frame_label_of(const SwfTag& tag) {
+  std::string label;
+  for (const std::byte byte : tag.payload) {
+    if (byte == std::byte{0}) {
+      break;
+    }
+    label.push_back(static_cast<char>(std::to_integer<unsigned char>(byte)));
+  }
+  return label;
+}
+
+CollectedTimeline collect_actions(const std::vector<SwfTag>& tags) {
+  CollectedTimeline out;
+  std::vector<avm1::Avm1Action> current;
+  for (const SwfTag& tag : tags) {
+    if (tag.code == tag::kShowFrame) {
+      out.frame_actions.push_back(std::move(current));
+      current.clear();
+      continue;
+    }
+    if (tag.code == tag::kFrameLabel) {
+      // A label must address the frame it opens, so it indexes the frames collected so far.
+      out.labels.emplace(frame_label_of(tag),
+                         static_cast<std::uint32_t>(out.frame_actions.size()));
+      continue;
+    }
+    if (tag.code != tag::kDoAction || !tag.action) {
+      continue;
+    }
+    const auto bytes =
+        std::span<const std::byte>(tag.payload).subspan(tag.action->offset, tag.action->size);
+    const avm1::Avm1Stream stream = avm1::decode_actions(bytes);
+    if (!stream.ok() || has_unmodelled_flow(stream.actions)) {
+      continue;
+    }
+    current.insert(current.end(), stream.actions.begin(), stream.actions.end());
+  }
+  if (out.frame_actions.empty()) {
+    out.frame_actions.push_back(std::move(current));
+  }
+  return out;
+}
+
+std::optional<std::uint32_t> call_target_frame(const avm1::Avm1Value& value,
+                                               const LabelMap& labels) {
+  if (value.type == avm1::Avm1ValueType::String) {
+    const auto found = labels.find(value.text);
+    if (found == labels.end()) {
+      return std::nullopt;
+    }
+    return found->second;
+  }
+  const auto number = number_of(value);
+  const auto frame = number ? frame_number(*number) : std::nullopt;
+  if (!frame) {
+    return std::nullopt;
+  }
+  return *frame - 1;
+}
+
+void append_controls(const std::vector<avm1::Avm1Action>& actions,
+                     const CollectedTimeline& timeline, std::size_t depth,
+                     std::vector<FrameControl>& out, std::size_t& budget) {
   const avm1::Avm1Action* previous = nullptr;
   for (const avm1::Avm1Action& action : actions) {
     switch (action.code) {
@@ -87,6 +164,37 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions, std::vector<F
           out.push_back({FrameControlKind::stop, 0});
         }
         break;
+      case kGoToLabel: {
+        // A label jump must land where the display list lands, so it resolves through the same map.
+        const auto* text = std::get_if<avm1::Avm1Text>(&action.payload);
+        const auto found =
+            text == nullptr ? timeline.labels.end() : timeline.labels.find(text->text);
+        if (found != timeline.labels.end()) {
+          out.push_back({FrameControlKind::go_to, found->second});
+          out.push_back({FrameControlKind::stop, 0});
+        }
+        break;
+      }
+      case kCall: {
+        // A call must run the target frame inline, so a shared routine takes effect.
+        const auto* push =
+            previous == nullptr ? nullptr : std::get_if<avm1::Avm1Push>(&previous->payload);
+        if (push == nullptr || push->values.empty() || depth >= kMaxCallDepth) {
+          break;
+        }
+        const auto target = call_target_frame(push->values.back(), timeline.labels);
+        if (!target || *target >= timeline.frame_actions.size()) {
+          break;
+        }
+        const std::vector<avm1::Avm1Action>& body = timeline.frame_actions[*target];
+        // A call must walk its whole body or do nothing, so the walk stays inside the budget.
+        if (body.size() > budget) {
+          break;
+        }
+        budget -= body.size();
+        append_controls(body, timeline, depth + 1, out, budget);
+        break;
+      }
       case kGotoFrame2: {
         const auto* jump = std::get_if<avm1::Avm1GotoFrame2>(&action.payload);
         const auto* push =
@@ -101,7 +209,8 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions, std::vector<F
           break;
         }
         out.push_back({FrameControlKind::go_to, *frame - 1});
-        out.push_back({(jump->flags & 1) != 0 ? FrameControlKind::play : FrameControlKind::stop, 0});
+        out.push_back(
+            {(jump->flags & 1) != 0 ? FrameControlKind::play : FrameControlKind::stop, 0});
         break;
       }
       default:
@@ -137,7 +246,17 @@ bool land(const FrameControls& controls, std::uint32_t tick, std::uint32_t targe
       moved = true;
     }
     std::optional<std::uint32_t> jump;
+    // Init controls must run once per simulation, so later landings on frame 0 skip to the marker.
+    bool skip = cursor.init_done && cursor.frame == 0;
     for (const FrameControl& control : controls[cursor.frame]) {
+      if (control.kind == FrameControlKind::init_barrier) {
+        cursor.init_done = true;
+        skip = false;
+        continue;
+      }
+      if (skip) {
+        continue;
+      }
       switch (control.kind) {
         case FrameControlKind::stop:
           cursor.playing = false;
@@ -160,6 +279,9 @@ bool land(const FrameControls& controls, std::uint32_t tick, std::uint32_t targe
             cursor.playing = false;
           }
           break;
+        case FrameControlKind::init_barrier:
+          // The guard above must consume the barrier, so this case never runs.
+          break;
       }
     }
     if (!jump) {
@@ -172,30 +294,48 @@ bool land(const FrameControls& controls, std::uint32_t tick, std::uint32_t targe
 
 }  // namespace
 
-FrameControls collect_frame_controls(const std::vector<SwfTag>& tags) {
-  FrameControls frames;
-  std::vector<FrameControl> current;
-  for (const SwfTag& tag : tags) {
-    if (tag.code == tag::kShowFrame) {
-      frames.push_back(std::move(current));
-      current.clear();
-      continue;
+FrameControls collect_frame_controls(const std::vector<SwfTag>& tags,
+                                     const InitActionStreams& init, std::size_t& budget) {
+  CollectedTimeline collected = collect_actions(tags);
+  // Init actions must run once at instantiation, before the sprite's first frame.
+  std::vector<avm1::Avm1Action> init_actions;
+  for (const auto& stream : init) {
+    if (!has_unmodelled_flow(stream)) {
+      init_actions.insert(init_actions.end(), stream.begin(), stream.end());
     }
-    if (tag.code != tag::kDoAction || !tag.action) {
+  }
+  FrameControls frames;
+  bool first = true;
+  for (const auto& actions : collected.frame_actions) {
+    std::vector<FrameControl> current;
+    if (first && !init_actions.empty()) {
+      append_controls(init_actions, collected, 0, current, budget);
+      current.push_back({FrameControlKind::init_barrier, 0});
+    }
+    first = false;
+    append_controls(actions, collected, 0, current, budget);
+    frames.push_back(std::move(current));
+  }
+  return frames;
+}
+
+std::map<std::uint16_t, InitActionStreams> collect_init_actions(
+    const std::vector<SwfTag>& tags) {
+  std::map<std::uint16_t, InitActionStreams> out;
+  for (const SwfTag& tag : tags) {
+    // By invariant the sprite id lives on the action; only DefineSprite sets the tag-level id.
+    if (tag.code != tag::kDoInitAction || !tag.action) {
       continue;
     }
     const auto bytes =
         std::span<const std::byte>(tag.payload).subspan(tag.action->offset, tag.action->size);
     const avm1::Avm1Stream stream = avm1::decode_actions(bytes);
-    if (!stream.ok() || has_unmodelled_flow(stream.actions)) {
+    if (!stream.ok()) {
       continue;
     }
-    append_controls(stream.actions, current);
+    out[tag.action->sprite_id].push_back(stream.actions);
   }
-  if (frames.empty()) {
-    frames.emplace_back();
-  }
-  return frames;
+  return out;
 }
 
 Playhead simulate_playhead(const FrameControls& controls, std::uint32_t ticks) {

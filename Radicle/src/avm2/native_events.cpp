@@ -176,24 +176,24 @@ ExecutionResult dispatcher_construct(Interpreter& interpreter, const Value& self
 
 ExecutionResult dispatcher_add_listener(Interpreter& interpreter, const Value& self,
                                         const std::vector<Value>& arguments) {
-  (void)interpreter;
   if (!self.is_object()) {
     return native_value(Value::undefined());
   }
   add_event_listener(*self.as_object(), to_string(argument_at(arguments, 0)),
                      argument_at(arguments, 1), to_boolean(argument_at(arguments, 2)),
                      to_int32(argument_at(arguments, 3)));
+  sync_frame_listener(interpreter.runtime(), self.as_object());
   return native_value(Value::undefined());
 }
 
 ExecutionResult dispatcher_remove_listener(Interpreter& interpreter, const Value& self,
                                            const std::vector<Value>& arguments) {
-  (void)interpreter;
   if (!self.is_object()) {
     return native_value(Value::undefined());
   }
   remove_event_listener(*self.as_object(), to_string(argument_at(arguments, 0)),
                         argument_at(arguments, 1), to_boolean(argument_at(arguments, 2)));
+  sync_frame_listener(interpreter.runtime(), self.as_object());
   return native_value(Value::undefined());
 }
 
@@ -209,11 +209,7 @@ ExecutionResult dispatcher_dispatch_event(Interpreter& interpreter, const Value&
   }
   std::shared_ptr<EventObject> event_shared =
       std::static_pointer_cast<EventObject>(event_value.as_object());
-  ExecutionResult result =
-      dispatch_event(interpreter, self.as_object(), event_shared, depth);
-  if (!result.ok()) {
-    return result;
-  }
+  dispatch_event(interpreter, self.as_object(), event_shared, depth);
   return native_value(Value::boolean(!event->default_prevented()));
 }
 

@@ -1,10 +1,13 @@
 #pragma once
 
 #include <fo4/abc/abc.hpp>
+#include <fo4/avm2/display.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -143,6 +146,8 @@ class CodeBuilder {
     u30(count);
   }
   void constructsuper(std::uint32_t count) { op_u30(0x49, count); }
+  void getsuper(std::uint32_t multiname) { op_multiname(0x04, multiname); }
+  void setsuper(std::uint32_t multiname) { op_multiname(0x05, multiname); }
   void applytype(std::uint32_t count) { op_u30(0x53, count); }
   void getslot(std::uint32_t slot) { op_u30(0x6C, slot); }
   void setslot(std::uint32_t slot) { op_u30(0x6D, slot); }
@@ -214,6 +219,15 @@ class ScriptBuilder {
     return static_cast<std::uint32_t>(multinames_.size());
   }
 
+  std::uint32_t attribute_multiname(const std::string& name) {
+    MultinameEntry entry;
+    entry.kind = fo4::abc::AbcMultinameKind::QNameA;
+    entry.name = string_of(name);
+    entry.name_space = namespace_of("");
+    multinames_.push_back(entry);
+    return static_cast<std::uint32_t>(multinames_.size());
+  }
+
   std::uint32_t multiname_l(std::uint32_t ns_set = 1u) {
     MultinameEntry entry;
     entry.kind = fo4::abc::AbcMultinameKind::MultinameL;
@@ -261,10 +275,12 @@ class ScriptBuilder {
                                        std::uint32_t local_count,
                                        std::vector<fo4::abc::AbcException> exceptions) {
     fo4::abc::AbcMethodInfo info;
-    info.param_count = 0;
+    info.param_count = local_count == 0 ? 0 : local_count - 1;
     info.return_type = 0;
     info.name = string_of(name);
-    info.flags = 0;
+    info.flags = info.param_count == 0 ? 0 : 0x08;
+    info.options.assign(info.param_count,
+                        fo4::abc::AbcOptionalValue{fo4::abc::AbcValueKind::Undefined, 0});
     methods_.push_back(std::move(info));
     fo4::abc::AbcMethodBody body;
     body.method = static_cast<std::uint32_t>(methods_.size() - 1);
@@ -353,5 +369,16 @@ class ScriptBuilder {
   std::vector<fo4::abc::AbcMethodInfo> methods_;
   std::vector<fo4::abc::AbcMethodBody> bodies_;
 };
+
+inline void set_box_hit_area(fo4::avm2::DisplayObject& object) {
+  const double width = object.width();
+  const double height = object.height();
+  fo4::avm2::ShapeEdge side;
+  side.fill1 = 1;
+  side.points = {{{0.0, 0.0}, {width, 0.0}, {width, height}, {0.0, height}, {0.0, 0.0}}};
+  fo4::avm2::ShapeGeometry geometry;
+  geometry.edges.push_back(side);
+  object.set_shape_geometry(std::make_shared<const fo4::avm2::ShapeGeometry>(geometry));
+}
 
 }  // namespace avm2_test

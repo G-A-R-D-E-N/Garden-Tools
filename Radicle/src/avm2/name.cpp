@@ -97,4 +97,14 @@ bool key_matches(const Multiname& multiname, const Key& key) {
   return false;
 }
 
+std::string rendered_class_name(std::string_view name) {
+  const std::size_t dot = name.find_last_of('.');
+  if (dot == std::string_view::npos || name.find("::") != std::string_view::npos) {
+    return std::string{name};
+  }
+  std::string rendered{name};
+  rendered.replace(dot, 1, "::");
+  return rendered;
+}
+
 }  // namespace fo4::avm2

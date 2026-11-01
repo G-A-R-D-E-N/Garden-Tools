@@ -30,6 +30,7 @@ namespace {
 namespace abc = fo4::abc;
 
 using fo4::avm2::ApplicationDomainObject;
+using fo4::avm2::Class;
 using fo4::avm2::ExecutionResult;
 using fo4::avm2::HostCallbacks;
 using fo4::avm2::Interpreter;
@@ -70,15 +71,15 @@ struct DomainHarness {
   }
 };
 
-std::vector<std::uint8_t> second_class_abc() {
+std::vector<std::uint8_t> named_class_abc(const char* name) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder body;
   body.returnvoid();
   const std::uint32_t init = script.method("init", body.bytes(), 0);
-  const std::uint32_t constructor = script.method("second", body.bytes(), 1);
+  const std::uint32_t constructor = script.method(name, body.bytes(), 1);
   const std::uint32_t class_init = script.method("cinit", body.bytes(), 1);
   const std::uint32_t object_name = script.multiname("Object");
-  const std::uint32_t class_name = script.multiname("Second");
+  const std::uint32_t class_name = script.multiname(name);
   abc::AbcFile file = script.finish(init);
   abc::AbcInstanceInfo instance;
   instance.name = class_name;
@@ -92,6 +93,8 @@ std::vector<std::uint8_t> second_class_abc() {
   EXPECT_EQ(file.serialize(bytes), abc::AbcStatus::Ok);
   return bytes;
 }
+
+std::vector<std::uint8_t> second_class_abc() { return named_class_abc("Second"); }
 
 std::vector<std::uint8_t> second_movie() {
   const std::vector<std::uint8_t> abc_bytes = second_class_abc();
@@ -289,6 +292,79 @@ TEST(Avm2Domain, LoaderContextDomainReceivesTheSecondMovieDefinitions) {
   EXPECT_EQ(harness.runtime.host().stats().asset_requests, 1u);
 }
 
+TEST(Avm2Domain, ChildDomainSeesRootLoadedDefinitions) {
+  DomainHarness harness;
+  const std::vector<std::uint8_t> bytes = named_class_abc("RootClass");
+  abc::AbcFile root_file;
+  ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), root_file), abc::AbcStatus::Ok);
+  harness.runtime.add_file(root_file);
+  ASSERT_TRUE(harness.runtime.link().ok());
+  const Class* domain_class =
+      harness.runtime.find_class("flash.system::ApplicationDomain");
+  ASSERT_NE(domain_class, nullptr);
+  const auto child = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  EXPECT_NE(harness.runtime.find_domain_definition(*child, "RootClass"), nullptr);
+  EXPECT_NE(harness.runtime.find_domain_definition(*child, "flash.display::Sprite"),
+            nullptr);
+  EXPECT_EQ(harness.runtime.find_domain_definition(*child, "NoSuchClass"), nullptr);
+}
+
+TEST(Avm2Domain, SiblingDomainsStayIsolated) {
+  DomainHarness harness;
+  // Requires a linked runtime: builtins install at link.
+  harness.runtime.add_file(harness.main_file);
+  ASSERT_TRUE(harness.runtime.link().ok());
+  const Class* domain_class =
+      harness.runtime.find_class("flash.system::ApplicationDomain");
+  ASSERT_NE(domain_class, nullptr);
+  const auto first = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  const auto second = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  const std::vector<std::uint8_t> bytes = named_class_abc("SibClass");
+  abc::AbcFile sib_file;
+  ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), sib_file), abc::AbcStatus::Ok);
+  harness.runtime.add_file(sib_file, first);
+  ASSERT_TRUE(harness.runtime.link_added_file(harness.runtime.file_count() - 1).ok());
+  EXPECT_NE(harness.runtime.find_domain_definition(*first, "SibClass"), nullptr);
+  EXPECT_EQ(
+      harness.runtime.find_domain_definition(*harness.runtime.current_domain(), "SibClass"),
+      nullptr);
+  EXPECT_EQ(harness.runtime.find_domain_definition(*second, "SibClass"), nullptr);
+  const auto grandchild = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), first);
+  EXPECT_NE(harness.runtime.find_domain_definition(*grandchild, "SibClass"), nullptr);
+}
+
+TEST(Avm2Domain, SiblingDomainsShareRepeatedClassNames) {
+  DomainHarness harness;
+  // Requires a linked runtime: builtins install at link.
+  harness.runtime.add_file(harness.main_file);
+  ASSERT_TRUE(harness.runtime.link().ok());
+  const Class* domain_class =
+      harness.runtime.find_class("flash.system::ApplicationDomain");
+  ASSERT_NE(domain_class, nullptr);
+  const auto first = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  const auto second = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  // The same name in both files must alias the first winner, so isolation holds for unique names only.
+  const std::vector<std::uint8_t> bytes = named_class_abc("SharedClass");
+  abc::AbcFile first_file;
+  ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), first_file), abc::AbcStatus::Ok);
+  harness.runtime.add_file(first_file, first);
+  ASSERT_TRUE(harness.runtime.link_added_file(harness.runtime.file_count() - 1).ok());
+  abc::AbcFile second_file;
+  ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), second_file), abc::AbcStatus::Ok);
+  harness.runtime.add_file(second_file, second);
+  ASSERT_TRUE(harness.runtime.link_added_file(harness.runtime.file_count() - 1).ok());
+  const Class* from_first = harness.runtime.find_domain_definition(*first, "SharedClass");
+  const Class* from_second = harness.runtime.find_domain_definition(*second, "SharedClass");
+  ASSERT_NE(from_first, nullptr);
+  EXPECT_EQ(from_first, from_second);
+}
+
 TEST(Avm2Domain, LoaderWithoutAContextLoadsIntoTheCurrentDomain) {
   DomainHarness harness;
   harness.assets["second.swf"] = second_movie();
@@ -480,6 +556,149 @@ TEST(Avm2Domain, ExternalInterfaceCallRoutesToANamedHostFunction) {
   EXPECT_EQ(result.value.as_string(), "sum:2,5");
   EXPECT_EQ(harness.runtime.host().stats().host_calls, 1u);
   EXPECT_EQ(harness.runtime.host().stats().host_call_misses, 0u);
+}
+
+TEST(Avm2Domain, LoaderCompleteIsSentToTheContentLoaderInfo) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t loader_class = script.multiname("Loader", "flash.display");
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t load_name = script.multiname("load");
+  const std::uint32_t content_info = script.multiname("contentLoaderInfo");
+  const std::uint32_t listen = script.multiname("addEventListener");
+  const std::uint32_t flag = script.multiname("completed");
+  avm2_test::CodeBuilder handler_code;
+  handler_code.getglobalscope();
+  handler_code.pushtrue();
+  handler_code.setproperty(flag);
+  handler_code.returnvoid();
+  const std::uint32_t handler = script.method("onComplete", handler_code.bytes(), 1);
+  avm2_test::CodeBuilder code;
+  code.getglobalscope();
+  code.pushfalse();
+  code.setproperty(flag);
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlocal(1);
+  code.getproperty(content_info);
+  code.setlocal(2);
+  code.getlocal(2);
+  code.pushstring(script.string_of("complete"));
+  code.newfunction(handler);
+  code.callpropvoid(listen, 2);
+  code.getlex(request_class);
+  code.pushstring(script.string_of("second.swf"));
+  code.construct(1);
+  code.setlocal(3);
+  code.getlocal(1);
+  code.getlocal(3);
+  code.callpropvoid(load_name, 1);
+  code.getglobalscope();
+  code.getproperty(flag);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 4);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
+}
+
+ExecutionResult run_loaded_content(DomainHarness& harness, bool through_info) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t loader_class = script.multiname("Loader", "flash.display");
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t load_name = script.multiname("load");
+  const std::uint32_t info_name = script.multiname("contentLoaderInfo");
+  const std::uint32_t content_name = script.multiname("content");
+  avm2_test::CodeBuilder code;
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlex(request_class);
+  code.pushstring(script.string_of("second.swf"));
+  code.construct(1);
+  code.setlocal(2);
+  code.getlocal(1);
+  code.getlocal(2);
+  code.callpropvoid(load_name, 1);
+  code.getlocal(1);
+  if (through_info) {
+    code.getproperty(info_name);
+  }
+  code.getproperty(content_name);
+  code.returnvalue();
+  return harness.run(script, code, 3);
+}
+
+TEST(Avm2Domain, LoaderContentIsTheLoadedMovie) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  const ExecutionResult result = run_loaded_content(harness, false);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_TRUE(result.value.is_object());
+}
+
+TEST(Avm2Domain, LoaderInfoContentIsTheLoadedMovie) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  const ExecutionResult result = run_loaded_content(harness, true);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_TRUE(result.value.is_object());
+}
+
+TEST(Avm2Domain, LoaderDispatchesOpenInitAndCompleteInOrder) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t loader_class = script.multiname("Loader", "flash.display");
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t load_name = script.multiname("load");
+  const std::uint32_t content_info = script.multiname("contentLoaderInfo");
+  const std::uint32_t listen = script.multiname("addEventListener");
+  const std::uint32_t log = script.multiname("log");
+  std::vector<std::pair<std::string, std::uint32_t>> handlers;
+  for (const char* type : {"open", "init", "complete"}) {
+    avm2_test::CodeBuilder body;
+    body.getglobalscope();
+    body.getglobalscope();
+    body.getproperty(log);
+    body.pushstring(script.string_of(std::string{type} + ","));
+    body.add();
+    body.setproperty(log);
+    body.returnvoid();
+    handlers.emplace_back(type, script.method(std::string{"on_"} + type, body.bytes(), 1));
+  }
+  avm2_test::CodeBuilder code;
+  code.getglobalscope();
+  code.pushstring(script.string_of(""));
+  code.setproperty(log);
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlocal(1);
+  code.getproperty(content_info);
+  code.setlocal(2);
+  for (const auto& [type, method] : handlers) {
+    code.getlocal(2);
+    code.pushstring(script.string_of(type));
+    code.newfunction(method);
+    code.callpropvoid(listen, 2);
+  }
+  code.getlex(request_class);
+  code.pushstring(script.string_of("second.swf"));
+  code.construct(1);
+  code.setlocal(3);
+  code.getlocal(1);
+  code.getlocal(3);
+  code.callpropvoid(load_name, 1);
+  code.getglobalscope();
+  code.getproperty(log);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 4);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "open,init,complete,");
 }
 
 }  // namespace

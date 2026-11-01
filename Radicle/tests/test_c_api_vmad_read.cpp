@@ -3,6 +3,7 @@
 #include "fo4/c_api_vmad.h"
 
 #include "plugin_bytes.hpp"
+#include "temp_data_dir.hpp"
 
 #include <gtest/gtest.h>
 
@@ -300,7 +301,8 @@ class CApiVmadReadTest : public ::testing::Test {
 protected:
   void SetUp() override {
     const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    root_ = std::filesystem::temp_directory_path() / ("radicle_vmad_read_" + std::to_string(id));
+    root_ = std::filesystem::temp_directory_path() /
+            ("radicle_vmad_read_" + std::to_string(fo4::test::process_id()) + "_" + std::to_string(id));
     std::filesystem::create_directories(root_);
   }
 
