@@ -111,3 +111,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Bryant-21 (modkit21, bacup and related repositories)
+
+The AS3, LOD, LAND, FUZE and XWMA, cloth profile, voice path, pitch shift, pchip and palette, animation text table and NIF audit code under `Radicle/src` and `Radicle/include/fo4` was written from study of the Bryant-21 repositories, https://github.com/Bryant-21, which are licensed GPL-3.0.

@@ -166,11 +166,30 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/texture/bcn.cpp
   src/texture/dds.cpp
   src/texture/dds_codec.cpp
+  src/texture/palette.cpp
+  src/math/interpolation.cpp
+  src/anim/anim_text_data.cpp
+  src/audio/sound_container.cpp
+  src/audio/voice_path.cpp
+  src/audio/pitch_shift.cpp
+  src/cloth/cloth_profile.cpp
+  src/land/heightmap.cpp
+  src/land/layers.cpp
+  src/as3/ast.cpp
+  src/as3/lexer.cpp
+  src/as3/parser.cpp
+  src/as3/parser_expr.cpp
+  src/as3/parser_helpers.cpp
+  src/lod/lod.cpp
+  src/lod/tile_index.cpp
+  src/lod/tile_summary.cpp
+  src/lod/object_merge.cpp
   src/nif/write_edits.cpp
   src/nif/write_model.cpp
   src/nif/import_obj.cpp
   src/nif/import_build.cpp
   src/nif/fix_nif.cpp
+  src/nif/nif_audit.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -942,7 +961,25 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_sound.cpp
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
+    tests/test_palette.cpp
+    tests/test_pchip.cpp
+    tests/test_anim_text_data.cpp
+    tests/test_anim_text_data_real.cpp
+    tests/test_sound_container.cpp
+    tests/test_cloth_profile.cpp
+    tests/test_voice_path.cpp
+    tests/test_pitch_shift.cpp
+    tests/test_land_heightmap.cpp
+    tests/test_land_layers.cpp
+    tests/test_as3_lexer.cpp
+    tests/test_as3_parser.cpp
+    tests/test_as3_statements.cpp
+    tests/test_lod.cpp
+    tests/test_lod_tile_index.cpp
+    tests/test_lod_tile_summary.cpp
+    tests/test_lod_object_merge.cpp
     tests/test_nif_write.cpp
+    tests/test_nif_audit.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
