@@ -104,6 +104,27 @@ radicle_status radicle_light_get_info(const radicle_env* env, const radicle_reco
   });
 }
 
+radicle_status radicle_add_on_node_get_info(const radicle_env* env,
+                                            const radicle_record* record,
+                                            radicle_add_on_node_info* out_info) {
+  clear_error();
+  if (const auto status = require(env, record, out_info); status != RADICLE_STATUS_OK) return status;
+  return guarded("unknown exception while decoding ADDN", [&] {
+    const auto data = fo4::env::decode_add_on_node(env->value, *to_ref(record));
+    radicle_add_on_node_info info{};
+    set_optional(data.node_index, info.has_node_index, info.node_index);
+    info.light = to_c_key(*env, data.light);
+    info.model = stored_text(*env, data.model);
+    if (data.master_particle_cap.has_value() && data.flags.has_value()) {
+      info.has_dnam = 1;
+      info.master_particle_cap = *data.master_particle_cap;
+      info.flags = *data.flags;
+    }
+    *out_info = info;
+    return RADICLE_STATUS_OK;
+  });
+}
+
 radicle_status radicle_bendable_spline_get_info(const radicle_env* env,
                                                 const radicle_record* record,
                                                 radicle_bendable_spline_info* out_info) {

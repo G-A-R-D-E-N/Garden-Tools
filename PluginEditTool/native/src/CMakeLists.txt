@@ -21,6 +21,7 @@ add_library(
     plugin/RadiclePluginFields.cpp
     plugin/RadiclePluginArmor.cpp
     plugin/RadiclePluginGraphCache.cpp
+    plugin/RadiclePluginEffects.cpp
     plugin/RadiclePluginFormLinkList.cpp
     plugin/RadiclePluginComponents.cpp
     plugin/RadiclePluginQuest.cpp
