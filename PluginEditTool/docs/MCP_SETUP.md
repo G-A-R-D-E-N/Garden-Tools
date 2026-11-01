@@ -260,7 +260,7 @@ column, then `PATH` for programs.
 
 | Helper | Used by | Environment variable | `settings.json` key | Location |
 |---|---|---|---|---|
-| niftool | NIF import with box collision | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
+| niftool | Optional; used for NIF commands when configured | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
 | Creation Kit Wiki mirror (a folder) | `papyrus_function_lookup`, `papyrus_script_info` | `CK_WIKI_PATH` | `CkWikiPath` | `tools\ckwiki\fallout4` |
 | `xWMAEncode.exe` | `audio_convert_to_xwm`, `audio_convert_from_xwm` | `XWMAENCODE_PATH` | `XwmaEncodePath` | `tools\audio\` |
 | ffmpeg | `audio_convert_to_xwm` (input that is not PCM WAV), `audio_convert_from_xwm` (output other than WAV) | `FFMPEG_PATH` | `FfmpegPath` | `tools\audio\` |
@@ -310,8 +310,8 @@ only feed the Creation Kit compiler route.
   compiler is Bethesda's and is not shipped here), or use `engine="builtin"`.
 - **The built-in engine reports every vanilla type as unknown.** It has no base script sources to
   resolve against. Set `PAPYRUS_BASE_IMPORTS` or pass `imports`, as described above.
-- **NIF import with box collision says `box collision needs niftool`, or a NIF command says `niftool executable not found`.** Only box-collision import
-  needs niftool; fix, import, inspect, geometry, verify, tree and saving NIF edits run in-process. Fix repairs tangents, adds a missing BSX flag and trims texture and material name whitespace; it does not change shader or BSX flags, and it leaves the tangents of shapes without normal, tangent and UV attributes alone. niftool is missing from
+- **A NIF command says `niftool executable not found`.** No NIF command
+  needs niftool; fix, import (including box collision), inspect, geometry, verify, tree and saving NIF edits run in-process. Fix repairs tangents, adds a missing BSX flag and trims texture and material name whitespace; it does not change shader or BSX flags, and it leaves the tangents of shapes without normal, tangent and UV attributes alone. niftool is missing from
   the package, or `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
 - **`archive_pack` says `Archive2.exe is not configured`.** Install the Creation Kit or set
   `ARCHIVE2_PATH`.

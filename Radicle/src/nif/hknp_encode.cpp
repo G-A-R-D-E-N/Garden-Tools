@@ -336,8 +336,10 @@ bool shape_is_finite(const HknpShape& shape) {
   for (const auto& vertex : shape.vertices) {
     if (!all_finite(vertex)) return false;
   }
-  for (const auto& plane : shape.planes) {
-    if (!all_finite(plane)) return false;
+  // Invariant: plane slots past the face count are Havok's round-up to four and hold uninitialised bytes.
+  const std::size_t face_planes = std::min(shape.planes.size(), shape.faces.size());
+  for (std::size_t i = 0; i < face_planes; ++i) {
+    if (!all_finite(shape.planes[i])) return false;
   }
   if (!shape.has_mass_properties) return true;
   const auto& mass = shape.mass_properties;

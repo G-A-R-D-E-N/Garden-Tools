@@ -862,6 +862,17 @@ TEST(HknpEncode, AuthorRejectsCompoundKindAndNonFiniteGeometry) {
   EXPECT_THROW(fo4::nif::author_hknp_static_body(sphere, {}), std::invalid_argument);
 }
 
+TEST(HknpEncode, AuthorAcceptsNonFiniteBytesOnlyInThePlanePaddingSlots) {
+  // Detects: vanilla polytopes keep uninitialised bytes in the slots that round the plane list up to four.
+  auto box = fo4::nif::make_hknp_box({}, {1.0f, 1.0f, 1.0f}, 1U);
+  box.planes.resize(box.faces.size() + 2);
+  box.planes.back()[0] = std::numeric_limits<float>::quiet_NaN();
+  EXPECT_NO_THROW(fo4::nif::author_hknp_static_body(box, {}));
+
+  box.planes.front()[0] = std::numeric_limits<float>::quiet_NaN();
+  EXPECT_THROW(fo4::nif::author_hknp_static_body(box, {}), std::invalid_argument);
+}
+
 TEST(HknpEncode, ShapeObjectsCarryTheMeasuredLayoutBytes) {
   fo4::nif::HknpShape sphere;
   sphere.kind = fo4::nif::HknpShapeKind::sphere;

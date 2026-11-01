@@ -11,6 +11,8 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -362,9 +364,18 @@ bool first_stage_encodable(const fo4::nif::HknpSystem& sys, const fo4::nif::Hknp
   return stored == shape.faces.size();
 }
 
+// Invariant: plane padding slots can hold NaN bit patterns, so planes compare by bits, not by value.
+bool same_plane_bits(const fo4::nif::HknpShape& a, const fo4::nif::HknpShape& b) {
+  return std::equal(a.planes.begin(), a.planes.end(), b.planes.begin(), b.planes.end(),
+                    [](const fo4::nif::HknpVec4& p, const fo4::nif::HknpVec4& q) {
+                      return std::bit_cast<std::array<std::uint32_t, 4>>(p) ==
+                             std::bit_cast<std::array<std::uint32_t, 4>>(q);
+                    });
+}
+
 bool same_shape(const fo4::nif::HknpShape& a, const fo4::nif::HknpShape& b) {
   return a.kind == b.kind && std::abs(a.radius - b.radius) <= 1e-5f &&
-         std::abs(a.convex_radius - b.convex_radius) <= 1e-5f && a.vertices == b.vertices && a.planes == b.planes &&
+         std::abs(a.convex_radius - b.convex_radius) <= 1e-5f && a.vertices == b.vertices && same_plane_bits(a, b) &&
          a.point_a == b.point_a && a.point_b == b.point_b;
 }
 
