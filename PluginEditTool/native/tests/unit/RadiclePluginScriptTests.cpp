@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/forms/effects.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/vmad.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -102,6 +103,33 @@ std::vector<std::byte> scriptEditPatch() {
 std::vector<std::byte> scriptEditBase() {
     fo4::test::ByteWriter out;
     scriptEditHeader(out, {});
+    return out.bytes;
+}
+
+std::vector<std::byte> scriptEditEffectBase() {
+    fo4::test::ByteWriter out;
+    scriptEditHeader(out, {});
+    const auto effectGroup = fo4::test::begin_group(out, "MGEF", 0);
+    const auto effect = fo4::test::begin_record(out, "MGEF", 0, 0x00000800u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"BaseEffect\0", 11});
+    fo4::test::end_record(out, effect);
+    fo4::test::end_group(out, effectGroup);
+    const auto weaponGroup = fo4::test::begin_group(out, "WEAP", 0);
+    const auto weapon = fo4::test::begin_record(out, "WEAP", 0, 0x00000801u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"BaseWeapon\0", 11});
+    fo4::test::end_record(out, weapon);
+    fo4::test::end_group(out, weaponGroup);
+    return out.bytes;
+}
+
+std::vector<std::byte> scriptEditEffectPatch() {
+    fo4::test::ByteWriter out;
+    scriptEditHeader(out, {"Base.esm"});
+    const auto spelGroup = fo4::test::begin_group(out, "SPEL", 0);
+    const auto spell = fo4::test::begin_record(out, "SPEL", 0, 0x01000800u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"PatchSpell\0", 12});
+    fo4::test::end_record(out, spell);
+    fo4::test::end_group(out, spelGroup);
     return out.bytes;
 }
 
@@ -239,3 +267,189 @@ TEST_CASE("Native script refusals leave the plugin untouched and report a named 
     CHECK_FALSE(scriptEditPending(backend, 1));
     CHECK(scriptEditReadBytes(patchPath) == before);
 }
+
+TEST_CASE("Native magic effect takes an MGEF from a loaded master and writes its master index") {
+    const auto root = scriptEditTempRoot();
+    ScriptEditCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    scriptEditWriteBytes(basePath, scriptEditEffectBase());
+    scriptEditWriteBytes(patchPath, scriptEditEffectPatch());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    scriptEditLoad(backend, basePath, patchPath);
+    const std::string spell = "000800:Patch.esp";
+
+    const auto added = backend.addMagicEffect(
+        nlohmann::json::array({"Patch.esp", spell, "000800:Base.esm", 2.5, 1, 3}));
+    REQUIRE(added.has_value());
+    CHECK(added->at("index") == 0);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto reread = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(reread, fo4::FormKey::parse(spell));
+    REQUIRE(record != nullptr);
+    const auto effects = fo4::forms::read_magic_effects(reread, *record);
+    REQUIRE(effects.size() == 1u);
+    CHECK(effects[0].effect == fo4::FormKey::parse("000800:Base.esm"));
+    CHECK(effects[0].duration == 3u);
+}
+
+TEST_CASE("Native magic effect refuses a master effect that is not an MGEF, is missing or has an unloaded owner") {
+    const auto root = scriptEditTempRoot();
+    ScriptEditCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    scriptEditWriteBytes(basePath, scriptEditEffectBase());
+    scriptEditWriteBytes(patchPath, scriptEditEffectPatch());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    scriptEditLoad(backend, basePath, patchPath);
+    const std::string spell = "000800:Patch.esp";
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto before = scriptEditReadBytes(patchPath);
+
+    const auto refusals = [&](const nlohmann::json& args, const char* type,
+                              const std::function<fo4ide::Result<nlohmann::json>(const nlohmann::json&)>& edit) {
+        const auto result = edit(args);
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == type);
+        CHECK_FALSE(scriptEditPending(backend, 1));
+    };
+    const auto add = [&](const nlohmann::json& args) { return backend.addMagicEffect(args); };
+    const auto set = [&](const nlohmann::json& args) { return backend.setMagicEffect(args); };
+    refusals(nlohmann::json::array({"Patch.esp", spell, "000801:Base.esm", 1.0, 0, 0}), "NotMagicEffect", add);
+    refusals(nlohmann::json::array({"Patch.esp", spell, "000999:Base.esm", 1.0, 0, 0}), "RecordNotFound", add);
+    refusals(nlohmann::json::array({"Patch.esp", spell, "000800:Other.esm", 1.0, 0, 0}),
+             "MagicEffectOwnerNotLoaded", add);
+    refusals(nlohmann::json::array({"Patch.esp", spell, 0, "000801:Base.esm", 1.0, 0, 0}),
+             "NotMagicEffect", set);
+    CHECK(scriptEditReadBytes(patchPath) == before);
+}
+
+TEST_CASE("Native magic effect refuses a loaded owner that the edited plugin does not declare as a master") {
+    const auto root = scriptEditTempRoot();
+    ScriptEditCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    const auto otherPath = root / "Other.esm";
+    scriptEditWriteBytes(basePath, scriptEditEffectBase());
+    scriptEditWriteBytes(patchPath, scriptEditEffectPatch());
+    scriptEditWriteBytes(otherPath, scriptEditEffectBase());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({scriptEditPluginEntry("Base.esm", basePath),
+                                           scriptEditPluginEntry("Patch.esp", patchPath),
+                                           scriptEditPluginEntry("Other.esm", otherPath)})}};
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto before = scriptEditReadBytes(patchPath);
+
+    const auto result = backend.addMagicEffect(
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "000800:Other.esm", 1.0, 0, 0}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "MagicEffectOwnerNotMaster");
+    CHECK_FALSE(scriptEditPending(backend, 1));
+    CHECK(scriptEditReadBytes(patchPath) == before);
+}
+
+TEST_CASE("Native script property values bind through the typed setter") {
+    const auto root = scriptEditTempRoot();
+    ScriptEditCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    scriptEditWriteBytes(basePath, scriptEditBase());
+    scriptEditWriteBytes(patchPath, scriptEditPatch());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    scriptEditLoad(backend, basePath, patchPath);
+    const std::string bare = "000800:Patch.esp";
+
+    REQUIRE(backend.addScript(nlohmann::json::array({"Patch.esp", bare, "PF_Values", 0, nullptr}))
+                .has_value());
+    struct Property {
+        const char* name;
+        int type;
+    };
+    const Property properties[] = {{"Msg", 2}, {"Count", 3},  {"Speed", 4},   {"Flag", 5},
+                                   {"Target", 1}, {"Names", 12}, {"Nums", 13}, {"Floats", 14},
+                                   {"Bools", 15}, {"Objs", 11}};
+    for (const auto& property : properties) {
+        REQUIRE(backend.addScriptProperty(nlohmann::json::array(
+                    {"Patch.esp", bare, 0, property.name, property.type, 0, nullptr}))
+                    .has_value());
+    }
+
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 0, "string", "hello"})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 1, "int", "-7"})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 2, "float", "1.5"})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 3, "bool", "true"})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 4, "object", "000801:Patch.esp", 3})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 5, "string", "alpha"})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 6, "int", "42"})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 7, "float", "2.5"})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 8, "bool", "true"})).has_value());
+    REQUIRE(backend.setScriptValue(nlohmann::json::array(
+                {"Patch.esp", bare, 0, 9, "object", "000801:Patch.esp", 4})).has_value());
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto reread = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(reread, fo4::FormKey::parse(bare));
+    REQUIRE(record != nullptr);
+    const auto* vmad = scriptEditVmad(*record);
+    REQUIRE(vmad != nullptr);
+    const auto scripts = fo4::read_vmad_scripts(vmad->data);
+    REQUIRE(scripts.scripts.size() == 1u);
+    const auto& values = scripts.scripts[0].properties;
+    REQUIRE(values.size() == 10u);
+    CHECK(values[0].text == std::optional<std::string>{"hello"});
+    CHECK(values[1].integer == std::optional<std::int32_t>{-7});
+    CHECK(values[2].real == std::optional<float>{1.5f});
+    CHECK(values[3].boolean == std::optional<bool>{true});
+    REQUIRE(values[4].object.has_value());
+    CHECK(values[4].object->value() == 0x01000801u);
+    CHECK(values[4].alias == std::optional<std::int16_t>{static_cast<std::int16_t>(3)});
+    REQUIRE(values[5].text_elements.has_value());
+    CHECK(values[5].text_elements->at(0) == "alpha");
+    REQUIRE(values[6].integer_elements.has_value());
+    CHECK(values[6].integer_elements->at(0) == 42);
+    REQUIRE(values[7].real_elements.has_value());
+    CHECK(values[7].real_elements->at(0) == 2.5f);
+    REQUIRE(values[8].boolean_elements.has_value());
+    CHECK(values[8].boolean_elements->at(0) == true);
+    REQUIRE(values[9].object_elements.has_value());
+    CHECK(values[9].object_elements->at(0).object.value() == 0x01000801u);
+    CHECK(values[9].object_elements->at(0).alias == 4);
+
+    const auto before = scriptEditReadBytes(patchPath);
+    const auto refusal = [&](const nlohmann::json& args, const char* type) {
+        const auto result = backend.setScriptValue(args);
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == type);
+    };
+    refusal(nlohmann::json::array({"Patch.esp", bare, 9, 0, "string", "x"}),
+            "ScriptIndexOutOfRange");
+    refusal(nlohmann::json::array({"Patch.esp", bare, 0, 99, "string", "x"}),
+            "PropertyIndexOutOfRange");
+    refusal(nlohmann::json::array({"Patch.esp", bare, 0, 0, "int", "1"}),
+            "PropertyTypeMismatch");
+    refusal(nlohmann::json::array({"Patch.esp", bare, 0, 1, "int", "1", nullptr, 1}),
+            "InvalidPropertyValue");
+    refusal(nlohmann::json::array({"Patch.esp", bare, 0, 3, "bool", "yes"}),
+            "InvalidPropertyValue");
+    refusal(nlohmann::json::array({"Patch.esp", bare, 0, 5, "string", "x", nullptr, 5}),
+            "ElementIndexOutOfRange");
+    refusal(nlohmann::json::array({"Patch.esp", bare, 0, 0, "string", "x", 2}),
+            "InvalidPropertyValue");
+    refusal(nlohmann::json::array({"Patch.esp", "000801:Patch.esp", 0, 0, "string", "x"}),
+            "ScriptIndexOutOfRange");
+    CHECK(scriptEditReadBytes(patchPath) == before);
+}
+

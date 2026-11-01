@@ -1,5 +1,7 @@
 #include "McpTools.hpp"
 
+#include "McpCatalog.hpp"
+
 #include <string>
 #include <string_view>
 #include <utility>
@@ -69,30 +71,12 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
         ToolDefinition definition{std::move(name), std::move(description),
                                   objectSchema(properties, required)};
         definition.inputSchema["additionalProperties"] = false;
+        const auto schema = definition.inputSchema;
         auto bridge = std::make_shared<RpcTool>(definition, rpc, std::move(target),
                                                 std::move(method), std::move(order));
         return registerMcpTool(registry, std::make_shared<FunctionTool>(
-            std::move(definition), [bridge, fields, properties](const nlohmann::json& args) {
-                if (!args.is_object()) return ToolResult{"Arguments must be an object", true};
-                for (const auto& [name, value] : args.items()) {
-                    static_cast<void>(value);
-                    if (!properties.contains(name)) return ToolResult{"Unknown argument: " + name, true};
-                }
-                for (const auto& field : fields) {
-                    const auto value = args.find(field.name);
-                    if (value == args.end()) {
-                        if (field.optional) continue;
-                        return ToolResult{std::string("Missing argument: ") + field.name, true};
-                    }
-                    const std::string_view type(field.type);
-                    const bool valid = (type == "string" && value->is_string()) ||
-                                       (type == "object" && value->is_object()) ||
-                                       (type == "integer" && value->is_number_integer()) ||
-                                       (type == "number" && value->is_number()) ||
-                                       (type == "array" && value->is_array()) ||
-                                       (type == "boolean" && value->is_boolean());
-                    if (!valid) return ToolResult{std::string(field.name) + " must be " + field.type, true};
-                }
+            std::move(definition), [bridge, schema](const nlohmann::json& args) {
+                if (const auto error = argumentError(schema, args)) return ToolResult{*error, true};
                 return bridge->call(args);
             }), log);
     };
@@ -118,7 +102,9 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              "Create an interior CELL in this plugin with the given editor ID and return its formKey. Refused when the editor ID is empty or matches a CELL in this plugin, ignoring ASCII case",
              "backend", "CreateInteriorCell",
              {{"plugin", "string"}, {"editor_id", "string"}})) return false;
-    if (!add("get_record", "Get record fields and plugin versions by FormKey, including pending edits", "backend", "GetConflictMatrix",
+    if (!add("get_record", "Get one record's compact details: FormKey, signature, EditorID, winning plugin and override count. Per-plugin versions come from get_record_plugin_matrix", "backend", "GetRecordDetails",
+             {{"form_key", "string"}})) return false;
+    if (!add("get_conflict_matrix", "Get the conflict matrix for one FormKey: every plugin version and its conflict rows. Large payloads are possible on big load orders; prefer get_record for a compact view", "backend", "GetConflictMatrix",
              {{"form_key", "string"}})) return false;
     if (!add("get_record_fields", "Get the field paths and values for one plugin's record version", "backend", "GetRecordTree",
              {{"plugin", "string"}, {"form_key", "string"}})) return false;
@@ -143,6 +129,33 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}})) return false;
     if (!add("list_masters", "List a plugin's declared masters", "masters", "List",
              {{"plugin", "string"}})) return false;
+    if (!add("add_master",
+             "Declare one master on a plugin, fresh or existing, in memory; call save_plugin to persist. Use it before authoring records whose links live in that master. master_file is a plugin file name, not a path. Masters are load-order significant: an already-declared master that loads after the new one is refused with MasterOrder. Declaring a master that is already declared is a no-op. A plugin cannot declare itself, an unloaded full or light-unknown master is refused, and protected or game-Data plugins are refused",
+             "backend", "AddMasters",
+             {{"plugin", "string"}, {"master_file", "string"}})) return false;
+    if (!add("add_masters",
+             "Declare several masters on a plugin in one call, in memory; call save_plugin to persist. master_file is a comma-separated list of plugin file names and the declaration order is the order given. Same refusals as add_master, and a refusal leaves the plugin unchanged",
+             "backend", "AddMasters",
+             {{"plugin", "string"}, {"master_file", "string"}})) return false;
+    if (!add("get_magic_effects",
+             "Read a record's magic effect list. The record must be SPEL, ALCH, ENCH or INGR. Returns count and effects with index, effect FormKey, magnitude, area and duration",
+             "backend", "GetMagicEffects",
+             {{"plugin", "string"}, {"form_key", "string"}})) return false;
+    if (!add("add_magic_effect",
+             "Append one effect to a record's magic effect list in memory and return its index. The record must be SPEL, ALCH, ENCH or INGR; effect must be an MGEF FormKey; magnitude is a float, area and duration are integers. Call save_plugin to persist",
+             "backend", "AddMagicEffect",
+             {{"plugin", "string"}, {"form_key", "string"}, {"effect", "string"},
+              {"magnitude", "number"}, {"area", "integer"}, {"duration", "integer"}})) return false;
+    if (!add("set_magic_effect",
+             "Replace one effect of a record's magic effect list in memory by index. The record must be SPEL, ALCH, ENCH or INGR; effect must be an MGEF FormKey. Call save_plugin to persist",
+             "backend", "SetMagicEffect",
+             {{"plugin", "string"}, {"form_key", "string"}, {"index", "integer"},
+              {"effect", "string"}, {"magnitude", "number"}, {"area", "integer"},
+              {"duration", "integer"}})) return false;
+    if (!add("remove_magic_effect",
+             "Remove one effect from a record's magic effect list in memory by index. The record must be SPEL, ALCH, ENCH or INGR. Call save_plugin to persist",
+             "backend", "RemoveMagicEffect",
+             {{"plugin", "string"}, {"form_key", "string"}, {"index", "integer"}})) return false;
     if (!add("get_leveled_list", "Get a leveled list (LVLI, LVLN or LVSP) by FormKey: chance none, max count, flags, use global and entries from the winning version, or from plugin's version when plugin is given. edit_leveled_list_entry indexes the named plugin's version", "backend", "GetLeveledList",
              {{"form_key", "string"}, {"plugin", "string", true}})) return false;
     if (!add("set_leveled_list_settings", "Set a leveled list's chance none, max count and flags bytes (0-255) in memory. Call save_plugin to persist", "backend", "SetLeveledListSettings",
@@ -173,8 +186,12 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"form_key", "string"}, {"script", "string"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
     if (!add("remove_script", "Remove one script and its properties from a record's VMAD in memory by script index. Call save_plugin to persist", "backend", "RemoveScript",
              {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}})) return false;
-    if (!add("add_script_property", "Add a property to a script in memory. type is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); flags is the optional property flags byte and index the optional property-list position. Set the value with set_field or the typed VMAD setters. Call save_plugin to persist", "backend", "AddScriptProperty",
+    if (!add("add_script_property", "Add a property to a script in memory. type is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); flags is the optional property flags byte and index the optional property-list position. Set its value afterwards with set_script_value. Call save_plugin to persist", "backend", "AddScriptProperty",
              {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}, {"name", "string"}, {"type", "integer"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
+    if (!add("set_script_value", "Set one VMAD script property value in memory. kind selects the typed setter: object (value is a FormKey, alias optional), string, int, float or bool (value is text for int/float/bool). element selects an element of an array property and defaults to 0. Call save_plugin to persist", "backend", "SetScriptValue",
+             {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"},
+              {"property_index", "integer"}, {"kind", "string"}, {"value", "string", true},
+              {"alias", "integer", true}, {"element", "integer", true}})) return false;
     if (!add("remove_script_property", "Remove one property from a script in memory by property index. Call save_plugin to persist", "backend", "RemoveScriptProperty",
              {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}, {"property_index", "integer"}})) return false;
     if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
@@ -406,5 +423,6 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
             }),
             log)) return false;
 
-    return registerPluginTools(registry, rpc, log);
+    return registerPluginTools(registry, rpc, log) &&
+           fo4ide::app::registerCatalogTools(registry, rpc, log);
 }

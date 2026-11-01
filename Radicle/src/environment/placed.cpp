@@ -157,6 +157,23 @@ private:
       data_.encounter_zone = single_link(sub, data_.encounter_zone);
     } else if (s == sig("XEMI")) {
       data_.emittance = single_link(sub, data_.emittance);
+    } else if (s == sig("XRDS")) {
+      once(data_.radius.has_value(), sub);
+      require_size(sub, 4);
+      data_.radius = Reader::f32(sub, 0);
+    } else if (s == sig("XLIG")) {
+      once(data_.light_data.has_value(), sub);
+      if (sub.data.size() != 16 && sub.data.size() != 20 && sub.data.size() != 24) {
+        reader_.fail(s, "must be 16, 20 or 24 bytes");
+      }
+      PlacedLightData light;
+      light.fov = Reader::f32(sub, 0);
+      light.fade = Reader::f32(sub, 4);
+      light.end_distance_cap = Reader::f32(sub, 8);
+      light.shadow_depth_bias = Reader::f32(sub, 12);
+      if (sub.data.size() >= 20) light.near_clip = Reader::f32(sub, 16);
+      if (sub.data.size() >= 24) light.volumetric_intensity = Reader::f32(sub, 20);
+      data_.light_data = light;
     } else if (s == sig("XLRL")) {
       data_.location_reference = single_link(sub, data_.location_reference);
     } else if (s == sig("XATR")) {

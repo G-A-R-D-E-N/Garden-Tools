@@ -5,8 +5,12 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **58 tools**: 17 for plugins and records, 18 for typed records, 5 for MO2 profile and host state, 5 for
-Papyrus, 4 for NIFs, 2 for materials, 4 for audio, 1 for BA2 archives and 2 for PACK procedure trees.
+It advertises **162 tools**: 66 hand-written tools and 96 catalog tools. The 66 are 20 for plugins and records,
+25 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects, weapons and perks), 5 for MO2 profile
+and host state, 5 for Papyrus, and 11 for NIFs, materials, audio and BA2 archives (4 NIF, 2 material, 4 audio, 1
+archive). The 96 catalog tools are the editor parity set: 24 read-side (`McpCatalogRead.cpp`), 46 edit-side
+(`McpCatalogEdit.cpp`) and 26 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
+blueprint graphs and `load_script`).
 
 The server is the native C++23 host that the desktop editor also runs on, and it needs no other
 runtime. Radicle, the C++ plugin library built into the app, parses, edits and writes the plugins.
@@ -110,7 +114,8 @@ six hex digits, a colon and the plugin that owns the record.
 | `create_record` | `plugin`, `type`, `payload` | memory | Creates a record from a four-letter signature and returns its `formKey`. The payload fields are listed under "create_record payloads". |
 | `create_placed_object` | `plugin`, `cell`, `baseObject`, `x`, `y`, `z` [`rotX`, `rotY`, `rotZ`, `persistent`, `initially_disabled`] | memory | Adds a placed reference (REFR) over `baseObject` to a CELL and returns its `formKey`. `cell` and `baseObject` are FormKeys. `cell` must be a CELL this plugin owns (copy the cell as an override first if it is a master's); `baseObject` must be in this plugin or one of its masters. `rotX`, `rotY` and `rotZ` are radians and default to 0. `persistent` defaults to `true` (the cell's persistent list); `false` puts it in the temporary list. `initially_disabled` defaults to `false`. In an exterior cell `persistent` must be `false` and `x` and `y` must lie inside the cell's grid. The cell's child group is created when missing. |
 | `create_interior_cell` | `plugin`, `editor_id` | memory | Creates an interior CELL with the given editor ID and returns its `formKey`. Refused when `editor_id` is empty or matches a CELL in this plugin, ignoring ASCII case. |
-| `get_record` | `form_key` | no | Every loaded version of a record: `Winner`, `Plugins`, per-field `Rows` and an overall `Level` of `onlyone`, `override` or `conflict`. Includes pending edits. `RecordNotFound` when no loaded plugin has it. |
+| `get_record` | `form_key` | no | Compact record details: `FormKey`, the raw form id, `Signature`, `EditorId`, winning plugin (`Winner`), `BaseForm` and `OverrideCount`. Per-plugin versions are in `get_record_plugin_matrix`. `RecordNotFound` when no loaded plugin has it. |
+| `get_conflict_matrix` | `form_key` | no | Full conflict matrix for a record: every loaded version and its per-field `Rows` with `Winner`, `Plugins` and an overall `Level` of `onlyone`, `override` or `conflict`. Large payloads are possible on big load orders; prefer `get_record` for a compact view. |
 | `get_record_fields` | `plugin`, `form_key` | no | Field paths and values of one plugin's version of the record (`RecordVersionNotFound` if that plugin has none). |
 | `list_record_types` | `plugin` | no | The record signatures in a plugin with counts, as strings such as `EYES (3)`. |
 | `list_records` | `type` [`filter`, `limit`, `offset`] | no | Winning records of one signature across the loaded plugins. `filter` is a case-insensitive substring of the form key or EditorID. Rows: `FormKey`, `EditorID`, `Type`, `Plugin` (the winner). `limit` defaults to 200 and is capped at 5000. |
@@ -121,6 +126,8 @@ six hex digits, a colon and the plugin that owns the record.
 | `save_plugin` | `plugin` | disk | Writes the plugin atomically to the path it was loaded from. No other path can be chosen over MCP. Refused for read-only plugins and for files changed on disk since loading. |
 | `discard_plugin` | `plugin` | memory | Drops the plugin's pending edits by re-reading the plugin from disk. Refuses with `PluginChangedOnDisk` when the file changed since it was loaded, and with `PluginReadOnly` for a protected or game-Data plugin, leaving the edits pending. Writes nothing. |
 | `list_masters` | `plugin` | no | The plugin's declared masters (`index`, `name`, `size`, `used`, `kind` of `light` or `full`) and whether the plugin itself is light. Returns `{}` if the plugin is not loaded. |
+| `add_master` | `plugin`, `master_file` | memory | Declares one master on a plugin, fresh or existing, so records whose links live in that master can be authored next. `master_file` is a plugin file name, not a path. Masters are load-order significant: a master that loads before an already-declared master is refused with `MasterOrder`, and so is one that does not load before the plugin. Re-declaring an existing master is a no-op (`No new masters were needed`). `SelfMaster`, `MasterNotLoaded` for a full or light-unknown master that is not loaded, and `PluginReadOnly` for protected or game-Data plugins. A refusal leaves the plugin unchanged. Call `save_plugin` to persist. |
+| `add_masters` | `plugin`, `master_file` | memory | Same as `add_master` for several masters in one call: `master_file` is a comma-separated list and the declaration order is the order given. |
 
 #### create_record payloads
 
@@ -170,9 +177,118 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record (PER
 | `remove_script` | `plugin`, `form_key`, `script_index` | memory | Removes one script and its properties by script index. Call `save_plugin` to persist. |
 | `add_script_property` | `plugin`, `form_key`, `script_index`, `name`, `type` [`flags`, `index`] | memory | Adds one property to a script. `type` is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); `flags` is the optional property flags byte and `index` the optional property-list position. Set the value with `set_field` or the typed VMAD setters. Call `save_plugin` to persist. |
 | `remove_script_property` | `plugin`, `form_key`, `script_index`, `property_index` | memory | Removes one property by property index. Call `save_plugin` to persist. |
+| `set_script_value` | `plugin`, `form_key`, `script_index`, `property_index`, `kind` [`value` `alias` `element`] | memory | Sets one VMAD property value. `kind` is `object`, `string`, `int`, `float` or `bool` and must match the stored property type; for `object` the `value` is a FormKey and `alias` an optional signed 16-bit index (default -1); for `int`/`float`/`bool` the value is text. `element` addresses an array element and defaults to 0. Refusals name the mismatch (`PropertyTypeMismatch`, `PropertyIndexOutOfRange`, `ElementIndexOutOfRange`, `InvalidPropertyValue`); call `save_plugin` to persist. |
 | `get_weapon_damage_types` | `form_key` | no | A WEAP record's damage types (read-only). |
 | `get_perk_effects` | `plugin`, `form_key` | no | A PERK record's effects: `type`, `rank`, `priority`, then `quest` and `questStage`, `ability`, or `entryPoint` and `function`; each effect's condition `tabs` and `parameters` (`data` is hex). |
 | `set_perk_effects` | `plugin`, `form_key`, `effects` | memory | Replaces the whole effect list with `effects`, in the shape `get_perk_effects` returns. An effect that omits `tabs` has its condition tabs cleared. Call `save_plugin` to persist. |
+| `get_magic_effects` | `plugin`, `form_key` | no | A SPEL, ALCH, ENCH or INGR record's effect list: count plus each effect's index, `effect` FormKey, `magnitude`, `area` and `duration`. |
+| `add_magic_effect` | `plugin`, `form_key`, `effect`, `magnitude`, `area`, `duration` | memory | Appends one effect (EFID/EFIT) to a SPEL, ALCH, ENCH or INGR record and returns its index. `effect` must be an MGEF FormKey, `magnitude` a number, `area` and `duration` integers. Call `save_plugin` to persist. |
+| `set_magic_effect` | `plugin`, `form_key`, `index`, `effect`, `magnitude`, `area`, `duration` | memory | Replaces one effect of the list by index; the record must be SPEL, ALCH, ENCH or INGR and `effect` an MGEF FormKey. Call `save_plugin` to persist. |
+| `remove_magic_effect` | `plugin`, `form_key`, `index` | memory | Removes one effect of a SPEL, ALCH, ENCH or INGR record by index; the whole block is dropped when the last effect goes. Call `save_plugin` to persist. |
+
+
+### Editor parity tools
+
+These map onto the same native RPC operations the desktop editor uses, so the MCP surface now matches the visual one. `Writes` follows the rest of this document: `memory` edits must be persisted with `save_plugin` (or the operation's own save call), `files` tools write the file they name.
+
+| Tool | Arguments | Writes | What it does |
+|---|---|---|---|
+| `get_conflicts` | none | no | Editor query: get conflicts. Same RPC the desktop editor uses. |
+| `get_referenced_by` | `form_key` | no | Editor query: get referenced by. Same RPC the desktop editor uses. |
+| `get_problems` | `form_key` | no | Editor query: get problems. Same RPC the desktop editor uses. |
+| `compare_plugin_to` | `plugin`, `other_path`, `form_key` (optional) | no | Editor query: compare plugin to. Same RPC the desktop editor uses. |
+| `describe_element` | `plugin`, `form_key`, `path` | no | Editor query: describe element. Same RPC the desktop editor uses. |
+| `get_conditions` | `plugin`, `form_key` | no | Editor query: get conditions. Same RPC the desktop editor uses. |
+| `get_conditions_at` | `plugin`, `form_key`, `path` | no | Editor query: get conditions at. Same RPC the desktop editor uses. |
+| `get_condition_functions` | none | no | Editor query: get condition functions. Same RPC the desktop editor uses. |
+| `get_condition_run_on_types` | none | no | Editor query: get condition run on types. Same RPC the desktop editor uses. |
+| `get_condition_function_params` | none | no | Editor query: get condition function params. Same RPC the desktop editor uses. |
+| `get_record_type_index` | none | no | Editor query: get record type index. Same RPC the desktop editor uses. |
+| `get_containment_path` | `form_key` | no | Editor query: get containment path. Same RPC the desktop editor uses. |
+| `get_record_details` | `form_key` | no | Editor query: get record details. Same RPC the desktop editor uses. |
+| `get_record_plugin_matrix` | `form_key` | no | Editor query: get record plugin matrix. Same RPC the desktop editor uses. |
+| `get_dependencies` | `form_key` | no | Editor query: get dependencies. Same RPC the desktop editor uses. |
+| `get_history` | `form_key` | no | Editor query: get history. Same RPC the desktop editor uses. |
+| `get_load_order_summary` | none | no | Editor query: get load order summary. Same RPC the desktop editor uses. |
+| `get_texture` | `rel_model_path`, `rel_tex_path` | no | Editor query: get texture. Same RPC the desktop editor uses. |
+| `get_placed_references` | `cell_id` | no | Editor query: get placed references. Placed-reference or cell operation. |
+| `get_placed_references_at_grid` | `worldspace`, `grid_x`, `grid_y` | no | Editor query: get placed references at grid. Placed-reference or cell operation. |
+| `search_worldspaces` | `query`, [`limit`] | no | Editor query: search worldspaces. Placed-reference or cell operation. |
+| `get_geometry_batch` | `rel_model_paths_json` | no | Editor query: get geometry batch. Same RPC the desktop editor uses. |
+| `search_cells` | `query`, [`limit`] | no | Editor query: search cells. Placed-reference or cell operation. |
+| `get_geometry_batch_progress` | none | no | Editor query: get geometry batch progress. Same RPC the desktop editor uses. |
+| `set_components` | `plugin`, `form_key`, `components_json` | memory | Editor operation: set components. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_quest_aliases` | `plugin`, `form_key`, `aliases_json` | memory | Editor operation: set quest aliases. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_quest_stages` | `plugin`, `form_key`, `stages_json` | memory | Editor operation: set quest stages. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_conditions` | `plugin`, `form_key`, `conditions_json` | memory | Editor operation: set conditions. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `add_list_item` | `plugin`, `form_key`, `field`, `value` | memory | Editor operation: add list item. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `remove_list_item` | `plugin`, `form_key`, `field`, `value` | memory | Editor operation: remove list item. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `delete_record` | `plugin`, `form_key` | memory | Editor operation: delete record. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `copy_as_override` | `source_plugin`, `form_key`, `patch_plugin`, `overwrite`, `allow_losing` (optional) | memory | Editor operation: copy as override. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `copy_as_override_many` | `items_json`, `patch_plugin`, `overwrite`, `allow_losing` (optional) | memory | Editor operation: copy as override many. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `revert_overrides` | `bad_plugin`, `patch_plugin`, [`signature`], [`contains_component`], [`apply`], [`limit`] | memory | Editor operation: revert overrides. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `compact_to_esl` | `plugin` | memory | Editor operation: compact to esl. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `clean_unused_masters` | `plugin`, `apply` | memory | Editor operation: clean unused masters. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `check_for_errors` | `plugin`, [`limit`] | no | Editor query: check for errors. Same RPC the desktop editor uses. |
+| `find_unreachable` | `plugin`, [`limit`] | no | Editor query: find unreachable. Same RPC the desktop editor uses. |
+| `loot_cleaning_report` | `plugin` | no | Editor query: loot cleaning report. Same RPC the desktop editor uses. |
+| `update_onam` | `plugin` | memory | Editor operation: update onam. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `copy_as_disabled_override` | `source_plugin`, `form_key`, `patch_plugin`, `overwrite` | memory | Editor operation: copy as disabled override. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `copy_as_wrapper` | `source_plugin`, `form_key`, `patch_plugin`, `editor_id` | memory | Editor operation: copy as wrapper. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `check_esl_eligibility` | `plugin` | no | Editor query: check esl eligibility. Same RPC the desktop editor uses. |
+| `clean_plugin` | `plugin` | memory | Editor operation: clean plugin. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `renumber_form_id` | `plugin`, `form_key`, `new_id` | memory | Editor operation: renumber form id. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `add_element` | `plugin`, `form_key`, `path`, [`template`] | memory | Adds one element to a record: an authoring-path subrecord, or the 4-character subrecord signature named by `template`; a nullable FormLink list gets a null element. Refusals name why the type cannot take the new element (`ElementNotAuthorable`, `ElementPathUnsupported`, `already present`). Call `save_plugin` to persist. |
+| `remove_element` | `plugin`, `form_key`, `path` | memory | Editor operation: remove element. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `move_element` | `plugin`, `form_key`, `path`, `delta` | memory | Editor operation: move element. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `clear_element` | `plugin`, `form_key`, `path` | memory | Editor operation: clear element. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `copy_element_to_selected` | `source_plugin`, `source_form_key`, `element_path`, `targets_json` | memory | Editor operation: copy element to selected. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `remove_element_from_selected` | `element_path`, `targets_json` | memory | Editor operation: remove element from selected. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_conditions_at` | `plugin`, `form_key`, `path`, `conditions_json` | memory | Editor operation: set conditions at. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `resolve_form_key_labels` | `form_keys_csv` | no | Editor query: resolve form key labels. Same RPC the desktop editor uses. |
+| `copy_as_new_record` | `source_plugin`, `form_key`, `target_plugin`, `new_editor_id` | memory | Editor operation: copy as new record. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `remove_identical_to_master` | `plugin`, [`apply`], [`limit`] | memory | Editor operation: remove identical to master. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `create_merged_patch` | `plugins`, `patch_plugin`, [`apply`] | memory | Editor operation: create merged patch. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `renumber_plugin_form_ids` | `plugin`, `start`, [`apply`] | memory | Editor operation: renumber plugin form ids. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `inject_forms_into_master` | `plugin`, `master`, `start`, [`apply`] | memory | Editor operation: inject forms into master. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `create_seq_file` | `plugin`, `output_dir` | files | Editor operation: create seq file. Same RPC the desktop editor uses; writes the seq file to disk at once, not through save_plugin. |
+| `check_circular_leveled_lists` | [`plugin`, `limit`] | no | Editor query: check circular leveled lists. Same RPC the desktop editor uses. |
+| `deep_copy_as_override` | `source_plugin`, `form_key`, `patch_plugin`, [`apply`], [`overwrite`], `max_records` (optional), `allow_losing` (optional) | memory | Editor operation: deep copy as override. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `change_referencing_records` | `from`, `to`, `patch_plugin`, [`apply`] | memory | Editor operation: change referencing records. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `resolve_conflict` | `form_key`, `winner`, `patch`, `allow_losing` (optional) | memory | Editor operation: resolve conflict. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `scan_conflicts` | none | no | Editor query: scan conflicts. Same RPC the desktop editor uses. |
+| `scan_broken_refs` | none | no | Editor query: scan broken refs. Same RPC the desktop editor uses. |
+| `fix` | `nif_path`, `out_nif` | files | Editor operation: fix. Same RPC the desktop editor uses; writes out_nif to disk at once, not through save_plugin. |
+| `reorder` | `plugin`, `order_json` | memory | Editor operation: reorder. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_light` | `plugin`, `light` | memory | Editor operation: set light. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `clean_unused` | `plugin`, `apply` | memory | Editor operation: clean unused. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_placed_reference_transform` | `form_key`, `patch_plugin`, `x`, `y`, `z`, `rx`, `ry`, `rz` | memory | Editor operation: set placed reference transform. Placed-reference or cell operation. |
+| `load_script` | `path` | no | Editor operation: load script. Same RPC the desktop editor uses. |
+| `script_analyze` | `text`, [`path`] | no | Editor query: analyze. Papyrus source operation. |
+| `script_symbol_at` | `text`, [`path`], [`offset`], [`imports`] | no | Editor operation: symbol at. Papyrus source operation. |
+| `script_read_script` | `path` | no | Editor query: read script. Papyrus source operation. |
+| `script_write_script` | `path`, `text` | files | Editor operation: write script. Papyrus source operation. |
+| `strings_list_tables` | `plugin`, [`language`] | no | Editor query: list string tables. String-table operation. |
+| `strings_get` | `plugin`, [`language`], `table`, [`filter`], [`offset`], [`limit`] | no | Editor query: get strings. String-table operation. |
+| `strings_lookup` | `plugin`, [`language`], `form_key` | no | Editor query: lookup string. String-table operation. |
+| `strings_set` | `plugin`, [`language`], `table`, `form_key`, `text` | memory/files | Editor operation: set string. String-table operation; persist with strings_save or drop with strings_discard. |
+| `strings_add` | `plugin`, [`language`], `table`, `text` | memory/files | Editor operation: add string. String-table operation; persist with strings_save or drop with strings_discard. |
+| `strings_remove` | `plugin`, [`language`], `table`, `form_key` | memory/files | Editor operation: remove string. String-table operation; persist with strings_save or drop with strings_discard. |
+| `strings_export` | `plugin`, [`language`], `table` | no | Editor operation: export strings. String-table operation. |
+| `strings_save` | `plugin`, [`language`] | memory/files | Editor operation: save string tables. String-table operation; persist with strings_save or drop with strings_discard. |
+| `strings_discard` | `plugin`, [`language`] | memory/files | Editor operation: discard string edits. String-table operation; persist with strings_save or drop with strings_discard. |
+| `archive_extract_file` | `archive_path`, `inner_path`, `out_path` | files | Editor operation: extract file. Archive operation; paths are validated by the editor backend. |
+| `archive_extract_selected` | `archive_path`, `inner_paths_json`, `out_dir` | files | Editor operation: extract selected. Archive operation; paths are validated by the editor backend. |
+| `archive_extract_all` | `archive_path`, `out_dir`, [`filter`], [`limit`], [`filter_mode`] | files | Editor operation: extract all. Archive operation; paths are validated by the editor backend. |
+| `archive_compare` | `archive_path_a`, `archive_path_b` | no | Editor query: compare. Archive operation; paths are validated by the editor backend. |
+| `graph_core_palette` | none | no | Editor query: get core palette. Blueprint behaviour-graph operation. |
+| `graph_search_palette` | [`kind`], `query`, [`script_filter`], [`limit`] | no | Editor query: search palette. Blueprint behaviour-graph operation. |
+| `graph_node_signature` | `node_type` | no | Editor query: get node signature. Blueprint behaviour-graph operation. |
+| `graph_validate` | `document_json` | no | Editor query: validate graph. Blueprint behaviour-graph operation. |
+| `graph_compile_to_source` | `document_json` | no | Editor operation: compile to source. Blueprint behaviour-graph operation. |
+| `graph_compile_to_pex` | `document_json`, `output_directory` | files | Editor operation: compile to pex. Blueprint behaviour-graph operation. |
+| `graph_load` | `path` | no | Editor operation: load graph. Blueprint behaviour-graph operation. |
+| `graph_save` | `path`, `document_json` | files | Editor operation: save graph. Blueprint behaviour-graph operation. |
 
 ### Profile and host state
 

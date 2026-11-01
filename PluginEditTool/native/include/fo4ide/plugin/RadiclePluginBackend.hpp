@@ -91,6 +91,7 @@ public:
     Result<nlohmann::json> getPerkEffects(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPerkEffects(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setScriptValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> releaseMemory(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScriptProperty(const nlohmann::json& arguments) override;
@@ -104,6 +105,10 @@ public:
     Result<nlohmann::json> createSound(const nlohmann::json& arguments) override;
     Result<nlohmann::json> editFactionEntries(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getMagicEffects(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> addMagicEffect(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setMagicEffect(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeMagicEffect(const nlohmann::json& arguments) override;
     Result<nlohmann::json> conditionFunctionParams() const override {
         return nlohmann::json(ConditionFunctions::asJson());
     }
