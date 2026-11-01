@@ -532,6 +532,10 @@ if(RADICLE_SHARED)
   set_target_properties(fo4 PROPERTIES
     OUTPUT_NAME radicle
     WINDOWS_EXPORT_ALL_SYMBOLS ON)
+  # A PE import library holds at most 65535 objects (LNK1189).
+  if(MSVC)
+    target_compile_options(fo4 PRIVATE /Zc:inline)
+  endif()
   # Stamp the PE image version. SOVERSION stays empty: on the Linux path it only
   # adds the libradicle.so -> libradicle.so.0 symlink step, which some checkout
   # volumes cannot create.

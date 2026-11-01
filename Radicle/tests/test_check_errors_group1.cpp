@@ -165,7 +165,7 @@ TEST(CheckErrorsGroup1, HardcodedPlayerRefIsTypeCheckedAgainstTheGameMaster) {
   const auto wrong = of_code(findings, fo4::CheckCode::wrong_target_type);
   ASSERT_EQ(wrong.size(), 1u);
   EXPECT_EQ(wrong[0].target, fo4::FormKey::parse("000014:Fallout4.esm"));
-  EXPECT_TRUE(wrong[0].message.starts_with("XLKR target 000014:Fallout4.esm is PLYR, expected one of "))
+  EXPECT_TRUE(wrong[0].message.starts_with("KWDA target 000014:Fallout4.esm is PLYR, expected one of "))
       << wrong[0].message;
   EXPECT_EQ(wrong[0].record, fo4::FormKey::parse("000801:Mod.esp"));
   EXPECT_TRUE(of_code(findings, fo4::CheckCode::unresolved_link).empty());

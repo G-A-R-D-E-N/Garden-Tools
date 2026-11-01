@@ -392,6 +392,7 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*movie_clip, "gotoAndPlay", native::Id::display_goto_and_play, false);
   add_method(*movie_clip, "gotoAndStop", native::Id::display_goto_and_stop, false);
   add_method(*movie_clip, "stop", native::Id::display_stop, false);
+  add_method(*movie_clip, "addFrameScript", native::Id::display_add_frame_script, false);
   add_method(*movie_clip, "play", native::Id::display_play, false);
   add_method(*movie_clip, "nextFrame", native::Id::display_next_frame, false);
   add_method(*movie_clip, "prevFrame", native::Id::display_prev_frame, false);

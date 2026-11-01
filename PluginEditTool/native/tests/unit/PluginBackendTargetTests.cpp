@@ -231,6 +231,10 @@ public:
         return recordTypedCall("RemoveScriptProperty", args);
     }
 
+    fo4ide::Result<nlohmann::json> releaseMemory(const nlohmann::json& args) override {
+        return recordTypedCall("ReleaseMemory", args);
+    }
+
     fo4ide::Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& args) const override {
         return recordTypedCall("GetWeaponDamageTypes", args);
     }
@@ -690,7 +694,7 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
         "EditFactionEntries", "GetWeaponDamageTypes", "GetPerkEffects", "SetPerkEffects", "CreatePlacedObject",
         "CreateInteriorCell", "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound",
         "AddPackageProcedure", "RemovePackageProcedure",
-        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty"};
+        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty", "ReleaseMemory"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());

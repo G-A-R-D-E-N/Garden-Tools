@@ -261,6 +261,11 @@ public:
     virtual Result<nlohmann::json> createSound(const nlohmann::json&) {
         return std::unexpected(Error{"SoundBackendUnavailable", "Sound record creation is unavailable"});
     }
+    // Constraint: memory trimming only pages the process out; it never drops plugin data.
+    virtual Result<nlohmann::json> releaseMemory(const nlohmann::json&) {
+        return std::unexpected(Error{"MemoryBackendUnavailable", "Memory trimming is unavailable"});
+    }
+
     // Constraint: script structure writes keep the in-memory plugin unchanged on refusal.
     virtual Result<nlohmann::json> addScript(const nlohmann::json&) {
         return std::unexpected(Error{"ScriptBackendUnavailable", "Script writes are unavailable"});

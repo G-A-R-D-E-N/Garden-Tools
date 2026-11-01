@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -9,8 +10,10 @@
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <stop_token>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -42,6 +45,10 @@ Result<void> requirePluginUnchangedSince(const std::filesystem::path& path,
 
 class RadiclePluginBackend final : public IPluginBackend {
 public:
+    RadiclePluginBackend();
+    ~RadiclePluginBackend() override;
+    RadiclePluginBackend(const RadiclePluginBackend&) = delete;
+    RadiclePluginBackend& operator=(const RadiclePluginBackend&) = delete;
     Capabilities capabilities() const noexcept override;
     Result<nlohmann::json> invoke(std::string_view operation,
                                   const nlohmann::json& arguments) override;
@@ -84,6 +91,7 @@ public:
     Result<nlohmann::json> getPerkEffects(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPerkEffects(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> releaseMemory(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeScriptProperty(const nlohmann::json& arguments) override;
@@ -101,6 +109,10 @@ public:
     }
 
     void setDataDirectory(std::filesystem::path dataDirectory);
+
+#ifdef FO4IDE_TEST_HOOKS
+    std::weak_ptr<const fo4::ConflictGraph> cachedGraphForTest() const;
+#endif
 
 private:
     struct StagedLocalization {
@@ -120,7 +132,6 @@ private:
         std::filesystem::file_time_type loadedTime{};
         bool trusted{false};
         fo4::Plugin plugin;
-        std::optional<fo4::Plugin> originalPlugin;
         bool dirty{false};
         std::optional<StagedLocalization> stagedLocalization;
         std::unique_ptr<std::mutex> writeMutex = std::make_unique<std::mutex>();
@@ -307,15 +318,39 @@ private:
         const std::filesystem::path& path) const;
     std::optional<std::filesystem::path> allowedLocalizationDirectory(
         const std::filesystem::path& path) const;
-    void rebuildGraphLocked();
+    std::shared_ptr<const fo4::ConflictGraph> conflictGraph() const;
+    void markGraphDirtyLocked() const;
+    void reapIdleConflictGraph(std::stop_token stop_token);
+    void dropConflictGraphLocked() const;
     std::string dirtyPluginListLocked() const;
+
+    // Constraint: references from this proxy must not be held across a stage, because the next access may rebuild the graph.
+    class ConflictGraphProxy {
+    public:
+        explicit ConflictGraphProxy(RadiclePluginBackend* owner) : owner_(owner) {}
+        const fo4::ConflictGraph* operator->() const {
+            return owner_->conflictGraph().get();
+        }
+        const fo4::ConflictGraph& operator*() const {
+            return *owner_->conflictGraph();
+        }
+        operator const fo4::ConflictGraph&() const { return **this; }
+    private:
+        RadiclePluginBackend* owner_{nullptr};
+    };
+
 
     mutable std::shared_mutex lifecycleMutex_;
     mutable std::shared_mutex stateMutex_;
     std::mutex saveIoMutex_;
     std::vector<LoadedPlugin> plugins_;
     std::uint64_t mutationEpoch_{0};
-    fo4::ConflictGraph graph_;
+    ConflictGraphProxy graph_{this};
+    mutable std::mutex graphMutex_;
+    mutable std::shared_ptr<const fo4::ConflictGraph> graphStorage_;
+    mutable bool graphDirty_{true};
+    mutable std::chrono::steady_clock::time_point graphLastUse_{};
+    mutable std::chrono::seconds graphIdleLimit_{60};
     std::filesystem::path dataDirectory_;
     using StringArchiveStamp = std::tuple<std::filesystem::path, std::uintmax_t, std::filesystem::file_time_type>;
     mutable std::mutex stringAssetsMutex_;
@@ -327,6 +362,7 @@ private:
     std::map<StagedStringKey, fo4::localization::LocalizedStringTable> stagedStrings_;
     std::filesystem::path trustedNewPluginRoot_;
     std::vector<std::filesystem::path> trustedSaveRoots_;
+    std::jthread graphReaper_;
 };
 
 }

@@ -5,7 +5,7 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **57 tools**: 17 for plugins and records, 18 for typed records, 4 for MO2 profile and host state, 5 for
+It advertises **58 tools**: 17 for plugins and records, 18 for typed records, 5 for MO2 profile and host state, 5 for
 Papyrus, 4 for NIFs, 2 for materials, 4 for audio, 1 for BA2 archives and 2 for PACK procedure trees.
 
 The server is the native C++23 host that the desktop editor also runs on, and it needs no other
@@ -43,7 +43,7 @@ environment variables listed under "Helper programs and settings".
 | Argument | What it does |
 |---|---|
 | `--mcp` | Run as a stdio MCP server. No window opens. |
-| `--mo2 <instance>` | Load the active profile of a Mod Organizer 2 instance before serving. The instance is the folder that holds `ModOrganizer.ini` and `profiles\`. |
+| `--mo2 <instance>` | Load the active profile of a Mod Organizer 2 instance on the first tool call rather than before serving. The instance is the folder that holds `ModOrganizer.ini` and `profiles\`. |
 | `--health` | Print a JSON status and exit. A quick check that the exe starts at all. |
 
 The other flags (`--window`, `--browser`, `--headless`, `--port`, `--web-root`) start the desktop
@@ -53,11 +53,13 @@ editor and are not used for MCP.
 way MO2's virtual file system would: the game `Data` folder, then enabled mods from lowest to highest
 priority, then the overwrite folder. It assembles the load order with the official and Creation Club
 plugins included and loads every enabled plugin, so winners and conflicts resolve the way they do in
-game. It also records the instance path in `settings.json`.
+game. The load, and recording the instance path in `settings.json`, happen on that first tool call, so
+the first call takes as long as the load does.
 
-If the instance cannot be loaded (a missing folder, a profile without `plugins.txt`, or a load order
-the engine would refuse, such as a missing master), the process prints the reason to stderr and exits
-with code 6. MCP clients show stderr in their server log.
+A missing instance folder is checked at startup: the process prints the reason to stderr and exits
+with code 6. Any other load failure (a profile without `plugins.txt`, or a load order the engine would
+refuse, such as a missing master) also prints the reason to stderr, and every tool call returns that
+error and tries the load again until it succeeds. MCP clients show stderr in their server log.
 
 Without `--mo2` the server starts with nothing loaded. `open_plugin` still loads a plugin by absolute
 path, and `reload_mo2_profile` loads the instance saved in `settings.json` (the one the desktop editor
@@ -117,7 +119,7 @@ six hex digits, a colon and the plugin that owns the record.
 | `search_records` | `query` [`type`] | no | Case-insensitive substring search over form keys, EditorIDs and signatures across all loaded plugins; `type` limits it to one signature. At most 500 rows. |
 | `set_field` | `plugin`, `form_key`, `path`, `value` | memory | Sets one field using a column path from `list_records_summary`, such as `EYES\Full`. `value` is always text. Paths that are not editable columns are refused (for example with `FieldWriteUnsupported`), and a value that does not fit leaves nothing changed. A form-link field checks that the target is loaded and of an allowed record type (`NULL` only where the field allows it), and adds the target's plugin to the edited plugin's masters when needed. |
 | `save_plugin` | `plugin` | disk | Writes the plugin atomically to the path it was loaded from. No other path can be chosen over MCP. Refused for read-only plugins and for files changed on disk since loading. |
-| `discard_plugin` | `plugin` | memory | Drops the plugin's pending edits and restores the state from when it was loaded or last saved. Writes nothing. |
+| `discard_plugin` | `plugin` | memory | Drops the plugin's pending edits by re-reading the plugin from disk. Refuses with `PluginChangedOnDisk` when the file changed since it was loaded, and with `PluginReadOnly` for a protected or game-Data plugin, leaving the edits pending. Writes nothing. |
 | `list_masters` | `plugin` | no | The plugin's declared masters (`index`, `name`, `size`, `used`, `kind` of `light` or `full`) and whether the plugin itself is light. Returns `{}` if the plugin is not loaded. |
 
 #### create_record payloads
@@ -179,6 +181,7 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record (PER
 | `native_status` | none | no | Host status: `pluginBackend`, `pluginRead`, `pluginWrite`, `archiveReadBackend`, `nifTool` (niftool was found at startup) and `embeddedWindow`. `materialCodec` and `audioTools` are fixed at `true` and do not check for helper programs. |
 | `get_mo2_status` | none | no | `loaded`; for a loaded profile also `instancePath`, `profile`, `dataFolder`, `overwriteFolder`, `pluginCount`, `missingPluginCount` and `loadedAtUnixMs`. Always `pendingPlugins` (plugins with unsaved edits) and staleness flags: `staleConfig` (`ModOrganizer.ini` changed), `staleLoadOrder` (`plugins.txt`, `modlist.txt` or `loadorder.txt` changed) and `stale` (either). |
 | `reload_mo2_profile` | [`discard_pending`] | memory | Reloads the enabled plugins from the configured profile, replacing everything that is loaded (plugins added with `open_plugin` included), and returns the `get_mo2_status` fields. Refused with `PluginHasPendingChanges` while any plugin has unsaved edits, unless `discard_pending` is `true`, which throws those edits away. Also saves the instance path to `settings.json`. |
+| `release_memory` | [`drop_conflict_graph`] | memory | Pages the process working set out to the OS after a large load, save or reload. Plugin data stays loaded and pages back in on the next access, so use it when the editor is idle and memory use matters. The result reports the working set before and after the trim. `drop_conflict_graph: true` also drops the cached conflict/reference graph (the largest optional allocation); it rebuilds on the next conflict or reference query. The reference half of that graph is also released automatically after an idle period. |
 | `get_settings` | none | no | The current settings: folders, tool paths and flags, including values that came from environment variables. Secrets are redacted. |
 
 ### Papyrus
@@ -291,8 +294,10 @@ only feed the Creation Kit compiler route.
 - **A tool is missing, or a fix has no effect.** The running server is an older build, or it never
   started. Stop every `FO4RecordEditor.exe`, reconnect, and check the client's server log.
 - **The server exits at once.** Read stderr in the client's log. `--mo2 requires an instance folder`
-  or `MO2 load failed: ...` (exit code 6) means the instance path is missing or wrong, the profile
-  has no `plugins.txt`, or its load order is invalid.
+  or `MO2 load failed: instance folder not found` (exit code 6) means the instance path is missing or
+  wrong.
+- **Every tool returns `MO2 load failed: ...`.** The profile has no `plugins.txt`, or its load order is
+  invalid. Fix it, then call the tool again; the load is retried on every call until it succeeds.
 - **`list_plugins` is empty.** You started without `--mo2` (call `reload_mo2_profile` or
   `open_plugin`), or the profile has no enabled plugins.
 - **One plugin is missing from `list_plugins`.** It is not enabled in the profile, its file was not

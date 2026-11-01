@@ -105,6 +105,8 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}})) return false;
     if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PERK, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults. PERK takes an editorId and optional full, desc, trait, level, ranks, playable and effects (the set_perk_effects array)", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
+    if (!add("release_memory", "Page the process working set out to the OS after a large load, save or reload. Plugin data stays loaded; the next access pages it back in. drop_conflict_graph also drops the cached conflict/reference graph (the largest optional allocation; it rebuilds on the next conflict or reference query). Use when the editor is idle and memory use matters", "backend", "ReleaseMemory",
+             {{"drop_conflict_graph", "boolean", true}})) return false;
     if (!add("create_placed_object",
              "Create a placed reference (REFR) over a base object in a CELL this plugin owns and return its formKey. cell and baseObject are FormKeys. The CELL must be owned by this plugin. In an exterior CELL the reference must be non-persistent and positioned inside the CELL's grid. persistent defaults to true (persistent list), false puts it in the temporary list. initially_disabled defaults to false. Rotations are in radians and default to 0",
              "backend", "CreatePlacedObject",
