@@ -40,6 +40,17 @@ def latest(state, description="", url=""):
     return {"state": state, "description": description, "target_url": url}
 
 
+# Constraint: planning logic stays tested with two branches, though only the integration branch has the public workflows.
+SHIPPED_BRANCHES = sync.BRANCHES
+sync.BRANCHES = ("nomad/dev", "main")
+
+
+class ShippedBranchesTest(unittest.TestCase):
+    def test_only_the_integration_branch_is_synced(self):
+        # Regression: main has no public workflows, so exporting it fails on every tick.
+        self.assertEqual(("nomad/dev",), SHIPPED_BRANCHES)
+
+
 class SourceCommitTest(unittest.TestCase):
     def test_reads_the_trailer_the_export_writes(self):
         self.assertEqual(HEAD, sync.source_commit(sync.export_message("ci/pr-12", HEAD)))

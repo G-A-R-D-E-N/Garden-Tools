@@ -32,7 +32,7 @@ BUNDLED_TOOLS = ".github/scripts/test_bundled_tools_manifest.py"
 BUNDLED_TOOLS_TREES = ("PluginEditTool", ".forgejo")
 ABI_PATHS = ("Radicle/include/fo4/*", "Radicle/bindings/csharp/*",
              "Radicle/tests/test_c_api_quest.cpp", ABI_CHECK)
-BRANCHES = ("nomad/dev", "main")
+BRANCHES = ("nomad/dev",)
 EXPORT_CAP = 5
 ABI_HISTORY = 200
 EXPORT_CONTEXT = "public-ci/export"
