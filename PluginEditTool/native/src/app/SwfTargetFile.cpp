@@ -27,6 +27,8 @@ using swftarget::errorText;
 using swftarget::radicleError;
 using swftarget::takeError;
 using swftarget::takeText;
+using swftarget::utf8Path;
+using swftarget::utf8String;
 
 }  // namespace
 
@@ -46,8 +48,12 @@ void SwfTarget::closeDocument() {
 
 bool SwfTarget::requireUnderRoots(const std::string& path, std::string& rooted) const {
     std::error_code code;
-    const fs::path full = fs::weakly_canonical(fs::path(path), code);
+    const fs::path full = fs::weakly_canonical(utf8Path(path), code);
     if (code) return false;
+    if (browsed_ && full == *browsed_) {
+        rooted = utf8String(full);
+        return true;
+    }
     for (const auto& root : roots_()) {
         // Constraint: a blank root is skipped, as ToolPaths.RequireUnderRoots skips IsNullOrWhiteSpace roots.
         if (support::trim(root.string()).empty()) continue;
@@ -57,7 +63,7 @@ bool SwfTarget::requireUnderRoots(const std::string& path, std::string& rooted) 
         const auto [baseEnd, fullEnd] =
             std::mismatch(base.begin(), base.end(), full.begin(), full.end());
         if (baseEnd == base.end() && fullEnd != full.end()) {
-            rooted = full.string();
+            rooted = utf8String(full);
             return true;
         }
     }
@@ -72,12 +78,12 @@ Result<nlohmann::json> SwfTarget::open(const nlohmann::json& args) {
         return errorText("the path is outside the configured Data and project folders");
     }
     std::error_code code;
-    const auto size = fs::file_size(rooted, code);
+    const auto size = fs::file_size(utf8Path(rooted), code);
     if (code) return errorText("no SWF file was found at that path: " + path);
     if (size > core::kMaxSwfFileBytes) {
         return errorText("the SWF file is larger than the 256 MiB limit: " + path);
     }
-    std::ifstream stream(rooted, std::ios::binary);
+    std::ifstream stream(utf8Path(rooted), std::ios::binary);
     if (!stream) return errorText("no SWF file was found at that path: " + path);
     std::vector<std::byte> bytes(static_cast<std::size_t>(size));
     stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
@@ -130,14 +136,14 @@ Result<nlohmann::json> SwfTarget::save() {
     // Constraint: the first save must keep a .bak of the on-disk original, and later saves must never overwrite it.
     const std::string backup = *path_ + ".bak";
     std::error_code code;
-    if (fs::exists(*path_, code) && !fs::exists(backup, code)) {
-        fs::copy_file(*path_, backup, code);
+    if (fs::exists(utf8Path(*path_), code) && !fs::exists(utf8Path(backup), code)) {
+        fs::copy_file(utf8Path(*path_), utf8Path(backup), code);
         if (code) {
             return errorText("the SWF backup could not be written: " + backup + ": " + code.message());
         }
     }
     try {
-        fo4::io::write_file_atomic(*path_, bytes);
+        fo4::io::write_file_atomic(utf8Path(*path_), bytes);
     } catch (const std::exception& ex) {
         return errorText(std::string("the SWF file could not be written: ") + *path_ + ": " + ex.what());
     }

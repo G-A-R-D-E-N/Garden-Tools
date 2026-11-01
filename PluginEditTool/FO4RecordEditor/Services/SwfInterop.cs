@@ -20,17 +20,31 @@ public class SwfInterop
 
     private static SwfDocument? _document;
     private static readonly object Gate = new();
+    private static string? _browsedPath;
 
-    // Constraint: a loose path opens directly; anything else goes through the existing PET asset resolver.
+    public string BrowseForFile(string title, string filter)
+    {
+        var picked = HostServices.PickFile(title, filter);
+        if (!string.IsNullOrEmpty(picked))
+        {
+            lock (Gate) _browsedPath = Path.GetFullPath(picked);
+        }
+        return picked;
+    }
+
+    // Constraint: a loose path must be under the configured roots unless the user picked it in the host dialog; other paths go through the PET asset resolver.
     public Task<string> Open(string path) => Run(() =>
     {
         _document?.Dispose();
         _document = null;
         _document = File.Exists(path)
-            ? SwfDocument.OpenFile(ToolPaths.RequireDataOrProjectPath(path))
+            ? SwfDocument.OpenFile(IsBrowsed(path) ? Path.GetFullPath(path) : ToolPaths.RequireDataOrProjectPath(path))
             : SwfDocument.OpenResolved(path, ResolveBytes);
         return Snapshot();
     });
+
+    private static bool IsBrowsed(string path) =>
+        _browsedPath != null && string.Equals(Path.GetFullPath(path), _browsedPath, StringComparison.OrdinalIgnoreCase);
 
     private static byte[]? ResolveBytes(string path)
     {
@@ -142,6 +156,8 @@ public class SwfInterop
         Snapshot(Document().InsertAbcInstruction(abc, body, offset, text).Changed));
     public Task<string> ReplaceAbcInstruction(int abc, int body, int offset, string text) => Run(() =>
         Snapshot(Document().ReplaceAbcInstruction(abc, body, offset, text).Changed));
+    public Task<string> ApplyAbcText(int abc, string text) => Run(() =>
+        Snapshot(Document().ApplyAbcText(abc, text).Changed));
     public Task<string> AbcBlocks() => Run(() => Json(new
     {
         blocks = Document().Movie.AbcBlocks.Select((block, abc) => new
@@ -157,6 +173,8 @@ public class SwfInterop
     }));
     public Task<string> Disassemble(int abc, int methodIndex) => Run(() =>
         Json(new { text = Document().Movie.Disassemble(abc, methodIndex) }));
+    public Task<string> AbcText(int abc) => Run(() =>
+        Json(new { text = Document().Movie.AbcText(abc) }));
     public Task<string> InspectText() => Run(() => Json(new { text = Document().InspectText() }));
     public Task<string> ActionTags() => Run(() => Json(new
     {

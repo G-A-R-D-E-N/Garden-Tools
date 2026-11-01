@@ -27,12 +27,13 @@ so the panel can show the Radicle message verbatim next to the field. `SwfPanel`
 label lists on the left, the frame scrubber and display-list table in the centre, the history/save controls
 and dirty marker in the header, and binds Ctrl/Cmd+Z / Shift+Z / Y to undo/redo. The web test stubs the
 `hostObjects.swf` bridge exactly like the other PET panels and drives open → select label → rename → undo →
-redo → save plus the verbatim-refusal path. Wiring the panel into `MainShell` and the backend type surface is
-deferred to the next round; nothing was built or run locally.
+redo → save plus the verbatim-refusal path. The panel is a full-page overlay mounted by `MainShell`, with a Movie and
+an ABC scripts tab (`SwfPanel.tsx:SwfPanel` renders the tab row and the `hidden` page wrappers).
 ## web/src/MainShell.tsx (SWF panel registration)
 
 The Interface (SWF) panel is registered the same way as the other asset panels: `showSwf` state, an activity-bar
-button with the `Boxes` icon after Papyrus, and a conditional `SwfPanel` render beside `PapyrusPanel`/`NifPanel`.
+button with the `Boxes` icon after Papyrus, and a conditional `SwfPanel` render as a full-page `position: fixed`
+overlay like `PapyrusPanel`, not inside the shell's layout.
 The host bridge is picked up by the existing `[RpcExpose]` scan as `hostObjects.swf`, which is the name the panel
 test stubs. Archive-resolved open and the semantic edit verbs are still deferred.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfEditText.cs:SwfEditTextCodec (edit-text fields)
@@ -253,11 +254,14 @@ The native instruction and glyph verbs mutate a handle directly through `radicle
 
 `AbcBlocks` lists every ABC block of the open movie with its class and script names and its method pool, read from `SwfFile.AbcBlocks` (already parsed) and `SwfFile.Methods(abc)`. The method pool index is the index `Disassemble(abc, methodIndex)` expects, so the panel passes `(abc, index)` straight back. An unparsed block reports zero pool methods (`radicle_swf_abc_method_count` returns 0 when `!view->parsed`), so it lists with no methods instead of failing the whole listing. A method with no body is disabled in the panel instead of being sent to `Disassemble`, which would refuse it. Covered by `FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.AbcRpcsReturnTheFieldsThePanelReadsAndTheRefusalShape`.
 
-## web/src/SwfPanel.tsx:SwfPanel (ABC scripts view)
+## web/src/SwfAbcPage.tsx:SwfAbcPage (ABC scripts page)
 
-The "Scripts (ABC)" section sits at the foot of the right aside. `open` (`web/src/SwfPanel.tsx:SwfPanel.open`) clears the ABC listing, the selected method and `selectedMethodKey` before the host `Open` call, so a refused re-open leaves no stale listing and a late `pickMethod` reply from the previous document is dropped; it then loads `AbcBlocks` after the placement list. `pickMethod` (`web/src/SwfPanel.tsx:SwfPanel.pickMethod`) shows `Disassemble` output in the `instructions` preformatted block. It records the picked method key in `selectedMethodKey` before the await and drops a reply whose key no longer matches, so an out-of-order reply cannot overwrite the listing of the method now selected; a rejected host call goes into the section alert. An `AbcBlocks` refusal goes into the section's own alert rather than the header error bar, and the "No ABC scripts in this SWF." message only shows when the listing succeeds with zero blocks. The view is display-only: no ABC edit verb is wired, and the listing is not refreshed by undo or redo because no panel control edits ABC yet.
+The ABC scripts page is its own tab, mounted by `web/src/SwfPanel.tsx:SwfPanel` inside a `hidden` wrapper and keyed by `documentId`, which `SwfPanel.open` sets to 0 at the start and to a new value only on a successful open, so a refused re-open starts with an empty page. The page's left column lists the blocks with their classes, scripts and methods from `AbcBlocks` (`web/src/SwfPanel.tsx:SwfPanel.loadAbc`, which `open`, `refresh` and an apply all call, so undo and redo update the list). The main area holds the whole block text from `AbcText` in one textarea; `Apply script` sends the draft with `ApplyAbcText`, a refusal is shown verbatim and keeps the draft, and a success passes the reply to `SwfPanel.abcApplied`, which sets the revision, redraws the preview and reloads the list. The text reloads when the block, the list length or the revision changes, and a reply that is no longer current is dropped by a `live` flag, so a late load cannot replace the text of a newer block. A draft belongs to the block it was loaded from, so a block switch shows no text until its load arrives. The picked method's `Disassemble` listing is an effect over the selected method and the revision with the same guard, so an out-of-order reply cannot overwrite the method now selected. `SwfPanel` ignores Ctrl/Cmd+Z and Ctrl/Cmd+Y whose target is a `HTMLTextAreaElement`, so the script box keeps its own undo.
 
-Tests: `web/src/SwfPanel.test.tsx` extends the existing `stubBridge` with `AbcBlocks` and `Disassemble` defaults and adds the listing, empty-state, refusal, stale-reply and refused-re-open cases (`web/src/SwfPanel.test.tsx:SwfPanel`).
+Tests: `web/src/SwfPanel.test.tsx` covers the tab switch that hides the movie page, the apply that redraws without a `State` read, the verbatim refusal that keeps the draft, Ctrl+Z staying in the box, and a draft that survives a tab switch, alongside the existing listing, empty-state, refusal, stale-reply and refused-re-open cases.
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.BrowseForFile (picked path outside the roots)
+
+`SwfInterop.BrowseForFile` returns the host dialog's path and remembers its full path in `_browsedPath`. `SwfInterop.Open` accepts exactly that path (OrdinalIgnoreCase) without `ToolPaths.RequireDataOrProjectPath`; every other loose path is still checked against the roots, so a typed outside path stays refused. The native target mirrors this: `PluginEditTool/native/src/app/SwfTarget.cpp:SwfTarget::invoke` runs the `BrowseForFile` branch before `mutex_` (the dialog is modal) and stores the weakly canonical pick in `browsed_`, and `PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::requireUnderRoots` accepts that one path. Only the dialog call writes the remembered path, so the page cannot forge a pick. A cancelled dialog returns an empty string and remembers nothing. Tests: `FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.OpenRefusesAnOutsideFileUntilTheHostDialogPicksIt` and `PluginEditTool/native/tests/unit/SwfTargetTests.cpp:SwfTarget` (`opens an outside file only after the native dialog picks it`).
 
 ## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.ShapeSvg (shape preview RPC)
 

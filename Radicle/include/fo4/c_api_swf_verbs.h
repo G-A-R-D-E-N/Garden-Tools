@@ -114,6 +114,11 @@ RADICLE_API radicle_status radicle_swf_history_abc_text_edit(radicle_swf_history
                                                              uint8_t insert,
                                                              radicle_swf_plan_result* out_result);
 
+/* Invariant: the whole ABC block is assembled from text and applied to the history's own movie; a refusal leaves the history unchanged. */
+RADICLE_API radicle_status radicle_swf_history_abc_apply_text(radicle_swf_history* history, size_t abc,
+                                                              const uint8_t* text, size_t size,
+                                                              radicle_swf_plan_result* out_result);
+
 /* Invariant: a JSON array of {tag_index, code, inside_sprite} for DoAction and DoInitAction in flat order; release *out_text with radicle_free_bytes. */
 RADICLE_API radicle_status radicle_swf_action_tags_json(const radicle_swf_history* history,
                                                        uint8_t** out_text, size_t* out_size);

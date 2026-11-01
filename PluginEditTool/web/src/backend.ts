@@ -454,6 +454,9 @@ export interface SwfHost {
   InspectText(): Promise<string>;
   ActionTags(): Promise<string>;
   Avm1Disassemble(tagIndex: number): Promise<string>;
+  BrowseForFile(title: string, filter: string): Promise<string>;
+  AbcText(abc: number): Promise<string>;
+  ApplyAbcText(abc: number, text: string): Promise<string>;
 }
 
 
@@ -706,3 +709,6 @@ export const getStrings = (): StringsHost | undefined =>
 
 export const getGraph = (): GraphHost | undefined =>
   window.chrome?.webview?.hostObjects?.graph;
+
+export const getSwf = (): SwfHost | undefined =>
+  window.chrome?.webview?.hostObjects?.swf;

@@ -4459,6 +4459,9 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_abc_text_edit")]
     public static extern Status SwfHistoryAbcTextEdit(IntPtr history, nuint abc, uint body, nuint offset, byte* text, nuint size, byte insert, SwfPlanResult* out_result);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_abc_apply_text")]
+    public static extern Status SwfHistoryAbcApplyText(IntPtr history, nuint abc, byte* text, nuint size, SwfPlanResult* out_result);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_action_tags_json")]
     public static extern Status SwfActionTagsJson(IntPtr history, byte** out_text, nuint* out_size);
 

@@ -254,7 +254,7 @@ int main(int argc, char** argv) {
 
     auto swfTarget = std::make_shared<fo4ide::app::SwfTarget>([&currentSettings] {
         return fo4ide::app::swfRootsFor(currentSettings.snapshot());
-    });
+    }, platformServices);
 
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService, nifTool), log) ||
         !registerTarget(rpc, "appInterop", refreshingAppInteropTarget, log) ||

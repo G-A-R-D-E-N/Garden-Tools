@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-react';
 import type { SwfHost } from './backend';
+import { getSwf } from './backend';
+import SwfAbcPage, { type AbcBlockRow, type AbcReply } from './SwfAbcPage';
 import './SwfPanel.css';
 
 type CharacterRow = { id: number; kind: string; tagIndex: number; name: string; imported: string };
@@ -15,13 +17,10 @@ type StateReply = { changed?: boolean; revision: number; undo: number; redo: num
 type ErrorReply = { error?: string };
 
 type PlacementRow = { tagIndex: number; depth: number; character: number | null; insideSprite: boolean };
-type AbcMethodRow = { index: number; name: string; returnType: string; hasBody: boolean };
-type AbcBlockRow = { abc: number; name: string; classes: string[]; scripts: string[]; methods: AbcMethodRow[] };
 type ActionTagRow = { tagIndex: number; code: number; insideSprite: boolean };
 
 function host(): SwfHost | null {
-  const bridge = (globalThis as { chrome?: { webview?: { hostObjects?: Record<string, SwfHost> } } }).chrome;
-  return bridge?.webview?.hostObjects?.swf ?? null;
+  return getSwf() ?? null;
 }
 
 function parse<T>(reply: string): T & ErrorReply {
@@ -50,9 +49,9 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [editText, setEditText] = useState({ text: '', color: '', x0: 0, x1: 0, y0: 0, y1: 0 });
   const [abcBlocks, setAbcBlocks] = useState<AbcBlockRow[]>([]);
   const [abcError, setAbcError] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [selectedMethod, setSelectedMethod] = useState<{ key: string; label: string } | null>(null);
-  const selectedMethodKey = useRef('');
+  const [documentId, setDocumentId] = useState(0);
+  const documentSeq = useRef(0);
+  const [page, setPage] = useState<'movie' | 'abc'>('movie');
   const labelRequest = useRef(0);
   const [shapeSvg, setShapeSvg] = useState('');
   const shapeRequest = useRef(0);
@@ -122,6 +121,14 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     await redrawPreview();
   }, [redrawPreview]);
 
+  const loadAbc = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const reply = parse<{ blocks: AbcBlockRow[] }>(await bridge.AbcBlocks());
+    setAbcError(reply.error ?? '');
+    setAbcBlocks(reply.blocks ?? []);
+  }, []);
+
   const refresh = useCallback(async () => {
     const bridge = host();
     if (!bridge) return;
@@ -131,18 +138,17 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setSelectedLabel(null);
     await loadCharacters();
     await loadLabels(timeline);
-  }, [timeline, loadCharacters, loadLabels, applyRevision]);
+    await loadAbc();
+  }, [timeline, loadCharacters, loadLabels, applyRevision, loadAbc]);
 
-  const open = useCallback(async () => {
+  const open = useCallback(async (target: string) => {
     const bridge = host();
-    if (!bridge || !path.trim()) return;
+    if (!bridge || !target.trim()) return;
     setBusy(true);
     setError('');
     setAbcBlocks([]);
     setAbcError('');
-    setInstructions('');
-    setSelectedMethod(null);
-    selectedMethodKey.current = '';
+    setDocumentId(0);
     shapeRequest.current += 1;
     setShapeSvg('');
     setBitmapSrc('');
@@ -156,9 +162,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setInspectText('');
     setInspectError('');
     try {
-      const opened = parse<StateReply>(await bridge.Open(path.trim()));
+      const opened = parse<StateReply>(await bridge.Open(target.trim()));
       if (opened.error) { setError(opened.error); return; }
       setState(opened);
+      setDocumentId(++documentSeq.current);
       previewRevision.current = opened.revision;
       setSelectedLabel(null);
       await loadCharacters();
@@ -171,9 +178,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       setInstances(rows.rows ?? []);
       const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
       setPlacements(placementReply.placements ?? []);
-      const abcReply = parse<{ blocks: AbcBlockRow[] }>(await bridge.AbcBlocks());
-      setAbcError(abcReply.error ?? '');
-      setAbcBlocks(abcReply.blocks ?? []);
+      await loadAbc();
       const inspect = parse<{ text?: string }>(await bridge.InspectText());
       setInspectText(inspect.text ?? '');
       setInspectError(inspect.error ?? '');
@@ -184,7 +189,27 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
     }
-  }, [path, timeline, frame, loadCharacters, loadLabels, showFrame]);
+  }, [timeline, frame, loadCharacters, loadLabels, showFrame, loadAbc]);
+
+  const browse = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    try {
+      const picked = await bridge.BrowseForFile('Open a SWF movie', 'SWF movie (*.swf)|*.swf|All files|*.*');
+      if (!picked) return;
+      setPath(picked);
+      await open(picked);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }, [open]);
+
+  const abcApplied = useCallback(async (reply: AbcReply) => {
+    setError('');
+    setState(reply);
+    await applyRevision(reply.revision);
+    await loadAbc();
+  }, [applyRevision, loadAbc]);
 
   const pickFrame = useCallback(async (nextTimeline: number, nextFrame: number) => {
     const bridge = host();
@@ -330,24 +355,6 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     await loadCharacters();
     await loadLabels(timeline);
   }, [timeline, labelOwner, selectedLabel, loadCharacters, loadLabels, applyRevision]);
-  const pickMethod = useCallback(async (block: AbcBlockRow, method: AbcMethodRow) => {
-    const bridge = host();
-    if (!bridge) return;
-    const key = `${block.abc}:${method.index}`;
-    selectedMethodKey.current = key;
-    setSelectedMethod({ key, label: method.name || `method ${method.index}` });
-    setInstructions('');
-    try {
-      const reply = parse<{ text: string }>(await bridge.Disassemble(block.abc, method.index));
-      if (selectedMethodKey.current !== key) return;
-      if (reply.error) { setAbcError(reply.error); setInstructions(''); return; }
-      setAbcError('');
-      setInstructions(reply.text);
-    } catch (caught) {
-      if (selectedMethodKey.current !== key) return;
-      setAbcError(caught instanceof Error ? caught.message : String(caught));
-    }
-  }, []);
   const pickActionTag = useCallback(async (item: ActionTagRow) => {
     const bridge = host();
     if (!bridge) return;
@@ -372,6 +379,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
+      // Constraint: Ctrl+Z and Ctrl+Y typed in the ABC script box stay with the textarea's own undo.
+      if (event.target instanceof HTMLTextAreaElement) return;
       if (event.key === 'z' && !event.shiftKey) { event.preventDefault(); void command('undo'); }
       else if ((event.key === 'z' && event.shiftKey) || event.key === 'y') { event.preventDefault(); void command('redo'); }
     };
@@ -386,14 +395,19 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
         <strong>Interface (SWF)</strong>
         <button type="button" onClick={onClose}>Close</button>
         {state.dirty && <span className="swf-dirty">modified</span>}
-        <button type="button" disabled={busy || !path.trim()} onClick={() => void open()}>Open</button>
+        <button type="button" onClick={() => void browse()}>Browse…</button>
+        <button type="button" disabled={busy || !path.trim()} onClick={() => void open(path)}>Open</button>
         <input value={path} onChange={event => setPath(event.target.value)} placeholder="Interface/Test.swf" />
         <button type="button" onClick={() => void command('undo')} disabled={state.undo === 0} title="Undo"><RotateCcw size={14} /></button>
         <button type="button" onClick={() => void command('redo')} disabled={state.redo === 0} title="Redo"><RotateCw size={14} /></button>
         <button type="button" onClick={() => void command('save')} title="Save"><SaveIcon size={14} /></button>
       </header>
+      <div className="swf-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={page === 'movie'} onClick={() => setPage('movie')}>Movie</button>
+        <button type="button" role="tab" aria-selected={page === 'abc'} onClick={() => setPage('abc')}>ABC scripts</button>
+      </div>
       {error && <div className="swf-error"><AlertTriangle size={14} /> {error}</div>}
-      <div className="swf-body">
+      <div className="swf-body" hidden={page !== 'movie'}>
         <aside className="swf-left">
           <h4>Characters</h4>
           <ul>
@@ -534,37 +548,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               </>
             )}
           </section>
-          <section className="swf-abc" aria-label="ABC scripts">
-            <h4>Scripts (ABC)</h4>
-            {abcError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {abcError}</div>}
-            {!abcError && abcBlocks.length === 0 && <p>No ABC scripts in this SWF.</p>}
-            <ul>
-              {abcBlocks.map(block => (
-                <li key={block.abc}>
-                  <strong>{block.name || `ABC block ${block.abc}`}</strong>
-                  <ul>
-                    {block.classes.map((name, index) => <li key={`class-${index}`}>class {name}</li>)}
-                    {block.scripts.map((name, index) => <li key={`script-${index}`}>script {name}</li>)}
-                    {block.methods.map(method => (
-                      <li key={method.index}>
-                        <button
-                          type="button"
-                          disabled={!method.hasBody}
-                          aria-pressed={selectedMethod?.key === `${block.abc}:${method.index}`}
-                          onClick={() => void pickMethod(block, method)}
-                        >
-                          {method.name || `method ${method.index}`} : {method.returnType}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-            {selectedMethod && <h5>{selectedMethod.label}</h5>}
-            <pre aria-label="instructions">{instructions}</pre>
-          </section>
         </aside>
+      </div>
+      <div className="swf-page" hidden={page !== 'abc'}>
+        <SwfAbcPage key={documentId} blocks={abcBlocks} error={abcError} revision={state.revision} onApplied={abcApplied} />
       </div>
     </div>
   );

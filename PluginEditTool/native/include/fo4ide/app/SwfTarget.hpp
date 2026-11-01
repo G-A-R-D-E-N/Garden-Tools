@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include <fo4ide/platform/PlatformServices.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
 #include <fo4ide/settings/Settings.hpp>
 
@@ -27,7 +28,7 @@ std::vector<std::filesystem::path> swfRootsFor(const fo4ide::settings::Settings&
 class SwfTarget final : public rpc::Target {
 public:
     // Invariant: the provider is called on every Open, so a settings change takes effect without a restart.
-    explicit SwfTarget(SwfRootsProvider roots);
+    SwfTarget(SwfRootsProvider roots, platform::Services& platform);
     ~SwfTarget() override;
 
     SwfTarget(const SwfTarget&) = delete;
@@ -46,9 +47,11 @@ private:
 
     std::mutex mutex_;
     SwfRootsProvider roots_;
+    platform::Services& platform_;
     radicle_swf* movie_{nullptr};
     radicle_swf_history* history_{nullptr};
     std::optional<std::string> path_;
+    std::optional<std::filesystem::path> browsed_;
     std::vector<std::byte> saved_;
     std::vector<std::byte> current_;
 };

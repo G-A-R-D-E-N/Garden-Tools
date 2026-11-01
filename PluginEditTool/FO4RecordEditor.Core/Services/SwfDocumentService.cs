@@ -185,6 +185,10 @@ public sealed class SwfDocument : IDisposable
     public SwfPlanResultRecord ReplaceAbcInstruction(int abc, int body, int offset, string text) =>
         ApplyNativeEdit(Movie.AbcBlocks[abc].TagIndex, scratch => scratch.ReplaceAbcInstruction(abc, body, offset, text));
 
+    // Requires the text AbcText returns for that block; the whole block lands as one plan over its DoABC tag.
+    public SwfPlanResultRecord ApplyAbcText(int abc, string text) =>
+        ApplyNativeEdit(Movie.AbcBlocks[abc].TagIndex, scratch => scratch.ApplyAbcText(abc, text));
+
     // Requires a DefineFont tag index; the glyph shape lands as one plan over that font tag.
     public SwfPlanResultRecord ReplaceFontGlyph(int tagIndex, int glyph, byte fillBits, byte lineBits,
                                                 IReadOnlyList<SwfShapeCommandRecord> records) =>

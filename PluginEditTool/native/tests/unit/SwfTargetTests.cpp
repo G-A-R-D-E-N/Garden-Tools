@@ -123,6 +123,37 @@ TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
     CHECK_FALSE(outOfRange.contains("svg"));
 }
 
+// Regression: an ABC block read as text must apply back through the history with undo, and a refused text must answer the error shape; detects the text RPCs drifting from the Radicle verbs.
+TEST_CASE("SwfTarget reads an ABC block as text and applies an edited block with undo") {
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    TempSwf file(fixtureMovie());
+    allowPath(rooted, file.path);
+    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    const auto listed = replyJson(target.invoke("AbcText", nlohmann::json::array({0})));
+    REQUIRE(listed.contains("text"));
+    std::string text = listed.at("text").get<std::string>();
+    const std::string original = "string 1 \"Foo\"";
+    REQUIRE(text.find(original) != std::string::npos);
+    text.replace(text.find(original), original.size(), "string 1 \"Bar\"");
+
+    const auto applied = replyJson(target.invoke("ApplyAbcText", nlohmann::json::array({0, text})));
+    CHECK(applied.value("changed", false) == true);
+    CHECK(applied.value("undo", 0) == 1);
+    const auto edited = replyJson(target.invoke("AbcText", nlohmann::json::array({0})));
+    CHECK(edited.at("text").get<std::string>().find("string 1 \"Bar\"") != std::string::npos);
+
+    const auto undone = replyJson(target.invoke("Undo", nlohmann::json::array()));
+    CHECK(undone.value("undo", 9) == 0);
+    const auto restored = replyJson(target.invoke("AbcText", nlohmann::json::array({0})));
+    CHECK(restored.at("text").get<std::string>().find("string 1 \"Foo\"") != std::string::npos);
+
+    const auto refusal = replyJson(target.invoke("ApplyAbcText", nlohmann::json::array({0, "foo"})));
+    CHECK(refusal.contains("error"));
+    CHECK(refusal.contains("status"));
+}
+
 TEST_CASE("SwfTarget refuses calls with no open document") {
     RootedTarget rooted;
     auto& target = rooted.target;
@@ -352,6 +383,56 @@ TEST_CASE("SwfTarget refuses paths outside its roots") {
     const auto opened =
         replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
     CHECK_FALSE(opened.contains("error"));
+}
+
+// Regression: an outside file must open only after the native dialog returned its path, and a typed outside path must stay refused; detects a picked path refused or a typed outside path accepted.
+TEST_CASE("SwfTarget opens an outside file only after the native dialog picks it") {
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    TempSwf file(fixtureMovie());
+    *rooted.roots = {file.path.parent_path() / "fo4ide-no-such-root"};
+
+    const auto typed = replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+    CHECK(typed.contains("error"));
+
+    rooted.platform.fileSelection = file.path;
+    const auto picked = target.invoke("BrowseForFile", nlohmann::json::array({"Open a SWF movie", "SWF movie (*.swf)|*.swf"}));
+    REQUIRE(picked.has_value());
+    REQUIRE(picked->is_string());
+    CHECK(picked->get<std::string>() == file.path.string());
+
+    const auto opened = replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+    CHECK_FALSE(opened.contains("error"));
+}
+
+// Regression: a pick must allow only that file, a cancelled dialog must allow nothing, and a non-ASCII pick must round trip as UTF-8.
+TEST_CASE("SwfTarget allows only the picked file and keeps a non-ASCII pick intact") {
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    const fs::path dir = uniqueDir("fo4ide-swf-pick");
+    const RemoveAll cleanup{dir};
+    const fs::path picked = dir / fs::path(u8"pick\u00e9.swf");
+    const fs::path other = dir / "other.swf";
+    writeBytes(picked, fixtureMovie());
+    writeBytes(other, fixtureMovie());
+    *rooted.roots = {dir / "fo4ide-no-such-root"};
+    const auto args = nlohmann::json::array({"Open a SWF movie", "SWF movie (*.swf)|*.swf"});
+
+    const auto cancelled = target.invoke("BrowseForFile", args);
+    REQUIRE(cancelled.has_value());
+    CHECK(cancelled->get<std::string>().empty());
+    const std::u8string pickedUtf8 = picked.u8string();
+    const std::string pickedText(pickedUtf8.begin(), pickedUtf8.end());
+    CHECK(replyJson(target.invoke("Open", nlohmann::json::array({pickedText}))).contains("error"));
+
+    rooted.platform.fileSelection = picked;
+    const auto reply = target.invoke("BrowseForFile", args);
+    REQUIRE(reply.has_value());
+    CHECK(reply->get<std::string>() == pickedText);
+    const std::u8string otherUtf8 = other.u8string();
+    CHECK(replyJson(target.invoke("Open", nlohmann::json::array({std::string(otherUtf8.begin(), otherUtf8.end())}))).contains("error"));
+    CHECK_FALSE(replyJson(target.invoke("Open", nlohmann::json::array({pickedText}))).contains("error"));
+    CHECK(replyJson(target.invoke("Save", nlohmann::json::array())).contains("saved"));
 }
 
 // Constraint: an edit colour must parse as hexadecimal in full, with no partial or signed read.

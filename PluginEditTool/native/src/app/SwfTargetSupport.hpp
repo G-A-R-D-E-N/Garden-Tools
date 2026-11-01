@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -9,6 +10,16 @@
 #include <nlohmann/json.hpp>
 
 namespace fo4ide::app::swftarget {
+
+// Constraint: RPC paths are UTF-8, while std::string paths on MSVC use the ANSI code page.
+inline std::filesystem::path utf8Path(const std::string& text) {
+    return std::filesystem::path(std::u8string(text.begin(), text.end()));
+}
+
+inline std::string utf8String(const std::filesystem::path& path) {
+    const std::u8string text = path.u8string();
+    return std::string(text.begin(), text.end());
+}
 
 inline const char* statusName(radicle_status status) {
     // Constraint: the names must match Status.ToString, because the panel reads the status field.

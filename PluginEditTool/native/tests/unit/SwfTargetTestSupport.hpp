@@ -21,6 +21,8 @@
 #include <fo4ide/core/PayloadLimits.hpp>
 #include <fo4ide/settings/Settings.hpp>
 
+#include "../helpers/ServiceTargetFakes.hpp"
+
 namespace swft_target_test {
 
 
@@ -173,7 +175,8 @@ struct TempSwf {
 
 struct RootedTarget {
     std::shared_ptr<std::vector<fs::path>> roots = std::make_shared<std::vector<fs::path>>();
-    fo4ide::app::SwfTarget target{[shared = roots] { return *shared; }};
+    fo4ide::app::test::FakePlatform platform;
+    fo4ide::app::SwfTarget target{[shared = roots] { return *shared; }, platform};
 };
 
 inline fs::path uniqueDir(const std::string& stem) {

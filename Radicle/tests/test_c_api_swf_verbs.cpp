@@ -327,6 +327,63 @@ TEST(CApiSwfVerbs, HistoryAbcTextEditInsertsReplacesAndRefusesThroughOneVerb) {
             RADICLE_STATUS_INVALID_ARGUMENT);
 }
 
+// Regression: a whole-block text apply through the history must land as one undoable command, leave the history untouched on refusal, and refuse a null history.
+TEST(CApiSwfVerbs, HistoryAbcApplyTextReplacesTheBlockAndUndoRestoresIt) {
+  SwfHandle swf = open_abc_movie();
+  ASSERT_NE(swf, nullptr);
+  radicle_swf_history* raw = nullptr;
+  ASSERT_EQ(radicle_swf_history_create(swf.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
+  const HistoryHandle history(raw);
+
+  const std::string original = abc_text(swf.get());
+  const std::size_t line = original.find("  string 1 \"");
+  ASSERT_NE(line, std::string::npos);
+  const std::size_t line_end = original.find('\n', line);
+  ASSERT_NE(line_end, std::string::npos);
+  std::string changed = original;
+  changed.replace(line, line_end - line + 1, "  string 1 \"RadicleEdit\"\n");
+
+  const auto bytes = [&history]() {
+    std::uint8_t* out = nullptr;
+    std::size_t size = 0;
+    EXPECT_EQ(radicle_swf_history_write_bytes(history.get(), &out, &size), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    std::vector<std::byte> copy(reinterpret_cast<const std::byte*>(out),
+                                reinterpret_cast<const std::byte*>(out) + size);
+    radicle_free_bytes(out);
+    return copy;
+  };
+  const std::vector<std::byte> before = bytes();
+
+  radicle_swf_plan_result result{};
+  EXPECT_EQ(radicle_swf_history_abc_apply_text(nullptr, 0,
+                                               reinterpret_cast<const std::uint8_t*>(changed.data()),
+                                               changed.size(), &result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  ASSERT_EQ(radicle_swf_history_abc_apply_text(history.get(), 0,
+                                               reinterpret_cast<const std::uint8_t*>(changed.data()),
+                                               changed.size(), &result),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(result.changed, 1);
+  SwfHandle reopened = open(bytes());
+  ASSERT_NE(reopened, nullptr);
+  EXPECT_NE(abc_text(reopened.get()).find("RadicleEdit"), std::string::npos);
+
+  ASSERT_EQ(radicle_swf_history_undo(history.get(), &result), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(bytes(), before);
+
+  const std::uint64_t revision = radicle_swf_history_revision(history.get());
+  const std::string bad = "foo";
+  EXPECT_EQ(radicle_swf_history_abc_apply_text(history.get(), 0,
+                                               reinterpret_cast<const std::uint8_t*>(bad.data()),
+                                               bad.size(), &result),
+            RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_NE(std::string(radicle_last_error()), "");
+  EXPECT_EQ(radicle_swf_history_revision(history.get()), revision);
+  EXPECT_EQ(bytes(), before);
+}
+
 TEST(CApiSwfVerbs, ResolveFlatTagMapsPreorderPositions) {
   const std::vector<std::byte> bytes = placement_after_sprite_movie();
   const auto parsed =

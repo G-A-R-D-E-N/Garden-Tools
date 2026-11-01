@@ -115,6 +115,8 @@ std::optional<std::string_view> expectedArguments(std::string_view method) {
         {"InsertKeyframe", "iu"},
         {"InsertAbcInstruction", "iuis"},
         {"ReplaceAbcInstruction", "iuis"},
+        {"ApplyAbcText", "is"},
+        {"AbcText", "i"},
         {"Disassemble", "ii"},
         {"ShapeSvg", "h"},
         {"FrameSvg", "u"},
@@ -160,11 +162,25 @@ std::optional<std::string> argumentRefusal(std::string_view method, const nlohma
 
 }  // namespace
 
-SwfTarget::SwfTarget(SwfRootsProvider roots) : roots_(std::move(roots)) {}
+SwfTarget::SwfTarget(SwfRootsProvider roots, platform::Services& platform)
+    : roots_(std::move(roots)), platform_(platform) {}
 
 SwfTarget::~SwfTarget() { closeDocument(); }
 
 Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann::json& args) {
+    if (method == "BrowseForFile") {
+        // Constraint: the dialog is modal, so it runs before mutex_ is taken.
+        const auto picked = platform_.pickFile({support::stringArgument(args, 0), support::stringArgument(args, 1), {}});
+        if (!picked || picked->empty()) return std::string{};
+        std::error_code code;
+        const std::filesystem::path full = std::filesystem::weakly_canonical(*picked, code);
+        if (!code) {
+            std::lock_guard<std::mutex> guard(mutex_);
+            browsed_ = full;
+        }
+        return swftarget::utf8String(*picked);
+    }
+
     std::lock_guard<std::mutex> guard(mutex_);
     const std::string name(method);
 
@@ -482,6 +498,17 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
         return nlohmann::json(nlohmann::json{{"text", swftarget::takeText(raw, size)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
+    if (name == "AbcText") {
+        std::uint8_t* raw = nullptr;
+        std::size_t size = 0;
+        const radicle_status status = radicle_swf_abc_text(movie_, sizeArg(args, 0), &raw, &size);
+        if (status != RADICLE_STATUS_OK) {
+            if (raw != nullptr) radicle_free_bytes(raw);
+            return swftarget::radicleError(status);
+        }
+        return nlohmann::json(nlohmann::json{{"text", swftarget::takeText(raw, size)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
+    }
+
     if (name == "InsertAbcInstruction" || name == "ReplaceAbcInstruction") {
         const std::size_t abc = sizeArg(args, 0);
         const std::uint32_t body = u32Arg(args, 1);
@@ -494,6 +521,18 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
         const radicle_status status = radicle_swf_history_abc_text_edit(
             history_, abc, body, offset, input, text.size(),
             name == "InsertAbcInstruction" ? 1 : 0, &result);
+        if (status != RADICLE_STATUS_OK) return swftarget::radicleError(status);
+        std::string message;
+        if (!refreshFromHistory(message, false)) return swftarget::errorText(message);
+        return snapshot(result.changed != 0);
+    }
+
+    if (name == "ApplyAbcText") {
+        const std::string text = stringArg(args, 1);
+        const auto* input = text.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(text.data());
+        radicle_swf_plan_result result{};
+        const radicle_status status =
+            radicle_swf_history_abc_apply_text(history_, sizeArg(args, 0), input, text.size(), &result);
         if (status != RADICLE_STATUS_OK) return swftarget::radicleError(status);
         std::string message;
         if (!refreshFromHistory(message, false)) return swftarget::errorText(message);
