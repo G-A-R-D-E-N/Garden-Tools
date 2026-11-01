@@ -148,7 +148,8 @@ class Runtime {
   Class* ensure_external_class(const Multiname& multiname);
   Class* add_builtin_class(std::string name, std::string package, Class* super);
   RuntimeStatus build_class_shells();
-  RuntimeStatus build_shells_for_file(const abc::AbcFile& file);
+  RuntimeStatus build_shells_for_file(const abc::AbcFile& file,
+                                      const std::shared_ptr<ApplicationDomainObject>& domain);
   RuntimeStatus resolve_hierarchy();
   RuntimeStatus build_traits();
   RuntimeStatus install_builtins();

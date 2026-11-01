@@ -83,6 +83,54 @@ std::vector<std::uint8_t> goto_frame2(std::uint8_t number, std::uint8_t flags) {
   return {0x96, 0x05, 0x00, 0x07, number, 0x00, 0x00, 0x00, 0x9F, 0x01, 0x00, flags};
 }
 
+std::vector<std::uint8_t> goto_label(const std::string& name) {
+  std::vector<std::uint8_t> out = {0x8C, 0x00, 0x00};
+  for (char c : name) {
+    out.push_back(static_cast<std::uint8_t>(c));
+  }
+  out.push_back(0x00);
+  const auto size = static_cast<std::uint16_t>(out.size() - 3);
+  out[1] = static_cast<std::uint8_t>(size & 0xFFu);
+  out[2] = static_cast<std::uint8_t>(size >> 8);
+  return out;
+}
+
+std::vector<std::uint8_t> push_frame(std::uint32_t number) {
+  return {0x96, 0x05, 0x00, 0x07, static_cast<std::uint8_t>(number & 0xFFu),
+          static_cast<std::uint8_t>((number >> 8) & 0xFFu),
+          static_cast<std::uint8_t>((number >> 16) & 0xFFu),
+          static_cast<std::uint8_t>((number >> 24) & 0xFFu)};
+}
+
+std::vector<std::uint8_t> push_label(const std::string& name) {
+  std::vector<std::uint8_t> out = {0x96, 0x00, 0x00, 0x00};
+  for (char c : name) {
+    out.push_back(static_cast<std::uint8_t>(c));
+  }
+  out.push_back(0x00);
+  const auto size = static_cast<std::uint16_t>(out.size() - 3);
+  out[1] = static_cast<std::uint8_t>(size & 0xFFu);
+  out[2] = static_cast<std::uint8_t>(size >> 8);
+  return out;
+}
+
+std::vector<std::uint8_t> call_frame(std::vector<std::uint8_t> push) {
+  // ActionCall (0x9E) requires a u16 length even when it carries no operands.
+  push.push_back(0x9E);
+  push.push_back(0x00);
+  push.push_back(0x00);
+  return push;
+}
+
+std::vector<std::byte> label_payload(const std::string& name) {
+  std::vector<std::byte> out;
+  for (char c : name) {
+    out.push_back(static_cast<std::byte>(static_cast<unsigned char>(c)));
+  }
+  out.push_back(std::byte{0});
+  return out;
+}
+
 fo4::swf::SwfDisplayOptions controlled_options() {
   fo4::swf::SwfDisplayOptions options;
   options.apply_frame_control = true;
@@ -153,6 +201,203 @@ TEST(SwfFrameControl, BareGotoFrameStopsAtItsTarget) {
   ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
   EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
             (std::vector<std::uint32_t>{0, 1, 0, 0, 0}));
+}
+
+TEST(SwfFrameControl, GoToLabelJumpsToTheNamedFrameAndStops) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{43, label_payload("mid")}},
+      {{12, script(goto_label("mid"))}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 1, 1, 1}));
+}
+
+TEST(SwfFrameControl, CallRunsTheTargetFrameInline) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script(call_frame(push_frame(3)))}},
+      {{12, script({0x81, 0x02, 0x00, 0x00, 0x00})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 0, 0, 0, 0}));
+}
+
+TEST(SwfFrameControl, CallRunsTheTargetLabelInline) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script(call_frame(push_label("mid")))}},
+      {{43, label_payload("mid")}, {12, script({0x07})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 1, 1, 1}));
+}
+
+TEST(SwfFrameControl, CallToItsOwnFrameTerminatesAndKeepsPlaying) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script(call_frame(push_frame(2)))}},
+      {},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 2, 0, 1}));
+}
+
+TEST(SwfFrameControl, CallRunsADifferentFrameInline) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}, {12, script(call_frame(push_frame(3)))}},
+      {},
+      {{12, script({0x07})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 0, 0, 0, 0}));
+}
+
+TEST(SwfFrameControl, CallStormSpendsTheSharedBudgetAndLaterCallsAreNoOps) {
+  std::vector<std::uint8_t> storm_body(65534, 0x17);
+  storm_body.push_back(0x07);
+  const std::vector<std::uint8_t> call = call_frame(push_frame(3));
+  const auto storm = sprite_tag(9, 3, with_show_frames({
+                                          {{26, place_named(1, 5, "Cell")}, {12, script(call)}},
+                                          {},
+                                          {{12, script(storm_body)}},
+                                      }));
+  const auto mark = sprite_tag(10, 3, with_show_frames({
+                                          {{26, place_named(1, 6, "Cell")}, {12, script(call)}},
+                                          {},
+                                          {{12, script({0x07})}},
+                                      }));
+  const auto movie = movie_of(5, with_show_frames({
+                                     {{39, storm}, {39, mark}, {26, place_named(1, 9, "Art")},
+                                      {26, place_named(2, 10, "Mark")}},
+                                     {},
+                                     {},
+                                     {},
+                                     {},
+                                 }));
+  const auto display = display_of(movie);
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Mark/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 2, 2, 2}));
+}
+
+TEST(SwfFrameControl, CallToAFrameLargerThanTheBudgetIsANoOp) {
+  std::vector<std::uint8_t> calls;
+  for (int call = 0; call < 2000; ++call) {
+    const std::vector<std::uint8_t> call_bytes = call_frame(push_frame(3));
+    calls.insert(calls.end(), call_bytes.begin(), call_bytes.end());
+  }
+  std::vector<std::uint8_t> body(100000, 0x17);
+  body.push_back(0x07);
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script(calls)}},
+      {{12, script(body)}},
+      {},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 2, 2, 2}));
+}
+
+TEST(SwfFrameControl, LegitimateCallHeavyTimelineStillBuilds) {
+  std::vector<Frame> clip;
+  for (std::uint32_t index = 0; index < 600; ++index) {
+    Frame frame = {{12, script(call_frame(push_frame(index == 500 ? 602u : 601u)))}};
+    if (index == 0) {
+      frame.insert(frame.begin(), TagPayload{26, place_named(1, 5, "Cell")});
+    }
+    clip.push_back(frame);
+  }
+  clip.push_back({{12, script(std::vector<std::uint8_t>(9, 0x06))}});
+  clip.push_back({{12, script(std::vector<std::uint8_t>(11, 0x07))}});
+  std::vector<Frame> root(602);
+  root[0] = {{39, sprite_tag(9, 602, with_show_frames(clip))}, {26, place_named(1, 9, "Art")}};
+  const auto display = display_of(movie_of(602, with_show_frames(root)));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  std::vector<std::uint32_t> expected;
+  for (std::uint32_t tick = 0; tick < 602; ++tick) {
+    expected.push_back(tick <= 500 ? tick : 500);
+  }
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"), expected);
+}
+
+TEST(SwfFrameControl, CallExpandsOneLevelAndNoFurther) {
+  std::vector<std::uint8_t> middle = {0x07};
+  const std::vector<std::uint8_t> nested = call_frame(push_frame(4));
+  middle.insert(middle.end(), nested.begin(), nested.end());
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script(call_frame(push_frame(3)))}},
+      {{12, script(middle)}},
+      {{12, script({0x06})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 1, 1, 1}));
+}
+
+TEST(SwfFrameControl, TopLevelActionsNeverSpendTheInlineBudget) {
+  const std::vector<std::uint8_t> plays(70000, 0x06);
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}, {12, script(plays)}},
+      {{12, script(call_frame(push_frame(3)))}},
+      {{12, script({0x07})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 1, 1, 1}));
+}
+
+TEST(SwfFrameControl, DoInitActionDoesNotRerunOnLaterLandings) {
+  const auto sprite = sprite_tag(9, 3,
+                                 with_show_frames({
+                                     {{26, place_named(1, 5, "Cell")}},
+                                     {},
+                                     {},
+                                 }));
+  std::vector<std::byte> init = {std::byte{9}, std::byte{0}};
+  const std::vector<std::byte> go_first = script(goto_frame2(2, 1));
+  init.insert(init.end(), go_first.begin(), go_first.end());
+  const auto movie = movie_of(5, with_show_frames({
+                                      {{39, sprite}, {59, init}, {26, place_named(1, 9, "Art")}},
+                                      {},
+                                      {},
+                                      {},
+                                      {},
+                                  }));
+  const auto display = display_of(movie);
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{1, 2, 0, 1, 2}));
+}
+
+TEST(SwfFrameControl, DoInitActionStopsTheSpriteBeforeItsFirstFrame) {
+  const auto sprite = sprite_tag(9, 3,
+                                 with_show_frames({
+                                     {{26, place_named(1, 5, "Cell")}},
+                                     {},
+                                     {},
+                                 }));
+  std::vector<std::byte> init = {std::byte{9}, std::byte{0}};
+  const std::vector<std::byte> stop = script({0x07});
+  init.insert(init.end(), stop.begin(), stop.end());
+  const auto movie = movie_of(5, with_show_frames({
+                                      {{39, sprite}, {59, init}, {26, place_named(1, 9, "Art")}},
+                                      {},
+                                      {},
+                                      {},
+                                      {},
+                                  }));
+  const auto display = display_of(movie);
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 0, 0, 0, 0}));
 }
 
 TEST(SwfFrameControl, GotoLoopEndsAtTheHopCap) {

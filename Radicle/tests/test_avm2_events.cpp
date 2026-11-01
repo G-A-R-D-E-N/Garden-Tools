@@ -5,6 +5,7 @@
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/swf_runtime.hpp>
 #include <fo4/avm2/value.hpp>
 #include <fo4/swf/swf.hpp>
@@ -311,10 +312,12 @@ TEST(Avm2Events, MouseTargetIsTheTopmostHitChild) {
   auto* container = static_cast<fo4::avm2::DisplayObjectContainer*>(root.get());
   lower->set_width(100.0);
   lower->set_height(100.0);
+  avm2_test::set_box_hit_area(*lower);
   upper->set_x(50.0);
   upper->set_y(50.0);
   upper->set_width(100.0);
   upper->set_height(100.0);
+  avm2_test::set_box_hit_area(*upper);
   ASSERT_TRUE(container->add_child(lower));
   ASSERT_TRUE(container->add_child(upper));
   EXPECT_EQ(fo4::avm2::mouse_target_at(root, 60.0, 60.0).get(), upper.get());
@@ -322,6 +325,61 @@ TEST(Avm2Events, MouseTargetIsTheTopmostHitChild) {
   EXPECT_EQ(fo4::avm2::mouse_target_at(root, 200.0, 200.0).get(), nullptr);
   upper->set_mouse_enabled(false);
   EXPECT_EQ(fo4::avm2::mouse_target_at(root, 60.0, 60.0).get(), lower.get());
+}
+
+TEST(Avm2Events, MouseDisabledChildLetsItsParentTakeTheHit) {
+  Fixture fixture;
+  fixture.finish();
+  auto parent = make_sprite(fixture.runtime);
+  ASSERT_NE(parent, nullptr);
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto child = std::make_shared<DisplayObject>(&sprite_class);
+  child->set_width(50.0);
+  child->set_height(50.0);
+  avm2_test::set_box_hit_area(*child);
+  child->set_mouse_enabled(false);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(parent.get())->add_child(child));
+  EXPECT_EQ(fo4::avm2::mouse_target_at(parent, 10.0, 10.0).get(), parent.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(parent, 80.0, 80.0).get(), nullptr);
+}
+
+TEST(Avm2Events, MouseChildrenOffMakesTheContainerTheTarget) {
+  Fixture fixture;
+  fixture.finish();
+  auto parent = make_sprite(fixture.runtime);
+  ASSERT_NE(parent, nullptr);
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto child = std::make_shared<DisplayObject>(&sprite_class);
+  child->set_width(50.0);
+  child->set_height(50.0);
+  avm2_test::set_box_hit_area(*child);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(parent.get())->add_child(child));
+  parent->set_mouse_children(false);
+  EXPECT_EQ(fo4::avm2::mouse_target_at(parent, 10.0, 10.0).get(), parent.get());
+  parent->set_mouse_children(true);
+  EXPECT_EQ(fo4::avm2::mouse_target_at(parent, 10.0, 10.0).get(), child.get());
+}
+
+TEST(Avm2Events, MouseChildrenOffHidesItsChildrenFromAnAncestor) {
+  Fixture fixture;
+  fixture.finish();
+  auto root = make_sprite(fixture.runtime);
+  auto middle = make_sprite(fixture.runtime);
+  auto inner = make_sprite(fixture.runtime);
+  ASSERT_NE(middle, nullptr);
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto leaf = std::make_shared<DisplayObject>(&sprite_class);
+  leaf->set_width(50.0);
+  leaf->set_height(50.0);
+  avm2_test::set_box_hit_area(*leaf);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(inner.get())->add_child(leaf));
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(middle.get())->add_child(inner));
+  middle->set_mouse_children(false);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(root.get())->add_child(middle));
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 10.0, 10.0).get(), middle.get());
 }
 
 TEST(Avm2Events, HitTestFollowsTheParentTransform) {
@@ -348,6 +406,140 @@ TEST(Avm2Events, HitTestFollowsTheParentTransform) {
   EXPECT_FALSE(fo4::avm2::hit_test_object(*child, *other));
   root->set_visible(false);
   EXPECT_FALSE(fo4::avm2::hit_test_point(*child, 25.0, 15.0));
+}
+
+fo4::avm2::ShapeEdge square_edge(double x0, double y0, double x1, double y1,
+                                  std::uint32_t style) {
+  fo4::avm2::ShapeEdge edge;
+  edge.fill1 = style;
+  edge.points = {{{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}}};
+  return edge;
+}
+
+TEST(Avm2Events, ShapeGeometryUsesTheEvenOddRule) {
+  fo4::avm2::ShapeGeometry geometry;
+  geometry.edges.push_back(square_edge(0.0, 0.0, 100.0, 100.0, 1));
+  geometry.edges.push_back(square_edge(25.0, 25.0, 75.0, 75.0, 1));
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 10.0, 10.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 50.0, 50.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 150.0, 50.0));
+}
+
+TEST(Avm2Events, ShapeContainsCountsCrossingsPerFillStyle) {
+  fo4::avm2::ShapeGeometry geometry;
+  geometry.edges.push_back(square_edge(0.0, 0.0, 100.0, 100.0, 1));
+  geometry.edges.push_back(square_edge(60.0, 60.0, 150.0, 150.0, 1));
+  geometry.edges.push_back(square_edge(25.0, 25.0, 75.0, 75.0, 2));
+  fo4::avm2::ShapeEdge shared;
+  shared.fill0 = 1;
+  shared.fill1 = 1;
+  shared.points = {{{30.0, -10.0}, {30.0, 200.0}}};
+  geometry.edges.push_back(shared);
+  // An edge with one style on both sides must not count, so the shared border keeps the hit.
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 10.0, 10.0));
+  // Overlapping fills of one style must cancel, so the overlap misses.
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 75.0, 75.0));
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 125.0, 125.0));
+  // A second style over the cancelled overlap must still hit.
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 50.0, 50.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 200.0, 200.0));
+}
+
+TEST(Avm2Events, ShapeRecordsConvertFromTwipsToPixels) {
+  using Kind = fo4::swf::SwfShapeRecordKind;
+  auto style = [](std::uint16_t fill0, std::uint16_t fill1) {
+    fo4::swf::SwfShapeRecord record;
+    record.kind = Kind::style_change;
+    record.has_fill0 = true;
+    record.has_fill1 = true;
+    record.fill0 = fill0;
+    record.fill1 = fill1;
+    return record;
+  };
+  auto move = [](std::int32_t x, std::int32_t y) {
+    fo4::swf::SwfShapeRecord record;
+    record.kind = Kind::move;
+    record.x = x;
+    record.y = y;
+    return record;
+  };
+  auto edge = [](std::int32_t dx, std::int32_t dy) {
+    fo4::swf::SwfShapeRecord record;
+    record.kind = Kind::straight_edge;
+    record.x = dx;
+    record.y = dy;
+    return record;
+  };
+  // Requires pen deltas with the fill on the style record: (0,0), (200,0), (200,200) and back.
+  const std::vector<fo4::swf::SwfShapeRecord> records = {
+      move(0, 0), style(0, 1), edge(200, 0), edge(0, 200), edge(-200, -200),
+  };
+  const fo4::avm2::ShapeGeometry geometry =
+      fo4::avm2::geometry_from_shape_records(records);
+  ASSERT_EQ(geometry.edges.size(), 3u);
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 8.0, 2.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 2.0, 9.0));
+  const std::vector<fo4::swf::SwfShapeRecord> strokes = {
+      move(0, 0),
+      edge(200, 0),
+  };
+  EXPECT_TRUE(fo4::avm2::geometry_from_shape_records(strokes).edges.empty());
+}
+
+TEST(Avm2Events, ShapeFlagHitTestUsesFillGeometry) {
+  Fixture fixture;
+  fixture.finish();
+  auto root = make_sprite(fixture.runtime);
+  auto target = make_sprite(fixture.runtime);
+  ASSERT_NE(root, nullptr);
+  ASSERT_NE(target, nullptr);
+  ASSERT_TRUE(
+      static_cast<fo4::avm2::DisplayObjectContainer*>(root.get())->add_child(target));
+  target->set_width(100.0);
+  target->set_height(100.0);
+  fo4::avm2::ShapeGeometry geometry;
+  fo4::avm2::ShapeEdge edge;
+  edge.fill1 = 1;
+  edge.points = {{{0.0, 0.0}, {100.0, 0.0}, {0.0, 100.0}}};
+  geometry.edges.push_back(edge);
+  target->set_shape_geometry(std::make_shared<const fo4::avm2::ShapeGeometry>(geometry));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*target, 90.0, 90.0));
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*target, 90.0, 90.0, true));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*target, 10.0, 10.0, true));
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 10.0, 10.0).get(), target.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 90.0, 90.0).get(), nullptr);
+}
+
+TEST(Avm2Events, ShapeFlagHitTestFindsChildFillOutsideTheParentBox) {
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto root = std::make_shared<fo4::avm2::DisplayObjectContainer>(&sprite_class);
+  root->set_width(100.0);
+  root->set_height(100.0);
+  auto child = std::make_shared<DisplayObject>(&sprite_class);
+  child->set_x(200.0);
+  fo4::avm2::ShapeGeometry geometry;
+  fo4::avm2::ShapeEdge edge;
+  edge.fill1 = 1;
+  edge.points = {{{0.0, 0.0}, {100.0, 0.0}, {0.0, 100.0}}};
+  geometry.edges.push_back(edge);
+  child->set_shape_geometry(std::make_shared<const fo4::avm2::ShapeGeometry>(geometry));
+  ASSERT_TRUE(root->add_child(child));
+  // The point misses the parent box but lands on the child fill, so only the flag must find it.
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*root, 250.0, 10.0));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*root, 250.0, 10.0, true));
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*root, 250.0, 150.0, true));
+}
+
+TEST(Avm2Events, ShapeFlagHitTestMissesAnEmptyContainerBox) {
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto root = std::make_shared<fo4::avm2::DisplayObjectContainer>(&sprite_class);
+  root->set_width(100.0);
+  root->set_height(100.0);
+  // An empty container must claim nothing with the flag, but its box still hits without it.
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*root, 50.0, 50.0, true));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*root, 50.0, 50.0));
 }
 
 TEST(Avm2Events, FocusChangeDispatchesFocusOutThenFocusIn) {
@@ -398,6 +590,7 @@ TEST(Avm2Events, SwfRuntimeRoutesMouseInputToTheHitObject) {
   ASSERT_NE(target, nullptr);
   target->set_width(100.0);
   target->set_height(100.0);
+  avm2_test::set_box_hit_area(*target);
   ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(movie->root().get())
                   ->add_child(target));
   ASSERT_TRUE(fo4::avm2::add_event_listener(*target, "mouseDown",

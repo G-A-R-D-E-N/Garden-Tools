@@ -4,6 +4,7 @@
 #include <fo4/avm2/class.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/object.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/value.hpp>
 #include <fo4/swf/swf.hpp>
 
@@ -63,6 +64,14 @@ class DisplayObject : public Object {
   }
   void set_color_add(const double values[4]) noexcept {
     for (int index = 0; index < 4; ++index) color_add_[index] = values[index];
+  }
+
+  /* A placed shape must keep its fill geometry, so shape-flag hit tests use the drawing. */
+  const std::shared_ptr<const ShapeGeometry>& shape_geometry() const noexcept {
+    return shape_geometry_;
+  }
+  void set_shape_geometry(std::shared_ptr<const ShapeGeometry> geometry) {
+    shape_geometry_ = std::move(geometry);
   }
 
   /* A drawable must keep one Graphics object for its lifetime, because scripts keep drawing into it. */
@@ -168,6 +177,7 @@ class DisplayObject : public Object {
   double mouse_y_{0.0};
   std::vector<Value> filters_;
   Value bitmap_data_;
+  std::shared_ptr<const ShapeGeometry> shape_geometry_;
   Value graphics_;
   std::weak_ptr<DisplayObject> focus_;
   bool stage_focus_rect_{true};

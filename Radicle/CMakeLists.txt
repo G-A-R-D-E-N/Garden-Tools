@@ -442,6 +442,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/snapshot.cpp
   src/avm2/display_snapshot.cpp
   src/avm2/hit_test.cpp
+  src/avm2/shape_geometry.cpp
   src/avm2/amf.cpp
   src/avm2/replay.cpp
   src/avm2/native_shared.cpp
@@ -1048,6 +1049,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_runtime_names.cpp
     tests/test_avm2_display.cpp
     tests/test_avm2_swf_runtime.cpp
+    tests/test_avm2_swf_shape_geometry.cpp
     tests/test_avm2_snapshot.cpp
     tests/test_avm2_host.cpp
     tests/test_avm2_bgs_bridge.cpp
