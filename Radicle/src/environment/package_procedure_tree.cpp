@@ -342,9 +342,9 @@ PackageTreeMutationStatus remove_package_procedure_node(Plugin& plugin,
   if (!tree.decoded) return PackageTreeMutationStatus::undecodable;
   if (node_index >= tree.nodes.size()) return PackageTreeMutationStatus::index_out_of_range;
   const auto& node = tree.nodes[node_index];
-  if (node.kind != PackageProcedureKind::leaf) return PackageTreeMutationStatus::not_a_leaf;
   const auto parent = parent_of(tree, node_index);
   if (!parent) return PackageTreeMutationStatus::root_node;
+  if (node.kind != PackageProcedureKind::leaf) return PackageTreeMutationStatus::not_a_leaf;
   const auto pkcu = pkcu_index(*record);
   if (!pkcu) return PackageTreeMutationStatus::undecodable;
 

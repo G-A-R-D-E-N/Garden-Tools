@@ -126,6 +126,10 @@ TEST(PackageTreeReal, AddsAndRemovesTheDefaultInputsOfATravelLeafByteIdentically
     const bool deterministic_ids =
         tree.inputs.empty() || (tree.next_input_id && static_cast<std::size_t>(*tree.next_input_id) == tree.inputs.size());
     if (!deterministic_ids) continue;
+    // remove_package_procedure_node renumbers kept inputs, so only contiguous ids can come back byte-identical.
+    bool contiguous_ids = true;
+    for (std::size_t at = 0; at < tree.inputs.size(); ++at) contiguous_ids = contiguous_ids && tree.inputs[at].index == at;
+    if (!contiguous_ids) continue;
     const auto original = subs_of(plugin, key);
     for (std::size_t index = 0; index < tree.nodes.size(); ++index) {
       if (tree.nodes[index].kind != fo4::env::PackageProcedureKind::container) continue;

@@ -113,6 +113,7 @@ enum class Id : std::uint32_t {
   display_goto_and_play,
   display_goto_and_stop,
   display_stop,
+  display_add_frame_script,
   display_play,
   display_next_frame,
   display_prev_frame,

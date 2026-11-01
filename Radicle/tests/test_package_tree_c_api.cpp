@@ -58,7 +58,7 @@ TEST(CApiPackageTree, AddsAndRemovesNodesWithOutIndexResetAndNamedRefusals) {
   EXPECT_EQ(radicle_package_procedure_remove(plugin, key, added), RADICLE_STATUS_INVALID_ARGUMENT);
   ASSERT_EQ(radicle_plugin_write_file(plugin, (file.root / "Saved.esp").string().c_str()), RADICLE_STATUS_OK);
   const auto saved = fo4::read_plugin_file(file.root / "Saved.esp");
-  const auto* record = fo4::find_record(saved, fo4::FormKey{fo4::PluginKey::from_filename("Pack.esp"),
+  const auto* record = fo4::find_record(saved, fo4::FormKey{fo4::PluginKey::from_filename("Saved.esp"),
                                                              fo4::LocalFormId{0x800}});
   ASSERT_NE(record, nullptr);
   const auto decoded = fo4::env::decode_package_procedure(*record);
