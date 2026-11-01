@@ -283,6 +283,86 @@ public sealed class GltfAnimationImportTests
         Assert.True(rotation <= 0.001f, $"rotation off by {rotation} rad");
     }
 
+    // Regression: an external buffer URI that escapes the glTF's folder reads a file beside or above it, through ../ or percent-encoding.
+    [Theory]
+    [InlineData("../secret.bin")]
+    [InlineData("..%2Fsecret.bin")]
+    [InlineData("..%5Csecret.bin")]
+    public void RefusesAnExternalBufferThatEscapesTheGltfFolder(string uri)
+    {
+        using var work = new GltfWork();
+        string folder = Directory.CreateDirectory(work.At("gltf")).FullName;
+        work.Write("secret.bin", new byte[] { 1, 2, 3, 4 });
+
+        var error = Assert.Throws<NotSupportedException>(() => GltfScene.Parse(BufferJson(uri), folder));
+        Assert.Contains("outside the glTF's folder", error.Message, StringComparison.Ordinal);
+    }
+
+    // Regression: a percent-encoded absolute path reads a file anywhere on disk, because the rooted check ran before the path was unescaped.
+    [Fact]
+    public void RefusesAPercentEncodedAbsolutePath()
+    {
+        using var work = new GltfWork();
+        string folder = Directory.CreateDirectory(work.At("gltf")).FullName;
+        string secret = work.Write("secret.bin", new byte[] { 1, 2, 3, 4 });
+
+        var error = Assert.Throws<NotSupportedException>(() =>
+            GltfScene.Parse(BufferJson(Uri.EscapeDataString(secret)), folder));
+        Assert.Contains("must be a relative file beside the glTF", error.Message, StringComparison.Ordinal);
+    }
+
+    // Regression: the containment check refuses a buffer that really sits beside the glTF, which would make every relative-buffer .gltf unreadable.
+    [Fact]
+    public void ReadsAnExternalBufferBesideTheGltf()
+    {
+        using var work = new GltfWork();
+        string folder = Directory.CreateDirectory(work.At("gltf")).FullName;
+        File.WriteAllBytes(Path.Combine(folder, "buffer 0.bin"), new byte[] { 1, 2, 3, 4 });
+
+        var scene = GltfScene.Parse(BufferJson("buffer%200.bin"), folder);
+        Assert.Empty(scene.Nodes);
+    }
+
+    // Regression: malformed glTF JSON escapes as a JsonException, which the CLI does not catch, so the process crashes instead of refusing the file.
+    [Fact]
+    public void RefusesMalformedJsonAsInvalidData()
+    {
+        using var work = new GltfWork();
+        string folder = Directory.CreateDirectory(work.At("gltf")).FullName;
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            GltfScene.Parse(Encoding.UTF8.GetBytes("{ \"nodes\": [ "), folder));
+        Assert.Contains("malformed", error.Message, StringComparison.Ordinal);
+    }
+
+    // Regression: a clip over the frame-track read-back limit is baked in full before the limit is checked, so memory grows before the clip is refused.
+    [Fact]
+    public void RefusesAClipOverTheFrameTrackLimitBeforeBaking()
+    {
+        var skeleton = GltfTestFiles.Skeleton();
+        using var work = new GltfWork();
+        string path = work.Tiny(new TinyOptions(EndSeconds: 1500f), binary: false);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            GltfAnimationImport.Build(GltfScene.Read(path), skeleton));
+        Assert.Contains("4,194,304", error.Message, StringComparison.Ordinal);
+        Assert.Contains("45001 frame(s)", error.Message, StringComparison.Ordinal);
+    }
+
+    // Regression: channels that share one accessor each keep their own decoded copy, so a rig with many channels multiplies memory by the channel count.
+    [Fact]
+    public void ChannelsSharingAnAccessorShareOneDecodedArray()
+    {
+        using var work = new GltfWork();
+        string path = work.Tiny(new TinyOptions(), binary: false);
+
+        var channels = GltfScene.Read(path).Animations[0].Channels;
+        Assert.Same(channels[1].Times, channels[2].Times);
+    }
+
+    private static byte[] BufferJson(string uri) =>
+        Encoding.UTF8.GetBytes("{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"uri\":\"" + uri + "\",\"byteLength\":4}]}");
+
     private static GltfAnimationImport.Result BuildTiny(HkxSkeleton skeleton)
     {
         using var work = new GltfWork();

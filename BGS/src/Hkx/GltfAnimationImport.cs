@@ -10,6 +10,7 @@ public static class GltfAnimationImport
     public const float MetresPerUnit = 0.0142875f;
     public const float MinimumFrameRate = 30f;
     public const int MaximumFrames = 100_000;
+    public const long MaximumFrameTracks = 1L << 22;
     private const float RestPositionTolerance = 0.01f;
     private const float RestAngleTolerance = 0.001f;
 
@@ -138,6 +139,10 @@ public static class GltfAnimationImport
         int frames = (int)MathF.Ceiling(span - 1e-3f) + 1;
         if (frames < 2)
             throw Refuse("the animated keys span less than two frames, so there is no interval to store.");
+        if ((long)frames * skeleton.BoneNames.Count > MaximumFrameTracks)
+            throw Refuse($"the clip would be {frames} frame(s) over {skeleton.BoneNames.Count} track(s), which is " +
+                         $"{(long)frames * skeleton.BoneNames.Count:N0} frame-tracks, more than the {MaximumFrameTracks:N0} " +
+                         "the read-back allows. Refused before baking.");
 
         var tracks = new List<HkxTrackData>(skeleton.BoneNames.Count);
         var animated = new List<string>();

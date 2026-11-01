@@ -121,6 +121,23 @@ public sealed class GltfCliTests
         Assert.True(turn.Scale <= 0.0005f, $"scale off by {turn.Scale}");
     }
 
+    // Regression: malformed glTF JSON escapes the CLI as an uncaught JsonException, so the process crashes instead of printing a refusal.
+    [Fact]
+    public void RefusesMalformedGltfJsonThroughTheCli()
+    {
+        using var work = new GltfWork();
+        string input = work.Write("bad.gltf", System.Text.Encoding.UTF8.GetBytes("{ \"nodes\": [ "));
+        string outPath = work.At("bad-out.hkx");
+
+        var (exit, _, error) = Capture(() => CliEntry.Run(
+            new[] { "gltf", input, SkeletonPath, PairedKillPath, outPath }, TextWriter.Null, TextWriter.Null));
+
+        Assert.Equal(1, exit);
+        Assert.Contains("Not written:", error, StringComparison.Ordinal);
+        Assert.Contains("malformed", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(outPath));
+    }
+
     private static (int Exit, string Output, string Error) Capture(Func<int> action)
     {
         var output = new StringWriter();

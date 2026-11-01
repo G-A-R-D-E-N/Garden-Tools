@@ -135,7 +135,7 @@ internal static class GltfTestFiles
     public static (string Json, byte[] Bin) Tiny(TinyOptions options)
     {
         var binary = new BinaryBuilder();
-        int times = binary.Add(new[] { 0f, 1f }, "SCALAR");
+        int times = binary.Add(new[] { 0f, options.EndSeconds }, "SCALAR");
         int rootTranslation = binary.Add(new[] { 0f, 0f, 0f, 0f, 0.1f, 0f }, "VEC3");
         int halfSecond = binary.Add(new[] { 0f, 0.5f }, "SCALAR");
         int rootRotation = binary.Add(new[]
@@ -293,7 +293,8 @@ internal static class GltfTestFiles
 
 internal sealed record TinyOptions(bool Embedded = false, bool Cubic = false, string Com = "COM",
                                    bool RootParentsCom = true, bool ArmatureAnimated = false,
-                                   bool TwoAnimations = false, bool ArmatureYUp = false);
+                                   bool TwoAnimations = false, bool ArmatureYUp = false,
+                                   float EndSeconds = 1f);
 
 internal sealed class GltfWork : IDisposable
 {

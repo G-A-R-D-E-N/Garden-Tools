@@ -59,7 +59,7 @@ public sealed class GltfScene
         byte[]? bin = null;
         if (IsBinary(file)) (json, bin) = SplitBinary(file);
 
-        using var document = JsonDocument.Parse(json);
+        using var document = Parsed(json);
         var root = document.RootElement;
         var buffers = ReadBuffers(root, directory, bin);
         var scene = new GltfScene();
@@ -95,6 +95,13 @@ public sealed class GltfScene
 
         var accessors = Items(root, "accessors");
         var views = Items(root, "bufferViews");
+        var decoded = new Dictionary<int, (float[] Values, int Count, int Width)>();
+        (float[] Values, int Count, int Width) Accessor(int index)
+        {
+            if (!decoded.TryGetValue(index, out var value))
+                decoded[index] = value = ReadAccessor(accessors, views, buffers, index);
+            return value;
+        }
         foreach (var animation in Items(root, "animations"))
         {
             var samplers = Items(animation, "samplers");
@@ -122,8 +129,8 @@ public sealed class GltfScene
                 string interpolation = Text(samplers[sampler], "interpolation");
                 if (interpolation.Length == 0) interpolation = "LINEAR";
 
-                var times = ReadAccessor(accessors, views, buffers, Int(samplers[sampler], "input", -1));
-                var values = ReadAccessor(accessors, views, buffers, Int(samplers[sampler], "output", -1));
+                var times = Accessor(Int(samplers[sampler], "input", -1));
+                var values = Accessor(Int(samplers[sampler], "output", -1));
 
                 int perKey = interpolation == "CUBICSPLINE" ? 3 : 1;
                 if (times.Width != 1 || times.Count < 1 || values.Count != times.Count * perKey)
@@ -212,9 +219,29 @@ public sealed class GltfScene
             return Convert.FromBase64String(uri[(comma + 1)..]);
         }
 
-        if (uri.Contains("://", StringComparison.Ordinal) || Path.IsPathRooted(uri))
+        string relative = Uri.UnescapeDataString(uri);
+        if (relative.Contains("://", StringComparison.Ordinal) || Path.IsPathRooted(relative))
             throw new NotSupportedException($"external buffer '{uri}' must be a relative file beside the glTF.");
-        return File.ReadAllBytes(Path.Combine(directory, Uri.UnescapeDataString(uri)));
+
+        string root = Path.GetFullPath(directory);
+        string full = Path.GetFullPath(Path.Combine(root, relative));
+        string inside = Path.GetRelativePath(root, full);
+        if (inside == ".." || inside.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+            Path.IsPathRooted(inside))
+            throw new NotSupportedException($"external buffer '{uri}' lies outside the glTF's folder.");
+        return File.ReadAllBytes(full);
+    }
+
+    private static JsonDocument Parsed(byte[] json)
+    {
+        try
+        {
+            return JsonDocument.Parse(json);
+        }
+        catch (JsonException error)
+        {
+            throw new InvalidDataException("the glTF JSON is malformed: " + error.Message, error);
+        }
     }
 
     private static GltfNode ReadNode(JsonElement node)
