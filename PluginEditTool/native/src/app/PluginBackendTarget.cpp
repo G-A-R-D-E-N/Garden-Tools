@@ -491,6 +491,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "SetSoundBase") return backend_.setSoundBase(args);
         if (method == "CreateSound") return backend_.createSound(args);
         if (method == "ReleaseMemory") return backend_.releaseMemory(args);
+        if (method == "SetScriptValue") return backend_.setScriptValue(args);
         if (method == "AddScript") return backend_.addScript(args);
         if (method == "RemoveScript") return backend_.removeScript(args);
         if (method == "AddScriptProperty") return backend_.addScriptProperty(args);
@@ -499,6 +500,10 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "GetFaction") return backend_.getFaction(args);
         if (method == "EditFactionEntries") return backend_.editFactionEntries(args);
         if (method == "GetWeaponDamageTypes") return backend_.getWeaponDamageTypes(args);
+        if (method == "GetMagicEffects") return backend_.getMagicEffects(args);
+        if (method == "AddMagicEffect") return backend_.addMagicEffect(args);
+        if (method == "SetMagicEffect") return backend_.setMagicEffect(args);
+        if (method == "RemoveMagicEffect") return backend_.removeMagicEffect(args);
         if (method == "CreatePlacedObject") return backend_.createPlacedObject(args);
         if (method == "CreateInteriorCell") return backend_.createInteriorCell(args);
         return backend_.invokeLegacyBackend(method, args);
