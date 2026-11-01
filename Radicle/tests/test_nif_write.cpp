@@ -1,4 +1,8 @@
 #include "fo4/error.hpp"
+#include "fo4/nif/collision.hpp"
+#include "fo4/nif/hknp_decode.hpp"
+#include "fo4/nif/hknp_encode.hpp"
+#include "fo4/nif/hknp_packfile.hpp"
 #include "fo4/nif/nif.hpp"
 #include "fo4/nif/nif_fix.hpp"
 #include "fo4/nif/nif_import.hpp"
@@ -23,12 +27,15 @@ namespace {
 
 using fo4::nif::apply_edits;
 using fo4::nif::block_transform;
+using fo4::nif::decode_hknp_system;
 using fo4::nif::Edit;
 using fo4::nif::fix_nif;
 using fo4::nif::EditValue;
 using fo4::nif::import_obj;
 using fo4::nif::ImportOptions;
 using fo4::nif::NifFile;
+using fo4::nif::read_collision_blobs;
+using fo4::nif::read_hknp_packfile;
 using fo4::nif::read_nif;
 using fo4::nif::read_shader;
 using fo4::nif::read_shapes;
@@ -117,12 +124,13 @@ Block node_with_two_extras() {
   return Block{"NiNode", w.bytes()};
 }
 
-std::vector<std::byte> import_text(std::string_view obj, bool from_blender = false) {
+std::vector<std::byte> import_text(std::string_view obj, bool from_blender = false, bool box = false) {
   ImportOptions options;
   options.material = "materials\\body.bgsm";
   options.tex_diffuse = "textures\\body_d.dds";
   options.tex_normal = "textures\\body_n.dds";
   options.from_blender = from_blender;
+  options.box_collision = box;
   return import_obj(obj, options);
 }
 
@@ -508,10 +516,55 @@ TEST(NifImport, RejectsObjThatWouldWriteAWrongNif) {
   EXPECT_THROW(import_text("v 0 0 0\nv 1 0 0\nv nan 0 0\nf 1 2 3\n"), std::runtime_error);
 }
 
-TEST(NifImport, BoxCollisionIsRejectedInsteadOfDropped) {
-  ImportOptions options;
-  options.box_collision = true;
-  EXPECT_THROW(import_obj("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", options), std::runtime_error);
+TEST(NifImport, BoxCollisionAuthorsOneBodyThatEnclosesTheMeshTightly) {
+  const auto bytes = import_text("v -1 -2 0\nv 3 -2 0\nv 3 4 0\nv -1 4 0\nv -1 -2 5\nv 3 4 5\nf 1 2 3\nf 4 5 6\n",
+                                 false, true);
+  const auto nif = read_nif(bytes);
+  ASSERT_EQ(nif.blocks().size(), 7U);
+  const auto root = block_bytes(bytes, nif, 0);
+  EXPECT_EQ(uint_at(root, root.size() - 12), 5U);
+  EXPECT_EQ(uint_at(block_bytes(bytes, nif, 4), 4), 130U);
+  const auto owner = block_bytes(bytes, nif, 5);
+  ASSERT_EQ(owner.size(), 14U);
+  EXPECT_EQ(uint_at(owner, 4), 0x00060080U);
+  EXPECT_EQ(uint_at(owner, 10), 0U);
+
+  const auto blobs = read_collision_blobs(nif);
+  ASSERT_EQ(blobs.size(), 1U);
+  const auto sys = decode_hknp_system(read_hknp_packfile(blobs[0].bytes));
+  ASSERT_EQ(sys.bodies.size(), 1U);
+  const auto& shape = sys.shapes[static_cast<std::size_t>(sys.bodies[0].shape)];
+  ASSERT_EQ(shape.vertices.size(), 8U);
+  const std::array<float, 3> low{-1.0f, -2.0f, 0.0f};
+  const std::array<float, 3> high{3.0f, 4.0f, 5.0f};
+  for (std::size_t k = 0; k < 3; ++k) {
+    float vmin = shape.vertices[0][k];
+    float vmax = shape.vertices[0][k];
+    for (const auto& v : shape.vertices) {
+      vmin = std::min(vmin, v[k]);
+      vmax = std::max(vmax, v[k]);
+    }
+    EXPECT_NEAR((vmin - shape.convex_radius) * fo4::nif::k_hknp_game_units_per_metre, low[k], 0.1f);
+    EXPECT_NEAR((vmax + shape.convex_radius) * fo4::nif::k_hknp_game_units_per_metre, high[k], 0.1f);
+  }
+}
+
+TEST(NifImport, FlatBoxCollisionStillImports) {
+  const auto bytes = import_text("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", false, true);
+  const auto nif = read_nif(bytes);
+  const auto blobs = read_collision_blobs(nif);
+  ASSERT_EQ(blobs.size(), 1U);
+  EXPECT_EQ(decode_hknp_system(read_hknp_packfile(blobs[0].bytes)).bodies.size(), 1U);
+}
+
+TEST(NifImport, BoxOptionOffWritesNoCollisionBlocks) {
+  const auto bytes = import_text("v -1 -2 0\nv 3 -2 0\nv 3 4 0\nf 1 2 3\n");
+  const auto nif = read_nif(bytes);
+  EXPECT_EQ(nif.blocks().size(), 5U);
+  EXPECT_TRUE(read_collision_blobs(nif).empty());
+  const auto root = block_bytes(bytes, nif, 0);
+  EXPECT_EQ(uint_at(root, root.size() - 12), 0xFFFFFFFFU);
+  EXPECT_EQ(uint_at(block_bytes(bytes, nif, 4), 4), 0U);
 }
 
 TEST(NifImport, RejectsMoreVerticesThanAShapeCanIndex) {

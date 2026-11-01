@@ -421,7 +421,7 @@ TEST_CASE("NifService imports an OBJ in-process and the written NIF verifies") {
     CHECK_FALSE(std::filesystem::exists(root / "quad.nif.niftmp"));
 }
 
-TEST_CASE("NifService refuses box collision in-process and writes no NIF") {
+TEST_CASE("NifService writes box collision in-process") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto obj = root / "quad.obj";
@@ -432,10 +432,10 @@ TEST_CASE("NifService refuses box collision in-process and writes no NIF") {
     options.collisionBox = true;
     auto result = service.importObj(obj, root / "quad.nif", options);
 
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("box collision is not supported yet (needs the HKX writer, #1048)") !=
-          std::string::npos);
-    CHECK_FALSE(std::filesystem::exists(root / "quad.nif"));
+    REQUIRE(result.has_value());
+    std::ifstream written(root / "quad.nif", std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(written)), std::istreambuf_iterator<char>());
+    CHECK(bytes.find("bhkPhysicsSystem") != std::string::npos);
 }
 
 TEST_CASE("NifService in-process import rejects an OBJ without faces and writes no NIF") {

@@ -425,11 +425,10 @@ only feed the Creation Kit compiler route.
   compiler is Bethesda's and is not shipped here), or use `engine="builtin"`.
 - **The built-in engine reports every vanilla type as unknown.** It has no base script sources to
   resolve against. Set `PAPYRUS_BASE_IMPORTS` or pass `imports`, as described above.
-- **NIF import with box collision says `box collision is not supported yet`.** Box collision needs
-the HKX writer (issue #1048), which is separate from the read-only HKX reader in #814. Every other
-NIF verb runs in process: fix repairs tangents, adds a missing
-BSX flag and trims texture and material name whitespace; it does not change shader or BSX flags, and it
-leaves the tangents of shapes without normal, tangent and UV attributes alone.
+- **NIF commands need no external tool.** Fix, import (including box collision), inspect, geometry,
+  verify, tree and saving NIF edits all run in process. Fix repairs tangents, adds a missing BSX flag and
+  trims texture and material name whitespace; it does not change shader or BSX flags, and it leaves the
+  tangents of shapes without normal, tangent and UV attributes alone.
 - **`archive_pack` says `Archive2.exe is not configured`.** Install the Creation Kit or set
   `ARCHIVE2_PATH`.
 - **An audio tool answers `Error: set ..._PATH or place ... in tools/audio`.** A helper program is

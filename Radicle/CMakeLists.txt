@@ -171,6 +171,11 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/nif/vertex_desc.cpp
   src/nif/skin.cpp
   src/nif/collision.cpp
+  src/nif/hknp_packfile.cpp
+  src/nif/hknp_encode.cpp
+  src/nif/hknp_decode_fields.cpp
+  src/nif/hknp_decode_shapes.cpp
+  src/nif/hknp_decode_system.cpp
   src/texture/bcn.cpp
   src/texture/dds.cpp
   src/texture/dds_codec.cpp
