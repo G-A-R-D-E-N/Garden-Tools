@@ -4018,6 +4018,9 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_for_block")]
     public static extern Status NifNodeForBlock(IntPtr nif, uint block, int* out_node);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_value")]
+    public static extern Status NifNodeValue(IntPtr nif, nuint index, int* out_has_value, int* out_value);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_count")]
     public static extern Status NifShapeCount(IntPtr nif, nuint* out_count);
 
