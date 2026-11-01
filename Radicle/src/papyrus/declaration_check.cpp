@@ -115,13 +115,13 @@ std::vector<Diagnostic> declarationCheck(const Script& script) {
             if (existing != seen.end()) {
                 if (existing->second.kind == entry.kind) continue;
                 problems.push_back(Diagnostic{
-                    DiagnosticCode::DuplicateDeclaration, Severity::Error,
+                    DiagnosticCode::DuplicateDeclaration, Severity::Warning,
                     "'" + keyOf(*entry.declaration) + "' is already declared as a " +
                         existing->second.kind + " in " + existing->second.scope + ", on line " +
                         std::to_string(existing->second.declaration->nameSpan.line) + ". A " +
                         existing->second.kind + " and a " + entry.kind +
-                        " cannot share one name: bare-name resolution binds the first and the "
-                        "second is unreachable.",
+                        " share one name, so bare-name resolution binds the first and the second "
+                        "may be unreachable. The Creation Kit's behaviour here is not verified.",
                     entry.declaration->nameSpan, script.filePath});
                 continue;
             }
