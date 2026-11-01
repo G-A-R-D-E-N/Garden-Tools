@@ -1,0 +1,78 @@
+name: Public CI export
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main, nomad/dev]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  # A merged PR's close event reports its base branch ref; key PRs by number so it cannot cancel that branch's export.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PUBLIC_REPO: G-A-R-D-E-N/Garden-Tools
+
+jobs:
+  export:
+    name: Export to public CI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Delete the public CI branch of a closed PR
+        if: github.event.action == 'closed'
+        env:
+          TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # No checkout on close; git push needs a repository to run in.
+          git init -q .
+          url="https://x-access-token:${TOKEN}@github.com/${PUBLIC_REPO}.git"
+          rc=0; git ls-remote --exit-code "$url" "refs/heads/ci/pr-${PR_NUMBER}" >/dev/null || rc=$?
+          case $rc in
+            0) git push -q "$url" --delete "ci/pr-${PR_NUMBER}"; echo "deleted ci/pr-${PR_NUMBER}" ;;
+            2) echo "ci/pr-${PR_NUMBER} is already gone" ;;
+            *) echo "::error::cannot read the public repository (git ls-remote exit $rc)"; exit 1 ;;
+          esac
+
+      # github.sha is the PR merge commit, so PRs cut before this workflow landed still export.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event.action != 'closed'
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Export and push to the public repository
+        if: github.event.action != 'closed'
+        env:
+          TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event_name == 'push' && format('ci/{0}', github.ref_name) || format('ci/pr-{0}', github.event.pull_request.number) }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          GIT_AUTHOR_NAME: NomadsReach
+          GIT_AUTHOR_EMAIL: 144523850+NomadsReach@users.noreply.github.com
+          GIT_COMMITTER_NAME: NomadsReach
+          GIT_COMMITTER_EMAIL: 144523850+NomadsReach@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          [ -n "$TOKEN" ] || { echo "::error::GT_PUBLIC_CI_TOKEN is not set"; exit 1; }
+          commit=$(python3 .github/public-ci/export-public-ci.py HEAD "Garden Tools ${BRANCH}
+
+          Source-Commit: ${HEAD_SHA}")
+          git push -q --force "https://x-access-token:${TOKEN}@github.com/${PUBLIC_REPO}.git" "${commit}:refs/heads/${BRANCH}"
+          for workflow in $(grep -l 'context="public-ci/' .github/public-ci/workflows/*.yml); do
+            name=$(basename "$workflow" .yml)
+            gh api "repos/${REPOSITORY}/statuses/${HEAD_SHA}" -f state=pending -f context="public-ci/${name}" \
+              -f target_url="https://github.com/${PUBLIC_REPO}/actions?query=branch%3A${BRANCH}" \
+              -f description="Building on GitHub-hosted runners" >/dev/null
+          done
+          echo "exported ${HEAD_SHA:0:8} as ${commit:0:8} to ${PUBLIC_REPO} ${BRANCH}"
