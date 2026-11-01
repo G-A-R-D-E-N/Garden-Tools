@@ -2901,3 +2901,7 @@ The destructor removes the shared parent when it looks empty, so a test creating
 ## .github/workflows/native-real-data.yml:on
 
 The job runs only for changes to what it builds: `Radicle/`, `PluginEditTool/native/`, `cmake/`, the root `CMakeLists.txt`, `.github/scripts/` and this workflow. A PR touching only BGS, the web panels or docs does not queue on the single `fo4-data` runner, and shows no real-data check. `workflow_dispatch` still runs it on demand.
+
+## Radicle/tools/parity_matrix.py:main
+
+The build no longer runs `--check`, and `PluginEditTool/FO4RecordEditor.Tests/ShippedDocsTests.cs` is gone: a stale document must not fail a build or test. Run `python Radicle/tools/parity_matrix.py` by hand to refresh `Radicle/docs/FO4_PARITY.md`.

@@ -378,8 +378,11 @@ def publish(env, target, token, url):
                                              f"{merge}^1", merge], local).splitlines()
         abi = merge == head or touches_abi(changed)
     if abi:
-        run("deepen history", ["git", "fetch", "--quiet", "--no-tags", f"--deepen={ABI_HISTORY}",
-                               PRIVATE_URL, target.ref], env)
+        fetch = ["git", "fetch", "--quiet", "--no-tags"]
+        try:
+            run("deepen history", fetch + [f"--deepen={ABI_HISTORY}", PRIVATE_URL, target.ref], env)
+        except Failed:
+            run("unshallow history", fetch + ["--unshallow", PRIVATE_URL, target.ref], env)
     commit = run("export", [sys.executable, str(EXPORT), merge, export_message(branch, head)],
                  local).strip()
     post(env, head, EXPORT_CONTEXT, "pending", "Exporting to public CI", actions)
