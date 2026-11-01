@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -70,12 +71,13 @@ std::optional<std::uint32_t> parse_form_id(std::string_view text) {
 
 std::optional<std::uint32_t> parse_response_index(std::string_view text) {
   if (text.empty() || text.size() > 10) return std::nullopt;
-  std::uint32_t value = 0;
+  std::uint64_t value = 0;
   for (const char character : text) {
     if (character < '0' || character > '9') return std::nullopt;
-    value = value * 10u + static_cast<std::uint32_t>(character - '0');
+    value = value * 10u + static_cast<std::uint64_t>(character - '0');
   }
-  return value;
+  if (value > std::numeric_limits<std::uint32_t>::max()) return std::nullopt;
+  return static_cast<std::uint32_t>(value);
 }
 
 std::string format_form_id(std::uint32_t value) {

@@ -55,15 +55,16 @@ TEST(LandHeightmap, DecodesTheMeasuredLayout) {
   EXPECT_EQ(encode_land_heightmap(heightmap), bytes);
 }
 
-// Detects: a decoder that must accumulate deltas across row boundaries instead of resetting each row.
-TEST(LandHeightmap, HeightsAccumulateAcrossRowBoundaries) {
+// Detects: a row start that must chain from the previous row's first height, not from its last height.
+TEST(LandHeightmap, RowStartsChainFromThePreviousRowStart) {
   std::vector<int> deltas(fo4::land::k_heightmap_vertices, 1);
   const auto heightmap = decode_land_heightmap(payload(10.0f, deltas));
   const auto heights = land_heights(heightmap);
-  EXPECT_EQ(heights[0], 11.0f);
-  EXPECT_EQ(heights[32], 43.0f);
-  EXPECT_EQ(heights[33], 44.0f);
-  EXPECT_EQ(heights[fo4::land::k_heightmap_vertices - 1], 10.0f + 1089.0f);
+  EXPECT_EQ(heights[0], 88.0f);
+  EXPECT_EQ(heights[32], 344.0f);
+  EXPECT_EQ(heights[33], 96.0f);
+  EXPECT_EQ(heights[34], 104.0f);
+  EXPECT_EQ(heights[fo4::land::k_heightmap_vertices - 1], 600.0f);
 }
 
 // Detects: a writer that must reproduce every shipped payload, including the unused trailing bytes.
@@ -105,19 +106,19 @@ TEST(LandHeightmap, BuildsDeltasFromHeights) {
 // Detects: a step that must round to the nearest signed byte, because heights are integers plus an offset.
 TEST(LandHeightmap, RoundsFractionalStepsToTheNearestByte) {
   std::vector<float> heights(fo4::land::k_heightmap_vertices, 0.0f);
-  heights[0] = 0.4f;
-  heights[1] = 1.6f;
+  heights[0] = 8.0f * 0.4f;
+  heights[1] = 8.0f * 1.6f;
   const auto heightmap = make_land_heightmap(heights, 0.0f);
   ASSERT_TRUE(heightmap.has_value());
   EXPECT_EQ(static_cast<int>(heightmap->deltas[0]), 0);
-  EXPECT_EQ(static_cast<int>(heightmap->deltas[1]), 1);
-  EXPECT_EQ(land_heights(*heightmap)[1], 1.0f);
+  EXPECT_EQ(static_cast<int>(heightmap->deltas[1]), 2);
+  EXPECT_EQ(land_heights(*heightmap)[1], 16.0f);
 }
 
 // Detects: a height grid whose step cannot fit a signed byte, which must be refused instead of wrapping.
 TEST(LandHeightmap, RejectsHeightsWithTooLargeStep) {
   std::vector<float> heights(fo4::land::k_heightmap_vertices, 0.0f);
-  heights[5] = 200.0f;
+  heights[5] = 8.0f * 200.0f;
   EXPECT_FALSE(make_land_heightmap(heights, 0.0f).has_value());
   std::vector<float> short_grid(10, 0.0f);
   EXPECT_FALSE(make_land_heightmap(short_grid, 0.0f).has_value());
@@ -134,11 +135,11 @@ TEST(LandHeightmap, RejectsNonFiniteHeights) {
 
 // Detects: a flat grid that must be representable with zero deltas and keep its offset.
 TEST(LandHeightmap, EncodesAFlatGridWithoutDeltas) {
-  std::vector<float> heights(fo4::land::k_heightmap_vertices, 42.0f);
+  std::vector<float> heights(fo4::land::k_heightmap_vertices, 8.0f * 42.0f);
   const auto heightmap = make_land_heightmap(heights, 42.0f);
   ASSERT_TRUE(heightmap.has_value());
   for (const auto delta : heightmap->deltas) EXPECT_EQ(delta, 0);
   const auto bytes = encode_land_heightmap(*heightmap);
   EXPECT_EQ(float_at(bytes, 0), 42.0f);
-  EXPECT_EQ(land_heights(*heightmap)[0], 42.0f);
+  EXPECT_EQ(land_heights(*heightmap)[0], 336.0f);
 }

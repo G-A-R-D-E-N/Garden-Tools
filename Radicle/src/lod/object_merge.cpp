@@ -14,6 +14,7 @@ namespace fo4::lod {
 namespace {
 
 constexpr double k_cell_units = 4096.0;
+constexpr double k_max_cell_index = 1099511627776.0;
 
 bool level_usable(const LodSettings& settings, std::int32_t level) {
   if (level < settings.level_min || level > settings.level_max) return false;
@@ -21,7 +22,7 @@ bool level_usable(const LodSettings& settings, std::int32_t level) {
 }
 
 std::int64_t tile_cell_coordinate(double position, std::int16_t southwest_cell, std::int32_t level) {
-  const auto cell = std::floor(position / k_cell_units);
+  const auto cell = std::clamp(std::floor(position / k_cell_units), -k_max_cell_index, k_max_cell_index);
   const auto delta = static_cast<std::int64_t>(cell) - static_cast<std::int64_t>(southwest_cell);
   const auto block = static_cast<std::int64_t>(level);
   auto index = delta / block;

@@ -12,6 +12,9 @@
 #include <vector>
 
 namespace fo4::as3::detail {
+
+inline constexpr std::size_t k_max_nesting = 256;
+
 struct Parser {
   std::vector<Token> tokens;
   std::size_t index{0};
@@ -19,6 +22,13 @@ struct Parser {
   std::size_t error_offset{0};
   std::size_t error_line{1};
   bool allow_in{true};
+  std::size_t depth{0};
+
+  bool enter() {
+    if (depth >= k_max_nesting) return fail("expression or statement nesting is too deep");
+    ++depth;
+    return true;
+  }
 
   const Token& peek(std::size_t ahead = 0) const {
     const auto position = index + ahead;
@@ -108,4 +118,16 @@ struct Parser {
                                   std::size_t offset,
                                   std::size_t line);
 };
+
+struct NestingScope {
+  Parser& parser;
+  bool entered;
+
+  explicit NestingScope(Parser& owner) : parser(owner), entered(owner.enter()) {}
+  ~NestingScope() {
+    if (entered) --parser.depth;
+  }
+  explicit operator bool() const noexcept { return entered; }
+};
+
 }  // namespace fo4::as3::detail

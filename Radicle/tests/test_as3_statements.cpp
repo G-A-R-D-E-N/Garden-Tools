@@ -422,3 +422,10 @@ TEST(As3Statements, AcceptsAnEmptyProgram) {
   EXPECT_TRUE(result);
   EXPECT_TRUE(result.statements.empty());
 }
+
+// Detects: nested blocks past the depth limit, which must be refused instead of overflowing the stack.
+TEST(As3Statements, RefusesDeeplyNestedBlocks) {
+  const auto result = parse_program(std::string(1000, '{') + std::string(1000, '}'));
+  EXPECT_FALSE(result);
+  EXPECT_NE(result.error.find("nesting"), std::string::npos);
+}

@@ -1,8 +1,30 @@
 #include "fo4/as3/ast.hpp"
 
+#include <cstddef>
+#include <memory>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace fo4::as3 {
+
+Expr::~Expr() {
+  std::vector<ExprPtr> pending;
+  const auto detach = [&pending](Expr& node) {
+    for (auto& child : node.children) {
+      if (child) pending.push_back(std::move(child));
+    }
+    for (auto& member : node.members) {
+      if (member.second) pending.push_back(std::move(member.second));
+    }
+  };
+  detach(*this);
+  while (!pending.empty()) {
+    auto node = std::move(pending.back());
+    pending.pop_back();
+    detach(*node);
+  }
+}
 
 std::string_view expr_kind_name(ExprKind kind) {
   switch (kind) {

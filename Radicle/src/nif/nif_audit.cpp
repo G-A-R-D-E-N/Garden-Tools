@@ -235,6 +235,11 @@ std::vector<NifAuditFinding> audit_nif(const NifFile& nif) {
         continue;
       }
       if (entry < 0) continue;
+      if (entry >= block_limit) {
+        add(findings, NifAuditSeverity::error, k_audit_child_outside, block,
+            "child reference " + std::to_string(entry) + " is outside the block table");
+        continue;
+      }
       const auto index = static_cast<std::size_t>(entry);
       if (std::find(seen.begin(), seen.end(), entry) != seen.end()) {
         add(findings, NifAuditSeverity::error, k_audit_child_duplicate, block,

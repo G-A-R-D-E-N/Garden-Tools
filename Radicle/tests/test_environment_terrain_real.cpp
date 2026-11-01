@@ -9,6 +9,8 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <map>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -81,4 +83,55 @@ TEST(TerrainLandReal, CommonwealthCellsDecodeWithinInvariants) {
     ++decoded;
   }
   EXPECT_GT(decoded, 0u);
+}
+
+// Detects: a height decoder whose row chaining or scale disagrees with the shared edge of the neighbouring cell.
+TEST(TerrainLandReal, NeighbouringCellsMatchAtSharedEdges) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  const std::filesystem::path master = std::filesystem::path(dir) / "Fallout4.esm";
+  if (!std::filesystem::exists(master)) GTEST_SKIP() << "no Fallout4.esm under " << dir;
+  const std::vector<std::filesystem::path> paths{master};
+  const auto env = fo4::env::Environment::load(paths);
+  const auto* world = env.find_by_editor_id("Commonwealth", fo4::Signature::from_string("WRLD"));
+  ASSERT_NE(world, nullptr);
+
+  std::map<std::pair<int, int>, fo4::env::LandHeightGrid> grids;
+  for (const auto* cell : env.worldspace_cells(world->record->form_key)) {
+    const auto data = fo4::env::decode_cell(env, *cell);
+    if (!data.grid) continue;
+    const auto* landscape = env.cell_landscape(cell->record->form_key);
+    if (landscape == nullptr) continue;
+    const auto heights = fo4::env::decode_land_heights(fo4::env::decode_landscape(env, *landscape));
+    if (heights) grids.emplace(std::pair{data.grid->x, data.grid->y}, *heights);
+  }
+  ASSERT_GT(grids.size(), 0u);
+
+  std::size_t east_pairs = 0;
+  std::size_t east_matches = 0;
+  std::size_t north_pairs = 0;
+  std::size_t north_matches = 0;
+  constexpr std::size_t side = fo4::env::k_land_grid;
+  for (const auto& [key, grid] : grids) {
+    const auto east = grids.find({key.first + 1, key.second});
+    if (east != grids.end()) {
+      for (std::size_t y = 0; y < side; ++y) {
+        ++east_pairs;
+        if (std::fabs(grid.heights[y * side + side - 1] - east->second.heights[y * side]) < 1e-2f) ++east_matches;
+      }
+    }
+    const auto north = grids.find({key.first, key.second + 1});
+    if (north != grids.end()) {
+      for (std::size_t x = 0; x < side; ++x) {
+        ++north_pairs;
+        if (std::fabs(grid.heights[(side - 1) * side + x] - north->second.heights[x]) < 1e-2f) ++north_matches;
+      }
+    }
+  }
+  std::cout << "LAND shared-edge east " << east_matches << "/" << east_pairs << " north " << north_matches << "/"
+            << north_pairs << "\n";
+  ASSERT_GT(east_pairs, 0u);
+  ASSERT_GT(north_pairs, 0u);
+  EXPECT_GE(static_cast<double>(east_matches), 0.99 * static_cast<double>(east_pairs));
+  EXPECT_GE(static_cast<double>(north_matches), 0.99 * static_cast<double>(north_pairs));
 }

@@ -11,6 +11,7 @@ namespace fo4::land {
 inline constexpr std::size_t k_heightmap_side = 33;
 inline constexpr std::size_t k_heightmap_vertices = k_heightmap_side * k_heightmap_side;
 inline constexpr std::size_t k_vhgt_size = 4 + k_heightmap_vertices + 3;
+inline constexpr float k_land_height_scale = 8.0f;
 
 struct LandHeightmap {
   float offset{0.0f};

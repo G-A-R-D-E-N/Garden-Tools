@@ -225,3 +225,29 @@ TEST(AnimTextData, RefusesAnEventInfoItCouldNotLoadBack) {
   bad_flag_write.records = {{"DynamicAnim", 2, {"DynamicAnimA"}}};
   EXPECT_THROW(write_anim_event_info(bad_flag_write), std::invalid_argument);
 }
+
+// Detects: a dirlist longer than a list can hold, which must be refused before its lines are kept in memory.
+TEST(AnimTextData, CapsTheDirListAtTheListLimit) {
+  std::string at_limit;
+  for (int i = 0; i < 100000; ++i) at_limit += "n" + std::to_string(i) + ".txt\n";
+  EXPECT_EQ(parse_anim_file_dirlist(at_limit).names.size(), 100000U);
+  EXPECT_THROW(parse_anim_file_dirlist(at_limit + "over.txt\n"), fo4::parse_error);
+}
+
+// Detects: an idle list longer than a list can hold, which must be refused before its poses are kept in memory.
+TEST(AnimTextData, CapsTheIdleListAtTheListLimit) {
+  std::string at_limit = "Version 1\n";
+  for (int i = 0; i < 100000; ++i) at_limit += "pose" + std::to_string(i) + "\n";
+  EXPECT_EQ(parse_anim_idle_data(at_limit).poses.size(), 100000U);
+  EXPECT_THROW(parse_anim_idle_data(at_limit + "over\n"), fo4::parse_error);
+}
+
+// Detects: a named list whose count includes a blank entry, which the shipped ThrowingBottle01 list carries and must round-trip.
+TEST(AnimTextData, RoundTripsANamedListWithABlankEntry) {
+  const std::string text =
+      "3\r\n0\r\nThrowingBottle01\r\n3\r\nBehaviors\Behavior.hkx\r\nCharacters\Character.hkx\r\n\r\n0\r\n";
+  const auto list = parse_anim_file_list(text);
+  ASSERT_EQ(list.files.size(), 3U);
+  EXPECT_EQ(list.files[2], "");
+  EXPECT_EQ(write_anim_file_list(list), text);
+}

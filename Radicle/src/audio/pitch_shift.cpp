@@ -110,11 +110,20 @@ std::vector<float> pitch_shift(std::span<const float> samples, const PitchShiftS
     throw std::invalid_argument("pitch shift hop must be between one and half the window");
   }
   std::vector<float> unchanged{samples.begin(), samples.end()};
-  if (samples.size() < settings.window || settings.semitones == 0.0) {
+  if (samples.empty() || settings.semitones == 0.0) {
     return unchanged;
   }
+  auto window = settings.window;
+  auto hop = settings.hop;
+  if (samples.size() < window) {
+    window = samples.size();
+    if (window < 16) {
+      throw std::invalid_argument("pitch shift input is shorter than the minimum grain");
+    }
+    hop = std::min(hop, window / 2);
+  }
   const auto ratio = std::pow(2.0, settings.semitones / 12.0);
-  const auto stretched = time_stretch(samples, ratio, settings.window, settings.hop);
+  const auto stretched = time_stretch(samples, ratio, window, hop);
   return resample_linear(stretched, samples.size(), ratio);
 }
 

@@ -404,3 +404,13 @@ TEST(NifAudit, DetectsBoundDataThatIsNotABoundDataBlock) {
   ASSERT_NE(finding, nullptr);
   EXPECT_EQ(finding->block, 2U);
 }
+
+// Detects: a child reference past the block table on a particle system the reader does not bound, which must be reported.
+TEST(NifAudit, DetectsAChildReferenceOutsideTheBlockTable) {
+  const auto nif = build_nif({"root"}, {node_block("BSMasterParticleSystem", Transform{}, {5})}, {0});
+  const auto findings = audit_bytes(nif);
+  const auto* finding = find_rule(findings, fo4::nif::k_audit_child_outside);
+  ASSERT_NE(finding, nullptr);
+  EXPECT_EQ(finding->block, 0U);
+  EXPECT_NE(finding->message.find("5"), std::string::npos);
+}

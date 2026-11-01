@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -23,7 +24,7 @@ struct Split {
 
 bool is_control(unsigned char value) { return value < 0x20u || value == 0x7Fu; }
 
-Split split_lines(std::string_view text, const std::string& what) {
+Split split_lines(std::string_view text, const std::string& what, std::size_t max_lines) {
   if (text.empty()) {
     throw fo4::parse_error(0, what + " is empty");
   }
@@ -44,6 +45,9 @@ Split split_lines(std::string_view text, const std::string& what) {
     } else {
       out.lines.emplace_back(text.substr(start, stop - start));
     }
+    if (out.lines.size() > max_lines) {
+      throw fo4::parse_error(start, what + " holds more lines than a list can hold");
+    }
     start = stop + 1;
   }
   if (out.lines.empty()) {
@@ -52,15 +56,19 @@ Split split_lines(std::string_view text, const std::string& what) {
   return out;
 }
 
-void require_plain(const std::string& line, std::size_t index, const std::string& what) {
-  if (line.empty()) {
-    throw fo4::parse_error(index, what + " holds an empty line");
-  }
+void require_entry(const std::string& line, std::size_t index, const std::string& what) {
   for (const char value : line) {
     if (is_control(static_cast<unsigned char>(value))) {
       throw fo4::parse_error(index, what + " holds a control character");
     }
   }
+}
+
+void require_plain(const std::string& line, std::size_t index, const std::string& what) {
+  if (line.empty()) {
+    throw fo4::parse_error(index, what + " holds an empty line");
+  }
+  require_entry(line, index, what);
 }
 
 std::size_t parse_count(const std::string& line, std::size_t index, const std::string& what) {
@@ -97,11 +105,11 @@ void require_numeric_id(const std::string& name, std::size_t index) {
 }
 
 void require_unique(const std::vector<std::string>& lines, std::size_t index, const std::string& what) {
-  for (std::size_t first = 0; first < lines.size(); ++first) {
-    for (std::size_t second = first + 1; second < lines.size(); ++second) {
-      if (lines[first] == lines[second]) {
-        throw fo4::parse_error(index, what + " names \"" + lines[first] + "\" twice");
-      }
+  std::unordered_set<std::string_view> seen;
+  seen.reserve(lines.size());
+  for (const auto& line : lines) {
+    if (!seen.insert(line).second) {
+      throw fo4::parse_error(index, what + " names \"" + line + "\" twice");
     }
   }
 }
@@ -129,7 +137,7 @@ void require_writable(Callable check) {
 }  // namespace
 
 AnimFileList parse_anim_file_list(std::string_view text) {
-  const Split split = split_lines(text, "an animation file list");
+  const Split split = split_lines(text, "an animation file list", k_max_list_entries + 5);
   const auto& lines = split.lines;
   if (lines.size() < 4) {
     throw fo4::parse_error(0, "an animation file list has fewer than four header lines");
@@ -153,7 +161,7 @@ AnimFileList parse_anim_file_list(std::string_view text) {
   }
   list.files.assign(lines.begin() + 4, lines.begin() + 4 + static_cast<std::ptrdiff_t>(count));
   for (std::size_t index = 0; index < list.files.size(); ++index) {
-    require_plain(list.files[index], 4 + index, "an animation file list");
+    require_entry(list.files[index], 4 + index, "an animation file list");
   }
   require_unique(list.files, 4, "an animation file list");
   if (list.flavour == 0 && lines.back() != "0") {
@@ -179,7 +187,7 @@ std::string write_anim_file_list(const AnimFileList& list) {
       require_plain(list.name, 0, "an animation file list");
     }
     for (const auto& file : list.files) {
-      require_plain(file, 0, "an animation file list");
+      require_entry(file, 0, "an animation file list");
     }
     require_unique(list.files, 0, "an animation file list");
   });
@@ -198,7 +206,7 @@ std::string write_anim_file_list(const AnimFileList& list) {
 }
 
 AnimFileDirList parse_anim_file_dirlist(std::string_view text) {
-  const Split split = split_lines(text, "an animation file dirlist");
+  const Split split = split_lines(text, "an animation file dirlist", k_max_list_entries);
   AnimFileDirList list;
   list.names = split.lines;
   for (std::size_t index = 0; index < list.names.size(); ++index) {
@@ -233,7 +241,7 @@ std::string write_anim_file_dirlist(const AnimFileDirList& list) {
 }
 
 AnimIdleData parse_anim_idle_data(std::string_view text) {
-  const Split split = split_lines(text, "an animation idle list");
+  const Split split = split_lines(text, "an animation idle list", k_max_list_entries + 1);
   const auto& lines = split.lines;
   if (lines.empty() || lines[0] != k_anim_idle_version) {
     throw fo4::parse_error(0, "an animation idle list has an unknown version line");
@@ -264,7 +272,7 @@ std::string write_anim_idle_data(const AnimIdleData& data) {
 }
 
 AnimEventInfo parse_anim_event_info(std::string_view text) {
-  const Split split = split_lines(text, "an animation event info");
+  const Split split = split_lines(text, "an animation event info", std::string::npos);
   const auto& lines = split.lines;
   if (lines.size() < 4 || lines[0] != k_anim_event_version) {
     throw fo4::parse_error(0, "an animation event info has an unknown version line");

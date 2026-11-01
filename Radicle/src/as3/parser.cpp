@@ -13,6 +13,8 @@
 namespace fo4::as3 {
 namespace detail {
 StmtPtr Parser::parse_statement() {
+  NestingScope nesting{*this};
+  if (!nesting) return nullptr;
   const auto& token = peek();
   if (token.kind == TokenKind::end_of_file) {
     fail("unexpected end of input");

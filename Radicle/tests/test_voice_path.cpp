@@ -158,6 +158,12 @@ TEST(VoicePath, RejectsEmptyAndDotComponents) {
   EXPECT_FALSE(parse_voice_path("Sound\\Voice\\Fallout4.esm\\.\\Abby_F.fuz").has_value());
 }
 
+// Detects: a response index past 32 bits, which must be refused instead of wrapping to a small index.
+TEST(VoicePath, RejectsResponseIndexPastThirtyTwoBits) {
+  EXPECT_FALSE(parse_voice_path("Sound\\Voice\\Fallout4.esm\\MaleEvenToned\\0000A1B2_9999999999.fuz").has_value());
+  EXPECT_FALSE(parse_voice_path("Sound\\Voice\\Fallout4.esm\\MaleEvenToned\\0000A1B2_4294967297.fuz").has_value());
+}
+
 // Detects: a zero response index, which the shipped data never contains and which must be refused.
 TEST(VoicePath, RejectsResponseIndexZero) {
   EXPECT_FALSE(parse_voice_path("Sound\\Voice\\Fallout4.esm\\MaleEvenToned\\0000A1B2_0.fuz").has_value());

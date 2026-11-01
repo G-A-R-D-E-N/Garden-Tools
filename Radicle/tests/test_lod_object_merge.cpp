@@ -108,3 +108,12 @@ TEST(LodObjectPlan, HandlesAnEmptyListing) {
   EXPECT_EQ(plan.split_tiles, 0u);
   EXPECT_EQ(plan.dropped_objects, 0u);
 }
+
+// Detects: a finite position far outside the cell range, which must be dropped instead of cast out of range.
+TEST(LodObjectPlan, DropsPositionsFarOutsideTheCellRange) {
+  const auto objects = std::vector<LodObject>{at(1.0e300, 0.0), at(0.0, -1.0e300), at(0.0, 0.0)};
+  const auto plan = plan_object_lod(objects, commonwealth(), 16);
+  EXPECT_EQ(plan.dropped_objects, 2u);
+  ASSERT_EQ(plan.tiles.size(), 1u);
+  EXPECT_EQ(plan.tiles[0].objects, (std::vector<std::size_t>{2}));
+}

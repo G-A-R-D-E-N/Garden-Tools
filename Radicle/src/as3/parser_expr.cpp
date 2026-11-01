@@ -63,6 +63,8 @@ ExprPtr Parser::parse_sequence() {
 }
 
 ExprPtr Parser::parse_assignment() {
+  NestingScope nesting{*this};
+  if (!nesting) return nullptr;
   auto target = parse_conditional();
   if (!target) return nullptr;
   if (peek().kind != TokenKind::punct || !is_assignment_operator(peek().text)) return target;
@@ -123,6 +125,8 @@ ExprPtr Parser::parse_binary(int minimum_precedence) {
 }
 
 ExprPtr Parser::parse_unary() {
+  NestingScope nesting{*this};
+  if (!nesting) return nullptr;
   if (!is_unary_operator(peek())) return parse_postfix();
   const auto offset = peek().offset;
   const auto line = peek().line;
@@ -282,6 +286,8 @@ ExprPtr Parser::parse_object_literal() {
 }
 
 ExprPtr Parser::parse_primary() {
+  NestingScope nesting{*this};
+  if (!nesting) return nullptr;
   const auto& token = peek();
   if (token.kind == TokenKind::number) {
     auto literal = make(ExprKind::number_literal, token.offset, token.line);

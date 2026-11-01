@@ -35,6 +35,7 @@ inline constexpr std::string_view k_audit_child_below_null = "child_reference_be
 inline constexpr std::string_view k_audit_child_duplicate = "child_duplicate";
 inline constexpr std::string_view k_audit_child_cycle = "child_cycle";
 inline constexpr std::string_view k_audit_child_multiple_parents = "child_multiple_parents";
+inline constexpr std::string_view k_audit_child_outside = "child_reference_outside_table";
 inline constexpr std::string_view k_audit_shape_reference = "shape_reference_out_of_range";
 inline constexpr std::string_view k_audit_skin_data = "skin_data_reference";
 inline constexpr std::string_view k_audit_skin_bone = "skin_bone_reference";

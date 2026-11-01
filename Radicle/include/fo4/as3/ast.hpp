@@ -42,6 +42,8 @@ struct Expr {
   std::string value;
   std::vector<ExprPtr> children;
   std::vector<std::pair<std::string, ExprPtr>> members;
+
+  ~Expr();
 };
 
 std::string_view expr_kind_name(ExprKind kind);

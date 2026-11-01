@@ -107,12 +107,22 @@ TEST(PitchShift, ProducesFiniteSamplesAtTheRangeLimits) {
   }
 }
 
-// Detects: an input shorter than one grain that must pass through unchanged.
-TEST(PitchShift, ReturnsShortInputUnchanged) {
+// Detects: an input shorter than the window that must still be shifted, not returned as the unshifted input.
+TEST(PitchShift, ShiftsAShortInputWithAShrunkWindow) {
   const auto input = sine(220.0, 100);
   PitchShiftSettings settings;
   settings.semitones = 12.0;
-  EXPECT_EQ(pitch_shift(input, settings), input);
+  const auto output = pitch_shift(input, settings);
+  EXPECT_EQ(output.size(), input.size());
+  EXPECT_NE(output, input);
+}
+
+// Detects: an input shorter than the minimum grain, which must be refused rather than returned unshifted.
+TEST(PitchShift, RefusesInputShorterThanTheMinimumGrain) {
+  const auto input = sine(220.0, 10);
+  PitchShiftSettings settings;
+  settings.semitones = 12.0;
+  EXPECT_THROW(pitch_shift(input, settings), std::invalid_argument);
 }
 
 // Detects: an empty input that must return empty output.

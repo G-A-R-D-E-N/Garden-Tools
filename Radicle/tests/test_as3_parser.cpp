@@ -194,3 +194,27 @@ TEST(As3Parser, RejectsReservedWordsAsExpressions) {
   EXPECT_TRUE(rejects("var"));
   EXPECT_TRUE(rejects("function"));
 }
+
+// Detects: nested parentheses past the depth limit, which must be refused instead of overflowing the stack.
+TEST(As3Parser, RefusesDeeplyNestedParentheses) {
+  const auto result = parse_expression(std::string(1000, '(') + "1" + std::string(1000, ')'));
+  EXPECT_FALSE(result);
+  EXPECT_NE(result.error.find("nesting"), std::string::npos);
+}
+
+// Detects: unary and right-associative assignment chains past the depth limit, which must be refused.
+TEST(As3Parser, RefusesDeeplyNestedUnaryAndAssignmentChains) {
+  EXPECT_FALSE(parse_expression(std::string(1000, '!') + "a"));
+  std::string assignments;
+  for (int i = 0; i < 1000; ++i) assignments += "a = ";
+  EXPECT_FALSE(parse_expression(assignments + "b"));
+}
+
+// Detects: a one-million-token flat chain whose left-deep tree would recurse when it is released.
+TEST(As3Parser, ParsesLongFlatChainsWithoutDeepRecursion) {
+  std::string source = "a";
+  for (int i = 0; i < 500000; ++i) source += "+a";
+  const auto result = parse_expression(source);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(result.expression->kind, fo4::as3::ExprKind::binary);
+}

@@ -45,10 +45,14 @@ std::array<std::byte, k_vhgt_size> encode_land_heightmap(const LandHeightmap& he
 
 std::array<float, k_heightmap_vertices> land_heights(const LandHeightmap& heightmap) {
   std::array<float, k_heightmap_vertices> heights{};
-  std::int32_t accumulated = 0;
-  for (std::size_t index = 0; index < k_heightmap_vertices; ++index) {
-    accumulated += static_cast<std::int32_t>(heightmap.deltas[index]);
-    heights[index] = heightmap.offset + static_cast<float>(accumulated);
+  float row_start = k_land_height_scale * heightmap.offset;
+  for (std::size_t row = 0; row < k_heightmap_side; ++row) {
+    float current = row_start;
+    for (std::size_t column = 0; column < k_heightmap_side; ++column) {
+      current += static_cast<float>(heightmap.deltas[row * k_heightmap_side + column]) * k_land_height_scale;
+      heights[row * k_heightmap_side + column] = current;
+      if (column == 0) row_start = current;
+    }
   }
   return heights;
 }
@@ -61,13 +65,20 @@ std::optional<LandHeightmap> make_land_heightmap(std::span<const float> heights,
   }
   LandHeightmap heightmap;
   heightmap.offset = offset;
-  double previous = static_cast<double>(offset);
-  for (std::size_t index = 0; index < k_heightmap_vertices; ++index) {
-    const auto difference = static_cast<double>(heights[index]) - previous;
-    const auto rounded = std::llround(difference);
-    if (rounded < -128 || rounded > 127) return std::nullopt;
-    heightmap.deltas[index] = static_cast<std::int8_t>(rounded);
-    previous = static_cast<double>(heights[index]);
+  std::int64_t row_start = 0;
+  for (std::size_t row = 0; row < k_heightmap_side; ++row) {
+    std::int64_t previous = row_start;
+    for (std::size_t column = 0; column < k_heightmap_side; ++column) {
+      const auto index = row * k_heightmap_side + column;
+      const double units = static_cast<double>(heights[index]) / k_land_height_scale - static_cast<double>(offset);
+      if (std::fabs(units) > 1.0e9) return std::nullopt;
+      const std::int64_t total = std::llround(units);
+      const std::int64_t delta = total - previous;
+      if (delta < -128 || delta > 127) return std::nullopt;
+      heightmap.deltas[index] = static_cast<std::int8_t>(delta);
+      previous = total;
+      if (column == 0) row_start = total;
+    }
   }
   return heightmap;
 }
