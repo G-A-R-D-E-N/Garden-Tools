@@ -100,7 +100,7 @@ TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
     CHECK(matrix.value("scaleX", 0) == 0x10000);
 
     const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
-    CHECK(saved.value("saved", "") == file.path.string());
+    CHECK(saved.value("saved", "") == fs::weakly_canonical(file.path).string());
 
     RootedTarget reopenedRooted;
     auto& reopened = reopenedRooted.target;
@@ -289,12 +289,12 @@ TEST_CASE("SwfTarget keeps the first-save backup across later saves") {
 
     replyJson(target.invoke("RenameLabel", nlohmann::json::array({0, 0, "menu"})));
     const auto first = replyJson(target.invoke("Save", nlohmann::json::array()));
-    CHECK(first.value("saved", "") == file.path.string());
+    CHECK(first.value("saved", "") == fs::weakly_canonical(file.path).string());
     CHECK(readFileBytes(fs::path(file.path.string() + ".bak")) == original);
 
     replyJson(target.invoke("RenameLabel", nlohmann::json::array({0, 0, "submenu"})));
     const auto second = replyJson(target.invoke("Save", nlohmann::json::array()));
-    CHECK(second.value("saved", "") == file.path.string());
+    CHECK(second.value("saved", "") == fs::weakly_canonical(file.path).string());
     CHECK(readFileBytes(fs::path(file.path.string() + ".bak")) == original);
 
     RootedTarget reopenedRooted;
