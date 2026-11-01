@@ -238,3 +238,28 @@ TEST(FormIdEncode, EncodeRefusesOversizedLocal) {
   const auto oversized = FormKey{ctx.current_plugin, LocalFormId{fo4::k_full_local_mask + 1u}};
   EXPECT_THROW(fo4::encode_plugin_form_id(oversized, ctx), fo4::FormIdError);
 }
+
+TEST(PluginKey, InternsBySpellingAndComparesFolded) {
+  static_assert(sizeof(PluginKey) == sizeof(void*));
+  static_assert(sizeof(FormKey) <= 16);
+
+  const auto first = PluginKey::from_filename("Fallout4.esm");
+  const auto same = PluginKey::from_filename("Fallout4.esm");
+  EXPECT_EQ(first.filename().data(), same.filename().data());
+
+  const auto upper = PluginKey::from_filename("FALLOUT4.ESM");
+  EXPECT_EQ(first, upper);
+  EXPECT_EQ(std::hash<PluginKey>{}(first), std::hash<PluginKey>{}(upper));
+  EXPECT_FALSE(first < upper);
+  EXPECT_FALSE(upper < first);
+  EXPECT_EQ(first.filename(), "Fallout4.esm");
+  EXPECT_EQ(upper.filename(), "FALLOUT4.ESM");
+
+  EXPECT_TRUE(PluginKey::from_filename("").empty());
+  EXPECT_TRUE(PluginKey::from_filename("C:/mods/").empty());
+  EXPECT_EQ(PluginKey::from_filename(""), PluginKey{});
+  EXPECT_EQ(PluginKey::from_filename("C:/mods/"), PluginKey{});
+  EXPECT_EQ(PluginKey::from_filename("C:/Data/Fallout4.esm").filename(), "Fallout4.esm");
+  EXPECT_STREQ(PluginKey{}.filename().data(), "");
+  EXPECT_STREQ(PluginKey::from_filename("Fallout4.esm").filename().data(), "Fallout4.esm");
+}

@@ -221,7 +221,6 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
     try {
         const auto lowered = light ? fo4::lowered_light_next_form_id(loaded->plugin) : std::nullopt;
         auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
-        if (!loaded->dirty) loaded->originalPlugin = loaded->plugin;
         loaded->plugin = std::move(mutated);
         loaded->dirty = true;
         ++mutationEpoch_;
@@ -235,7 +234,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
             });
         }
         for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, known);
-        rebuildGraphLocked();
+        markGraphDirtyLocked();
 
         const auto loweredNote = lowered
             ? "; lowered HEDR nextFormID to " + std::format("0x{:03X}", *lowered)

@@ -259,6 +259,25 @@ ExecutionResult display_stop_play(const Value& self, bool play) {
   return native_value(Value::undefined());
 }
 
+ExecutionResult display_add_frame_script(const Value& self, const std::vector<Value>& arguments) {
+  MovieClip* clip = movie_clip_self(self);
+  if (clip == nullptr) {
+    return native_value(Value::undefined());
+  }
+  for (std::size_t at = 0; at + 1 < arguments.size(); at += 2) {
+    const std::int32_t frame = to_int32(arguments[at]);
+    if (frame < 0) {
+      continue;
+    }
+    const Value& script = arguments[at + 1];
+    clip->set_frame_script(static_cast<std::uint32_t>(frame) + 1u,
+                           script.is_object() && script.as_object()->kind() == ObjectKind::Function
+                               ? std::static_pointer_cast<FunctionObject>(script.as_object())
+                               : nullptr);
+  }
+  return native_value(Value::undefined());
+}
+
 ExecutionResult display_step(Interpreter& interpreter, const Value& self, int direction) {
   MovieClip* clip = movie_clip_self(self);
   if (clip == nullptr) {
@@ -394,6 +413,9 @@ bool try_display_native(Interpreter& interpreter, native::Id id, const Value& se
       return true;
     case native::Id::display_stop:
       out = display_stop_play(self, false);
+      return true;
+    case native::Id::display_add_frame_script:
+      out = display_add_frame_script(self, arguments);
       return true;
     case native::Id::display_play:
       out = display_stop_play(self, true);
