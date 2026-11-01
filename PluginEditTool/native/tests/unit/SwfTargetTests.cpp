@@ -466,7 +466,8 @@ TEST_CASE("SwfTarget reads the MO2 instance root from settings on each Open") {
     writeBytes(movie, fixtureMovie());
 
     fo4ide::settings::SharedSettings settings;
-    fo4ide::app::SwfTarget target([&settings] { return fo4ide::app::swfRootsFor(settings.snapshot()); });
+    fo4ide::app::test::FakePlatform platform;
+    fo4ide::app::SwfTarget target([&settings] { return fo4ide::app::swfRootsFor(settings.snapshot()); }, platform);
     const auto refused = replyJson(target.invoke("Open", nlohmann::json::array({movie.string()})));
     CHECK(refused.contains("error"));
 
@@ -488,7 +489,8 @@ TEST_CASE("SwfTarget treats the configured Fallout 4 folder as a root") {
     const auto roots = fo4ide::app::swfRootsFor(settings);
     REQUIRE(roots.size() == 4u);
     CHECK(roots[1] == game);
-    fo4ide::app::SwfTarget target([roots] { return roots; });
+    fo4ide::app::test::FakePlatform platform;
+    fo4ide::app::SwfTarget target([roots] { return roots; }, platform);
     const auto opened = replyJson(target.invoke("Open", nlohmann::json::array({movie.string()})));
     CHECK_FALSE(opened.contains("error"));
 }
