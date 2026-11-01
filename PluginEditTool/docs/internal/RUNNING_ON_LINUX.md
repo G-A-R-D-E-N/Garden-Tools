@@ -50,7 +50,7 @@ run `pkill FO4RecordEditor` (a launch from the menu has no terminal).
 The server always binds `127.0.0.1`; there is no option to change that. Exit codes: 2 means `web/dist`
 was not found (give `--web-root`), 3 means the server could not start (a port that is taken, for
 example), 5 is `--window`, and 6 means a bad `--port` or `--mo2` argument or an MO2 instance that
-failed to load.
+failed to load; with `--mcp`, only a missing instance folder exits 6, and other load failures come back as tool errors.
 
 Settings live in `$XDG_CONFIG_HOME/FO4RecordEditor/settings.json` (`~/.config/FO4RecordEditor/` when
 that variable is unset). The log is `logs/FO4IDE.log` in the same folder, 5 MiB per file with the

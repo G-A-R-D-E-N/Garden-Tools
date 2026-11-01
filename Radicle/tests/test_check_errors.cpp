@@ -266,7 +266,10 @@ TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
     ADD_FAILURE() << wrong_type[i].record.to_string() << " " << wrong_type[i].message;
   }
   EXPECT_TRUE(wrong_type.empty()) << wrong_type.size() << " wrong_target_type findings";
-  EXPECT_TRUE(of_code(findings, fo4::CheckCode::invalid_master_index).empty());
+  // Fallout4.esm 1.11.240 really stores these: it has no masters, yet NPC_ 00080B holds 0x01000809 in TPTA.
+  const auto bad_master = of_code(findings, fo4::CheckCode::invalid_master_index);
+  EXPECT_EQ(bad_master.size(), 73u);
+  for (const auto& finding : bad_master) EXPECT_EQ(finding.severity, fo4::CheckSeverity::warning) << finding.message;
   for (const auto& finding : findings) EXPECT_NE(finding.severity, fo4::CheckSeverity::error) << finding.message;
 }
 

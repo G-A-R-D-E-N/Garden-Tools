@@ -298,7 +298,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     return std::unexpected(Error{"InvalidLeveledSpellReference", error.what()});
                 }
 
-                const auto* winner = graph_.winner(entry.spell);
+                const auto* winner = (*graph_).winner(entry.spell);
                 if (winner == nullptr ||
                     (winner->signature != fo4::Signature::from_string("SPEL") &&
                      winner->signature != fo4::Signature::from_string("LVSP"))) {
@@ -578,7 +578,7 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
             return std::unexpected(*error);
         }
 
-        for (const auto& version : graph_.versions(key)) {
+        for (const auto& version : (*graph_).versions(key)) {
             if (version.plugin != loaded->plugin.key) {
                 return std::unexpected(Error{
                     "RecordHasExternalVersions",
@@ -587,7 +587,7 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
                 });
             }
         }
-        if (!graph_.referenced_by(key).empty()) {
+        if (!(*graph_).referenced_by(key).empty()) {
             return std::unexpected(Error{
                 "RecordReferenced",
                 "Cannot delete a record while loaded records still reference it: " + formKeyText
@@ -595,7 +595,7 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
         }
         for (const auto& removed : fo4::records_removed_by_delete(loaded->plugin, key)) {
             const bool ownedElsewhere = removed.owner() != loaded->plugin.key;
-            for (const auto& version : graph_.versions(removed)) {
+            for (const auto& version : (*graph_).versions(removed)) {
                 if (ownedElsewhere || version.plugin == loaded->plugin.key) continue;
                 return std::unexpected(Error{
                     "RecordHasExternalVersions",
@@ -604,9 +604,9 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
                 });
             }
             const bool masterKeepsRecord = ownedElsewhere && std::ranges::any_of(
-                graph_.versions(removed),
+                (*graph_).versions(removed),
                 [&](const auto& version) { return version.plugin == removed.owner(); });
-            for (const auto& reference : graph_.referenced_by(removed)) {
+            for (const auto& reference : (*graph_).referenced_by(removed)) {
                 if (reference.plugin == loaded->plugin.key || masterKeepsRecord) continue;
                 return std::unexpected(Error{
                     "RecordReferenced",
@@ -680,7 +680,7 @@ Result<nlohmann::json> RadiclePluginBackend::renumberRecord(const nlohmann::json
             return std::unexpected(*error);
         }
 
-        for (const auto& version : graph_.versions(oldKey)) {
+        for (const auto& version : (*graph_).versions(oldKey)) {
             if (version.plugin != loaded->plugin.key) {
                 return std::unexpected(Error{
                     "RecordHasExternalVersions",
@@ -689,7 +689,7 @@ Result<nlohmann::json> RadiclePluginBackend::renumberRecord(const nlohmann::json
                 });
             }
         }
-        for (const auto& reference : graph_.referenced_by(oldKey)) {
+        for (const auto& reference : (*graph_).referenced_by(oldKey)) {
             if (reference.plugin != loaded->plugin.key) {
                 return std::unexpected(Error{
                     "RecordReferencedExternally",

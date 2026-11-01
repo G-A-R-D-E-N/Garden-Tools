@@ -118,6 +118,32 @@ TEST(ConflictGraph, TracksInboundAndOutboundFormLinks) {
   EXPECT_EQ(outbound[0].subrecord.to_string(), "NAME");
 }
 
+TEST(ConflictGraph, ReferenceIndexRebuildsWithoutDuplicatesAfterRelease) {
+  const auto base = fo4::read_plugin(
+      make_plugin({}, "WEAP", 0x00000800),
+      "Base.esp");
+  const auto ref_plugin = fo4::read_plugin(
+      make_plugin("Base.esp", "MISC", 0x01000801, 0x00000800),
+      "Reference.esp");
+
+  const std::array<const fo4::Plugin*, 2> load_order{
+      &base,
+      &ref_plugin,
+  };
+  const auto graph = fo4::ConflictGraph::build(load_order);
+  const auto target = fo4::FormKey::parse("000800:Base.esp");
+
+  const auto built_size = graph.referenced_by(target).size();
+  EXPECT_EQ(built_size, 1u);
+  EXPECT_TRUE(graph.references_built());
+
+  graph.release_references();
+  EXPECT_FALSE(graph.references_built());
+
+  EXPECT_EQ(graph.referenced_by(target).size(), built_size);
+  EXPECT_TRUE(graph.references_built());
+}
+
 TEST(ConflictGraph, PartialFormOverridesKeepHistoryButDoNotWin) {
   constexpr std::uint32_t partial = 0x4000;
   const auto base = fo4::read_plugin(make_plugin({}, "QUST", 0x800), "Base.esp");

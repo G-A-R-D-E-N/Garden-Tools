@@ -268,7 +268,19 @@ ExecutionResult MovieClip::apply_frame_state(Interpreter& interpreter) {
   return ExecutionResult{};
 }
 
+void MovieClip::set_frame_script(std::uint32_t frame, std::shared_ptr<FunctionObject> script) {
+  if (script == nullptr) {
+    added_frame_scripts_.erase(frame);
+  } else {
+    added_frame_scripts_[frame] = std::move(script);
+  }
+}
+
 ExecutionResult MovieClip::run_frame_script(Interpreter& interpreter) {
+  const auto added = added_frame_scripts_.find(current_frame_);
+  if (added != added_frame_scripts_.end()) {
+    return interpreter.call_function(*added->second, detail::borrowed_object(*this), {}, 0);
+  }
   if (display_class() != nullptr) {
     const std::string frame_name = "frame" + std::to_string(current_frame_);
     const Trait* frame_trait =

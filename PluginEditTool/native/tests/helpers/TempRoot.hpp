@@ -13,7 +13,14 @@ public:
     explicit TempRoot(std::string_view parent)
         : parent_(std::filesystem::temp_directory_path() / std::string(parent)),
           path_(parent_ / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())) {
-        std::filesystem::create_directories(path_);
+        // A finishing test can remove the shared empty parent during this call, so retry.
+        std::error_code error;
+        for (int attempt = 0; attempt < 5; ++attempt) {
+            error.clear();
+            std::filesystem::create_directories(path_, error);
+            if (!error) return;
+        }
+        throw std::filesystem::filesystem_error("cannot create test folder", path_, error);
     }
     ~TempRoot() {
         std::error_code ignored;
