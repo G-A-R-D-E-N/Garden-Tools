@@ -13,8 +13,9 @@ public sealed class HkxAnimationCompressionTests
     public void QuantizedCompressionIsExplainedInPlainEnglish()
     {
         Assert.Equal(
-            "This animation uses Havok quantized compression (hkaQuantizedAnimation), which BGS cannot " +
-            "decode yet. The file has not been changed.",
+            "This animation uses Havok quantized compression (hkaQuantizedAnimation). BGS decodes only the " +
+            "layouts the reverse-engineering record fully specifies, and this file is not one of them. " +
+            "The file has not been changed.",
             AnimationCompression.Describe(Quantized));
     }
 
@@ -22,8 +23,9 @@ public sealed class HkxAnimationCompressionTests
     public void PredictiveCompressionIsExplainedInPlainEnglish()
     {
         Assert.Equal(
-            "This animation uses Havok predictive compression (hkaPredictiveCompressedAnimation), which " +
-            "BGS cannot decode yet. The file has not been changed.",
+            "This animation uses Havok predictive compression (hkaPredictiveCompressedAnimation). BGS decodes " +
+            "only the layouts the reverse-engineering record fully specifies, and this file is not one of them. " +
+            "The file has not been changed.",
             AnimationCompression.Describe(Predictive));
     }
 

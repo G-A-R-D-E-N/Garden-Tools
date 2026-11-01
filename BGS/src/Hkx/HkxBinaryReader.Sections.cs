@@ -137,6 +137,12 @@ public partial class HkxBinaryReader
 
         switch (result.AnimationClass)
         {
+            case "hkaPredictiveCompressedAnimation":
+                ParsePredictiveAnimation(data, dataAbs, animRel, fixups, result);
+                break;
+            case "hkaQuantizedAnimation":
+                ParseQuantizedAnimation(data, dataAbs, animRel, fixups, result);
+                break;
             case "hkaSplineCompressedAnimation":
                 ParseSplineAnimation(data, dataAbs, animRel, fixups, result);
                 break;
