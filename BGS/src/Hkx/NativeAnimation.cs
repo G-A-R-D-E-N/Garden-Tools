@@ -218,7 +218,8 @@ public static class NativeAnimation
         Recompress(InputFilePolicy.ReadHkx(hkxPath), decoded, options, dropReplaced, cut);
 
     public static Result Recompress(byte[] hkx, HkxAnimationData decoded,
-        SplineEncoder.Options? options = null, bool dropReplaced = true, Timeline? cut = null)
+        SplineEncoder.Options? options = null, bool dropReplaced = true, Timeline? cut = null,
+        bool keepAnnotations = true)
     {
         ArgumentNullException.ThrowIfNull(hkx);
         ArgumentNullException.ThrowIfNull(decoded);
@@ -287,7 +288,7 @@ public static class NativeAnimation
         BitConverter.GetBytes(blob.FrameDuration).CopyTo(data.Data, made + SplineFrameDuration);
         BitConverter.GetBytes(0).CopyTo(data.Data, made + Endian);
 
-        if (annotations is { Count: > 0 })
+        if (keepAnnotations && annotations is { Count: > 0 })
         {
             int copied = CopyStructRun(image, data, annotations.At, annotations.Count, "hkaAnnotationTrack");
             data.SetLocal(made + AnnotationTracks, copied);

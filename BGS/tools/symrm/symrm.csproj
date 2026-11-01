@@ -17,6 +17,7 @@
     <Compile Include="PackOrderCli.cs" />
     <Compile Include="MotionCli.cs" />
     <Compile Include="SkeletonCli.cs" />
+    <Compile Include="GltfCli.cs" />
     <Compile Include="Tests.cs" />
     <Compile Include="Png.cs" />
     <Compile Include="GameDefaults.cs" />

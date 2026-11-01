@@ -38,6 +38,8 @@ public static class CliEntry
         if (args.Length >= 2 && SymrmHelp.IsHelpToken(args[1]))
             return PrintCommandHelp(args[0], output, error);
 
+        if (string.Equals(args[0], "gltf", StringComparison.Ordinal)) return GltfCli.Run(args);
+
         return Program.Main(args);
     }
 
