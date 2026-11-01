@@ -301,6 +301,8 @@
           return fail(InterpreterStatus::ClassIndexOutOfRange,
                       "class index " + std::to_string(index) + " has no linked class");
         }
+        Value base_class;
+        pop_value(base_class);
         ExecutionResult initialized =
             initialize_class_value(Value::object(klass->class_object), depth);
         if (!initialized.ok()) {

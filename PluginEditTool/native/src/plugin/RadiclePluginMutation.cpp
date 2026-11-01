@@ -522,7 +522,7 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
                         } catch (const std::exception& error) {
                             return std::unexpected(Error{"InvalidFieldValue", error.what()});
                         }
-                        const auto* winner = graph_.winner(target);
+                        const auto* winner = (*graph_).winner(target);
                         if (winner == nullptr ||
                             (winner->signature != fo4::Signature::from_string("SPEL") &&
                              winner->signature != fo4::Signature::from_string("LVSP"))) {
@@ -689,7 +689,7 @@ std::vector<std::string> RadiclePluginBackend::laterOverridesLocked(
     const fo4::FormKey& key) const {
     const auto targetIndex = static_cast<std::size_t>(&target - plugins_.data());
     std::vector<std::string> later;
-    for (const auto& version : graph_.versions(key)) {
+    for (const auto& version : (*graph_).versions(key)) {
         if (version.load_order > targetIndex) later.emplace_back(version.plugin.filename());
     }
     return later;

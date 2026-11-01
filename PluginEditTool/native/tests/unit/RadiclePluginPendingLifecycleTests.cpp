@@ -392,6 +392,68 @@ TEST_CASE("DiscardPlugin is scoped to one plugin") {
     CHECK(healthOnDisk(firstPath, "000800:Patch.esp") == 50u);
 }
 
+TEST_CASE("DiscardPlugin refuses PluginChangedOnDisk and keeps the edit pending when the file changed") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeLocalizedPlugin());
+    writeLocalizationSet(root);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadEnvironment(backend, {{"Patch.esp", path}});
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
+    })).has_value());
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+
+    const auto replacement = makeSecondPlugin();
+    writeBytes(path, replacement);
+    std::filesystem::last_write_time(
+        path, std::filesystem::last_write_time(path) + std::chrono::seconds(60));
+
+    const auto discarded = backend.invoke(
+        "backend.DiscardPlugin", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE_FALSE(discarded.has_value());
+    CHECK(discarded.error().type == "PluginChangedOnDisk");
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+    CHECK(readBytes(path) == replacement);
+}
+
+#ifdef FO4IDE_TEST_HOOKS
+std::filesystem::path discardTouchedPath;
+
+void touchDiscardPathLater() {
+    std::filesystem::last_write_time(
+        discardTouchedPath,
+        std::filesystem::last_write_time(discardTouchedPath) + std::chrono::seconds(60));
+}
+
+// Invariant: discard must refuse a file that changes after its read.
+TEST_CASE("DiscardPlugin refuses PluginChangedOnDisk when the file changes during its read") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeLocalizedPlugin());
+    writeLocalizationSet(root);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadEnvironment(backend, {{"Patch.esp", path}});
+    REQUIRE(backend.setFieldValue(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "75"
+    })).has_value());
+
+    discardTouchedPath = path;
+    fo4ide::plugin::setLoadReadWindowHook(&touchDiscardPathLater);
+    const auto discarded = backend.invoke(
+        "backend.DiscardPlugin", nlohmann::json::array({"Patch.esp"}));
+    fo4ide::plugin::setLoadReadWindowHook(nullptr);
+
+    REQUIRE_FALSE(discarded.has_value());
+    CHECK(discarded.error().type == "PluginChangedOnDisk");
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+}
+#endif
+
 TEST_CASE("LoadMo2 refuses to replace pending plugins unless discardPending is set") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
