@@ -273,12 +273,11 @@ Result<RadiclePluginBackend::LoadedPlugin*> RadiclePluginBackend::createPluginLo
             .loadedTime = loadedTime,
             .trusted = true,
             .plugin = std::move(verified),
-            .originalPlugin = std::nullopt,
             .dirty = false,
             .stagedLocalization = std::nullopt,
         });
         try {
-            rebuildGraphLocked();
+            markGraphDirtyLocked();
         } catch (...) {
             plugins_.pop_back();
             throw;
@@ -372,11 +371,11 @@ Result<void> RadiclePluginBackend::discardCreatedPlugin(std::string_view name) {
     auto removed = std::move(*it);
     plugins_.erase(plugins_.begin() + static_cast<std::ptrdiff_t>(index));
     try {
-        rebuildGraphLocked();
+        markGraphDirtyLocked();
     } catch (const std::exception& error) {
         plugins_.insert(plugins_.begin() + static_cast<std::ptrdiff_t>(index), std::move(removed));
         try {
-            rebuildGraphLocked();
+            markGraphDirtyLocked();
         } catch (...) {
         }
         return std::unexpected(Error{"CreatedPluginRollbackGraphFailed", error.what()});
@@ -387,7 +386,7 @@ Result<void> RadiclePluginBackend::discardCreatedPlugin(std::string_view name) {
     if (removeEc || !removedFile) {
         plugins_.insert(plugins_.begin() + static_cast<std::ptrdiff_t>(index), std::move(removed));
         try {
-            rebuildGraphLocked();
+            markGraphDirtyLocked();
         } catch (...) {
         }
         return std::unexpected(Error{

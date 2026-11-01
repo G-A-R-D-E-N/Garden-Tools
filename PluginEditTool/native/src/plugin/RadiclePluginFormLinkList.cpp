@@ -151,7 +151,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkListField(
         });
     }
 
-    const auto* winner = graph_.winner(targetKey);
+    const auto* winner = (*graph_).winner(targetKey);
     if (winner == nullptr) {
         return std::unexpected(Error{
             "FormLinkTargetMissing",
@@ -287,7 +287,7 @@ Result<nlohmann::json> RadiclePluginBackend::insertFormLinkListElement(
         });
     }
 
-    const auto* winner = graph_.winner(targetKey);
+    const auto* winner = (*graph_).winner(targetKey);
     if (winner == nullptr) {
         return std::unexpected(Error{
             "FormLinkTargetMissing",
@@ -548,7 +548,7 @@ Result<nlohmann::json> RadiclePluginBackend::addListItem(
     }
 
     if (!descriptor->wildcard_target) {
-        const auto* winner = graph_.winner(*targetKey);
+        const auto* winner = (*graph_).winner(*targetKey);
         if (winner == nullptr) {
             return std::unexpected(Error{
                 "FormLinkTargetMissing",

@@ -109,7 +109,19 @@ ToolResult Registry::call(std::string_view name, const nlohmann::json& arguments
         if (it == tools_.end()) return {"Unknown MCP tool: " + std::string(name), true};
         tool = it->second;
     }
+    {
+        std::lock_guard lock(hookMutex_);
+        if (beforeFirstCall_) {
+            if (auto error = beforeFirstCall_()) return {std::move(*error), true};
+            beforeFirstCall_ = nullptr;
+        }
+    }
     return tool->call(arguments);
+}
+
+void Registry::setBeforeFirstCall(std::function<std::optional<std::string>()> hook) {
+    std::lock_guard lock(hookMutex_);
+    beforeFirstCall_ = std::move(hook);
 }
 
 StdioServer::StdioServer(Registry& registry) : registry_(registry) {}

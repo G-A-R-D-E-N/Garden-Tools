@@ -191,3 +191,58 @@ TEST_CASE("MCP tool exception becomes a JSON-RPC internal error and the stdio lo
     CHECK(failedJson.at("error").at("message") == "boom");
     CHECK(nlohmann::json::parse(second).at("id") == 4);
 }
+
+TEST_CASE("MCP before-first-call hook runs only for known tool calls and retries until it succeeds") {
+    fo4ide::mcp::Registry registry;
+    int hookRuns = 0;
+    int handlerRuns = 0;
+    bool failing = true;
+    registry.setBeforeFirstCall([&]() -> std::optional<std::string> {
+        ++hookRuns;
+        if (failing) return std::string("load failed");
+        return std::nullopt;
+    });
+    REQUIRE(registry.registerTool(std::make_shared<fo4ide::mcp::FunctionTool>(
+        fo4ide::mcp::ToolDefinition{.name = "probe", .description = "probe"},
+        [&](const nlohmann::json&) {
+            ++handlerRuns;
+            return fo4ide::mcp::ToolResult{"ran", false};
+        })).has_value());
+    fo4ide::mcp::StdioServer server(registry);
+
+    REQUIRE(server.handleLine(R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})").has_value());
+    REQUIRE(server.handleLine(R"({"jsonrpc":"2.0","id":2,"method":"tools/list"})").has_value());
+    CHECK(hookRuns == 0);
+
+    const auto unknown = server.handleLine(
+        R"({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"missing","arguments":{}}})");
+    REQUIRE(unknown.has_value());
+    CHECK(nlohmann::json::parse(*unknown).at("result").at("isError").get<bool>());
+    CHECK(hookRuns == 0);
+
+    const auto callProbe = [&server](int id) {
+        const auto response = server.handleLine(
+            R"({"jsonrpc":"2.0","id":)" + std::to_string(id) +
+            R"(,"method":"tools/call","params":{"name":"probe","arguments":{}}})");
+        REQUIRE(response.has_value());
+        return nlohmann::json::parse(*response).at("result");
+    };
+
+    const auto failed = callProbe(4);
+    CHECK(failed.at("isError").get<bool>());
+    CHECK(failed.at("content").at(0).at("text") == "load failed");
+    CHECK(hookRuns == 1);
+    CHECK(handlerRuns == 0);
+
+    failing = false;
+    const auto retried = callProbe(5);
+    CHECK_FALSE(retried.at("isError").get<bool>());
+    CHECK(retried.at("content").at(0).at("text") == "ran");
+    CHECK(hookRuns == 2);
+    CHECK(handlerRuns == 1);
+
+    const auto again = callProbe(6);
+    CHECK_FALSE(again.at("isError").get<bool>());
+    CHECK(hookRuns == 2);
+    CHECK(handlerRuns == 2);
+}
