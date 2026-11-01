@@ -82,7 +82,7 @@ window path instead of testing a disconnected copy of the UI logic.
 
 ## CI-parity check
 
-For a local pass that mirrors the order used by `.github/workflows/bgs-ci.yml`:
+For a local pass that mirrors the order used by `.github/public-ci/workflows/bgs-ci.yml`:
 
 ```bash
 dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore
@@ -165,5 +165,5 @@ but only an actual stored artifact proves the downloadable-artifact path.
 - Native/diagnostic CLI: `tools/symrm/`
 - CLI command reference: `guide/cli/symrm.md`
 - Headless UI regression harness: `tools/uismoke/`
-- Active GitHub Actions lane: `../.github/workflows/bgs-ci.yml`
+- Active GitHub Actions lane: `../.github/public-ci/workflows/bgs-ci.yml`
 - Headless load-order scan guide: `guide/scan/README.md`

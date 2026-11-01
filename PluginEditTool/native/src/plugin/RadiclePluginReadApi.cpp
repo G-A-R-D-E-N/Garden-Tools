@@ -421,7 +421,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordDetails(
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* winner = graph_.winner(key);
+    const auto* winner = (*graph_).winner(key);
     if (winner == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",
@@ -443,7 +443,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordDetails(
         });
     }
 
-    const auto& versions = graph_.versions(key);
+    const auto& versions = (*graph_).versions(key);
 
     // Resolve the base form for override records: the earliest definition in
     // load order. All overrides share the FormKey, so the UI can navigate to
@@ -488,7 +488,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordPluginMatrix(
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto& versions = graph_.versions(key);
+    const auto& versions = (*graph_).versions(key);
     nlohmann::json rows = nlohmann::json::array();
     const fo4::Record* previous = nullptr;
 
@@ -519,7 +519,7 @@ Result<nlohmann::json> RadiclePluginBackend::getContainmentPath(
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* winner = graph_.winner(key);
+    const auto* winner = (*graph_).winner(key);
     if (winner == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",

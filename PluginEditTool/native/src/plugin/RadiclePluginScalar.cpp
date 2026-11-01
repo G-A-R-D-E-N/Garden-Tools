@@ -231,7 +231,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkField(
     }
 
     if (!target.owner().empty()) {
-        const auto* target_record = graph_.winner(target);
+        const auto* target_record = (*graph_).winner(target);
         if (target_record == nullptr) {
             return std::unexpected(Error{
                 "FormLinkTargetUnresolved",
