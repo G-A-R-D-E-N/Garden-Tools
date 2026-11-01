@@ -179,6 +179,7 @@ class SwfTimelineClip : public MovieClip {
     }
     Runtime& runtime = interpreter.runtime();
     std::vector<std::uint16_t> just_created;
+    ExecutionResult failure;
     for (const SwfPlacementRow& row : rows_->frames[frame - 1]) {
       if (row.kind == SwfPlacementRow::Kind::Remove) {
         detach(interpreter, row.depth, depth);
@@ -219,7 +220,8 @@ class SwfTimelineClip : public MovieClip {
         apply_character_definition(*object, *data_, row.character_id);
         ExecutionResult initialized = initialize_placed(interpreter, object, *klass, depth + 1);
         if (!initialized.ok()) {
-          return initialized;
+          failure = initialized;
+          break;
         }
         created = true;
       }
@@ -244,13 +246,15 @@ class SwfTimelineClip : public MovieClip {
         if (clip != nullptr) {
           ExecutionResult placed = clip->place_frame(interpreter, 1, true, depth);
           if (!placed.ok()) {
-            return placed;
+            failure = placed;
+            break;
           }
         }
         ExecutionResult constructed =
             run_placed_constructor(interpreter, object, *klass, depth + 1);
         if (!constructed.ok()) {
-          return constructed;
+          failure = constructed;
+          break;
         }
         if (clip != nullptr) {
           sprite_clips_[row.depth] = clip.get();
@@ -272,7 +276,9 @@ class SwfTimelineClip : public MovieClip {
       const std::shared_ptr<DisplayObject> object = added_object->second;
       dispatch_added(interpreter, object, depth + 1);
     }
-    return advance_child_clips(interpreter, depth, just_created, advance_children);
+    ExecutionResult advanced =
+        advance_child_clips(interpreter, depth, just_created, advance_children);
+    return failure.ok() ? advanced : failure;
   }
 
  private:

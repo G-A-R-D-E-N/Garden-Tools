@@ -30,6 +30,7 @@ using swf_test::sprite_tag;
 using swf_test::wrap_body;
 
 using ConstructorBody = void (*)(avm2_test::ScriptBuilder&, avm2_test::CodeBuilder&);
+using FrameBody = void (*)(avm2_test::ScriptBuilder&, avm2_test::CodeBuilder&);
 
 void add_abc_block(SwfBuilder& builder, const abc::AbcFile& file, const char* name) {
   std::vector<std::uint8_t> bytes;
@@ -99,9 +100,50 @@ void throw_on_construction(avm2_test::ScriptBuilder&, avm2_test::CodeBuilder& co
   code.throw_op();
 }
 
+void count_then_throw_two(avm2_test::ScriptBuilder& script, avm2_test::CodeBuilder& code) {
+  count_on_this(script, code, "frameRuns");
+  code.pushbyte(2);
+  code.throw_op();
+}
+
 void no_constructor_body(avm2_test::ScriptBuilder&, avm2_test::CodeBuilder&) {}
 
-abc::AbcFile clip_file(const std::string& name, ConstructorBody body) {
+void goto_frame_one_on_construction(avm2_test::ScriptBuilder& script,
+                                    avm2_test::CodeBuilder& code) {
+  code.getlocal0();
+  code.pushbyte(1);
+  code.callpropvoid(script.multiname("gotoAndStop"), 1);
+}
+
+void listen_for_added_to_stage(avm2_test::ScriptBuilder& script, avm2_test::CodeBuilder& code) {
+  avm2_test::CodeBuilder handler;
+  const std::uint32_t added_runs = script.multiname("addedRuns");
+  handler.getglobalscope();
+  handler.dup();
+  handler.getproperty(added_runs);
+  handler.convert_i();
+  handler.pushbyte(1);
+  handler.add();
+  handler.setproperty(added_runs);
+  handler.returnvoid();
+  const std::uint32_t on_added = script.method("onAdded", handler.bytes(), 1);
+  code.getlocal0();
+  code.pushstring(script.string_of("addedToStage"));
+  code.newfunction(on_added);
+  code.callpropvoid(script.multiname("addEventListener"), 2);
+}
+
+void count_frame(avm2_test::ScriptBuilder& script, avm2_test::CodeBuilder& code) {
+  count_on_this(script, code, "frameRuns");
+}
+
+void record_parent_in_frame(avm2_test::ScriptBuilder& script, avm2_test::CodeBuilder& code) {
+  count_on_this(script, code, "frameRuns");
+  store_property(script, code, "parent", "frameParent");
+}
+
+abc::AbcFile clip_file(const std::string& name, ConstructorBody body,
+                       FrameBody frame_body = count_frame) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t klass = script.multiname(name);
   const std::uint32_t super = script.multiname("MovieClip", "flash.display");
@@ -116,7 +158,7 @@ abc::AbcFile clip_file(const std::string& name, ConstructorBody body) {
   avm2_test::CodeBuilder frame_code;
   frame_code.getlocal0();
   frame_code.pushscope();
-  count_on_this(script, frame_code, "frameRuns");
+  frame_body(script, frame_code);
   frame_code.returnvoid();
   const std::uint32_t frame = script.method("frame1", frame_code.bytes(), 1);
   avm2_test::CodeBuilder class_init;
@@ -343,4 +385,80 @@ TEST(Avm2PlacedConstruction, FailingConstructorLeavesNothingAttached) {
   EXPECT_FALSE(movie->frame_error().empty());
   EXPECT_NE(movie->root()->child_by_name("ok"), nullptr);
   EXPECT_EQ(movie->root()->child_by_name("bad"), nullptr);
+}
+
+TEST(Avm2PlacedConstruction, PlacedChildFrameOneScriptSeesItsParentAfterAttach) {
+  const std::vector<std::byte> bytes =
+      clip_movie({clip_file("Clip", no_constructor_body, record_parent_in_frame)},
+                 {sprite_with_frame(2, {})}, {{placement(1, 2, "hero")}}, {{2, "Clip"}});
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.link().ok());
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<fo4::avm2::DisplayObject> hero = movie->root()->child_by_name("hero");
+  ASSERT_NE(hero, nullptr);
+  EXPECT_EQ(number_property(*hero, "frameRuns"), 1.0);
+  const fo4::avm2::Value parent = global_value(*runtime.global_object(), "frameParent");
+  EXPECT_TRUE(parent.is_object() && parent.as_object() == movie->root());
+}
+
+TEST(Avm2PlacedConstruction, ConstructorGotoRunsThePlacedFrameScriptOnce) {
+  const std::vector<std::byte> bytes =
+      clip_movie({clip_file("Clip", goto_frame_one_on_construction)}, {sprite_with_frame(2, {})},
+                 {{placement(1, 2, "hero")}}, {{2, "Clip"}});
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.link().ok());
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<fo4::avm2::DisplayObject> hero = movie->root()->child_by_name("hero");
+  ASSERT_NE(hero, nullptr);
+  EXPECT_EQ(number_property(*hero, "constructedRuns"), 1.0);
+  EXPECT_EQ(number_property(*hero, "frameRuns"), 1.0);
+}
+
+TEST(Avm2PlacedConstruction, DocumentConstructorGotoRunsFrameOneScriptOnce) {
+  const std::vector<std::byte> bytes = clip_movie(
+      {clip_file("Document", goto_frame_one_on_construction)}, {}, {{}}, {{0, "Document"}});
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.link().ok());
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  EXPECT_EQ(number_property(*movie->root(), "constructedRuns"), 1.0);
+  EXPECT_EQ(number_property(*movie->root(), "frameRuns"), 1.0);
+}
+
+TEST(Avm2PlacedConstruction, FailingSiblingStillFinishesTheEarlierChildInTheSameFrame) {
+  const std::vector<std::byte> bytes = clip_movie(
+      {clip_file("Listener", listen_for_added_to_stage, count_then_throw_two),
+       clip_file("Thrower", throw_on_construction)},
+      {sprite_with_frame(2, {}), sprite_with_frame(4, {})},
+      {{}, {placement(1, 2, "ok"), placement(2, 4, "bad")}}, {{2, "Listener"}, {4, "Thrower"}});
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.link().ok());
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  movie->advance(interpreter, 1.0 / 24.0);
+  ASSERT_EQ(movie->root()->current_frame(), 2u);
+  const std::shared_ptr<fo4::avm2::DisplayObject> ok = movie->root()->child_by_name("ok");
+  ASSERT_NE(ok, nullptr);
+  EXPECT_EQ(movie->root()->child_by_name("bad"), nullptr);
+  EXPECT_EQ(movie->frame_error(), "uncaught exception: 1");
+  EXPECT_EQ(number_property(*runtime.global_object(), "addedRuns"), 1.0);
+  EXPECT_EQ(number_property(*ok, "frameRuns"), 1.0);
 }

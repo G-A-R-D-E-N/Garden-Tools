@@ -240,7 +240,9 @@ ExecutionResult MovieClip::goto_frame(Interpreter& interpreter, std::uint32_t fr
   if (!placed.ok()) {
     return placed;
   }
-  return run_frame_actions(interpreter, depth);
+  ExecutionResult ran = run_frame_actions(interpreter, depth);
+  frame_actions_ran_ = true;
+  return ran;
 }
 
 void MovieClip::step_playhead() {
@@ -272,11 +274,12 @@ ExecutionResult MovieClip::place_frame(Interpreter& interpreter, std::uint32_t f
                                        std::size_t depth) {
   current_frame_ = frame == 0 ? 1u : std::min(frame, total_frames());
   playing_ = play;
+  frame_actions_ran_ = false;
   return apply_frame_state(interpreter, depth, false);
 }
 
 ExecutionResult MovieClip::run_frame_actions(Interpreter& interpreter, std::size_t depth) {
-  return run_frame_script(interpreter, depth);
+  return frame_actions_ran_ ? ExecutionResult{} : run_frame_script(interpreter, depth);
 }
 
 ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {

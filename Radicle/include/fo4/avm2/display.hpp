@@ -252,7 +252,7 @@ class MovieClip : public DisplayObjectContainer {
   /* Places a frame and sets the playhead; runs no frame script and dispatches no event. */
   ExecutionResult place_frame(Interpreter& interpreter, std::uint32_t frame, bool play,
                               std::size_t depth = 0);
-  /* Runs the current frame's script; the caller has placed the frame already. */
+  /* Runs the current frame's script unless goto_frame already ran it since the frame was placed. */
   ExecutionResult run_frame_actions(Interpreter& interpreter, std::size_t depth = 0);
 
   /* enterFrame runs before placement and the frame script; exitFrame runs after them. */
@@ -271,6 +271,7 @@ class MovieClip : public DisplayObjectContainer {
   std::map<std::uint32_t, std::shared_ptr<FunctionObject>> added_frame_scripts_;
   std::uint32_t current_frame_{1};
   bool playing_{true};
+  bool frame_actions_ran_{false};
 };
 
 /* Requires a linked runtime; resolves a display class by rendered name. */

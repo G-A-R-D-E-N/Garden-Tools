@@ -10006,7 +10006,7 @@ The movie's ABC blocks are all linked first, and only then do the script initial
 
 `Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::advance` broadcasts `enterFrame` and `exitFrame` to the stage tree once per tick, and `collect_frame_targets` pushes each display object once, so a listener on a stopped root, a Sprite or a Shape hears each tick exactly once. The root and the registered clips then advance with `Radicle/src/avm2/display.cpp:MovieClip::advance_timeline`, which moves the playhead, places frames and runs frame scripts without sending frame events, so `MovieClip::run_frame_lifecycle` no longer sends a second `enterFrame`. Test: `Radicle/tests/test_avm2_swf_runtime.cpp:EnterFrameIsDeliveredOncePerObjectPerFrame`. Before, a listener on the stage never ran. The Programs register one as an `Event.ENTER_FRAME` listener on the stage (`GameController.onDelayedAssetLoading`), and it removes itself on its first call. Test: `Radicle/tests/test_avm2_swf_runtime.cpp:EnterFrameReachesTheStageAndItsSpriteChildren`.
 
-`Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create` places frame 1 (`place_frame(interpreter, 1, ...)`) after it adds the root to the stage and before the document `iinit` runs, so the constructor can read frame-1 children such as `List_mc`. The frame-1 script still runs after the constructor (`run_frame_actions`), as in AS3. Test: `Radicle/tests/test_avm2_document_class.cpp:FrameOneChildrenExistWhenTheDocumentConstructorRuns`.
+`Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create` places frame 1 (`place_frame(interpreter, 1, ...)`) after it adds the root to the stage and before the document `iinit` runs, so the constructor can read frame-1 children such as `List_mc`. The frame-1 script still runs after the constructor (`run_frame_actions`, skipped when the constructor already went to a frame), as in AS3. Test: `Radicle/tests/test_avm2_document_class.cpp:FrameOneChildrenExistWhenTheDocumentConstructorRuns`.
 
 Open: TurretHack's constructor now completes. Its `List_mc` slot is typed `Shared.AS3:BSScrollingList`, and the timeline child is that class (SymbolClass `Shared.AS3.BSScrollingList`). Once the symbol-class name is rendered (`Radicle/src/avm2/swf_movie_data.cpp:read_symbol_classes`), the child fills the declared slot (`Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip::store_named_child`). The constructor's next call, `flash.utils::getDefinitionByName`, is now registered in the package. The acceptance harness still calls `SetPlatform` for every program, which TurretHack does not define. With init off (a WSL-only change, not committed), both replay runs complete, are deterministic, and the state changes.
 
@@ -10084,7 +10084,7 @@ When a named child is placed, a declared instance slot with the same name receiv
 
 ## Radicle/src/avm2/display.cpp:MovieClip::goto_frame (no frame events, call depth)
 
-`goto_frame` places the frame (`place_frame`) and runs its script (`run_frame_actions`). It sends no `enterFrame` or `exitFrame`, so a `gotoAndStop` inside an `enterFrame` listener does not repeat the event. Placement and frame scripts receive the call depth, so a frame script that goes to its own frame fails with `CallDepthExceeded`. Tests: `Radicle/tests/test_avm2_stage_events.cpp:GotoAndStopInsideEnterFrameSendsNoFrameEvents` and `FrameScriptThatGoesToItsOwnFrameStopsWithACallDepthError`.
+`goto_frame` places the frame (`place_frame`) and runs its script (`run_frame_actions`), then marks the frame's actions as run so a caller's `run_frame_actions` skips them (see `Radicle/src/avm2/display.cpp:MovieClip::run_frame_actions`). It sends no `enterFrame` or `exitFrame`, so a `gotoAndStop` inside an `enterFrame` listener does not repeat the event. Placement and frame scripts receive the call depth, so a frame script that goes to its own frame fails with `CallDepthExceeded`. Tests: `Radicle/tests/test_avm2_stage_events.cpp:GotoAndStopInsideEnterFrameSendsNoFrameEvents` and `FrameScriptThatGoesToItsOwnFrameStopsWithACallDepthError`.
 
 ## Radicle/src/avm2/interpreter_dispatch_b.inc:getsuper and setsuper (super accessors and native display)
 
@@ -10108,7 +10108,7 @@ The frame snapshot keeps the root's entries and paths and appends the subtrees o
 
 ## Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create (slot defaults before frame 1; child frame-1 order)
 
-The document class's slot defaults are applied before frame 1 is placed, so the constructor sees the timeline children and no default overwrites them. A frame-1 child's own frame-1 script runs during placement, before the document constructor. The document's frame-1 script runs after the constructor. That order was left unchanged and is not verified against Flash. Test: `Radicle/tests/test_avm2_document_class.cpp:FrameOneChildrenExistWhenTheDocumentConstructorRuns`.
+The document class's slot defaults are applied before frame 1 is placed, so the constructor sees the timeline children and no default overwrites them. A frame-1 child's own frame-1 script runs during placement, before the document constructor. The document's frame-1 script runs after the constructor, unless the constructor already moved to a frame, which ran it (`Radicle/src/avm2/display.cpp:MovieClip::run_frame_actions`). That order was left unchanged and is not verified against Flash. Test: `Radicle/tests/test_avm2_document_class.cpp:FrameOneChildrenExistWhenTheDocumentConstructorRuns`.
 
 ## Radicle/src/avm2/swf_runtime.cpp:broadcast_frame_event (skip targets without listeners)
 
@@ -10674,9 +10674,9 @@ For a newly created placed child, `Radicle/src/avm2/swf_timeline_clip.cpp:SwfTim
 5. `run_placed_constructor`: the ABC `iinit`, with the placed object as `this`.
 6. Attach to the parent (`sprite_clips_`, `add_child`, `objects_`). After the frame's rows, `dispatch_added`.
 
-The frame-1 script of a created child runs later, in `SwfTimelineClip::advance_child_clips` through `run_frame_actions`, after its constructor and attach, as the document path does. Nested children are placed once, by their parent's step 4. `advance_child_clips` does not place them again, so their frame-1 script runs once.
+The frame-1 script of a created child runs later, in `SwfTimelineClip::advance_child_clips` through `run_frame_actions`, after its constructor and attach, as the document path does. Nested children are placed once, by their parent's step 4. `advance_child_clips` does not place them again, so their frame-1 script runs once. If the constructor itself went to a frame (`gotoAndStop`, `gotoAndPlay`, `nextFrame`, `prevFrame`), that `goto_frame` already ran the frame-1 script, and `run_frame_actions` skips it (see `Radicle/src/avm2/display.cpp:MovieClip::run_frame_actions`).
 
-A constructor failure returns before step 6, so the child is not half-attached. The failure reaches the caller. `SwfRuntime::create` fails with "frame 1 failed" when the first frame fails, and `SwfRuntime::advance` sets `frame_error` for a later frame.
+A failing row (`initialize_placed`, the child's own `place_frame`, or its constructor) stops the frame's rows at that row. The failing child is not half-attached: it is not in `objects_`, has no `sprite_clips_` entry, is not `add_child`ed, and gets no `added`, `addedToStage` or frame-1 script. The children attached earlier in the same frame are finished, not abandoned: the pass still runs `order_children_by_depth`, `dispatch_added` for them, and `advance_child_clips`, so each gets its `added`, `addedToStage` and frame-1 script. The first failure is the one returned; a later failure from those steps is dropped. Rows after the failing row are not placed in that frame. Decision from the brief, not Flash-verified: finish the earlier siblings, because a failed `gotoAndStop` in a mouse handler leaves the movie running. `SwfRuntime::create` fails with "frame 1 failed" when the first frame fails, and `SwfRuntime::advance` sets `frame_error` for a later frame.
 
 Unverified (from memory): Flash runs a placed symbol's constructor after its own frame-1 children exist and before it joins the display list. This order is a decision, not a measured Flash behaviour.
 
@@ -10687,6 +10687,9 @@ Tests: `Radicle/tests/test_avm2_placed_construction.cpp` (suite `Avm2PlacedConst
 - `PlacedClipIsConstructedOncePerPlacementAcrossFrames`: two placements over 24 frames. Each is constructed once, and its frame-1 script runs 25 times (once at placement, then once per frame).
 - `NestedClipIsConstructedAndScriptedOnceWhenItsParentIsPlaced`: the outer and inner clip are each constructed once and run frame 1 once at placement.
 - `FailingConstructorLeavesNothingAttached`: a constructor that throws on frame 2 leaves no child, and `frame_error` is set.
+- `PlacedChildFrameOneScriptSeesItsParentAfterAttach`: the child's frame-1 script records `parent`, which must be the root. Detects a frame-1 script that runs before `add_child` (parent null).
+- `ConstructorGotoRunsThePlacedFrameScriptOnce` and `DocumentConstructorGotoRunsFrameOneScriptOnce`: a constructor that calls `gotoAndStop(1)` on a placed child and on the document class. Each expects `frameRuns` 1. They detect a frame-1 script run again after a constructor goto, which is the double run the `MovieClip::run_frame_actions` section describes.
+- `FailingSiblingStillFinishesTheEarlierChildInTheSameFrame`: frame 2 places `ok` (a listener class: its constructor adds an `addedToStage` listener that bumps the global `addedRuns`, and its frame-1 script counts and then throws 2), then `bad` at depth 2 (its constructor throws 1). Expects `ok` attached with `addedRuns` 1 and `frameRuns` 1, `bad` not attached, and `frame_error` exactly "uncaught exception: 1". Detects an early return that leaves the earlier sibling without `addedToStage` and its frame-1 script, and a fix that returns the later frame-script failure ("uncaught exception: 2").
 
 Revert proofs (one sabotage at a time in `swf_timeline_clip.cpp`, with the new test file):
 - Constructor moved ahead of the matrix and placement state: NameAndX, WriteSurvives and FrameOneChild fail.
@@ -10694,6 +10697,21 @@ Revert proofs (one sabotage at a time in `swf_timeline_clip.cpp`, with the new t
 - Constructor run twice: PlacedClip and Nested fail (`constructedRuns` is 2).
 - Frame-1 script run twice for created children: PlacedClip and Nested fail (`frameRuns` is 2).
 - Child attached before the constructor: NameAndX (parent not null) and FailingConstructor fail.
+- Frame-1 script moved ahead of `add_child`, its later call removed (run once, before attach): `PlacedChildFrameOneScriptSeesItsParentAfterAttach` fails, `parent` is not an object. Restored byte-identical.
+- Early returns in `apply_frame_state` restored (no `failure` and `break`): `FailingSiblingStillFinishesTheEarlierChildInTheSameFrame` fails with `addedRuns` -1 and `frameRuns` -1 (both undefined).
+- Returning the later failure (`advanced.ok() ? failure : advanced`): the same test fails with `frame_error` "uncaught exception: 2".
+
+## Radicle/src/avm2/display.cpp:MovieClip::run_frame_actions (a constructor's goto runs the frame-1 script once; #807 round 7)
+
+A placed child's constructor can call `gotoAndStop` or `gotoAndPlay` on itself before it is attached. `MovieClip::goto_frame` places the frame and runs its script, and the caller then ran the script again. `SwfTimelineClip::advance_child_clips` calls `run_frame_actions` for every created sprite, so a constructor that went to frame 1 ran frame 1 twice. The document class had the same double run, because `SwfRuntime::create` calls `run_frame_actions` after the document constructor.
+
+The fix is one flag, `frame_actions_ran_`. `goto_frame` sets it after its own run. `place_frame` clears it, so each placement starts with nothing run. `run_frame_actions` returns an empty result without running when the flag is set. The flag is not set by `run_frame_script`: a frame script attached after a placement and then run with `run_frame_actions` must still run. `Radicle/tests/test_avm2_stage_events.cpp:StoppedParentStepsItsPlayingChildOnceAndRerunsNoFrameScript` does that on the root and still passes.
+
+Callers of `run_frame_actions`, all covered by the one guard: `goto_frame`, which the `gotoAndStop`, `gotoAndPlay`, `nextFrame` and `prevFrame` natives reach (`Radicle/src/avm2/native_display.cpp:display_goto` and `display_step`); `Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create` for the document class (unchanged); and `Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip::advance_child_clips`.
+
+Decision: a goto from a constructor counts as the frame's run even when that frame has no script. A script attached to that frame afterwards is not run by the caller's `run_frame_actions`; nothing in the code attaches one at that point. Unverified (from memory): Flash runs a frame's actions once when a constructor moves its own clip to that frame. The tests pin the behaviour the brief asked for, not a Flash measurement.
+
+Tests (`Radicle/tests/test_avm2_placed_construction.cpp`, suite `Avm2PlacedConstruction`): `ConstructorGotoRunsThePlacedFrameScriptOnce` and `DocumentConstructorGotoRunsFrameOneScriptOnce`, described in the `apply_frame_state` section above. Revert proof: with the guard removed, both fail with `frameRuns` 2 instead of 1. The same tests were run before the fix and failed that way.
 
 ## Radicle/src/avm2/builtins.cpp:Runtime::install_builtins (Stage.invalidate requests a render; #807 round 6)
 
