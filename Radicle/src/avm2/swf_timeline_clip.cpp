@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <numbers>
 #include <string>
 #include <vector>
 
