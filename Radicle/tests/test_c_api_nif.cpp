@@ -354,6 +354,28 @@ TEST(CapiNif, ExposesTheNodeTreeAndTheShapesParentNode) {
   EXPECT_EQ(radicle_nif_shape_parent_node(nif.get(), 5, &node), RADICLE_STATUS_INVALID_ARGUMENT);
 }
 
+TEST(CapiNif, ExposesTheValueOfABSValueNodeAndNoValueWithoutATrailer) {
+  Writer trailer;
+  trailer.u32(817);
+  trailer.u8(1);
+  auto present = nif_fixture::node_block("BSValueNode", 0, fo4::nif::Transform{}, {1});
+  present.data.insert(present.data.end(), trailer.bytes().begin(), trailer.bytes().end());
+  const auto bytes = nif_fixture::build_nif(
+      {"node", "child"}, {present, nif_fixture::node_block("BSValueNode", 1, fo4::nif::Transform{}, {})}, {0});
+  Nif nif(bytes);
+  ASSERT_NE(nif.get(), nullptr);
+
+  int32_t has_value = 99;
+  int32_t value = 99;
+  ASSERT_EQ(radicle_nif_node_value(nif.get(), 0, &has_value, &value), RADICLE_STATUS_OK);
+  EXPECT_EQ(has_value, 1);
+  EXPECT_EQ(value, 817);
+  ASSERT_EQ(radicle_nif_node_value(nif.get(), 1, &has_value, &value), RADICLE_STATUS_OK);
+  EXPECT_EQ(has_value, 0);
+  EXPECT_EQ(value, 0);
+  EXPECT_EQ(radicle_nif_node_value(nif.get(), 2, &has_value, &value), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
 TEST(CapiNif, ReportsABadShaderBlockAsAShapeWarning) {
   const auto bytes = nif_fixture::build_nif({"shape", "Root"}, bad_shader_blocks(), {0});
   Nif nif(bytes);

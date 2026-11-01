@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -28,6 +29,7 @@ struct Node {
   std::int32_t parent{-1};
   std::vector<std::uint32_t> children;
   Transform local;
+  std::optional<std::int32_t> value;
 };
 
 class NifFile {

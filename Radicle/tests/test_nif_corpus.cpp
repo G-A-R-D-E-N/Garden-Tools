@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -18,6 +19,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -43,6 +45,15 @@ bool is_geometry_name(std::string_view type) {
 
 bool names_a_node(std::string_view type) { return type.find("Node") != std::string_view::npos; }
 
+bool name_numbers_value(std::string_view name, std::int32_t value) {
+  const auto start = name.find_first_of("0123456789");
+  if (start == std::string_view::npos) return false;
+  const auto end = std::min(name.find_first_not_of("0123456789", start), name.size());
+  std::int64_t number{};
+  const auto parsed = std::from_chars(name.data() + start, name.data() + end, number);
+  return parsed.ec == std::errc{} && number == value;
+}
+
 struct CorpusCounts {
   std::size_t nifs{0};
   std::size_t shapes{0};
@@ -67,6 +78,8 @@ struct CorpusCounts {
   std::size_t parent_disagreements{0};
   std::size_t non_node_named_blocks{0};
   std::size_t shapes_with_warnings{0};
+  std::size_t value_nodes{0};
+  std::size_t value_node_mismatches{0};
 };
 
 }  // namespace
@@ -127,6 +140,13 @@ TEST(NifCorpus, ReadsEveryVanillaNifAndHandlesGeometryTypes) {
           }
           for (const auto child : node.children) {
             EXPECT_EQ(nif.parent(child), static_cast<std::int32_t>(node.block)) << path;
+          }
+          if (node.type == "BSValueNode") {
+            ++counts.value_nodes;
+            if (!node.value || !name_numbers_value(node.name, *node.value)) {
+              ++counts.value_node_mismatches;
+              ADD_FAILURE() << path << ": BSValueNode '" << node.name << "' does not hold its name's number as a value";
+            }
           }
         }
         for (const auto& shape : fo4::nif::read_shapes(nif)) {
@@ -231,8 +251,10 @@ TEST(NifCorpus, ReadsEveryVanillaNifAndHandlesGeometryTypes) {
   RecordProperty("supplied_texture_count", std::to_string(counts.supplied_textures));
   RecordProperty("parse_failure_count", std::to_string(counts.failures));
   RecordProperty("non_node_named_block_count", std::to_string(counts.non_node_named_blocks));
+  RecordProperty("value_node_count", std::to_string(counts.value_nodes));
 
   EXPECT_EQ(counts.failures, 0U);
+  EXPECT_EQ(counts.value_node_mismatches, 0U);
   EXPECT_EQ(counts.weight_count_mismatches, 0U);
   EXPECT_EQ(counts.bone_index_overflows, 0U);
   EXPECT_EQ(counts.parent_disagreements, 0U);
@@ -245,6 +267,7 @@ TEST(NifCorpus, ReadsEveryVanillaNifAndHandlesGeometryTypes) {
   EXPECT_GT(counts.shapes_with_textures, 0U);
   EXPECT_GT(counts.bones, 0U);
   EXPECT_GT(counts.nodes, 0U);
+  EXPECT_GT(counts.value_nodes, 0U);
   EXPECT_GT(counts.shapes_with_node_parent, 0U);
   EXPECT_EQ(counts.shapes_with_warnings, 0U);
 }

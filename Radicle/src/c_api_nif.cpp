@@ -257,6 +257,22 @@ radicle_status radicle_nif_node_for_block(const radicle_nif* nif, uint32_t block
   return RADICLE_STATUS_OK;
 }
 
+radicle_status radicle_nif_node_value(const radicle_nif* nif,
+                                      size_t index,
+                                      int32_t* out_has_value,
+                                      int32_t* out_value) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* node = find_node(nif, index, status);
+  if (!node) return status;
+  if (!out_has_value || !out_value) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_has_value and out_value are required");
+  }
+  *out_has_value = node->value ? 1 : 0;
+  *out_value = node->value.value_or(0);
+  return RADICLE_STATUS_OK;
+}
+
 radicle_status radicle_nif_shape_count(const radicle_nif* nif, size_t* out_count) {
   clear_error();
   if (!nif || !out_count) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "nif and out_count are required");

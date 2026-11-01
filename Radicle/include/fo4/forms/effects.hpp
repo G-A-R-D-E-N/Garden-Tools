@@ -3,6 +3,7 @@
 #include "fo4/plugin/container.hpp"
 #include "fo4/schema/ctda.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <stdexcept>
@@ -28,6 +29,8 @@ enum class EffectListWrite {
   record_missing,
   unsupported_record,
   unexpected_layout,
+  index_out_of_range,
+  effect_not_magic_effect,
 };
 
 std::vector<MagicEffectEntry> read_magic_effects(const Plugin& plugin, const Record& record);
@@ -35,5 +38,19 @@ std::vector<MagicEffectEntry> read_magic_effects(const Plugin& plugin, const Rec
 EffectListWrite set_magic_effects(Plugin& plugin,
                                   const FormKey& key,
                                   std::span<const MagicEffectEntry> entries);
+
+EffectListWrite add_magic_effect(Plugin& plugin,
+                                 const FormKey& key,
+                                 MagicEffectEntry entry,
+                                 std::size_t* out_index);
+
+EffectListWrite set_magic_effect(Plugin& plugin,
+                                 const FormKey& key,
+                                 std::size_t index,
+                                 MagicEffectEntry entry);
+
+EffectListWrite remove_magic_effect(Plugin& plugin,
+                                    const FormKey& key,
+                                    std::size_t index);
 
 }  // namespace fo4::forms
