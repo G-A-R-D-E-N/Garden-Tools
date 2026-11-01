@@ -2,6 +2,7 @@
 
 #include <fo4/avm2/class.hpp>
 #include <fo4/avm2/object.hpp>
+#include <fo4/avm2/xml.hpp>
 
 #include <array>
 #include <charconv>
@@ -185,6 +186,8 @@ std::string object_default_to_string(const Object& object) {
                              ? std::string{"<unnamed>"}
                              : class_object.represented_class()->name);
     }
+    case ObjectKind::Xml:
+      return xml_default_string(static_cast<const XmlObject&>(object));
     case ObjectKind::Object:
     case ObjectKind::Namespace:
     case ObjectKind::Display:

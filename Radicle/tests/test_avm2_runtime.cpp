@@ -6,6 +6,7 @@
 #include <fo4/avm2/value.hpp>
 
 #include "abc_test_support.hpp"
+#include "avm2_test_support.hpp"
 
 #include <gtest/gtest.h>
 
@@ -261,6 +262,130 @@ TEST(Avm2Runtime, ReportsABrokenLinkWithoutKeepingHalfTheState) {
   EXPECT_EQ(load.status, RuntimeStatus::InvalidTrait);
   EXPECT_FALSE(runtime.linked());
   EXPECT_EQ(runtime.link().status, RuntimeStatus::AlreadyLinked);
+}
+
+TEST(Avm2Runtime, AutoSlotTraitsGetTheirOwnSlotsAfterTheSuperclassSlots) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t object = script.multiname("Object");
+  const std::uint32_t base = script.multiname("SlotBase");
+  const std::uint32_t derived = script.multiname("SlotDerived");
+  const std::uint32_t first = script.multiname("first");
+  const std::uint32_t second = script.multiname("second");
+  const std::uint32_t third = script.multiname("third");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder init_code;
+  init_code.returnvoid();
+  const std::uint32_t init = script.method("init", init_code.bytes(), 1);
+  AbcFile file = script.finish(init);
+
+  abc::AbcTrait first_trait;
+  first_trait.name = first;
+  abc::AbcTrait second_trait;
+  second_trait.name = second;
+  abc::AbcInstanceInfo base_instance;
+  base_instance.name = base;
+  base_instance.super_index = object;
+  base_instance.iinit = constructor;
+  base_instance.traits = {first_trait, second_trait};
+  file.instances.push_back(base_instance);
+  abc::AbcClassInfo base_class;
+  base_class.cinit = constructor;
+  file.classes.push_back(base_class);
+
+  abc::AbcTrait third_trait;
+  third_trait.name = third;
+  abc::AbcInstanceInfo derived_instance;
+  derived_instance.name = derived;
+  derived_instance.super_index = base;
+  derived_instance.iinit = constructor;
+  derived_instance.traits = {third_trait};
+  file.instances.push_back(derived_instance);
+  abc::AbcClassInfo derived_class;
+  derived_class.cinit = constructor;
+  file.classes.push_back(derived_class);
+
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  const Class* base_runtime = runtime.find_class("SlotBase");
+  const Class* derived_runtime = runtime.find_class("SlotDerived");
+  ASSERT_NE(base_runtime, nullptr);
+  ASSERT_NE(derived_runtime, nullptr);
+  ASSERT_EQ(base_runtime->instance_traits.size(), 2u);
+  EXPECT_EQ(base_runtime->instance_traits[0].slot_id, 0u);
+  EXPECT_EQ(base_runtime->instance_traits[1].slot_id, 1u);
+  EXPECT_EQ(base_runtime->slot_count, 2u);
+  ASSERT_EQ(derived_runtime->instance_traits.size(), 1u);
+  EXPECT_EQ(derived_runtime->instance_traits[0].slot_id, 2u);
+  EXPECT_EQ(derived_runtime->slot_count, 3u);
+}
+
+TEST(Avm2Runtime, ResolvesTheAs3BuiltinNamespaceToThePublicOne) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder init_code;
+  init_code.returnvoid();
+  const std::uint32_t init = script.method("init", init_code.bytes(), 1);
+  AbcFile file = script.finish(init);
+  file.pool.strings.push_back("http://adobe.com/AS3/2006/builtin");
+  file.pool.namespaces.push_back(abc::AbcNamespace{
+      abc::AbcNamespaceKind::Namespace, static_cast<std::uint32_t>(file.pool.strings.size() - 1)});
+  const auto builtin = static_cast<std::uint32_t>(file.pool.namespaces.size() - 1);
+  file.pool.strings.push_back("shift");
+  abc::AbcMultiname shift;
+  shift.kind = abc::AbcMultinameKind::QName;
+  shift.name = static_cast<std::uint32_t>(file.pool.strings.size() - 1);
+  shift.ns = builtin;
+  file.pool.multinames.push_back(shift);
+  const auto index = static_cast<std::uint32_t>(file.pool.multinames.size() - 1);
+
+  Multiname multiname;
+  ASSERT_EQ(fo4::avm2::resolve_multiname(file, index, multiname), RuntimeStatus::Ok);
+  EXPECT_EQ(multiname.name, "shift");
+  EXPECT_EQ(multiname.namespaces, std::vector<Namespace>{Namespace{}});
+}
+
+TEST(Avm2Runtime, AutoSlotNumberingSkipsTheIdsAnExplicitTraitUses) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t object = script.multiname("Object");
+  const std::uint32_t holder = script.multiname("SlotHolder");
+  const std::uint32_t first = script.multiname("a");
+  const std::uint32_t second = script.multiname("b");
+  const std::uint32_t third = script.multiname("c");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  const std::uint32_t init = script.method("init", constructor_code.bytes(), 1);
+  AbcFile file = script.finish(init);
+
+  abc::AbcTrait a_trait;
+  a_trait.name = first;
+  abc::AbcTrait b_trait;
+  b_trait.name = second;
+  b_trait.slot_id = 1;
+  abc::AbcTrait c_trait;
+  c_trait.name = third;
+  abc::AbcInstanceInfo instance;
+  instance.name = holder;
+  instance.super_index = object;
+  instance.iinit = constructor;
+  instance.traits = {a_trait, b_trait, c_trait};
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  const Class* linked = runtime.find_class("SlotHolder");
+  ASSERT_NE(linked, nullptr);
+  ASSERT_EQ(linked->instance_traits.size(), 3u);
+  EXPECT_EQ(linked->instance_traits[0].slot_id, 0u);
+  EXPECT_EQ(linked->instance_traits[1].slot_id, 1u);
+  EXPECT_EQ(linked->instance_traits[2].slot_id, 2u);
+  EXPECT_EQ(linked->slot_count, 3u);
 }
 
 }  // namespace

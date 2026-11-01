@@ -9,6 +9,9 @@ namespace fo4::avm2 {
 /* Requires a stage point; a hidden ancestor, a singular transform or zero size never hits. */
 bool hit_test_point(const DisplayObject& object, double x, double y);
 
+/* Requires a stage point; with shape_flag the decoded fill geometry decides when present. */
+bool hit_test_point(const DisplayObject& object, double x, double y, bool shape_flag);
+
 /* Requires both objects to be display objects; compares their axis-aligned stage bounds. */
 bool hit_test_object(const DisplayObject& first, const DisplayObject& second);
 

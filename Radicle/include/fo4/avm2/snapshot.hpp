@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -76,6 +77,8 @@ struct SnapshotEntry {
   SnapshotMatrix matrix;
   SnapshotColorTransform color;
   std::vector<SnapshotTextRun> runs;
+  /* Invariant: geometry stays out of the text dump, so existing text pins keep passing. */
+  std::shared_ptr<const ShapeGeometry> geometry;
   std::size_t filter_count{0};
   std::optional<std::uint16_t> ratio;
   bool cache_as_bitmap{false};

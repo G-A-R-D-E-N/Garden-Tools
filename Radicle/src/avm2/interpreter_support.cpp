@@ -56,6 +56,18 @@ ExecutionResult Interpreter::call_function(const FunctionObject& function, Value
   return invoke(function, std::move(this_value), std::move(arguments), {}, depth);
 }
 
+void Interpreter::record_handler_failure(const ExecutionResult& result) {
+  if (result.ok()) {
+    return;
+  }
+  if (handler_failures_.count == 0) {
+    handler_failures_.first_message = result.message.empty()
+                                          ? std::string{interpreter_status_name(result.status)}
+                                          : result.message;
+  }
+  ++handler_failures_.count;
+}
+
 ExecutionResult Interpreter::prepare_class(Class& klass, std::size_t depth) {
   return ensure_class_initialized(klass, depth);
 }
@@ -67,7 +79,12 @@ ExecutionResult Interpreter::read_property(Object& object, const Multiname& mult
   if (global != nullptr) {
     frame.scopes.push_back(global);
   }
-  return get_property(frame, object, multiname, depth);
+  const std::shared_ptr<Object> owner = detail::owner_of(object);
+  if (owner == nullptr) {
+    return fail(InterpreterStatus::InvalidArgument,
+                "the receiver of a property read must be owned by a shared_ptr");
+  }
+  return get_property(frame, owner, multiname, depth);
 }
 
 ExecutionResult Interpreter::write_property(Object& object, const Multiname& multiname,
@@ -77,7 +94,12 @@ ExecutionResult Interpreter::write_property(Object& object, const Multiname& mul
   if (global != nullptr) {
     frame.scopes.push_back(global);
   }
-  return set_property(frame, object, multiname, value, false, depth);
+  const std::shared_ptr<Object> owner = detail::owner_of(object);
+  if (owner == nullptr) {
+    return fail(InterpreterStatus::InvalidArgument,
+                "the receiver of a property write must be owned by a shared_ptr");
+  }
+  return set_property(frame, owner, multiname, value, false, depth);
 }
 
 std::shared_ptr<Object> Interpreter::make_instance(Class& klass) {
@@ -187,7 +209,58 @@ double Interpreter::next_random() {
 
 Value Interpreter::global_this() {
   Object* global = runtime_.global_object();
-  return global == nullptr ? Value::undefined() : detail::borrowed_object(*global);
+  return global == nullptr ? Value::undefined() : Value::object(runtime_.global_object_shared());
+}
+
+ExecutionResult Interpreter::call_class(const ClassObject& class_object,
+                                        const std::vector<Value>& arguments, std::size_t depth) {
+  Class* klass = class_object.represented_class();
+  if (klass == nullptr) {
+    return fail(InterpreterStatus::CannotCall, "class object has no class");
+  }
+  if (klass->native_constructor != 0) {
+    const Value class_self =
+        klass->class_object == nullptr ? Value::undefined() : Value::object(klass->class_object);
+    return call_native_id(klass->native_constructor, class_self, arguments, depth);
+  }
+  if (klass->external) {
+    if (limits_.lenient_builtins) {
+      return ExecutionResult{};
+    }
+    return fail(InterpreterStatus::CannotCall, "class " + klass->name + " is not defined");
+  }
+  Value value = arguments.empty() ? Value::undefined() : arguments[0];
+  if (klass->super != nullptr && klass->super->name == "__AS3__.vec::Vector" && value.is_object() &&
+      value.as_object()->kind() == ObjectKind::Array) {
+    const auto& source = static_cast<const ArrayObject&>(*value.as_object());
+    auto vector = std::make_shared<ArrayObject>();
+    vector->set_instance_class(klass);
+    vector->set_element_class(klass->vector_element);
+    if (klass->prototype_object != nullptr) {
+      vector->set_prototype(klass->prototype_object);
+    }
+    for (Value element : source.elements()) {
+      if (klass->vector_element != nullptr) {
+        std::string element_message;
+        ExecutionResult coerced = coerce_to_class(*klass->vector_element, element, element_message);
+        if (!coerced.ok()) {
+          return coerced;
+        }
+      }
+      vector->elements().push_back(std::move(element));
+    }
+    ExecutionResult result;
+    result.value = Value::object(std::move(vector));
+    return result;
+  }
+  std::string message;
+  const InterpreterStatus status = coerce_value(klass->name_multiname, value, message);
+  if (status != InterpreterStatus::Ok) {
+    return fail(status, std::move(message));
+  }
+  ExecutionResult result;
+  result.value = std::move(value);
+  return result;
 }
 
 ExecutionResult Interpreter::call_native_id(std::uint32_t native_id, const Value& self,
@@ -238,6 +311,9 @@ ExecutionResult Interpreter::call_native_id(std::uint32_t native_id, const Value
     return result;
   }
   if (try_bytearray_native(*this, id, self, arguments, depth, result)) {
+    return result;
+  }
+  if (try_xml_native(*this, id, self, arguments, depth, result)) {
     return result;
   }
   if (try_compat_native(*this, id, self, arguments, depth, result)) {
