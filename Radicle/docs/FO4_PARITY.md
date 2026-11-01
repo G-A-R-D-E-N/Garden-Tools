@@ -48,7 +48,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | ACHR | 4483 | 37 | 1 | 21 | 1 | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 3 | L4 |
-| ADDN | 7796 | 16 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
+| ADDN | 7796 | 16 | 1 | 3 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | AECH | 12206 | 12 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | 29 | 5 | 11 | - | 3 | yes | yes | - | yes | 2 | L4 |
 | AMDL | 12246 | 16 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -120,7 +120,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | LCTN | 8039 | 16 | - | 30 | - | 1 | yes | yes | - | yes | 1 | L4 |
 | LENS | 12405 | 12 | 2 | - | - | - | yes | - | - | - | 2 | L4 |
 | LGTM | 8629 | 81 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
-| LIGH | 9871 | 44 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 3 | L4 |
+| LIGH | 9871 | 44 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 4 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 2 | L4 |
 | LVLI | 10009 | 10 | - | 3 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |

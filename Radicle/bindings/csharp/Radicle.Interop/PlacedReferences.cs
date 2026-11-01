@@ -51,7 +51,11 @@ public sealed record PlacedReference(
     MapMarker? MapMarker, Teleport? Teleport, Primitive? Primitive, Spline? Spline, IReadOnlyList<Portal> Portals,
     RoomPortal? RoomPortal, Room? Room, IReadOnlyList<FormKey?> LinkedRooms, IReadOnlyList<Patrol> Patrols,
     int? Count, int? LevelModifier, bool HasScripts, short ScriptVersion, short ScriptObjectFormat,
-    bool ScriptsUnsupported, IReadOnlyList<Script> Scripts, FormKey? Emittance = null);
+    bool ScriptsUnsupported, IReadOnlyList<Script> Scripts, FormKey? Emittance = null, float? Radius = null,
+    PlacedLightData? LightData = null);
+
+public sealed record PlacedLightData(float Fov, float Fade, float EndDistanceCap, float ShadowDepthBias,
+                                     float? NearClip, float? VolumetricIntensity);
 
 public sealed unsafe partial class RadicleEnvironment
 {
@@ -151,6 +155,12 @@ public sealed unsafe partial class RadicleEnvironment
             room, Keys(r->LinkedRooms, r->LinkedRoomCount), patrols, r->HasCount != 0 ? r->Count : null,
             r->HasLevelModifier != 0 ? r->LevelModifier : null, r->HasScripts != 0, r->ScriptVersion,
             r->ScriptObjectFormat, r->ScriptsUnsupported != 0, scripts,
-            r->HasEmittance != 0 ? FormKey.FromNative(r->Emittance) : null);
+            r->HasEmittance != 0 ? FormKey.FromNative(r->Emittance) : null,
+            r->HasRadius != 0 ? r->Radius : null,
+            r->HasLightData != 0
+                ? new PlacedLightData(r->LightFov, r->LightFade, r->LightEndDistanceCap, r->LightShadowDepthBias,
+                                      r->HasLightNearClip != 0 ? r->LightNearClip : null,
+                                      r->HasLightVolumetricIntensity != 0 ? r->LightVolumetricIntensity : null)
+                : null);
     }
 }

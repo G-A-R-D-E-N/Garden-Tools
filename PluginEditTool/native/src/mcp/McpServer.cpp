@@ -15,6 +15,33 @@ nlohmann::json ToolDefinition::toJson() const {
     };
 }
 
+std::optional<std::string> argumentError(const nlohmann::json& inputSchema,
+                                         const nlohmann::json& arguments) {
+    if (!arguments.is_object()) return "Arguments must be an object";
+    const auto properties = inputSchema.value("properties", nlohmann::json::object());
+    for (const auto& [name, value] : arguments.items()) {
+        static_cast<void>(value);
+        if (!properties.contains(name)) return "Unknown argument: " + name;
+    }
+    for (const auto& field : inputSchema.value("required", nlohmann::json::array())) {
+        const auto name = field.get<std::string>();
+        if (!arguments.contains(name)) return "Missing argument: " + name;
+    }
+    for (const auto& [name, schema] : properties.items()) {
+        const auto value = arguments.find(name);
+        if (value == arguments.end()) continue;
+        const auto type = schema.value("type", std::string{});
+        const bool valid = (type == "string" && value->is_string()) ||
+                           (type == "object" && value->is_object()) ||
+                           (type == "array" && value->is_array()) ||
+                           (type == "integer" && value->is_number_integer()) ||
+                           (type == "number" && value->is_number()) ||
+                           (type == "boolean" && value->is_boolean());
+        if (!valid) return name + " must be " + type;
+    }
+    return std::nullopt;
+}
+
 FunctionTool::FunctionTool(ToolDefinition definition, Handler handler)
     : definition_(std::move(definition)), handler_(std::move(handler)) {}
 
