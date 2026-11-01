@@ -42,6 +42,14 @@ struct LightRecordData {
   std::optional<FormKey> god_rays;
 };
 
+struct AddOnNodeData {
+  std::optional<std::uint32_t> node_index;
+  std::optional<FormKey> light;
+  std::optional<std::string_view> model;
+  std::optional<std::uint16_t> master_particle_cap;
+  std::optional<std::uint16_t> flags;
+};
+
 struct BendableSplineData {
   std::optional<float> default_tiles;
   std::optional<std::uint16_t> default_slices;
@@ -208,6 +216,7 @@ struct WaterData {
 };
 
 LightRecordData decode_light(const Environment& env, const RecordRef& ref);
+AddOnNodeData decode_add_on_node(const Environment& env, const RecordRef& ref);
 BendableSplineData decode_bendable_spline(const Environment& env, const RecordRef& ref);
 std::optional<FormKey> decode_layer_parent(const Environment& env, const RecordRef& ref);
 ClimateData decode_climate(const Environment& env, const RecordRef& ref);

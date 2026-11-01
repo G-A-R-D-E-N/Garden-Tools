@@ -355,6 +355,17 @@ typedef struct radicle_placed_ref {
   void* internal;
   int32_t has_emittance;
   radicle_form_key emittance;
+  int32_t has_radius;
+  float radius;
+  int32_t has_light_data;
+  float light_fov;
+  float light_fade;
+  float light_end_distance_cap;
+  float light_shadow_depth_bias;
+  int32_t has_light_near_clip;
+  float light_near_clip;
+  int32_t has_light_volumetric_intensity;
+  float light_volumetric_intensity;
 } radicle_placed_ref;
 
 /* RADICLE_STATUS_PARSE_ERROR for a non-placed record or a malformed present subrecord. */
