@@ -96,6 +96,8 @@ public class HkxAnimationData
 
     public List<string> BoneNames { get; set; } = new();
     public List<HkxTrackData> Tracks { get; set; } = new();
+    public List<List<float>> FloatTracks { get; set; } = new();
+    public bool CompressionDecoded { get; set; }
     public List<HkxAnnotation> Annotations { get; set; } = new();
     public List<int> TrackToBoneIndices { get; set; } = new();
     public string OriginalSkeletonName { get; set; } = "";
@@ -105,13 +107,15 @@ public class HkxAnimationData
 
     public static readonly string[] DecodedAnimationClasses =
     {
+        "hkaPredictiveCompressedAnimation",
+        "hkaQuantizedAnimation",
         "hkaSplineCompressedAnimation",
         "hkaLosslessCompressedAnimation",
         "hkaInterleavedUncompressedAnimation",
     };
 
     public bool HasUnsupportedAnimation =>
-        AnimationClass.Length > 0 && Array.IndexOf(DecodedAnimationClasses, AnimationClass) < 0;
+        AnimationClass.Length > 0 && (Array.IndexOf(DecodedAnimationClasses, AnimationClass) < 0 || ((AnimationClass == AnimationCompression.QuantizedClass || AnimationClass == AnimationCompression.PredictiveClass) && !CompressionDecoded));
 
     public HkxSkeleton? Skeleton { get; set; }
 

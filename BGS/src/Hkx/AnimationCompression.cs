@@ -17,11 +17,13 @@ public static class AnimationCompression
     public static string Describe(string? animationClass)
     {
         if (IsQuantized(animationClass))
-            return "This animation uses Havok quantized compression (hkaQuantizedAnimation), which BGS " +
-                   "cannot decode yet. The file has not been changed.";
+            return "This animation uses Havok quantized compression (hkaQuantizedAnimation). BGS decodes only the " +
+                   "layouts the reverse-engineering record fully specifies, and this file is not one of them. " +
+                   "The file has not been changed.";
         if (IsPredictive(animationClass))
-            return "This animation uses Havok predictive compression (hkaPredictiveCompressedAnimation), " +
-                   "which BGS cannot decode yet. The file has not been changed.";
+            return "This animation uses Havok predictive compression (hkaPredictiveCompressedAnimation). BGS decodes " +
+                   "only the layouts the reverse-engineering record fully specifies, and this file is not one of them. " +
+                   "The file has not been changed.";
         if (string.IsNullOrEmpty(animationClass))
             return "This file does not name an animation class BGS can decode. The file has not been changed.";
 
