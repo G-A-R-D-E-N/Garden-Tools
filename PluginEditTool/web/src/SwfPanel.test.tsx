@@ -1,8 +1,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SwfPanel from './SwfPanel';
+import type { ConfirmRequest } from './useDialogs';
 
 afterEach(cleanup);
+
+const confirm = vi.hoisted(() => vi.fn<(req: ConfirmRequest) => Promise<boolean>>());
+vi.mock('./useDialogs', () => ({ useDialogs: () => ({ confirm }) }));
+beforeEach(() => { confirm.mockReset(); confirm.mockResolvedValue(true); });
 
 function stubBridge(overrides: Record<string, unknown> = {}) {
   const swf = {
@@ -699,5 +704,47 @@ describe('SwfPanel', () => {
     await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'ABC scripts' })); });
     expect((screen.getByLabelText('ABC script') as HTMLTextAreaElement).value).toBe('draft text');
     expect((screen.getByText('Apply script') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // Constraint: detects Close discarding unsaved edits without asking, or a refused close dropping the open document.
+  it('asks before closing with unsaved changes and keeps the document when refused', async () => {
+    stubBridge({ Open: vi.fn(async () => JSON.stringify({ revision: 1, undo: 1, redo: 0, dirty: true })) });
+    const onClose = vi.fn();
+    render(<SwfPanel onClose={onClose} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    confirm.mockResolvedValueOnce(false);
+    fireEvent.click(screen.getByText('Close'));
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('modified')).toBeTruthy();
+  });
+
+  // Constraint: detects Close on a clean document prompting the user for nothing.
+  it('closes a clean document without asking', async () => {
+    stubBridge();
+    const onClose = vi.fn();
+    render(<SwfPanel onClose={onClose} />);
+    fireEvent.click(screen.getByText('Close'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  // Constraint: detects Browse or Open replacing unsaved edits without asking first.
+  it('asks before Browse or Open replaces a dirty document', async () => {
+    const swf = stubBridge({
+      Open: vi.fn(async () => JSON.stringify({ revision: 1, undo: 1, redo: 0, dirty: true })),
+      BrowseForFile: vi.fn(async () => 'Interface/Other.swf'),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(swf.Open).toHaveBeenCalledTimes(1);
+    confirm.mockResolvedValue(false);
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    await act(async () => { fireEvent.click(screen.getByText('Browse…')); });
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+    expect(swf.Open).toHaveBeenCalledTimes(1);
   });
 });

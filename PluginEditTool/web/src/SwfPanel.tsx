@@ -3,6 +3,7 @@ import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-rea
 import type { SwfHost } from './backend';
 import { getSwf } from './backend';
 import SwfAbcPage, { type AbcBlockRow, type AbcReply } from './SwfAbcPage';
+import { useDialogs } from './useDialogs';
 import './SwfPanel.css';
 
 type CharacterRow = { id: number; kind: string; tagIndex: number; name: string; imported: string };
@@ -29,6 +30,7 @@ function parse<T>(reply: string): T & ErrorReply {
 
 // Constraint: every refusal from Radicle is shown verbatim next to the field that caused it.
 export default function SwfPanel({ onClose }: { onClose: () => void }) {
+  const { confirm: askConfirm } = useDialogs();
   const [path, setPath] = useState('');
   const [characters, setCharacters] = useState<CharacterRow[]>([]);
   const [labels, setLabels] = useState<LabelRow[]>([]);
@@ -144,6 +146,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const open = useCallback(async (target: string) => {
     const bridge = host();
     if (!bridge || !target.trim()) return;
+    if (state.dirty && !await askConfirm({
+      title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard',
+      message: 'Opening another SWF replaces the open movie and discards its unsaved changes.',
+    })) return;
     setBusy(true);
     setError('');
     setAbcBlocks([]);
@@ -189,7 +195,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
     }
-  }, [timeline, frame, loadCharacters, loadLabels, showFrame, loadAbc]);
+  }, [timeline, frame, state.dirty, askConfirm, loadCharacters, loadLabels, showFrame, loadAbc]);
 
   const browse = useCallback(async () => {
     const bridge = host();
@@ -389,11 +395,19 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   }, [command]);
 
 
+  const requestClose = async () => {
+    if (state.dirty && !await askConfirm({
+      title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard',
+      message: 'The open SWF has unsaved changes. Closing the panel discards them.',
+    })) return;
+    onClose();
+  };
+
   return (
     <div className="swf-panel">
       <header className="swf-head">
         <strong>Interface (SWF)</strong>
-        <button type="button" onClick={onClose}>Close</button>
+        <button type="button" onClick={() => void requestClose()}>Close</button>
         {state.dirty && <span className="swf-dirty">modified</span>}
         <button type="button" onClick={() => void browse()}>Browse…</button>
         <button type="button" disabled={busy || !path.trim()} onClick={() => void open(path)}>Open</button>
