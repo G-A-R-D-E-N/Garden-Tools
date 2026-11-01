@@ -1,4 +1,5 @@
 #include "fo4/c_api_swf.h"
+#include "fo4/c_api_swf_verbs.h"
 
 #include "c_api_env_internal.hpp"
 #include "c_api_internal.hpp"
