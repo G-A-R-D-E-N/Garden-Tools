@@ -382,6 +382,68 @@ std::vector<std::byte> movie_with_frame_one_child(const abc::AbcFile& document) 
   return wrap_body(builder.body, 10, false, false);
 }
 
+abc::AbcFile constructed_child_file() {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t marked = script.multiname("MarkedClip");
+  const std::uint32_t super = script.multiname("MovieClip", "flash.display");
+  const std::uint32_t store = script.multiname("markedChild");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.getlocal0();
+  constructor_code.pushscope();
+  constructor_code.getlocal0();
+  constructor_code.getglobalscope();
+  constructor_code.swap();
+  constructor_code.setproperty(store);
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("iinit", constructor_code.bytes(), 1);
+  const std::uint32_t initialized = script.multiname("classInitRan");
+  avm2_test::CodeBuilder class_init;
+  class_init.getlocal0();
+  class_init.pushscope();
+  class_init.pushtrue();
+  class_init.getglobalscope();
+  class_init.swap();
+  class_init.setproperty(initialized);
+  class_init.returnvoid();
+  const std::uint32_t cinit = script.method("cinit", class_init.bytes(), 1);
+  avm2_test::CodeBuilder script_init;
+  script_init.returnvoid();
+  const std::uint32_t init = script.method("init", script_init.bytes(), 1);
+  abc::AbcFile file = script.finish(init);
+  abc::AbcInstanceInfo instance;
+  instance.name = marked;
+  instance.super_index = super;
+  instance.iinit = constructor;
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = cinit;
+  file.classes.push_back(klass);
+  return file;
+}
+
+std::vector<std::byte> movie_with_placed_class(const abc::AbcFile& child) {
+  SwfBuilder builder;
+  builder.rect(0, 400, 0, 200, 9);
+  builder.u16(24u * 256u);
+  builder.u16(1);
+  add_abc_block(builder, child, "child");
+  builder.tag(fo4::swf::tag::kDefineSprite, sprite_tag(2, 1, {}), false);
+  SwfBuilder place;
+  place.u8(0x22);
+  place.u16(1);
+  place.u16(2);
+  place.text("List_mc");
+  builder.tag(fo4::swf::tag::kPlaceObject2, place.body, false);
+  SwfBuilder symbols;
+  symbols.u16(1);
+  symbols.u16(2);
+  symbols.text("MarkedClip");
+  builder.tag(fo4::swf::tag::kSymbolClass, symbols.body, false);
+  builder.tag(fo4::swf::tag::kShowFrame);
+  builder.tag(fo4::swf::tag::kEnd);
+  return wrap_body(builder.body, 10, false, false);
+}
+
 }  // namespace
 
 TEST(Avm2DocumentClass, FrameOneChildrenExistWhenTheDocumentConstructorRuns) {
@@ -434,4 +496,23 @@ TEST(Avm2DocumentClass, PlacedChildIsNotStoredInASlotOfAnUnrelatedType) {
       fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
   ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
   EXPECT_FALSE(global_value(*runtime.global_object(), "childSeen").is_object());
+}
+
+TEST(Avm2DocumentClass, PlacedChildRunsItsClassConstructor) {
+  const std::vector<std::byte> bytes = movie_with_placed_class(constructed_child_file());
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.link().ok());
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<fo4::avm2::DisplayObject> placed = movie->root()->child_by_name("List_mc");
+  ASSERT_NE(placed, nullptr);
+  const fo4::avm2::Value marked = global_value(*runtime.global_object(), "markedChild");
+  ASSERT_TRUE(marked.is_object());
+  EXPECT_EQ(marked.as_object().get(), static_cast<fo4::avm2::Object*>(placed.get()));
+  const fo4::avm2::Value initialized = global_value(*runtime.global_object(), "classInitRan");
+  EXPECT_TRUE(initialized.is_boolean() && initialized.as_boolean());
 }

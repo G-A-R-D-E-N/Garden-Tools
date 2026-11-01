@@ -275,7 +275,8 @@ void sync_frame_listener(Runtime& runtime, const std::shared_ptr<Object>& target
     return;
   }
   const auto display = std::static_pointer_cast<DisplayObject>(target);
-  if (has_event_listener(*target, "enterFrame") || has_event_listener(*target, "exitFrame")) {
+  if (has_event_listener(*target, "enterFrame") || has_event_listener(*target, "exitFrame") ||
+      has_event_listener(*target, "render")) {
     runtime.track_frame_listener(display);
   } else {
     runtime.untrack_frame_listener(display.get());

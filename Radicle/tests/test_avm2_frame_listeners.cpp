@@ -79,6 +79,22 @@ struct Scene {
     return script.method("tag_" + tag, body.bytes(), 2);
   }
 
+  std::uint32_t tag_and_invalidate(const std::string& tag) {
+    avm2_test::CodeBuilder body;
+    const std::uint32_t log_name = script.multiname("log");
+    body.findpropstrict(log_name);
+    body.dup();
+    body.getproperty(log_name);
+    body.pushstring(script.string_of(tag));
+    body.add();
+    body.initproperty(log_name);
+    body.getglobalscope();
+    body.getproperty(script.multiname("theStage"));
+    body.callpropvoid(script.multiname("invalidate"), 0);
+    body.returnvoid();
+    return script.method("tag_and_invalidate_" + tag, body.bytes(), 2);
+  }
+
   void start() {
     const std::uint32_t init = script.method("init", std::vector<std::uint8_t>{0x47}, 1);
     file = script.finish(init);
@@ -144,6 +160,17 @@ std::shared_ptr<SwfRuntime> create_movie(Scene& scene) {
       SwfRuntime::create(scene.runtime, *scene.interpreter, minimal_movie());
   EXPECT_NE(movie, nullptr) << SwfRuntime::last_error();
   return movie;
+}
+
+void invalidate_stage(Scene& scene, const std::shared_ptr<SwfRuntime>& movie) {
+  const std::shared_ptr<DisplayObject> stage = movie->stage();
+  const fo4::avm2::Trait* trait =
+      stage->instance_class()->resolve_instance_trait(public_name("invalidate"));
+  ASSERT_NE(trait, nullptr);
+  ASSERT_NE(trait->function, nullptr);
+  const ExecutionResult result =
+      scene.interpreter->call_function(*trait->function, Value::object(stage), {}, 0);
+  ASSERT_TRUE(result.ok()) << result.message;
 }
 
 }  // namespace
@@ -360,4 +387,79 @@ TEST(Avm2FrameListeners, AnObjectOnAnotherMoviesStageIsNotDeliveredByThisMovie) 
   EXPECT_EQ(scene.log(), "");
   first->advance(*scene.interpreter, 0.125);
   EXPECT_EQ(scene.log(), "aaa");
+}
+
+TEST(Avm2FrameListeners, TwoInvalidatesInAFrameGiveOneRender) {
+  Scene scene;
+  const std::uint32_t render = scene.tag_method("r");
+  scene.start();
+  const std::shared_ptr<SwfRuntime> movie = create_movie(scene);
+  ASSERT_NE(movie, nullptr);
+  listen(scene, movie->stage(), "render", scene.listener(render));
+  invalidate_stage(scene, movie);
+  invalidate_stage(scene, movie);
+
+  movie->advance(*scene.interpreter, 0.125);
+  EXPECT_EQ(scene.log(), "r");
+}
+
+TEST(Avm2FrameListeners, WithoutAnInvalidateThereIsNoRender) {
+  Scene scene;
+  const std::uint32_t render = scene.tag_method("r");
+  scene.start();
+  const std::shared_ptr<SwfRuntime> movie = create_movie(scene);
+  ASSERT_NE(movie, nullptr);
+  listen(scene, movie->stage(), "render", scene.listener(render));
+
+  movie->advance(*scene.interpreter, 0.125);
+  EXPECT_EQ(scene.log(), "");
+}
+
+TEST(Avm2FrameListeners, AFailingRenderListenerIsRecordedAndDoesNotStopTheOthers) {
+  Scene scene;
+  const std::uint32_t thrower = scene.throw_method();
+  const std::uint32_t render = scene.tag_method("r");
+  scene.start();
+  auto shape = make_display(scene.runtime, "flash.display::Shape");
+  ASSERT_NE(shape, nullptr);
+  const std::shared_ptr<SwfRuntime> movie = create_movie(scene);
+  ASSERT_NE(movie, nullptr);
+  listen(scene, movie->stage(), "render", scene.listener(thrower));
+  listen(scene, shape, "render", scene.listener(render));
+  invalidate_stage(scene, movie);
+
+  movie->advance(*scene.interpreter, 0.125);
+  EXPECT_EQ(scene.log(), "r");
+  EXPECT_EQ(scene.interpreter->handler_failures().count, 1u);
+  EXPECT_TRUE(movie->playing());
+  EXPECT_TRUE(movie->frame_error().empty());
+}
+
+TEST(Avm2FrameListeners, InvalidateDuringARenderWaitsForTheNextFrame) {
+  Scene scene;
+  const std::uint32_t render = scene.tag_and_invalidate("r");
+  scene.start();
+  const std::shared_ptr<SwfRuntime> movie = create_movie(scene);
+  ASSERT_NE(movie, nullptr);
+  scene.define_global("theStage", Value::object(movie->stage()));
+  listen(scene, movie->stage(), "render", scene.listener(render));
+  invalidate_stage(scene, movie);
+
+  movie->advance(*scene.interpreter, 0.125);
+  EXPECT_EQ(scene.log(), "rrr");
+}
+
+TEST(Avm2FrameListeners, AnOffListObjectReceivesRenderWhileItListens) {
+  Scene scene;
+  const std::uint32_t render = scene.tag_method("r");
+  scene.start();
+  auto shape = make_display(scene.runtime, "flash.display::Shape");
+  ASSERT_NE(shape, nullptr);
+  const std::shared_ptr<SwfRuntime> movie = create_movie(scene);
+  ASSERT_NE(movie, nullptr);
+  listen(scene, shape, "render", scene.listener(render));
+  invalidate_stage(scene, movie);
+
+  movie->advance(*scene.interpreter, 0.125);
+  EXPECT_EQ(scene.log(), "r");
 }

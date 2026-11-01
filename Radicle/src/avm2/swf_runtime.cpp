@@ -356,6 +356,9 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
       }
     }
     broadcast_frame_event(interpreter, stage_, "exitFrame");
+    if (runtime_ != nullptr && runtime_->take_render_request()) {
+      broadcast_frame_event(interpreter, stage_, "render");
+    }
     accumulator_ -= 1.0;
   }
 }

@@ -119,6 +119,7 @@ enum class Id : std::uint32_t {
   display_prev_frame,
   display_local_to_global,
   display_global_to_local,
+  display_stage_invalidate,
   geom_construct,
   dictionary_construct,
   event_construct,

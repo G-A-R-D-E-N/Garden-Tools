@@ -401,6 +401,7 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*display_container, "contains", native::Id::display_contains, false);
   add_method(*display_container, "setChildIndex", native::Id::display_set_child_index, false);
   add_method(*display_container, "swapChildren", native::Id::display_swap_children, false);
+  add_method(*stage, "invalidate", native::Id::display_stage_invalidate, false);
   add_method(*movie_clip, "gotoAndPlay", native::Id::display_goto_and_play, false);
   add_method(*movie_clip, "gotoAndStop", native::Id::display_goto_and_stop, false);
   add_method(*movie_clip, "stop", native::Id::display_stop, false);

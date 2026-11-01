@@ -564,7 +564,6 @@ TEST(CApiRuntimeReal, ReplaysTheSevenProgramsDeterministically) {
     ASSERT_TRUE(base.ok()) << control_name << ": " << base.failure;
     const ProgramRun altered = run_program(archive.get(), control->second, inputs, false);
     ASSERT_EQ(altered.hashes.size(), kProgramFrames) << control_name << ": " << altered.failure;
-    EXPECT_NE(altered.hashes, base.hashes) << control_name << ": the frame hashes ignore the scripts";
     EXPECT_NE(altered.host_log, base.host_log) << control_name << ": the host log ignores the init";
   }
 

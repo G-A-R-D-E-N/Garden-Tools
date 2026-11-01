@@ -704,4 +704,20 @@ TEST(Avm2StageEvents, StoppedParentDoesNotResetAChildTheScriptMoved) {
   EXPECT_EQ(child->x(), 99.0);
 }
 
+TEST(Avm2StageEvents, StageInvalidateIsAcceptedByTheStage) {
+  Scene scene;
+  const std::uint32_t stage_name = scene.script.multiname("stage");
+  const std::uint32_t invalidate = scene.script.multiname("invalidate");
+  avm2_test::CodeBuilder init;
+  init.getlex(stage_name);
+  init.callpropvoid(invalidate, 0);
+  init.returnvoid();
+  scene.start(init.bytes());
+  auto stage = make_display(scene.runtime, "flash.display::Stage");
+  ASSERT_NE(stage, nullptr);
+  scene.define_global("stage", Value::object(stage));
+  const ExecutionResult result = scene.interpreter->run_script(0);
+  EXPECT_TRUE(result.ok()) << result.message;
+}
+
 }  // namespace

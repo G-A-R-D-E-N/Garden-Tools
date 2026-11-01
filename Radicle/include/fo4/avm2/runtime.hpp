@@ -108,6 +108,12 @@ class Runtime {
   const std::vector<std::shared_ptr<DisplayObject>>& frame_listener_objects() const noexcept {
     return frame_listener_objects_;
   }
+  void request_render() noexcept { render_requested_ = true; }
+  bool take_render_request() noexcept {
+    const bool requested = render_requested_;
+    render_requested_ = false;
+    return requested;
+  }
 
   const Class* find_class(const Multiname& multiname) const;
   const Class* find_class(std::string_view rendered_name) const;
@@ -183,6 +189,7 @@ class Runtime {
   std::uint32_t next_sound_id_{1};
   std::vector<std::shared_ptr<MovieClip>> movie_clips_;
   std::vector<std::shared_ptr<DisplayObject>> frame_listener_objects_;
+  bool render_requested_{false};
   std::shared_ptr<ApplicationDomainObject> current_domain_;
   std::map<std::string, std::shared_ptr<Object>> external_callbacks_;
   bool linked_{false};

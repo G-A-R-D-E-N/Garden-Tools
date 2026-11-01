@@ -53,6 +53,29 @@ Class* resolve_character_class(Runtime& runtime, const SwfMovieData& data,
   return const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
 }
 
+ExecutionResult initialize_placed(Interpreter& interpreter,
+                                  const std::shared_ptr<DisplayObject>& object, Class& klass,
+                                  std::size_t depth) {
+  ExecutionResult prepared = interpreter.prepare_class(klass, depth);
+  if (!prepared.ok()) {
+    return prepared;
+  }
+  klass.apply_slot_defaults(*object);
+  return ExecutionResult{};
+}
+
+ExecutionResult run_placed_constructor(Interpreter& interpreter,
+                                       const std::shared_ptr<DisplayObject>& object, Class& klass,
+                                       std::size_t depth) {
+  if (klass.iinit == kNoMethod || klass.file == nullptr) {
+    return ExecutionResult{};
+  }
+  auto initializer = std::make_shared<FunctionObject>(klass.file->method_name(klass.iinit),
+                                                      klass.file, klass.iinit);
+  initializer->set_owner_class(&klass);
+  return interpreter.call_function(*initializer, Value::object(object), {}, depth);
+}
+
 void apply_character_definition(DisplayObject& object, const SwfMovieData& data,
                                 std::uint16_t character_id) {
   const auto bounds = data.character_bounds.find(character_id);
@@ -169,6 +192,8 @@ class SwfTimelineClip : public MovieClip {
         }
       }
       std::shared_ptr<DisplayObject> object;
+      std::shared_ptr<SwfTimelineClip> clip;
+      bool created = false;
       const auto found = objects_.find(row.depth);
       if (!row.has_character) {
         if (found == objects_.end()) {
@@ -182,10 +207,9 @@ class SwfTimelineClip : public MovieClip {
         detach(interpreter, row.depth, depth);
         const auto sprite = data_->sprites.find(row.character_id);
         if (sprite != data_->sprites.end()) {
-          auto clip = std::make_shared<SwfTimelineClip>(klass, data_, &sprite->second,
-                                                        row.character_id);
+          clip = std::make_shared<SwfTimelineClip>(klass, data_, &sprite->second,
+                                                   row.character_id);
           object = clip;
-          sprite_clips_[row.depth] = clip.get();
         } else {
           object = make_display_object(runtime, *klass);
         }
@@ -193,9 +217,11 @@ class SwfTimelineClip : public MovieClip {
           continue;
         }
         apply_character_definition(*object, *data_, row.character_id);
-        add_child(object);
-        objects_[row.depth] = object;
-        just_created.push_back(row.depth);
+        ExecutionResult initialized = initialize_placed(interpreter, object, *klass, depth + 1);
+        if (!initialized.ok()) {
+          return initialized;
+        }
+        created = true;
       }
       if (row.has_matrix || !row.move) {
         apply_matrix(*object, row);
@@ -213,6 +239,27 @@ class SwfTimelineClip : public MovieClip {
       apply_placement_state(*object, row);
       if (!row.name.empty()) {
         object->set_name(row.name);
+      }
+      if (created) {
+        if (clip != nullptr) {
+          ExecutionResult placed = clip->place_frame(interpreter, 1, true, depth);
+          if (!placed.ok()) {
+            return placed;
+          }
+        }
+        ExecutionResult constructed =
+            run_placed_constructor(interpreter, object, *klass, depth + 1);
+        if (!constructed.ok()) {
+          return constructed;
+        }
+        if (clip != nullptr) {
+          sprite_clips_[row.depth] = clip.get();
+        }
+        add_child(object);
+        objects_[row.depth] = object;
+        just_created.push_back(row.depth);
+      }
+      if (!row.name.empty()) {
         store_named_child(interpreter, object, row.name);
       }
     }
@@ -249,11 +296,8 @@ class SwfTimelineClip : public MovieClip {
       if (!created && !advance_children) {
         continue;
       }
-      ExecutionResult result = created ? clip.place_frame(interpreter, 1, true, depth)
+      ExecutionResult result = created ? clip.run_frame_actions(interpreter, depth)
                                        : clip.advance_timeline(interpreter, depth);
-      if (result.ok() && created) {
-        result = clip.run_frame_actions(interpreter, depth);
-      }
       if (!result.ok()) {
         return result;
       }

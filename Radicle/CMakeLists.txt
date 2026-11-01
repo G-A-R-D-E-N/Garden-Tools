@@ -1065,6 +1065,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_display_api.cpp
     tests/test_avm2_display_snapshot.cpp
     tests/test_avm2_document_class.cpp
+    tests/test_avm2_placed_construction.cpp
     tests/test_avm2_events.cpp
     tests/test_avm2_handler_failures.cpp
     tests/test_avm2_frame_listeners.cpp

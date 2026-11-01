@@ -478,6 +478,10 @@ bool try_display_native(Interpreter& interpreter, native::Id id, const Value& se
     case native::Id::display_global_to_local:
       out = display_to_global(interpreter, self, arguments, false);
       return true;
+    case native::Id::display_stage_invalidate:
+      interpreter.runtime().request_render();
+      out = native_value(Value::undefined());
+      return true;
     case native::Id::geom_construct:
       out = geom_construct(interpreter, self, arguments);
       return true;
