@@ -117,13 +117,18 @@ Shared by nodes and shapes (`detail::read_av_header` in `src/nif/nif.cpp`):
 - Effects list: absent for BS >= 130 (`F4LODGEN@06db2894:251-258`).
 - `BSMultiBoundNode` trailing fields are multi-bound i32 and cull mode u32
   (`F4LODGEN@06db2894:260-268`). The reader does not read them.
+- `BSValueNode` trailing fields, after the children list: an i32 value, then one
+  flags byte. All 1,766 base-game and DLC blocks have exactly those five bytes. The reader keeps the
+  i32 as the node's `value` when at least four bytes remain, so a shorter block has no
+  value and is not a parse error. The value equals the first number in the block's name, and 1,762 of the 1,766 base-game and DLC values match an ADDN DATA index in the seven masters. The flags byte is not read; its meaning is unknown.
 
 Node-type allowlist (`src/nif/nif.cpp:k_node_types`): `NiNode`, `BSFadeNode`,
 `BSMultiBoundNode`, `BSOrderedNode`, `BSLeafAnimNode`, `BSTreeNode`,
 `NiBillboardNode`, `NiSwitchNode`, `NiLODNode`, `BSValueNode`, `BSRangeNode`,
 `BSDebrisNode`, `BSBlastNode`, `BSDamageStage`, `NiSortAdjustNode`. Only
-`BSMultiBoundNode` is pinned by `F4LODGEN@06db2894:166`. The rest are unverified
-and listed in Parity-pending. Any other block type, including unknown `*Node`
+`BSMultiBoundNode` is pinned by `F4LODGEN@06db2894:166`. `BSValueNode` is settled
+by the shipped-data scan in the code notes. The other thirteen are unverified and
+listed in Parity-pending. Any other block type, including unknown `*Node`
 types such as `BSFurnitureMarkerNode`, is an opaque sized block: it is skipped,
 never rejected, and its children are not read.
 
@@ -448,8 +453,8 @@ Numbers do not move: an item that has since been settled says so and stays for t
 3. Node-type allowlist (`src/nif/nif.cpp:k_node_types`): `NiNode` and the other
    fourteen names. Only `BSMultiBoundNode` is pinned, by `F4LODGEN@06db2894:166`.
    `NiNode` is not pinned by any source; its prefix is assumed to match the
-   `BSMultiBoundNode` prefix. The other thirteen names are unverified too. The
-   corpus decides. Unknown `*Node` types such as `BSFurnitureMarkerNode` are skipped
+   `BSMultiBoundNode` prefix. `BSValueNode` is settled (see the NiNode family
+   section). The other twelve names are unverified too. The corpus decides. Unknown `*Node` types such as `BSFurnitureMarkerNode` are skipped
    as opaque sized blocks, not rejected.
 4. Billboard: the type name `NiBillboardNode` and a u16 mode after the children
    list. No source covers billboards.
@@ -661,6 +666,10 @@ warning, so no shipped file has a shader block this reader cannot follow.
 - Item 3 (node-type allowlist): settled by the corpus histogram above. The
   fifteen names are the node types vanilla data uses; `BSFurnitureMarkerNode` is
   deliberately outside the list, with its raw layout as evidence.
+- Item 3 (`BSValueNode` layout): settled by the shipped-data scan. The 1,766 base-game
+  and DLC blocks carry exactly five trailing bytes, and the first run of digits in
+  each of the 1,800 block names equals the i32 value. The corpus test `NifCorpus.ReadsEveryVanillaNifAndHandlesGeometryTypes`
+  checks the name rule on every value node it reads. A later whole-Data scan counted 1,800 blocks: 1,766 in base-game and DLC archives, 33 in Creation Club and 1 loose. The 1,783 in the histogram is from the earlier corpus run.
 - Item 4 (`NiBillboardNode` mode as a u16 after the children list): still the
   reader's reading; 709 vanilla billboard nodes parse with it, and the corpus
   reads their children without a single failure.
