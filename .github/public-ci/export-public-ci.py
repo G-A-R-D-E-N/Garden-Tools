@@ -25,6 +25,8 @@ DENY = (
     "README.md",
     "Radicle/README.md",
     "Radicle/ROADMAP.md",
+    ".probe/*",
+    "*/.probe/*",
     ".claude/*",
     "*/.claude/*",
     ".codex/*",
