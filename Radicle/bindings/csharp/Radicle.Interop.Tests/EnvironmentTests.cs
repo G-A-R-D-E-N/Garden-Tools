@@ -188,4 +188,79 @@ public class EnvironmentTests : IClassFixture<WorldFixture>
         var withoutXemi = env.PlacedReference(env.Winner(new FormKey("Emit.esp", 0x803))!.Value);
         Assert.Null(withoutXemi.Emittance);
     }
+
+    // Regression: XRDS and XLIG must surface as stored values, and a short XLIG must not invent the later members.
+    [Fact]
+    public void ExposesStoredRadiusAndLightDataOnlyWhenTheSubrecordsArePresent()
+    {
+        using var directory = new TempDirectory();
+        var path = directory.Write("Light.esp", Build(0, Array.Empty<string>(),
+            Top("REFR",
+                new Rec("REFR", 0x800, new[] { ("XRDS", F32(365.5f)), ("XLIG", F32(10, 2.5f, 30, 4.5f, 5.5f, 6.5f)) }),
+                new Rec("REFR", 0x803, Array.Empty<(string, byte[])>()),
+                new Rec("REFR", 0x804, new[] { ("XLIG", F32(90, 1, 2048, 0.5f)) }),
+                new Rec("REFR", 0x805, new[] { ("XLIG", F32(90, 1, 2048, 0.5f, 10)) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        PlacedReference Get(uint id) => env.PlacedReference(env.Winner(new FormKey("Light.esp", id))!.Value);
+
+        var full = Get(0x800);
+        Assert.Equal(365.5f, full.Radius);
+        Assert.NotNull(full.LightData);
+        Assert.Equal(10f, full.LightData!.Fov);
+        Assert.Equal(2.5f, full.LightData.Fade);
+        Assert.Equal(30f, full.LightData.EndDistanceCap);
+        Assert.Equal(4.5f, full.LightData.ShadowDepthBias);
+        Assert.Equal(5.5f, full.LightData.NearClip);
+        Assert.Equal(6.5f, full.LightData.VolumetricIntensity);
+
+        var absent = Get(0x803);
+        Assert.Null(absent.Radius);
+        Assert.Null(absent.LightData);
+
+        var sixteen = Get(0x804);
+        Assert.Null(sixteen.Radius);
+        Assert.NotNull(sixteen.LightData);
+        Assert.Null(sixteen.LightData!.NearClip);
+        Assert.Null(sixteen.LightData.VolumetricIntensity);
+
+        var twenty = Get(0x805);
+        Assert.Equal(10f, twenty.LightData!.NearClip);
+        Assert.Null(twenty.LightData.VolumetricIntensity);
+    }
+
+    // Regression: a missing ADDN MODL must stay a null string and a missing LNAM a null key, not an empty value.
+    [Fact]
+    public void AddOnNodeKeepsMissingModelAndMissingLightNull()
+    {
+        using var directory = new TempDirectory();
+        var path = directory.Write("AddOn.esp", Build(0, Array.Empty<string>(),
+            Top("ADDN",
+                new Rec("ADDN", 0x800, new[] { ("DATA", U32(283)), ("LNAM", U32(0x801)), ("MODL", Z("Lights\\FireAddOn.nif")), ("DNAM", U32(0x0002011B)) }),
+                new Rec("ADDN", 0x802, new[] { ("DATA", U32(282)), ("MODL", Z("Lights\\Klaxon.nif")), ("DNAM", U32(0x00030000)) }),
+                new Rec("ADDN", 0x803, new[] { ("DATA", U32(281)), ("LNAM", U32(0x801)), ("DNAM", U32(0x00040001)) }),
+                new Rec("ADDN", 0x804, new[] { ("DATA", U32(280)), ("LNAM", U32(0x801)), ("MODL", Z("Lights\\LunchBox.nif")) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        AddOnNodeRecord Get(uint id) => env.AddOnNode(env.Winner(new FormKey("AddOn.esp", id))!.Value);
+
+        var full = Get(0x800);
+        Assert.Equal(283u, full.NodeIndex);
+        Assert.Equal(new FormKey("AddOn.esp", 0x801), full.Light);
+        Assert.Equal("Lights\\FireAddOn.nif", full.Model);
+        Assert.Equal((ushort)283, full.MasterParticleCap);
+        Assert.Equal((ushort)2, full.Flags);
+
+        var withoutLight = Get(0x802);
+        Assert.Null(withoutLight.Light);
+        Assert.Equal("Lights\\Klaxon.nif", withoutLight.Model);
+        Assert.Equal((ushort)0, withoutLight.MasterParticleCap);
+        Assert.Equal((ushort)3, withoutLight.Flags);
+
+        var withoutModel = Get(0x803);
+        Assert.Null(withoutModel.Model);
+        Assert.Equal(new FormKey("AddOn.esp", 0x801), withoutModel.Light);
+
+        var withoutDnam = Get(0x804);
+        Assert.Null(withoutDnam.MasterParticleCap);
+        Assert.Null(withoutDnam.Flags);
+    }
 }
