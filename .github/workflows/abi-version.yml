@@ -18,7 +18,7 @@ permissions:
 jobs:
   unique:
     name: ABI number is unique
-    runs-on: [self-hosted, Linux, X64, garden]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
