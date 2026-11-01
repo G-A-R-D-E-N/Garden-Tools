@@ -258,6 +258,39 @@ TEST(PapyrusCodegen, FindStructConvertsSearchValueToMemberType) {
                                       "array_rfindstruct pts j \"fX\" 2.0 -1"}));
 }
 
+// Invariant: a call reading the destination stages through a temp; regression: it saw a half-written value.
+TEST(PapyrusCodegen, ShortCircuitIntoVariableReadByRightHandCallStagesThroughTemp) {
+  CodegenFixture f;
+  f.writeWithScriptObject();
+  f.write("CallAlias",
+          "Scriptname CallAlias\nbool bDone = false\nBool Function Ready(bool abValue)\n"
+          "    return abValue\nEndFunction\nFunction Go(bool abFlag)\n"
+          "    bDone = abFlag && Ready(bDone)\nEndFunction\n");
+  const auto obj = f.compileObject("CallAlias");
+
+  EXPECT_EQ(listing(function(obj, "Go")),
+            (std::vector<std::string>{"cast T abFlag", "jmpf T 3", "callmethod Ready self T bDone",
+                                      "cast T T", "assign bDone T"}));
+}
+
+// Invariant: FindStruct needs a literal member name; regression: a variable name was emitted untyped.
+TEST(PapyrusCodegen, FindStructWithNonLiteralMemberNameIsRefused) {
+  CodegenFixture f;
+  f.writeWithScriptObject();
+  f.write("FinderVar",
+          "Scriptname FinderVar\nStruct Point\n    float fX = 0.0\nEndStruct\n"
+          "Function Go(string asMember)\n    Point[] pts = new Point[2]\n"
+          "    int i = pts.FindStruct(asMember, 2.0)\nEndFunction\n");
+  const auto result = f.compile("FinderVar");
+
+  EXPECT_FALSE(result.success);
+  bool found = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == DiagnosticCode::CannotEmit) found = true;
+  }
+  EXPECT_TRUE(found);
+}
+
 TEST(PapyrusCodegen, InequalityIsEqualityFollowedByNot) {
   CodegenFixture f;
   f.writeWithScriptObject();
