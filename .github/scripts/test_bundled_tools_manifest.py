@@ -39,7 +39,7 @@ class BundledToolsManifestTest(unittest.TestCase):
         package = (PLUGIN / "package.ps1").read_text(encoding="utf-8")
         self.assertIn("-Id texconv", package)
         self.assertIn("-Id ffmpeg", package)
-        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+        workflow = (ROOT / ".forgejo" / "workflows" / "release.yml").read_text(encoding="utf-8")
         self.assertIsNone(re.search(r"FO4IDE_TEXCONV_PATH", workflow))
 
 
