@@ -43,7 +43,7 @@ TYPED_MODULES = {
     "src/forms/static_collection.cpp": ["SCOL"],
     "src/forms/weapon.cpp": ["WEAP"],
     "src/forms/weather.cpp": ["WTHR"],
-    "src/environment/base_records.cpp": ["ACTI", "BNDS", "CLMT", "LAYR", "LIGH", "STAT", "WATR", "WTHR"],
+    "src/environment/base_records.cpp": ["ACTI", "ADDN", "BNDS", "CLMT", "LAYR", "LIGH", "STAT", "WATR", "WTHR"],
     "src/environment/behavior.cpp": ["CSTY", "IDLE", "PACK"],
     "src/environment/dialogue.cpp": ["DIAL", "INFO", "SCEN"],
     "src/environment/material_swap.cpp": ["MSWP"],

@@ -1,4 +1,4 @@
-add_executable(fo4ide main.cpp McpTools.cpp)
+add_executable(fo4ide main.cpp McpTools.cpp McpCatalog.cpp McpCatalogRead.cpp McpCatalogEdit.cpp McpCatalogService.cpp)
 
 target_link_libraries(
     fo4ide

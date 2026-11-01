@@ -562,6 +562,10 @@ TEST(CApi, RecordFromAnotherEnvironmentIsRejected) {
   EXPECT_EQ(radicle_light_get_info(env_b, record, &light), RADICLE_STATUS_INVALID_ARGUMENT);
   expect_sentinel_value(light);
 
+  radicle_add_on_node_info addon = sentinel_value<radicle_add_on_node_info>();
+  EXPECT_EQ(radicle_add_on_node_get_info(env_b, record, &addon), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(addon);
+
   radicle_worldspace_info worldspace = sentinel_value<radicle_worldspace_info>();
   EXPECT_EQ(radicle_worldspace_get_info(env_b, record, &worldspace), RADICLE_STATUS_INVALID_ARGUMENT);
   expect_sentinel_value(worldspace);

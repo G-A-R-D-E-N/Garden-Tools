@@ -51,6 +51,8 @@ def main(executable):
                 assert required <= names, f"Missing native plugin tools: {sorted(required - names)}"
                 status = json.loads(call("get_mo2_status"))
                 assert status["loaded"] and status["profile"] == "Smoke", status
+                conditions = json.loads(call("get_condition_functions"))
+                assert "GetIsID" in conditions and conditions["GetIsID"], conditions
                 plugin = "NativeMcpSmoke.esp"
                 def listed():
                     rows = json.loads(call("list_plugins"))
@@ -66,7 +68,7 @@ def main(executable):
                 assert "McpSmokeEyes" in call("list_records", {"type": "EYES"})
                 record = {"form_key": form_key}
                 def read_record():
-                    matrix = json.loads(call("get_record", record))
+                    matrix = json.loads(call("get_conflict_matrix", record))
                     full = next(row for row in matrix["Rows"] if row["Field"] == "Subrecords\\FULL[0]")["Values"][-1]
                     return bytes.fromhex(full.split(": ", 1)[1]).rstrip(b"\x00").decode("utf-8")
 
@@ -141,7 +143,8 @@ def main(executable):
                 gap_path = root / "overwrite" / gap
                 gap_base = gap_path.read_bytes()
                 tools = {tool["name"]: tool for tool in rpc("tools/list")["tools"]}
-                for name in ("create_placed_object", "create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types", "add_sound_file", "remove_sound_file", "add_package_procedure", "remove_package_procedure", "set_sound_base", "create_sound", "add_script", "remove_script", "add_script_property", "remove_script_property"):
+                assert len(tools) == 160, f"Expected 160 MCP tools, got {len(tools)}"
+                for name in ("add_master", "add_masters", "set_script_value", "get_condition_functions", "create_placed_object","create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types", "add_sound_file", "remove_sound_file", "add_package_procedure", "remove_package_procedure", "set_sound_base", "create_sound", "add_script", "remove_script", "add_script_property", "remove_script_property", "get_magic_effects", "add_magic_effect", "set_magic_effect", "remove_magic_effect", "get_conflicts", "get_record_details", "get_conflict_matrix", "delete_record", "copy_as_override", "get_conditions", "set_conditions", "set_components", "describe_element", "add_element", "strings_list_tables", "graph_core_palette", "script_read_script", "archive_extract_file", "get_placed_references"):
                     assert name in tools, f"Missing MCP tool: {name}"
                 placed_schema = tools["create_placed_object"]["inputSchema"]
                 assert placed_schema["properties"]["x"]["type"] == "number", placed_schema
@@ -161,6 +164,10 @@ def main(executable):
                 assert call("set_leveled_list_settings", dict(leveled_args, flags=256), failed=True).startswith("InvalidLeveledListSettings: ")
                 assert call("create_interior_cell", {"plugin": gap, "editor_id": ""}, failed=True).startswith("InteriorCellArgumentsMissing: ")
                 assert call("edit_leveled_list_entry", {"plugin": gap, "form_key": "000800:NativeMcpGap.esp", "op": "bogus", "index": 0}, failed=True).startswith("InvalidLeveledListOperation: ")
+                assert call("clean_unused_masters", {"plugin": gap, "Apply": True}, failed=True) == "Unknown argument: Apply"
+                assert call("clean_unused_masters", {"plugin": gap}, failed=True) == "Missing argument: apply"
+                assert call("clean_unused_masters", {"plugin": gap, "apply": "yes"}, failed=True) == "apply must be boolean"
+                assert "Missing argument" not in json.dumps(rpc("tools/call", {"name": "search_cells", "arguments": {"query": "NativeMcpGap"}})), "search_cells must not require limit"
                 assert gap_path.read_bytes() == gap_base
                 outer = json.loads(call("create_record", {"plugin": gap, "type": "LVLI", "payload": {"editorId": "McpGapOuter", "chanceNone": 5, "maxCount": 2, "flags": 1}}))["formKey"]
                 inner = json.loads(call("create_record", {"plugin": gap, "type": "LVLI", "payload": {"editorId": "McpGapInner", "chanceNone": 0, "maxCount": 0, "flags": 0}}))["formKey"]
