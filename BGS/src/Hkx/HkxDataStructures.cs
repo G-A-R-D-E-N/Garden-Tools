@@ -114,6 +114,13 @@ public class HkxAnimationData
         "hkaInterleavedUncompressedAnimation",
     };
 
+    public static readonly string[] ExportableAnimationClasses =
+    {
+        "hkaSplineCompressedAnimation",
+        "hkaLosslessCompressedAnimation",
+        "hkaInterleavedUncompressedAnimation",
+    };
+
     public bool HasUnsupportedAnimation =>
         AnimationClass.Length > 0 && (Array.IndexOf(DecodedAnimationClasses, AnimationClass) < 0 || ((AnimationClass == AnimationCompression.QuantizedClass || AnimationClass == AnimationCompression.PredictiveClass) && !CompressionDecoded));
 

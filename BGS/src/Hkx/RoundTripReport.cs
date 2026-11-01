@@ -106,13 +106,18 @@ public sealed class RoundTripReport
         // file has an empty animation class and therefore contributes nothing here.
         try
         {
-            if (!new HkxBinaryReader().TryReadAnimation(hkx, out var animation) &&
-                animation.HasUnsupportedAnimation)
+            if (!new HkxBinaryReader().TryReadAnimation(hkx, out var animation))
                 report.Add(new RoundTripLoss(
                     RoundTripLossKind.UnsupportedAnimation,
                     null,
                     "",
                     AnimationCompression.Describe(animation.AnimationClass)));
+            else if (animation.AnimationClass is AnimationCompression.QuantizedClass or AnimationCompression.PredictiveClass)
+                report.Add(new RoundTripLoss(
+                    RoundTripLossKind.UnsupportedAnimation,
+                    null,
+                    "",
+                    NativeAnimation.SaveRefusal(animation.AnimationClass)));
         }
         catch (NotSupportedException error)
         {

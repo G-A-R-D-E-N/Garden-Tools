@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using OpenCommonwealth.Services.Hkx;
@@ -63,6 +64,20 @@ public sealed class QuantizedPlaybackTests
         blob = Blob(3, false);
         BinaryPrimitives.WriteUInt16LittleEndian(blob.AsSpan(64), 3);
         Assert.Throws<NotSupportedException>(() => QuantizedAnimationDecoder.Decode(blob, new()));
+    }
+
+    [Fact]
+    public void PoseFloatsKeepOneEntryPerTrackWhenATrackIsShort()
+    {
+        var skeleton = new HkxSkeleton();
+        skeleton.BoneNames.Add("root");
+        skeleton.ParentIndices.Add(-1);
+        var animation = new HkxAnimationData { NumFrames = 3, FrameDuration = 1f, Duration = 2f };
+        animation.FloatTracks.Add(new List<float> { 1, 2, 3 });
+        animation.FloatTracks.Add(new List<float> { 9 });
+
+        Assert.Equal(new[] { 3f, 9f }, AnimationPose.At(skeleton, animation, 2).Floats);
+        Assert.Equal(new[] { 2.5f, 9f }, AnimationPose.At(skeleton, animation, 1.5f).Floats);
     }
 
     internal static byte[] Fixture(int frames, bool allStatic)

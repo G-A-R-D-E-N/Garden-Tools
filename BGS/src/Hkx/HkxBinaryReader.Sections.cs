@@ -66,6 +66,8 @@ public partial class HkxBinaryReader
             throw new InvalidDataException("Missing __classnames__ section.");
         if (!sections.TryGetValue("__data__", out var dataSec))
             throw new InvalidDataException("Missing __data__ section.");
+        if (dataSec.DataStart < 0 || dataSec.LocalFixupAbs < 0 || dataSec.GlobalFixupAbs < 0 || dataSec.VirtualFixupAbs < 0)
+            throw new InvalidDataException("__data__ section offsets are negative; the packfile is malformed.");
 
         int cnStart = cnSec.DataStart;
         int dataAbs = dataSec.DataStart;
@@ -138,10 +140,12 @@ public partial class HkxBinaryReader
         switch (result.AnimationClass)
         {
             case "hkaPredictiveCompressedAnimation":
-                ParsePredictiveAnimation(data, dataAbs, animRel, fixups, result);
+                try { ParsePredictiveAnimation(data, dataAbs, animRel, fixups, result); }
+                catch (NotSupportedException) { }
                 break;
             case "hkaQuantizedAnimation":
-                ParseQuantizedAnimation(data, dataAbs, animRel, fixups, result);
+                try { ParseQuantizedAnimation(data, dataAbs, animRel, fixups, result); }
+                catch (NotSupportedException) { }
                 break;
             case "hkaSplineCompressedAnimation":
                 ParseSplineAnimation(data, dataAbs, animRel, fixups, result);

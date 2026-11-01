@@ -586,12 +586,15 @@ public static class NativeAnimation
                               : Quaternion.Identity;
     }
 
+    public static string SaveRefusal(string animationClass) =>
+        $"This clip uses {animationClass}. It can be played and inspected, but saving it is not supported yet, so nothing was written.";
+
     private static InvalidOperationException NothingToWrite(PackfileObjects objects)
     {
         var unsupported = objects.Instances.FirstOrDefault(i =>
             i.ClassName is AnimationCompression.QuantizedClass or AnimationCompression.PredictiveClass);
         return new InvalidOperationException(unsupported != null
-            ? $"This clip uses {unsupported.ClassName}. It can be played and inspected, but saving it is not supported yet, so nothing was written."
+            ? SaveRefusal(unsupported.ClassName)
             : "This file holds no animation of a class that can be decoded, so there was nothing to write out.");
     }
 }
