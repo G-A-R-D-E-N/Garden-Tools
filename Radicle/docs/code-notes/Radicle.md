@@ -9081,9 +9081,11 @@ Detects a validator that checks only the top-level list end and not the parent b
 
 - `ScriptIndex::baseChain` (`script_index.cpp:baseChain`) stops on a repeated name, so a cycle terminates. Its caller marks the resolution incomplete on line 46 (`last->extends`), which is the path the cycle tests pin. No diagnostic is raised for a cycle anywhere in `src/papyrus`, so a cyclic `extends` compiles silently. That is a gap; the tests assert only termination and `baseChainComplete == false`.
 
-## src/papyrus/declaration_check.cpp:declarationCheck (gap, not pinned)
+## src/papyrus/declaration_check.cpp:declarationCheck
 
-- Duplicate detection runs per kind: functions and events, variables, properties, structs, states and custom events. A variable and a function with the same name are not reported. Whether the Creation Kit rejects that was not verified, so no test pins it either way.
+- Duplicate detection runs per kind: functions and events, variables, properties, structs, states and custom events. A second pass refuses one bare name declared as two kinds: a variable and a function or event, or a property and a function or event. The message names the first declaration's kind and scope (`'Foo' is already declared as a variable in this script, on line N`). Names compare case-insensitively, as Papyrus names do. Same-kind repeats are left to the per-kind checks, so each repeat is reported once.
+- Whether the Creation Kit rejects a variable and a function with one name was not verified. The second pass follows PET's `PluginEditTool/native/src/papyrus/CodeGenerator.cpp:declarationCheck`. PET's copy on this branch does not have the second pass, so PET still accepts these names while Radicle refuses them. The refusal matches bare-name resolution (`ScriptIndex::findMemberOn`), where the first declaration would bind.
+- Pinned by `Radicle/tests/test_papyrus_declaration_check.cpp:VariableAndFunctionSharingOneNameAreReportedAsOneProblem` and `PropertyAndEventSharingOneNameAreReportedAsOneProblem`.
 
 ## src/papyrus/type_checker.cpp:TypeChecker (gap, not pinned)
 
@@ -9250,12 +9252,13 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 ## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::readsName
 
 - Walks the expression tree and reports whether any identifier resolves to the destination's storage name. Only `Local`, `Parameter`, `ScriptVariable` and auto `Property` bindings are passed to `storageFor`, because its default branch reports `CannotEmit` and a function name in a call callee would trigger that. An auto property resolves to its `::<name>_var` backing variable, so `bFlag = x && bFlag` is aliased. A `self.<auto prop>` member read is aliased too, because `Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitMemberRead` reads the backing variable directly.
+- A right-hand call whose argument reads the destination (`bDone = abFlag && Ready(bDone)`) is aliased as well. `Radicle/tests/test_papyrus_codegen.cpp:ShortCircuitIntoVariableReadByRightHandCallStagesThroughTemp` pins it. `readsName` and `emitShortCircuit` are the same code as PET's `PluginEditTool/native/src/papyrus/CodeGenerator.cpp:BodyEmitter::readsName` and `emitShortCircuit`, compared by diff with indentation ignored.
 
 ## Radicle/src/papyrus/body_call.cpp:BodyEmitter::emitArrayBuiltin
 
 - Bug, fixed: `findstruct` and `rfindstruct` emitted the search value with `value()`. An Int literal stayed `Integer` while the struct member was `Float`, and `Radicle/src/papyrus/struct_ops.cpp:Interpreter::findStructInArray` returns `TypeMismatch` on that, so the search failed without a message. The `memberType` lambda takes the member's declared type from the element struct (the `Owner:Struct` type name is split at its last `:`), and `valueAs` converts the value to it.
-- If the member name is not a string literal, or the struct cannot be found, `memberType` returns Error and `valueAs` falls back to `value()`, which is the old output.
-- Known gap: a member name held in a variable keeps the old unconverted search value. Unverified whether real scripts do this.
+- If the struct cannot be found, `memberType` returns Error and `valueAs` falls back to `value()`, which is the old output.
+- A member name that is not a string literal is refused with `CannotEmit` ("needs the member name as a string literal") and nothing is emitted. `Radicle/src/papyrus/struct_ops.cpp:Interpreter::findStructInArray` reads the member name from the instruction's String operand and returns `TypeMismatch` for any other operand type, and the member type the search value needs comes from the literal name. Whether the Creation Kit compiles a variable member name was not verified; the refusal fails that script's compile instead of emitting an instruction the interpreter rejects. Pinned by `Radicle/tests/test_papyrus_codegen.cpp:FindStructWithNonLiteralMemberNameIsRefused`.
 - `Radicle/tests/test_papyrus_codegen.cpp:FindStructConvertsSearchValueToMemberType` pins the Float conversion for `FindStruct` and `RFindStruct`.
 
 ## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
