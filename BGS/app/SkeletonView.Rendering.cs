@@ -54,6 +54,8 @@ public partial class SkeletonView
 
         if (DrawGroundPlane) DrawGround(ctx);
 
+        DrawRootMotion(ctx);
+
         if (ShowReference && _reference != null)
         {
             var ghost = new Pen(new SolidColorBrush(Ux.TextDisabled, 0.5), 1);
