@@ -17,6 +17,7 @@
 
 #include "graph_fixtures.hpp"
 #include "papyrus_pex_comparer.hpp"
+#include "temp_data_dir.hpp"
 
 using namespace fo4::graph;
 using namespace fo4::graph::test;
@@ -28,7 +29,7 @@ class UniqueRoot {
 public:
     explicit UniqueRoot(std::string_view tag)
         : path_(std::filesystem::temp_directory_path() /
-                ("fo4re-lift-" + std::string(tag) + "-" +
+                ("fo4re-lift-" + std::string(tag) + "-" + std::to_string(fo4::test::process_id()) + "-" +
                  std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))) {}
     ~UniqueRoot() {
         std::error_code ignored;
