@@ -153,10 +153,7 @@ class SwfTimelineClip : public MovieClip {
     std::vector<std::uint16_t> just_created;
     for (const SwfPlacementRow& row : rows_->frames[frame - 1]) {
       if (row.kind == SwfPlacementRow::Kind::Remove) {
-        ExecutionResult removal = detach(interpreter, row.depth, depth);
-        if (!removal.ok()) {
-          return removal;
-        }
+        detach(interpreter, row.depth, depth);
         continue;
       }
       Class* klass = nullptr;
@@ -177,10 +174,7 @@ class SwfTimelineClip : public MovieClip {
                  found->second->character_id() == row.character_id) {
         object = found->second;
       } else {
-        ExecutionResult removal = detach(interpreter, row.depth, depth);
-        if (!removal.ok()) {
-          return removal;
-        }
+        detach(interpreter, row.depth, depth);
         const auto sprite = data_->sprites.find(row.character_id);
         if (sprite != data_->sprites.end()) {
           auto clip = std::make_shared<SwfTimelineClip>(klass, data_, &sprite->second,
@@ -224,10 +218,7 @@ class SwfTimelineClip : public MovieClip {
         continue;
       }
       const std::shared_ptr<DisplayObject> object = added_object->second;
-      ExecutionResult added = dispatch_added(interpreter, object, depth + 1);
-      if (!added.ok()) {
-        return added;
-      }
+      dispatch_added(interpreter, object, depth + 1);
     }
     return advance_child_clips(interpreter, depth, just_created, advance_children);
   }
@@ -265,20 +256,16 @@ class SwfTimelineClip : public MovieClip {
     return ExecutionResult{};
   }
 
-  ExecutionResult detach(Interpreter& interpreter, std::uint16_t layer, std::size_t depth) {
+  void detach(Interpreter& interpreter, std::uint16_t layer, std::size_t depth) {
     const auto found = objects_.find(layer);
     if (found == objects_.end()) {
-      return ExecutionResult{};
+      return;
     }
     const std::shared_ptr<DisplayObject> object = found->second;
-    ExecutionResult removed = dispatch_removed(interpreter, object, depth + 1);
-    if (!removed.ok()) {
-      return removed;
-    }
+    dispatch_removed(interpreter, object, depth + 1);
     remove_child(object);
     sprite_clips_.erase(layer);
     objects_.erase(layer);
-    return ExecutionResult{};
   }
 
   void store_named_child(Interpreter& interpreter, const std::shared_ptr<DisplayObject>& child,

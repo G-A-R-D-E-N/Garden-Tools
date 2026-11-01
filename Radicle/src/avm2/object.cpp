@@ -102,6 +102,8 @@ const char* object_kind_name(ObjectKind kind) noexcept {
       return "event";
     case ObjectKind::ByteArray:
       return "bytearray";
+    case ObjectKind::Xml:
+      return "xml";
   }
   return "unknown";
 }

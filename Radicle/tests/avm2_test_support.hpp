@@ -216,6 +216,15 @@ class ScriptBuilder {
     return static_cast<std::uint32_t>(multinames_.size());
   }
 
+  std::uint32_t attribute_multiname(const std::string& name) {
+    MultinameEntry entry;
+    entry.kind = fo4::abc::AbcMultinameKind::QNameA;
+    entry.name = string_of(name);
+    entry.name_space = namespace_of("");
+    multinames_.push_back(entry);
+    return static_cast<std::uint32_t>(multinames_.size());
+  }
+
   std::uint32_t multiname_l(std::uint32_t ns_set = 1u) {
     MultinameEntry entry;
     entry.kind = fo4::abc::AbcMultinameKind::MultinameL;

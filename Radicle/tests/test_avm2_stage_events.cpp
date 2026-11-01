@@ -64,6 +64,14 @@ struct Scene {
     return script.method("on_" + tag, body.bytes(), 2);
   }
 
+  std::uint32_t thrower() {
+    avm2_test::CodeBuilder body;
+    body.pushbyte(1);
+    body.throw_op();
+    body.returnvoid();
+    return script.method("throw_one", body.bytes(), 2);
+  }
+
   void start(const std::vector<std::uint8_t>& init_code,
              fo4::avm2::InterpreterLimits limits = {}) {
     const std::uint32_t init = script.method("init", init_code, 1);
@@ -247,6 +255,64 @@ TEST(Avm2StageEvents, TimelinePlacementAndRemovalSendTheStageEvents) {
   EXPECT_EQ(scene.log(), "added,");
   movie->advance(*scene.interpreter, 1.0 / 24.0);
   EXPECT_EQ(scene.log(), "added,removed,");
+}
+
+std::vector<std::byte> two_placements_movie() {
+  swf_test::SwfBuilder builder;
+  builder.rect(0, 400, 0, 200, 9);
+  builder.u16(24u * 256u);
+  builder.u16(3);
+  builder.tag(fo4::swf::tag::kShowFrame);
+  for (std::uint16_t depth = 1; depth <= 2; ++depth) {
+    swf_test::SwfBuilder place;
+    place.u8(0x02);
+    place.u16(depth);
+    place.u16(5);
+    builder.tag(fo4::swf::tag::kPlaceObject2, place.body, false);
+  }
+  builder.tag(fo4::swf::tag::kShowFrame);
+  builder.tag(fo4::swf::tag::kShowFrame);
+  builder.tag(fo4::swf::tag::kEnd);
+  return swf_test::wrap_body(builder.body, 10, false, false);
+}
+
+TEST(Avm2StageEvents, TimelineRemovalWithAFailingRemovedListenerKeepsPlaying) {
+  Scene scene;
+  const std::uint32_t thrower = scene.thrower();
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes());
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(timeline_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  scene.listen(*movie->stage(), "removed", thrower);
+
+  movie->advance(*scene.interpreter, 1.0 / 24.0);
+  movie->advance(*scene.interpreter, 1.0 / 24.0);
+  EXPECT_TRUE(movie->playing());
+  EXPECT_EQ(scene.interpreter->handler_failures().count, 1u);
+}
+
+TEST(Avm2StageEvents, TimelinePlacementWithAFailingAddedListenerSendsEveryAddedEvent) {
+  Scene scene;
+  const std::uint32_t thrower = scene.thrower();
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes());
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(two_placements_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  scene.listen(*movie->stage(), "added", thrower);
+
+  movie->advance(*scene.interpreter, 1.0 / 24.0);
+  EXPECT_TRUE(movie->playing());
+  EXPECT_EQ(scene.interpreter->handler_failures().count, 2u);
 }
 
 void log_tag(Scene& scene, avm2_test::CodeBuilder& code, const char* tag) {

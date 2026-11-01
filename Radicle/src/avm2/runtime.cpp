@@ -219,6 +219,7 @@ RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, M
 Runtime::Runtime() : global_object_(std::make_shared<Object>()) {}
 
 Runtime::~Runtime() {
+  frame_listener_objects_.clear();
   for (const std::shared_ptr<FunctionObject>& function : script_functions_) {
     function->captured_scope().clear();
   }
@@ -239,6 +240,27 @@ void Runtime::register_movie_clip(const std::shared_ptr<MovieClip>& clip) {
   if (clip != nullptr) {
     movie_clips_.push_back(clip);
   }
+}
+
+void Runtime::track_frame_listener(const std::shared_ptr<DisplayObject>& object) {
+  if (object == nullptr) {
+    return;
+  }
+  for (const std::shared_ptr<DisplayObject>& tracked : frame_listener_objects_) {
+    if (tracked == object) {
+      return;
+    }
+  }
+  frame_listener_objects_.push_back(object);
+}
+
+void Runtime::untrack_frame_listener(const DisplayObject* object) {
+  frame_listener_objects_.erase(
+      std::remove_if(frame_listener_objects_.begin(), frame_listener_objects_.end(),
+                     [object](const std::shared_ptr<DisplayObject>& tracked) {
+                       return tracked.get() == object;
+                     }),
+      frame_listener_objects_.end());
 }
 
 RuntimeLoad Runtime::add_file(const abc::AbcFile& file,
@@ -608,6 +630,9 @@ RuntimeLoad Runtime::link() {
   }
   if (install_bytearray_builtins() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::InvalidTrait, "the flash.utils classes do not install");
+  }
+  if (install_xml_builtins() != RuntimeStatus::Ok) {
+    return fail(RuntimeStatus::InvalidTrait, "the XML classes do not install");
   }
   if (build_class_shells() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::DuplicateClass, "a class name is defined twice");

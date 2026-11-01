@@ -4,8 +4,10 @@
 
 #include <fo4/avm2/class.hpp>
 #include <fo4/avm2/coercion.hpp>
+#include <fo4/avm2/xml.hpp>
 
 #include <cmath>
+#include <memory>
 #include <string>
 
 namespace fo4::avm2 {
@@ -101,6 +103,17 @@ InterpreterStatus Interpreter::coerce_value(const Multiname& multiname, Value& v
   const Class* value_class = value.as_object()->instance_class();
   if (value_class != nullptr &&
       (value_class->is_subclass_of(target) || value_class->implements_interface(target))) {
+    return InterpreterStatus::Ok;
+  }
+  if (value.as_object()->kind() == ObjectKind::Xml && (name == "XML" || name == "XMLList")) {
+    const auto& source = static_cast<const XmlObject&>(*value.as_object());
+    if (name == "XML" && source.nodes().size() != 1) {
+      message = "an XMLList of " + std::to_string(source.nodes().size()) +
+                " nodes does not convert to XML";
+      return InterpreterStatus::TypeError;
+    }
+    value = Value::object(std::make_shared<XmlObject>(const_cast<Class*>(target), source.nodes(),
+                                                      name == "XMLList"));
     return InterpreterStatus::Ok;
   }
   const ObjectKind kind = value.as_object()->kind();

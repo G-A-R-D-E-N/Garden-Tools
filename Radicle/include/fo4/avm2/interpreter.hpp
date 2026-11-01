@@ -65,6 +65,12 @@ struct ExecutionResult {
   bool ok() const noexcept { return status == InterpreterStatus::Ok; }
 };
 
+/* Invariant: first_message is the text of the first counted failure. */
+struct HandlerFailures {
+  std::size_t count{0};
+  std::string first_message;
+};
+
 /* The interpreter must stay single threaded and clock free, so equal inputs give equal results. */
 class Interpreter {
  public:
@@ -110,6 +116,9 @@ class Interpreter {
   void advance_host_time(double dt_ms);
   ExecutionResult call_native_id(std::uint32_t native_id, const Value& self,
                                  const std::vector<Value>& arguments, std::size_t depth);
+  /* Requires the result of one handler call; a success is ignored. */
+  void record_handler_failure(const ExecutionResult& result);
+  const HandlerFailures& handler_failures() const noexcept { return handler_failures_; }
 
  private:
   struct Frame {
@@ -173,6 +182,8 @@ class Interpreter {
                                 std::size_t depth);
   ExecutionResult construct(Frame& frame, const ClassObject& class_object,
                             const std::vector<Value>& arguments, std::size_t depth);
+  ExecutionResult call_class(const ClassObject& class_object, const std::vector<Value>& arguments,
+                             std::size_t depth);
   ExecutionResult ensure_class_initialized(Class& klass, std::size_t depth);
   ExecutionResult initialize_class_value(const Value& value, std::size_t depth);
   bool is_instance_of(const Value& value, const Value& type) const;
@@ -197,6 +208,7 @@ class Interpreter {
   std::size_t frames_{0};
   std::uint64_t random_state_{0x9E3779B97F4A7C15ULL};
   HostClock host_clock_;
+  HandlerFailures handler_failures_;
   std::uint8_t current_opcode_{0};
   std::uint32_t current_offset_{0};
   std::map<std::pair<const abc::AbcFile*, std::uint32_t>, Multiname> multinames_;

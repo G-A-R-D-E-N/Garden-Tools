@@ -117,11 +117,8 @@ ExecutionResult detach_child(Interpreter& interpreter, DisplayObjectContainer& c
   child->set_removing(true);
   ExecutionResult removed = dispatch_removed(interpreter, child, depth + 1);
   child->set_removing(false);
-  if (!removed.ok()) {
-    return removed;
-  }
   container.remove_child(child);
-  return ExecutionResult{};
+  return removed;
 }
 
 ExecutionResult attach_child(Interpreter& interpreter, DisplayObjectContainer& container,
@@ -135,15 +132,14 @@ ExecutionResult attach_child(Interpreter& interpreter, DisplayObjectContainer& c
     container.add_child_at(child, index);
     return ExecutionResult{};
   }
+  ExecutionResult detached;
   if (previous != nullptr && previous->is_container()) {
-    ExecutionResult detached = detach_child(
-        interpreter, static_cast<DisplayObjectContainer&>(*previous), child, depth);
-    if (!detached.ok()) {
-      return detached;
-    }
+    detached = detach_child(interpreter, static_cast<DisplayObjectContainer&>(*previous), child,
+                            depth);
   }
   container.add_child_at(child, index);
-  return dispatch_added(interpreter, child, depth + 1);
+  ExecutionResult added = dispatch_added(interpreter, child, depth + 1);
+  return detached.ok() ? added : detached;
 }
 
 ExecutionResult display_add_child(Interpreter& interpreter, const Value& self,

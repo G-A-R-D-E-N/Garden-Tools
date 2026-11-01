@@ -292,6 +292,12 @@ void drive_movie(fo4::avm2::SwfRuntime& movie, fo4::avm2::Interpreter& interpret
     return;
   }
   run.hashes = replayed.frame_hashes;
+  const fo4::avm2::HandlerFailures& handler_failures = interpreter.handler_failures();
+  if (handler_failures.count != 0) {
+    run.failure = std::to_string(handler_failures.count) + " handler failure(s), first: " +
+                  handler_failures.first_message;
+    return;
+  }
   if (!init) return;
   if (!movie.playing()) {
     run.failure = "a frame script failed and the movie stopped";

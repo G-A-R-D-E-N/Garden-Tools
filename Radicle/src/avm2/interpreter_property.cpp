@@ -1,6 +1,7 @@
 #include <fo4/avm2/interpreter.hpp>
 
 #include "interpreter_internal.hpp"
+#include "native_internal.hpp"
 
 #include <fo4/avm2/bytearray.hpp>
 #include <fo4/avm2/class.hpp>
@@ -8,6 +9,7 @@
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/events.hpp>
 #include <fo4/avm2/text.hpp>
+#include <fo4/avm2/xml.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -156,6 +158,11 @@ ExecutionResult Interpreter::get_property(Frame& frame, const std::shared_ptr<Ob
       result.value = std::move(display_value);
       return result;
     }
+  }
+  if (object.kind() == ObjectKind::Xml && multiname.has_fixed_name()) {
+    ExecutionResult result;
+    result.value = read_xml_property(*this, static_cast<XmlObject&>(object), multiname);
+    return result;
   }
   if (object.kind() == ObjectKind::Function && multiname.has_fixed_name()) {
     const auto& function = static_cast<const FunctionObject&>(object);
@@ -306,6 +313,9 @@ ExecutionResult Interpreter::set_property(Frame& frame, const std::shared_ptr<Ob
       return ExecutionResult{};
     }
   }
+  if (object.kind() == ObjectKind::Xml) {
+    return write_xml_property(static_cast<XmlObject&>(object), multiname, value);
+  }
   if (define) {
     if (!multiname.has_fixed_name()) {
       return fail(InterpreterStatus::TypeError, "initproperty needs a fixed property name");
@@ -436,6 +446,10 @@ ExecutionResult Interpreter::call_property(Frame& frame, const std::shared_ptr<O
     if (!getter.ok()) {
       return getter;
     }
+    if (getter.value.is_object() && getter.value.as_object()->kind() == ObjectKind::Class) {
+      return call_class(static_cast<const ClassObject&>(*getter.value.as_object()), arguments,
+                        depth);
+    }
     if (!getter.value.is_object() ||
         getter.value.as_object()->kind() != ObjectKind::Function) {
       if (limits_.lenient_builtins) {
@@ -446,6 +460,9 @@ ExecutionResult Interpreter::call_property(Frame& frame, const std::shared_ptr<O
     }
     return invoke(static_cast<const FunctionObject&>(*getter.value.as_object()),
                   Value::object(owner), arguments, {}, depth);
+  }
+  if (lookup.value.is_object() && lookup.value.as_object()->kind() == ObjectKind::Class) {
+    return call_class(static_cast<const ClassObject&>(*lookup.value.as_object()), arguments, depth);
   }
   if (!lookup.value.is_object() || lookup.value.as_object()->kind() != ObjectKind::Function) {
     if (limits_.lenient_builtins) {

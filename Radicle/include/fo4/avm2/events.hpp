@@ -80,6 +80,9 @@ bool has_event_listener(const Object& target, std::string_view type);
 /* Requires a target; true when it or a display ancestor listens for the type. */
 bool will_trigger(const std::shared_ptr<Object>& target, std::string_view type);
 
+/* Requires a linked runtime. */
+void sync_frame_listener(Runtime& runtime, const std::shared_ptr<Object>& target);
+
 /* Requires a linked runtime; moves focus and dispatches focusOut then focusIn, bubbling. */
 ExecutionResult set_display_focus(Interpreter& interpreter, DisplayObject& owner,
                                   const std::shared_ptr<DisplayObject>& target, std::size_t depth);

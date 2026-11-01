@@ -21,6 +21,7 @@
 #include <numbers>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -108,24 +109,32 @@ FrameSnapshot stage_snapshot(const DisplayObject* root, const DisplayObjectConta
   return snapshot;
 }
 
-ExecutionResult broadcast_frame_event(Interpreter& interpreter,
-                                      const std::shared_ptr<DisplayObjectContainer>& stage,
-                                      const char* type) {
+void broadcast_frame_event(Interpreter& interpreter,
+                           const std::shared_ptr<DisplayObjectContainer>& stage, const char* type) {
   if (stage == nullptr) {
-    return ExecutionResult{};
+    return;
   }
   std::vector<std::shared_ptr<DisplayObject>> targets;
   collect_frame_targets(stage, targets);
+  Runtime& runtime = interpreter.runtime();
+  const std::vector<std::shared_ptr<DisplayObject>> tracked = runtime.frame_listener_objects();
+  for (const auto& object : tracked) {
+    sync_frame_listener(runtime, object);
+  }
+  std::unordered_set<const DisplayObject*> seen;
   for (const auto& target : targets) {
-    if (!will_trigger(target, type)) {
-      continue;
-    }
-    ExecutionResult result = dispatch_event(interpreter, target, type, false, 0);
-    if (!result.ok()) {
-      return result;
+    seen.insert(target.get());
+  }
+  for (const auto& object : runtime.frame_listener_objects()) {
+    if (object->stage() == nullptr && seen.insert(object.get()).second) {
+      targets.push_back(object);
     }
   }
-  return ExecutionResult{};
+  for (const auto& target : targets) {
+    if (will_trigger(target, type)) {
+      dispatch_event(interpreter, target, type, false, 0);
+    }
+  }
 }
 
 void dispatch_pointer(Interpreter& interpreter, const char* type,
@@ -326,11 +335,7 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
   const double fps = data_ != nullptr && data_->frame_rate > 0.0 ? data_->frame_rate : 24.0;
   accumulator_ += dt_seconds * fps;
   while (accumulator_ >= 1.0) {
-    const ExecutionResult entered = broadcast_frame_event(interpreter, stage_, "enterFrame");
-    if (!entered.ok()) {
-      playing_ = false;
-      break;
-    }
+    broadcast_frame_event(interpreter, stage_, "enterFrame");
     const ExecutionResult result = root_->advance_timeline(interpreter);
     if (!result.ok()) {
       playing_ = false;
@@ -348,11 +353,7 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
         }
       }
     }
-    const ExecutionResult exited = broadcast_frame_event(interpreter, stage_, "exitFrame");
-    if (!exited.ok()) {
-      playing_ = false;
-      break;
-    }
+    broadcast_frame_event(interpreter, stage_, "exitFrame");
     accumulator_ -= 1.0;
   }
 }

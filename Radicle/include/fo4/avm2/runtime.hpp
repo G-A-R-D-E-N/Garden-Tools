@@ -23,6 +23,7 @@
 
 namespace fo4::avm2 {
 
+class DisplayObject;
 class MovieClip;
 
 enum class RuntimeStatus : std::uint8_t {
@@ -102,6 +103,11 @@ class Runtime {
   const std::vector<std::shared_ptr<MovieClip>>& movie_clips() const noexcept {
     return movie_clips_;
   }
+  void track_frame_listener(const std::shared_ptr<DisplayObject>& object);
+  void untrack_frame_listener(const DisplayObject* object);
+  const std::vector<std::shared_ptr<DisplayObject>>& frame_listener_objects() const noexcept {
+    return frame_listener_objects_;
+  }
 
   const Class* find_class(const Multiname& multiname) const;
   const Class* find_class(std::string_view rendered_name) const;
@@ -148,6 +154,7 @@ class Runtime {
   RuntimeStatus install_builtins();
   RuntimeStatus install_system_builtins();
   RuntimeStatus install_bytearray_builtins();
+  RuntimeStatus install_xml_builtins();
   RuntimeStatus build_script_globals();
   void apply_class_slots();
   void build_prototypes();
@@ -174,6 +181,7 @@ class Runtime {
   std::map<std::uint32_t, SoundResource> sound_table_;
   std::uint32_t next_sound_id_{1};
   std::vector<std::shared_ptr<MovieClip>> movie_clips_;
+  std::vector<std::shared_ptr<DisplayObject>> frame_listener_objects_;
   std::shared_ptr<ApplicationDomainObject> current_domain_;
   std::map<std::string, std::shared_ptr<Object>> external_callbacks_;
   bool linked_{false};

@@ -156,8 +156,8 @@ TEST(Avm2Interpreter, CallsAFunctionCreatedWithNewfunction) {
   const std::uint32_t function_method = script.method("answer", function_code.bytes(), 1);
 
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.call(0);
   script_code.returnvalue();
   const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
@@ -171,6 +171,30 @@ TEST(Avm2Interpreter, CallsAFunctionCreatedWithNewfunction) {
                            << result.message;
   ASSERT_TRUE(result.value.is_int32());
   EXPECT_EQ(result.value.as_int32(), 42);
+}
+
+TEST(Avm2Interpreter, CallPassesTheValueAboveTheFunctionAsThis) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder function_code;
+  function_code.getlocal0();
+  function_code.returnvalue();
+  const std::uint32_t function_method = script.method("self", function_code.bytes(), 1);
+  avm2_test::CodeBuilder script_code;
+  script_code.newfunction(function_method);
+  script_code.pushstring(script.string_of("receiver"));
+  script_code.call(0);
+  script_code.returnvalue();
+  const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
+  abc::AbcFile file = script.finish(script_method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << fo4::avm2::interpreter_status_name(result.status) << ": "
+                           << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "receiver");
 }
 
 TEST(Avm2Interpreter, WritesAndReadsAGlobalThroughTheScopeChain) {
@@ -321,8 +345,8 @@ TEST(Avm2Interpreter, RefusesAnUnboundNativeUnlessTheProbeIsLenient) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t native_method = script.method_native("nativeHelper");
   avm2_test::CodeBuilder code;
-  code.pushnull();
   code.newfunction(native_method);
+  code.pushnull();
   code.call(0);
   code.returnvalue();
   const std::uint32_t method = script.method("init", code.bytes(), 1);
@@ -602,8 +626,8 @@ TEST(Avm2Interpreter, RestParameterCollectsTheArgumentsAfterTheDeclaredOnes) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("collect", function_code.bytes(), 3);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.pushbyte(1);
   script_code.pushbyte(2);
   script_code.pushbyte(3);
@@ -630,8 +654,8 @@ TEST(Avm2Interpreter, ArgumentsPastTheDeclaredParametersDoNotFillOrdinaryLocals)
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("local", function_code.bytes(), 3);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.pushbyte(1);
   script_code.pushbyte(2);
   script_code.call(2);

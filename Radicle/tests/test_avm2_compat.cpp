@@ -107,8 +107,8 @@ TEST(Avm2Compat, ConstructsFiltersAndKeyboardConstants) {
   avm2_test::CodeBuilder package_code;
   const std::uint32_t qualified_index =
       package_script.multiname("getQualifiedClassName", "flash.utils");
-  package_code.pushnull();
   package_code.getlex(qualified_index);
+  package_code.pushnull();
   package_code.getlex(package_script.multiname("Sprite", "flash.display"));
   package_code.call(1);
   package_code.returnvalue();
@@ -132,8 +132,8 @@ TEST(Avm2Compat, GetDefinitionByNameIsReachableThroughTheFlashUtilsPackage) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder code;
   const std::uint32_t definition_index = script.multiname("getDefinitionByName", "flash.utils");
-  code.pushnull();
   code.getlex(definition_index);
+  code.pushnull();
   code.pushstring(script.string_of("flash.display::Sprite"));
   code.call(1);
   code.returnvalue();

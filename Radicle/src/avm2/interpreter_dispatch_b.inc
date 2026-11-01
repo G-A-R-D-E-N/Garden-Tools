@@ -339,29 +339,25 @@
         const std::uint32_t count = count_operand(instruction);
         std::vector<Value> arguments;
         status = pop_arguments(frame, count, arguments, message);
-        Value function;
-        if (status == InterpreterStatus::Ok) {
-          pop_value(function);
-        }
         Value receiver;
         if (status == InterpreterStatus::Ok) {
           pop_value(receiver);
+        }
+        Value function;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(function);
         }
         if (status != InterpreterStatus::Ok) {
           break;
         }
         if (function.is_object() && function.as_object()->kind() == ObjectKind::Class) {
-          const Class* called_class =
-              static_cast<const ClassObject&>(*function.as_object()).represented_class();
-          if (called_class != nullptr && called_class->native_constructor != 0) {
-            ExecutionResult converted = call_native_id(called_class->native_constructor, function,
-                                                       arguments, depth);
-            if (!converted.ok()) {
-              return converted;
-            }
-            push_value(converted.value);
-            break;
+          ExecutionResult converted =
+              call_class(static_cast<const ClassObject&>(*function.as_object()), arguments, depth);
+          if (!converted.ok()) {
+            return converted;
           }
+          push_value(converted.value);
+          break;
         }
         if (!function.is_object() || function.as_object()->kind() != ObjectKind::Function) {
           if (limits_.lenient_builtins) {

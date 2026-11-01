@@ -10055,7 +10055,7 @@ A child with an instance name is a property of its parent: the container branch 
 
 ## Radicle/src/avm2/events.cpp:dispatch_added (ADDED, ADDED_TO_STAGE, REMOVED, REMOVED_FROM_STAGE)
 
-`dispatch_added` sends `added` (bubbling) to a child that has just been attached, and when the child is on a stage (`DisplayObject::stage`) it sends `addedToStage` to the child and its subtree in tree order. `dispatch_removed` sends `removed`, and `removedFromStage` when the child was on a stage, and it must run before the child is detached. Call sites: `Radicle/src/avm2/native_display.cpp:display_add_child`, `display_add_child_at`, `display_remove_child` and `display_remove_child_at`; the timeline in `Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip::apply_frame_state` and `SwfTimelineClip::detach`, which dispatches for new children after the frame's placement state is applied and before nested clips place their own frame 1; and `Radicle/src/avm2/native_net.cpp:loader_load` for loaded content. Before, none of these events were sent, so listeners for them never ran. Known limit: moving a child from one container to another does not send `removed` to the old parent. Tests: `Radicle/tests/test_avm2_stage_events.cpp:AddChildAndRemoveChildSendTheStageEventsDownTheSubtree` and `AddChildAtOffStageSendsAddedButNotAddedToStage`.
+`dispatch_added` sends `added` (bubbling) to a child that has just been attached, and when the child is on a stage (`DisplayObject::stage`) it sends `addedToStage` to the child and its subtree in tree order. `dispatch_removed` sends `removed`, and `removedFromStage` when the child was on a stage, and it must run before the child is detached. Call sites: `Radicle/src/avm2/native_display.cpp:display_add_child`, `display_add_child_at`, `display_remove_child` and `display_remove_child_at`; the timeline in `Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip::apply_frame_state` and `SwfTimelineClip::detach`, which dispatches for new children after the frame's placement state is applied and before nested clips place their own frame 1; and `Radicle/src/avm2/native_net.cpp:loader_load` for loaded content. Before, none of these events were sent, so listeners for them never ran. Moving a child to another container sends `removed` to the old parent first (see the attach_child section). Tests: `Radicle/tests/test_avm2_stage_events.cpp:AddChildAndRemoveChildSendTheStageEventsDownTheSubtree` and `AddChildAtOffStageSendsAddedButNotAddedToStage`.
 
 ## Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip (module split)
 
@@ -10071,7 +10071,7 @@ When a named child is placed, a declared instance slot with the same name receiv
 
 ## Radicle/src/avm2/native_display.cpp:attach_child (reparenting, re-entry and call depth)
 
-`attach_child` sends `removed` and `removedFromStage` to the old parent, and `added` and `addedToStage` to the new one, only when the parent changes. Re-adding a child to its own parent only reorders it. `detach_child` sets the child's `removing()` flag while its `removed` listeners run, so a nested add or remove of that child does nothing and a listener cannot remove the child twice. Every dispatch passes `depth + 1`, so a listener that keeps moving a child fails with `CallDepthExceeded` instead of recursing. The order follows the AS3 contract; it is not checked against Flash. Tests: `Radicle/tests/test_avm2_stage_events.cpp:ReAddingToTheSameParentFromAnAddedListenerSendsOneEvent`, `ReRemovingFromARemovedListenerIsANoOp`, `ReparentingSendsRemovedToTheOldParentAndAddedToTheNewOne` and `ReparentingLoopFromAnAddedListenerStopsWithACallDepthError`.
+`attach_child` sends `removed` and `removedFromStage` to the old parent, and `added` and `addedToStage` to the new one, only when the parent changes. Re-adding a child to its own parent only reorders it. A failing `removed` listener on the old parent does not stop the move: `attach_child` still adds the child and dispatches `added`, then returns the first failure (see the round-4 sections at the end of these notes). `detach_child` sets the child's `removing()` flag while its `removed` listeners run, so a nested add or remove of that child does nothing and a listener cannot remove the child twice. Every dispatch passes `depth + 1`, so a listener that keeps moving a child fails with `CallDepthExceeded` instead of recursing. The order follows the AS3 contract; it is not checked against Flash. Tests: `Radicle/tests/test_avm2_stage_events.cpp:ReAddingToTheSameParentFromAnAddedListenerSendsOneEvent`, `ReRemovingFromARemovedListenerIsANoOp`, `ReparentingSendsRemovedToTheOldParentAndAddedToTheNewOne` and `ReparentingLoopFromAnAddedListenerStopsWithACallDepthError`.
 
 ## Radicle/src/avm2/display.cpp:MovieClip::goto_frame (no frame events, call depth)
 
@@ -10206,3 +10206,365 @@ A script global holds its Method and Function traits in its slots, and each such
 - Getter and Setter script traits are still skipped by `Radicle/src/avm2/runtime_link.cpp:Runtime::build_script_globals`, so a package-level getter or setter is not bound.
 - Runtime-created closures can form the same global cycle: `Radicle/src/avm2/interpreter_dispatch_b.inc:k_newfunction` sets `captured_scope` to `frame.scopes`, which holds the script global when the closure is created in a script initializer. `Runtime::~Runtime` does not clear closures, so they are not covered by the cycle fix (code-read, not run).
 - The first AVM2 error for AtomicCommand, Grognak, PipFall, RedMenace and ZetaInvaders is `property XML is not callable`, which is the XML/XMLList built-in work. XML was already the first error at HEAD, so this change does not make it first. What this change removes is the second error at HEAD, `cannot read private:bhvr.manager:SoundManager::_instance from undefined`, for AtomicCommand, PipFall, RedMenace and ZetaInvaders. Measured with the real data: the final frame hashes are unchanged and the BGS call counts rise (AtomicCommand 1 to 15, PipFall 1 to 10, RedMenace 1 to 8, ZetaInvaders 1 to 6, Grognak stays at 2). No program newly passes.
+
+## Radicle/src/avm2/interpreter_support.cpp:Interpreter::call_class (#807 programs step 1: calling a class is a conversion)
+
+Calling a class is an AS3 conversion, so call_class takes one of three paths. A class with a native constructor (Class::native_constructor) runs that native, which keeps String(x), Number(x), int(x), uint(x), Boolean(x), Array(...), Object(x), Error(...), XML(x) and XMLList(x) on their builtin paths. A placeholder class (Class::external, made by Radicle/src/avm2/runtime.cpp:Runtime::ensure_external_class) is refused with "class N is not defined" (CannotCall), or returns undefined under InterpreterLimits::lenient_builtins like any other unbound builtin. Every other class is coerced through Interpreter::coerce_value: null and undefined become null, an instance of the class passes through unchanged, and anything else is a TypeError. Calling with no argument coerces undefined to null, and extra arguments are ignored (both unverified against avmplus). Calling a Vector.<T> class with an Array or Vector argument makes a new Vector of that class, with each element coerced to T (Radicle/src/avm2/interpreter_support.cpp:Interpreter::call_class, the Vector branch). Vectors are ArrayObjects here, so both are copied. Vector.<*> copies without coercion. Any other non-null argument still takes the coercion path, which passes it through, so Vector.<int>(5) returns 5 (unverified against AS3). Interpreter::coerce_value accepts every Vector type name, so a typed Vector parameter or assignment still takes any value (open, not changed).
+
+Tests: Radicle/tests/test_avm2_class_call.cpp:Avm2ClassCall.CallingAUserClassCoercesItsArgument (regression: calling a user class value fails as "not callable" instead of coercing), Avm2ClassCall.CallingAUserClassReturnsAnInstanceOfThatClassUnchanged (regression: K(instance) returns a different value), Avm2ClassCall.CallingAUserClassRefusesAValueOfAnotherType (regression: K(5) passes instead of a TypeError), Avm2ClassCall.CallingAnUndefinedClassNamesTheMissingClass (regression: a missing class is reported generically or accepted), Avm2ClassCall.CallingAVectorClassCopiesAnArrayWithItsElementsCoerced (regression: Vector.<int> called with an array returns the array unchanged), Avm2ClassCall.CallingAVectorClassRefusesAnElementOfAnotherType (regression: a string element is accepted by Vector.<Holder>). Revert proof: removing the Vector branch fails the two Vector tests (5 of 7 class-call tests pass).
+
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_property (class values and class-valued getters)
+
+A class value found by call_property goes to Interpreter::call_class, and so does a getter result that is a class. Before, every class value failed as "property X is not callable". That was the first error of AtomicCommand, Grognak, PipFall, RedMenace and ZetaInvaders: XML(loader.data) in the config handler.
+
+Why String(x) and Number(x) also failed: Radicle/src/avm2/runtime_link.cpp:Runtime::build_script_globals registers every class in classes_ on the global object after the scripts run, builtins included. That overwrites the global Function entries that Radicle/src/avm2/builtins.cpp:Runtime::install_builtins put there for String, Number, Boolean, int, uint and Object. After link those names resolve to Class objects, so the global functions are unreachable and the conversions run through the class's native constructor.
+
+Tests: Radicle/tests/test_avm2_builtins.cpp:Avm2Builtins.CallingTheArrayClassWithOneNumberSetsLength (regression: callproperty on a builtin class fails), Avm2Builtins.CallingNumberWithNoArgumentGivesZero (regression: Number() through callproperty gives NaN).
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_call (a class value is converted here too)
+
+The call opcode used to run only a class with a native constructor, and a user class failed "call target is not a function". Now every class goes through call_class. The operand order is now function, receiver, arguments (see the k_call operand-order section below). Test: Radicle/tests/test_avm2_class_call.cpp:Avm2ClassCall.CallOpcodeConvertsThroughAUserClass (regression: call refuses a class value). The test pushes getlex K, pushnull, pushnull, call 1.
+
+## Radicle/src/avm2/native_top.cpp:try_top_native (String() with no argument is the empty string)
+
+to_string_value returns the empty string when there is no argument, as AS3 String() does (from memory). Before, it returned "undefined" because the argument defaulted to undefined. Test: Radicle/tests/test_avm2_builtins.cpp:Avm2Builtins.CallingStringWithNoArgumentGivesTheEmptyString (regression: String() returns "undefined").
+
+## Radicle/include/fo4/avm2/xml.hpp:kMaxXmlDepth, kMaxXmlBytes, kMaxXmlNodes (caps for untrusted movie text)
+
+The caps follow the existing parsers. The depth cap of 64 matches Radicle/src/avm2/amf.cpp:decode_value (its kMaxDepth). The 16 MiB byte cap matches Radicle/src/avm1/interpreter.cpp:kMaxStringBytes. The node cap of 2^18 is new and not taken from another parser. Each cap is checked where the parser creates the thing it limits: depth in Radicle/src/avm2/xml_parse.cpp:Parser::parse_element, nodes in Radicle/src/avm2/xml_parse.cpp:Parser::new_node (elements, attributes and text nodes all count), bytes in Radicle/src/avm2/xml_parse.cpp:parse_xml before any parsing. Memory at the node cap was not measured. A document may nest 64 elements deep, with the root at level 0. Writes count against the same node cap, through XmlNode::document_nodes (see the write_xml_property section).
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.NestingPastTheDepthLimitIsATypeError (regression: unbounded nesting), Avm2Xml.NodeCountPastTheLimitIsATypeError (regression: unbounded node growth), Avm2Xml.TextPastTheByteLimitIsATypeError (regression: oversized text is parsed), Avm2Xml.NestingWithinTheDepthLimitParses (regression: a legal 60-level document is refused). The revert proofs disable each check in place rather than moving the constant, because the tests build their inputs from the constants.
+
+## Radicle/src/avm2/xml_parse.cpp:parse_xml, Parser (the XML text parser)
+
+Accepted: an XML document has exactly one root element, with no text outside it. Text that is empty or only whitespace, or a comment-only text, gives an empty XML. An XMLList takes any number of top-level nodes. Elements, attributes in single or double quotes, text, CDATA sections, comments and processing instructions are accepted, and comments and processing instructions are dropped. The five predefined entities and numeric character references (1 to 0x10FFFF, excluding surrogates and 0) are decoded. An unknown entity, a malformed reference, a mismatched closing tag, a duplicate attribute and a "<" inside an attribute value are all TypeErrors. DOCTYPE and other markup declarations are refused as TypeErrors, so there is no entity expansion to bound.
+
+Whitespace-only text nodes are dropped, which is the E4X ignoreWhitespace default (from memory). Line ends follow XML 1.0: CRLF and CR become LF in text, and CRLF, CR, LF and tab each become one space in attribute values. A UTF-8 byte order mark is not skipped (unverified against AS3; the five programs' config files parsed, so no BOM problem was seen). Namespace prefixes stay part of the name, and x.name matches the qualified name exactly. There is no namespace resolution.
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.MismatchedTagsAreATypeError (regression: malformed input is accepted), Avm2Xml.PredefinedAndNumericEntitiesDecodeInText (regression: entities stay raw), Avm2Xml.AnUnknownEntityIsATypeError (regression: an unknown entity is accepted), Avm2Xml.WhitespaceOnlyTextIsNotAChild (regression: indentation becomes child nodes).
+
+## Radicle/src/avm2/native_xml.cpp:convert (XML(x) and XMLList(x))
+
+XML(x) and new XML(x) share the native, so they behave the same. An XML argument is returned as it is. That is the call form, and new XML(xml) should copy instead, which is not done (an unverified deviation). The construct and call paths share this native; see the open note under write_xml_property. A single-node XMLList converts to that node, and a longer list is a TypeError (from memory). null and undefined make an empty XML (unverified). A string is parsed as a document. XMLList(x) parses a string as a fragment, wraps an XML argument, and makes an empty list from null. XML and XMLList are top-level builtin classes, from memory of ECMA-357 and AS3, and unverified.
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.ConvertsTextToAnElementThatSerializesBack (regression: XML(text) does not parse, or loses attributes on serialization), Avm2Xml.XmlListConversionKeepsEveryTopLevelNode (regression: XMLList(text) keeps only the first node).
+
+## Radicle/src/avm2/native_xml.cpp:read_xml_property (child, attribute and index reads)
+
+A get on an XML or XMLList value with a fixed name reads the children with that name, across all items (x.name, returned as an XMLList). A QNameA multiname (x.@name) reads the attribute nodes with that name, as an XMLList. A numeric name (list[0]) returns one node as an XML value. This runs before the builtin methods, from Radicle/src/avm2/interpreter_property.cpp:Interpreter::get_property, as E4X [[Get]] does. A call still reaches the method, because call_property uses Object::lookup. Text and attribute values are read from the node tree, not copied.
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.ChildAccessReturnsTheNamedChildsText (regression: child element access is missing), Avm2Xml.AttributeAccessReadsTheAttributeValue (regression: @attr access is missing).
+
+## Radicle/src/avm2/native_xml.cpp:write_xml_property (XML writes, #807 step 5)
+
+Interpreter::set_property hands an XML or XMLList value to write_xml_property. The writes are the subset the brief names. `x.child = v` replaces the content of the first element child named child and keeps its attributes; when no element child matches, it appends a new element with the text as its only child. `x.@attr = v` sets the attribute, or appends it when absent. The target must hold exactly one node: an XMLList of one node writes through, and any other count is a TypeError. The target must be an element. A runtime name and an index name are TypeErrors. The value is converted with ToString: an XML value writes its text, not a replacement element as E4X does (open); null writes "null" (unverified); and an empty value leaves the element with no children, serialized as `<c/>` (unverified).
+
+The node cap: every XmlNode has document_nodes (Radicle/include/fo4/avm2/xml.hpp:XmlNode), one counter shared by the nodes of one document. The parser counts through it (Radicle/src/avm2/xml_parse.cpp:Parser::new_node), copy_xml_node counts the copy, and each write adds to it and is refused with a TypeError past kMaxXmlNodes. Replacing content subtracts the removed subtree. A write through a child list checks the whole document, not only the child. A subtree-only count would accept the write in Avm2Xml.WriteThroughAChildCountsTheWholeDocumentAgainstTheLimit (reasoned from the tree shape; not run).
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.ChildWriteReplacesTheContentOfTheFirstMatchingChild (regression: a child write is refused or lands on a later child), Avm2Xml.ChildWriteAppendsANewElementWhenNoChildMatches (regression: a write to a missing child is dropped), Avm2Xml.AttributeWriteSetsAnExistingAttributeOrCreatesIt (regression: attribute writes are lost), Avm2Xml.WriteThroughAListWithOneNodeChangesTheDocument (regression: a one-node list write does not reach the document), Avm2Xml.WriteThroughAListOfTwoNodesIsATypeError (regression: a two-node list takes the write), Avm2Xml.WriteThatWouldPassTheNodeLimitIsATypeError (regression: a write grows a document past kMaxXmlNodes), Avm2Xml.WriteThroughAChildCountsTheWholeDocumentAgainstTheLimit (regression: a child-list write ignores the rest of the document). Revert proofs: restoring the refusal in set_property fails the four positive tests; removing the node-limit checks and the one-node check fails the three TypeError tests.
+
+Open: `new XML(xml)` still returns the argument. Interpreter::construct and Interpreter::call_class both reach Class::native_constructor through call_native_id with the same arguments, so the native cannot tell new from a call. Telling them apart needs a construct-only hook (a new Class field), which is not added here.
+
+## Radicle/src/avm2/native_xml.cpp:Runtime::install_xml_builtins (the XML subset)
+
+The subset comes from the E4X survey below. Instance methods are children, length, toString, toXMLString, text and copy. Radicle/src/avm2/runtime.cpp:Runtime::link calls the installer after the ByteArray classes. Serialization lives in Radicle/src/avm2/xml.cpp:xml_text, which returns the concatenated text of simple content and the markup of complex content; xml_markup, which writes attributes with double quotes and no pretty printing; and xml_default_string, which joins the items of a list with a newline. AS3's default prettyPrinting and prettyIndent (2) are not applied, so multi-level markup differs from AS3 output (known difference). The list join and the length() of an empty XML are unverified. length() of an XML value is 1 when it holds a node.
+
+Radicle/src/avm2/object.hpp:ObjectKind has a new Xml value, Radicle/src/avm2/object.cpp:object_kind_name names it, and Radicle/src/avm2/coercion.cpp:object_default_to_string converts it through xml_default_string, so string concatenation, == against a string and String(xml) read the text.
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.ChildrenOfAnElementIsAnXmlListThatCoercesToXMLList (regression: children() is not an XMLList, so coerce XMLList fails on the config path), Avm2Xml.CoercingAnXmlListToXmlIsATypeError (regression: an XMLList is accepted where an XML is required), Avm2Xml.TextMethodReturnsTheTextChildren (regression: text() is wrong), Avm2Xml.CopyMakesASeparateDocumentWithTheSameMarkup (regression: copy() is wrong).
+
+## Radicle/src/avm2/native_xml.cpp:Runtime::install_xml_builtins (E4X survey, #807 programs step 2)
+
+Scope: the seven programs in the real Interface archive, read with Radicle/include/fo4/abc/abc.hpp:AbcFile::parse over the SWF ABC blocks, then Radicle/src/abc/opcodes.cpp:decode_code per method body. The survey was a scratch test kept outside the repo. Counts are per program over all method bodies.
+
+| Program | DoABC blocks | bodies | getdescendants | checkfilter | dxns / dxnslate | esc_xattr / esc_xelem | call | attribute (QNameA) uses |
+|---|---|---|---|---|---|---|---|---|
+| AtomicCommand | 90 | 942 | 0 | 0 | 0 / 0 | 0 / 0 | 3 | 1 |
+| GJ_Defrag | 1 | 16 | 0 | 0 | 0 / 0 | 0 / 0 | 0 | 0 |
+| Grognak | 219 | 1961 | 0 | 0 | 0 / 0 | 0 / 0 | 11 | 1 |
+| PipFall | 88 | 962 | 0 | 0 | 0 / 0 | 0 / 0 | 1 | 1 |
+| RedMenace | 96 | 1126 | 0 | 0 | 0 / 0 | 0 / 0 | 5 | 1 |
+| TurretHack | 1 | 187 | 0 | 0 | 0 / 0 | 0 / 0 | 0 | 0 |
+| ZetaInvaders | 86 | 932 | 0 | 0 | 0 / 0 | 0 / 0 | 1 | 1 |
+
+XML-typed references (the five programs are identical): callproperty XML once (XML(loader.data) in the config handler), findpropstrict XML twice and getproperty XML once (this._xmlLoader.xml as XML, so astypelate and coerce XML), and coerce XMLList once (_config.children() coerced to XMLList). Grognak also has coerce XML. GJ_Defrag and TurretHack have no XML references.
+
+Member names, counted per program as callproperty / getproperty / setproperty. These names also exist on other classes, so the survey cannot tell the receiver apart; the ambiguous ones are marked (?).
+- AtomicCommand: called children 1, hasOwnProperty 1 (?), length 1 (?), replace 1 (?), toString 5 (?). Read elements 14, length 72 (?), name 16, parent 15, text 1. Written length 4 (?), text 23.
+- Grognak: called children 1, contains 1, copy 4, hasOwnProperty 11 (?), length 1 (?), replace 9 (?), toString 18 (?). Read elements 14, length 210 (?), name 31, parent 18, text 5. Written length 4 (?), name 39, text 27.
+- PipFall: called children 1, hasOwnProperty 1 (?), length 1 (?), toString 5 (?). Read elements 14, length 50 (?), name 16, parent 15, text 6. Written length 4 (?), text 33.
+- RedMenace: called children 1, hasOwnProperty 1 (?), length 1 (?), toString 10 (?). Read elements 14, length 103 (?), name 19, parent 15, text 5. Written length 4 (?), text 20.
+- TurretHack: called hasOwnProperty 2 (?). Read length 16 (?), parent 2, text 4. Written text 3.
+- ZetaInvaders: called children 1, hasOwnProperty 1 (?), length 1 (?), toString 2 (?). Read elements 14, length 71 (?), name 16, parent 16, text 1. Written length 4 (?), text 10.
+
+Subset: XML and XMLList from text; children(), text(), copy(), length(), toString() and toXMLString(); child reads by name (elements, name, parent and text are read as child names); @attr reads; index reads. Not in the subset, so not implemented: contains and replace on XML, hasOwnProperty on XML (the Object method is used), XML writes other than the child and attribute writes in write_xml_property, .., filters, default namespaces, attribute(), attributes(), elements(), name() and parent() as methods, and pretty printing. The call opcode count is in the table; see the k_call operand-order section below.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::fail (BGS counts and first errors, #807 programs step 4)
+
+Measure of "init finished": InitProgram returned OK, and the 180-frame replay ran with no AVM2 failure recorded. A failure is recorded by Radicle/src/avm2/interpreter.cpp:Interpreter::fail and by the invoke return path, using a temporary trace in the WSL clone only. The host sequence was also read. The replay hashes and host logs match HEAD for all five programs.
+
+| Program | BGS before | BGS after | first AVM2 error before | first AVM2 error after |
+|---|---|---|---|---|
+| AtomicCommand | 15 | 15 | property XML is not callable (callproperty, offset 37) | none |
+| Grognak | 2 | 2 | same | none |
+| PipFall | 10 | 10 | same | none |
+| RedMenace | 8 | 8 | same | none |
+| ZetaInvaders | 6 | 6 | same | none |
+| GJ_Defrag | 0 | 0 | SetPlatform missing (harness, other branch) | same |
+| TurretHack | 0 | 0 | SetPlatform missing (harness, other branch) | same |
+
+With the XML fix the five programs record no AVM2 error. They reach the title and game states, load the config (XMLLoader.onXMLLoaded runs), and make the same getHighscore, registerSound and getSaveData calls as before. The old error sat in the XML loader's completion path (inferred from the bytecode context at the XML call), and Radicle/src/avm2/native_net.cpp:dispatch_type discards its result, so the old run went on past it. The BGS counts did not change, so the XML fix does not change the observable startup sequence here.
+
+## Radicle/src/avm2/swf_runtime.cpp:broadcast_frame_event (off-list display objects receive enterFrame and exitFrame, #807 step 3; supersedes the earlier note)
+
+Decision: an enterFrame or exitFrame listener reaches its display object every frame, whether or not the object is on the display list. The earlier note in this section said the opposite, from memory, and was not checked. The coordinator's decision, from memory of Flash, is that frame events go to every display object with a listener. No reference document was consulted, and the rule is unverified against avmplus and Flash Player.
+
+The programs contain the pattern the decision covers. In every run of the real-data replay the only enterFrame listener on an off-list object is aze.motion:EazeTween/private:tick, on a flash.display::Shape the program never adds to a display list. That is the ticker pattern of the aze.motion tween library, and its 14 classes are present in every run (temporary probe). Before this change the tick never ran. After it, the tick runs once per frame: 3150 invocations over the 14 runs, which is 225 frames times 14. No tween is created during the replay (no EazeTween creation or tween call appears), so the tick does no visible work in these 180 host ticks. The bgs.* call sequences, the replay hashes and the handler counts did not change.
+
+Background: the replay calls SwfRuntime::advance 180 times at 1/24 s. The programs run at 30 fps, so each call adds 1.25 movie frames, and a run covers 225 frames.
+
+Mechanism:
+- Runtime::track_frame_listener and Runtime::untrack_frame_listener (Radicle/src/avm2/runtime.cpp) maintain Runtime::frame_listener_objects_. The set holds strong references, the same as movie_clips_ in that file. A listener keeps its ticker alive, which is the tween pattern. A weak set would drop a ticker that nothing else references.
+- sync_frame_listener (Radicle/src/avm2/events.cpp) tracks a display object while it has an enterFrame or exitFrame listener, and untracks it otherwise. dispatcher_add_listener and dispatcher_remove_listener (Radicle/src/avm2/native_events.cpp) call it after every add and remove. Those two natives are the only path from scripts, and nothing else in src calls add_event_listener or remove_event_listener.
+- broadcast_frame_event (Radicle/src/avm2/swf_runtime.cpp) first re-syncs each tracked object, so an object that lost its frame listeners leaves the set. It then takes a copy of the set. Delivery order is the on-list walk as before, followed by the tracked objects that are on no stage (DisplayObject::stage() == nullptr) and not already on that walk, in registration order. A seen-set of walk targets stops an object on the list from getting the event twice. A tracked object on another movie's stage is not added here; that movie's own broadcast reaches it (#807 review item 7). Dispatch checks will_trigger at dispatch time: a listener removed earlier in the same broadcast is skipped, and an object added during the broadcast first gets the event on the next frame. broadcast_frame_event returns nothing, so a failing listener does not stop the other targets or the movie (#807 review item 1, below).
+- ~Runtime (Radicle/src/avm2/runtime.cpp) clears the set before member destruction. Member destruction would release it anyway, so the explicit clear only fixes the order (see the revert results below).
+
+Double delivery: MovieClip::run_frame_lifecycle (Radicle/src/avm2/display.cpp, enterFrame and exitFrame dispatches) sends the frame events to the clip itself. It is reached only through MovieClip::advance_frame, and no src code calls advance_frame (tests only). SwfRuntime::advance uses advance_timeline, so the runtime path delivers each frame event once.
+
+Limits:
+- A listener added through the C++ add_event_listener directly is not tracked. Tests do this for on-list objects. The script paths are covered by the two natives above.
+- The useWeakReference argument of addEventListener is not read by the native, so listeners stay strong, as before.
+- useCapture is stored per listener and does not change tracking. A capture listener on an off-list target fires at the target phase (Radicle/src/avm2/events.cpp:invoke_listeners).
+- A cycle through a listener's captured scope or bound receiver is not broken by the set. Cycles are not collected anywhere in this runtime, as before; ~Runtime clears only script function scopes (Radicle/src/avm2/runtime.cpp:~Runtime).
+- Two movies sharing one Runtime (Radicle/src/c_api_runtime.cpp allows several): an off-list tracked object is on no stage, so every advanced movie delivers to it. Measured with a temporary probe, removed afterwards: one Shape with an enterFrame listener, two movies, first advanced then second, each at 0.125 s (3 frames): the log reads "aaa" and then "aaaaaa". Open, not fixed: a fix needs an owner recorded per registration, and none is recorded (the movie is not known when addEventListener runs).
+
+Tests: Radicle/tests/test_avm2_frame_listeners.cpp (a new file, because the events and stage-events files are at the line limit):
+- Avm2FrameListeners.AnOffListObjectReceivesEnterAndExitOncePerFrame (regression: an off-list Shape gets no frame events).
+- Avm2FrameListeners.RemovingTheListenersStopsDeliveryAndReleasesTheObject (regression: removeEventListener leaves the object delivered or tracked).
+- Avm2FrameListeners.AnOffListObjectStaysAliveWhileItsListenerIsRegistered (regression: the set does not hold the object; the ownership choice).
+- Avm2FrameListeners.AnOffListObjectReceivesACaptureListenerAtItsTarget (regression: capture listeners are skipped off the list).
+- Avm2FrameListeners.AnObjectOnTheListAndOffItIsDeliveredOncePerFrame (regression: an on-list object tracked as well gets the event twice; covers moving off the list).
+- Avm2FrameListeners.ListenersAddedAndRemovedDuringABroadcastTakeEffectWithoutBreakingIt (regression: a handler that removes itself or adds a listener invalidates the iteration).
+- Avm2FrameListeners.TearingDownTheRuntimeReleasesTheTrackedObjects (regression: the set keeps the object after the runtime is gone).
+- Avm2FrameListeners.AFailingFrameListenerDoesNotStopTheOtherTargetsOrThePlayback (regression: a failing listener on one off-list Shape stopped the broadcast, so the second Shape never ran and the movie stopped; #807 review item 1).
+- Avm2FrameListeners.AnObjectOnAnotherMoviesStageIsNotDeliveredByThisMovie (regression: a tracked Sprite on movie 1's stage got the events again from movie 2's advance; #807 review item 7).
+
+Revert results (each file restored from a saved copy and compared):
+- Delivery removed (HEAD swf_runtime.cpp, tracking kept), run with six tests before the capture test was added: five fail (AnOffListObjectReceivesEnterAndExitOncePerFrame, RemovingTheListenersStopsDeliveryAndReleasesTheObject, AnOffListObjectStaysAliveWhileItsListenerIsRegistered, AnObjectOnTheListAndOffItIsDeliveredOncePerFrame, ListenersAddedAndRemovedDuringABroadcastTakeEffectWithoutBreakingIt). TearingDownTheRuntimeReleasesTheTrackedObjects passes, because tracking is still active and the test checks the tracking.
+- Dedupe removed (the seen-set check always true): AnObjectOnTheListAndOffItIsDeliveredOncePerFrame fails with "aabaabaab", the on-list sprite getting the event twice per frame.
+- Untrack on removal removed: RemovingTheListenersStopsDeliveryAndReleasesTheObject fails at the released-object check. Delivery still stops, because dispatch checks will_trigger.
+- All tracking removed (sync_frame_listener returns at once): all seven tests fail, with 0 of 7 passing.
+- Explicit clear in ~Runtime removed: all seven pass. Member destruction releases the set, so no test guards the clear line.
+
+## Radicle/src/avm2/native_net.cpp:dispatch_type (handler results, resolved)
+
+dispatch_type still discards the result of dispatch_event. The failure is no longer lost: Radicle/src/avm2/events.cpp:invoke_listeners records every failing listener call (see the handler-failure section at the end of these notes). Test: Radicle/tests/test_avm2_host.cpp:Avm2Host.AFailingCompleteHandlerOfAUrlLoaderIsRecorded (regression: a failing URLLoader complete handler is invisible).
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_call (operand order of call, #807 step 1, fixed)
+
+The call opcode takes the stack as ..., function, receiver, arg1 .. argN and pops the receiver first. The layout comes from the compiled code: the survey context shows `getlocal2, getglobalscope, CALL(0)` (a local function called with the global scope as receiver) and `getlocal2, dup, setlocal3, pushstring, getproperty[], getlocal3, CALL(0)` (the function read from a property, the receiver from a local). The AVM2 reference layout is from memory; no reference document was consulted, so it is unverified against avmplus.
+
+The call sites are the `.call(n)` lines in the tests: 25 in the tracked test files at HEAD (test_avm2_arguments 9, test_avm2_builtins 5, test_avm2_compat 2, test_avm2_host 3, test_avm2_interpreter 4, test_avm2_scope_depth 2), one more in test_avm2_interpreter.cpp for the new test (5 there now), and 3 in the untracked test_avm2_class_call.cpp, so 29 in all. The earlier note said 26 existing sites; the count at HEAD is 25. Each site pushed null as the receiver before the callee. Each now pushes the callee first and the null second, with the same callee, receiver and arguments.
+
+Tests: Radicle/tests/test_avm2_interpreter.cpp:Avm2Interpreter.CallPassesTheValueAboveTheFunctionAsThis (regression: the value below the arguments is read as the function, so the receiver is never `this`), Avm2Interpreter.CallsAFunctionCreatedWithNewfunction (regression: the function-first layout is refused as not a function), and the call-site tests above. Revert proof: with the old pop order, 28 tests fail: Avm2Arguments 9, Avm2Builtins 5, Avm2ClassCall 1, Avm2Compat 2, Avm2Host 3, Avm2Interpreter 5 (including the new test), Avm2OuterScope 3 (one helper feeds two of them).
+
+The five real programs execute no call opcode (probe count 0 in all 14 runs), so their replay lines do not change with this fix.
+
+## Radicle/src/avm2/display.cpp:make_display_object (open: sprite-bound classes built by script)
+
+new CursorMc() went through make_display_object four times in the whole real-data run, next to four CustomCursor constructions on the AtomicCommand init path. The class is a MovieClip subclass, so the object is a plain MovieClip with no timeline. Nothing observed shows a host call that depends on it. Not fixed.
+
+## Radicle/src/avm2/runtime_link.cpp:Runtime::build_script_globals (open: candidates not hit)
+
+Getter and setter script traits were never seen in the five programs (0 traces). A getlex of a static before its script initializer ran (the PropertyTint case) produced no error in these programs. advance_child_clips in Radicle/src/avm2/swf_timeline_clip.cpp was not measured on its own. None of these changed the startup measure, so none is fixed.
+
+## Radicle/src/avm2/events.cpp:invoke_listeners (handler failures are counted and do not stop the dispatch, #807 step 2)
+
+Each listener call that fails is recorded once, inside invoke_listeners, through Radicle/src/avm2/interpreter_support.cpp:Interpreter::record_handler_failure into Interpreter::handler_failures() (a count, and the message of the first failure; an empty message is replaced by the status name). Every dispatch records its own failures, whether or not its caller uses the returned value.
+
+A failing listener does not stop the rest of its dispatch. invoke_listeners keeps calling the listeners on its node, dispatch_event keeps going through the capture, target and bubble phases, and dispatch_stage_tree keeps walking the children. Each one returns the first failure it saw, so callers that return the result (addChild, the loader's complete path) get the same error they got before. The timeline does not return a listener failure from its added or removed events (see the SwfTimelineClip::detach section at the end of these notes). The script's dispatchEvent is the exception: Radicle/src/avm2/native_events.cpp:dispatcher_dispatch_event records the failure and returns normally (#807 review item 3, below). broadcast_frame_event in Radicle/src/avm2/swf_runtime.cpp returns nothing and does not stop the movie on a listener failure (#807 review item 1). MovieClip::run_frame_lifecycle in Radicle/src/avm2/display.cpp keeps its return values; its listeners all run, and their failures are counted too.
+
+The discarding sites needed no code change. Their results are still unused, and the failure is counted in invoke_listeners: SwfRuntime::key_event, mouse_event (down, focus change and click), mouse_move, mouse_wheel, char_event, dispatch_pointer, dispatch_type in native_net.cpp, and the timer and timerComplete dispatches in HostClock::advance. A failing timer tick no longer stops its timer (#807 review item 2): HostClock::advance in Radicle/src/avm2/events.cpp dispatches the tick and continues, and timerComplete still fires when the repeat count is reached. The earlier policy, where a failing tick stopped the timer, is gone. dispatch_added, dispatch_removed and set_display_focus in the same file keep their first failure and still run the later dispatch (addedToStage, removedFromStage, focusIn), so a failing added or focusOut listener no longer skips them.
+
+Design note: the first version sent each discarding site's result into the recorder. A dispatch returns only its first failure, so a second failing listener on the same dispatch was counted nowhere (the key test read a count of 1 for two failing listeners). The recorder moved into invoke_listeners for that reason. The brief asked for the sites to route their results; the sites are covered through the dispatch instead.
+
+The replay-pins branch has SwfRuntime::frame_error(), the message of the frame step that stopped playback. handler_failures() counts failing listener calls. One frame failure can set both, and the two share no field.
+
+Tests: Radicle/tests/test_avm2_handler_failures.cpp:Avm2HandlerFailures.AFailingKeyHandlerDoesNotStopTheOthersAndIsRecorded (regression: a failing key handler is dropped, or the second listener does not run), Avm2HandlerFailures.AFailingTimerTickDoesNotStopTheTimerOrItsCompletion (regression: a failing tick stopped the timer and skipped timerComplete; replaces the test that asserted the stop), Avm2HandlerFailures.AFailingTimerCompleteHandlerIsRecorded (regression: a failing timerComplete is invisible), Avm2HandlerFailures.AFailingAddedToStageHandlerDoesNotStopTheRestOfTheSubtree (regression: the stage walk stops at the first failing child), Avm2Host.AFailingCompleteHandlerOfAUrlLoaderIsRecorded (regression: dispatch_type drops the failure), and the review-item-1 to 3 tests in the sections below. Revert results for those are listed in their sections.
+
+## Radicle/tests/test_c_api_runtime_real.cpp:drive_movie (recorded handler failures fail the real-data run)
+
+drive_movie fails a program run when the interpreter has recorded any handler failure, so the real-data test checks "no errors" as well as the playing state. In the final run every replay ended with handlers=0 (printed by a temporary probe; the check itself has no probe).
+
+## Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::advance (measured effect of the five fixes on the five programs)
+
+Measured with temporary probes, removed afterwards, on the start state (HEAD plus the previous agent's uncommitted work) and on the final state. First run of each program. "After init" is the replay window, from the end of InitProgram to the end of the 180-call replay.
+
+| Program | BGS before | BGS after | first AVM2 error before | first AVM2 error after | ABC functions after init, before | after |
+|---|---|---|---|---|---|---|
+| AtomicCommand | 15 (1 at init + 14 in replay) | 15 | none | none | 195 | 195 |
+| Grognak | 2 (2 + 0) | 2 | none | none | 355 | 355 |
+| PipFall | 10 (1 + 9) | 10 | none | none | 220 | 220 |
+| RedMenace | 8 (1 + 7) | 8 | none | none | 191 | 191 |
+| ZetaInvaders | 6 (1 + 5) | 6 | none | none | 204 | 204 |
+
+The per-run counts matched in all 14 runs, the controls included, and the replay lines (snapshot hash, host log hash, BGS count) are unchanged. No call opcode ran in any run. Fix 1 alone (with the handler change reverted to HEAD) also left the replay lines unchanged.
+
+## Radicle/src/avm2/swf_runtime.cpp:broadcast_frame_event (measured effect of off-list frame delivery, #807 step 3)
+
+Measured with temporary probes, removed afterwards, on the state before this change and on the state after it. First run of each program; "after init" is the replay window, from the end of InitProgram to the end of the 180-call replay.
+
+| Program | BGS before | BGS after | bgs.* calls added or removed | first AVM2 error before | first AVM2 error after | handler failures after | ABC functions after init, before | after |
+|---|---|---|---|---|---|---|---|---|
+| AtomicCommand | 15 (1 at init + 14 in replay) | 15 | none | none | none | 0 | 195 | 420 |
+| Grognak | 2 (2 + 0) | 2 | none | none | none | 0 | 355 | 580 |
+| PipFall | 10 (1 + 9) | 10 | none | none | none | 0 | 220 | 445 |
+| RedMenace | 8 (1 + 7) | 8 | none | none | none | 0 | 191 | 416 |
+| ZetaInvaders | 6 (1 + 5) | 6 | none | none | none | 0 | 204 | 429 |
+
+The added ABC entries are the tick, one per frame (225 per run). The bgs.* sequences of all 14 runs matched their earlier sequences, and the replay lines (snapshot hash, host log hash, BGS count) are unchanged. No AVM2 failure was recorded in any run, and no call opcode ran. The replay never creates an aze.motion tween, so whether the tween path would issue BGS calls in other driven sessions is unverified.
+
+## Radicle/src/avm2/swf_runtime.cpp:broadcast_frame_event (a listener failure does not stop the other targets or the movie, #807 review item 1)
+
+Decision: every target gets the event, a listener failure does not stop the movie, and the failure stays visible through Interpreter::handler_failures(). The real-data test fails on any recorded failure (Radicle/tests/test_c_api_runtime_real.cpp:drive_movie). Before, broadcast_frame_event returned at the first failing listener, and SwfRuntime::advance set playing_ to false. A failing timeline frame script keeps its behaviour: a failure of root_->advance_timeline or of a clip's advance_timeline still sets playing_ to false in Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::advance.
+
+Test: Radicle/tests/test_avm2_frame_listeners.cpp:Avm2FrameListeners.AFailingFrameListenerDoesNotStopTheOtherTargetsOrThePlayback (two off-list Shapes; the first throws; expects the log "bbb", playing() true, and a handler count of 3).
+
+Revert: an early return on the first failing target in broadcast_frame_event fails the test; the log reads "" where "bbb" is expected.
+
+## Radicle/src/avm2/events.cpp:dispatch_added, dispatch_removed, set_display_focus and HostClock::advance (the first failure is kept and the later dispatch still runs, #807 review item 2)
+
+Each of these returned at the first failing listener, so the addedToStage, removedFromStage and focusIn handlers, and the next timer tick, were skipped. dispatch_added and dispatch_removed run the stage walk and return the first failure. set_display_focus runs focusIn and returns the first failure. HostClock::advance keeps ticking. Decision (coordinator): a failing tick does not stop the timer, and timerComplete still fires when the repeat count is reached.
+
+Tests (Radicle/tests/test_avm2_handler_failures.cpp): Avm2HandlerFailures.AFailingAddedListenerDoesNotSkipTheAddedToStageHandlers, AFailingRemovedListenerDoesNotSkipTheRemovedFromStageHandlers, AFailingFocusOutDoesNotSkipTheFocusInHandler, and AFailingTimerTickDoesNotStopTheTimerOrItsCompletion (repeat count 2; the timer and timerComplete listeners fail; expects a handler count of 3, current_count 2, and the timer stopped).
+
+Revert results (one site at a time; each file restored from a saved copy and compared):
+- dispatch_added returns after its own dispatch on a failure: AFailingAddedListenerDoesNotSkipTheAddedToStageHandlers fails (count 1, expected 2).
+- dispatch_removed returns after its own dispatch on a failure: AFailingRemovedListenerDoesNotSkipTheRemovedFromStageHandlers fails (count 1, expected 2).
+- set_display_focus returns after focusOut on a failure: AFailingFocusOutDoesNotSkipTheFocusInHandler fails (count 1, expected 2).
+- HostClock::advance stops the timer on a failing tick: AFailingTimerTickDoesNotStopTheTimerOrItsCompletion fails (count 1, expected 3; current_count 1, expected 2).
+
+## Radicle/src/avm2/native_events.cpp:dispatcher_dispatch_event (a failure inside a nested dispatchEvent is counted once, #807 review item 3)
+
+A listener that throws during the script's dispatchEvent was recorded by invoke_listeners, and then returned to the calling script, which threw it again. One failure counted 2. Now dispatcher_dispatch_event returns the boolean (true unless the event's default was prevented) and does not return the failure to the script. Decision (coordinator). AS3 behaviour (unverified, from memory): in Flash Player a listener's uncaught error propagates out of dispatchEvent to the caller. This code does not match that; it is the decision, not checked against avmplus.
+
+Test: Radicle/tests/test_avm2_handler_failures.cpp:Avm2HandlerFailures.AFailingListenerInsideANestedDispatchIsCountedOnce (an outer ABC method calls dispatchEvent on a target with a failing listener; expects the dispatch result ok and a count of 1).
+
+Revert: returning the dispatch failure from the native fails the test (result not ok; count 2, expected 1).
+
+## Radicle/src/avm2/native_xml.cpp:write_xml_property (a write cannot nest an element past kMaxXmlDepth, #807 review item 4)
+
+Depth is stored per element as XmlNode::depth (Radicle/include/fo4/avm2/xml.hpp:XmlNode; the root is 0). Parsing sets it in Radicle/src/avm2/xml_parse.cpp:parse_element, which refuses depth >= kMaxXmlDepth. Copying restarts at 0 for the copied root and adds one per level down the copied subtree (Radicle/src/avm2/xml.cpp:copy_at_depth). A write that would create an element at depth >= kMaxXmlDepth returns TypeError "the XML would nest deeper than the limit" (kXmlDepthLimitMessage). A created element records its parent's depth plus one.
+
+The recursive walkers stay within the 64-level limit, because no path builds a deeper tree: parse_element, Radicle/src/avm2/xml.cpp:append_markup, Radicle/src/avm2/native_xml.cpp:subtree_size and move_to_counter, and Radicle/src/avm2/xml.cpp:copy_at_depth recurse at most kMaxXmlDepth levels. Destroying a node tree (shared_ptr chains) is bounded the same way.
+
+Reproduction reported before the fix: `cur.a = "t"; cur = cur.a;` in a 120000-iteration loop, then toXMLString(), gave rc=139. After the fix the same script stops with TypeError at the 64th level (148 ms in a probe, removed afterwards).
+
+Tests (Radicle/tests/test_avm2_xml.cpp): Avm2Xml.WriteThatWouldNestPastTheDepthLimitIsATypeError (63 navigations, then a child write), Avm2Xml.WriteThatStaysWithinTheDepthLimitSucceeds (the boundary: 62 navigations, then the write succeeds), Avm2Xml.CopyKeepsTheNestingDepthSoAWriteStillStopsAtTheLimit, Avm2Xml.RepeatedDeepeningWritesStopAtTheDepthLimit (70 deepening writes).
+
+Revert results (each restored and compared):
+- The depth check in write_xml_property removed: WriteThatWouldNestPastTheDepthLimitIsATypeError, CopyKeepsTheNestingDepthSoAWriteStillStopsAtTheLimit and RepeatedDeepeningWritesStopAtTheDepthLimit fail.
+- The created element's depth not set: RepeatedDeepeningWritesStopAtTheDepthLimit fails.
+- copy_at_depth sets depth 0 for every copy: CopyKeepsTheNestingDepthSoAWriteStillStopsAtTheLimit fails.
+- parse_element does not set depth: WriteThatWouldNestPastTheDepthLimitIsATypeError fails.
+
+## Radicle/src/avm2/native_xml.cpp:write_xml_property (only nodes still in the document are subtracted from the node count, #807 review item 6)
+
+The node counter is shared by a document (XmlNode::document_nodes). Replacing an element's content removes its children from the document. The replace path therefore subtracts their subtree size (`*budget -= removed;`) and re-homes the removed children to a new counter with native_xml.cpp:move_to_counter, which starts at their size. A node held after its removal then counts against its own counter, not the document. Before the fix, the held node still shared the document counter, so a later write into it subtracted the removed subtree a second time, and the document accepted nodes past kMaxXmlNodes.
+
+Open: each re-homed subtree is capped at kMaxXmlNodes on its own, but the total over several held subtrees is not capped. Not changed.
+
+Test: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.RemovedSubtreeIsNotSubtractedFromTheDocumentCountAgain. The document holds exactly kMaxXmlNodes nodes. After `x.a = ""` and `held.c = ""`, `x.q = "y"` must succeed and `x.r = "y"` must be TypeError.
+
+Revert results: deleting `*budget -= removed;` fails the write that must succeed ("the XML has more nodes than the limit"). Removing the re-home loop lets the write that must be refused succeed. Each fails the test.
+
+## Radicle/src/avm2/xml_parse.cpp:parse_attributes (the duplicate-attribute check uses a set, #807 review item 5)
+
+A set of attribute names per element replaces the scan over the earlier attributes, which was quadratic. Measured on the two tests (80000 distinct attributes; 5000 attributes plus a duplicate), the same binary took 11963 ms with the scan and 49 ms with the set. No deterministic test fails without the set: both tests pass with the scan. The tests check behaviour and assert no timing, so they are not flaky.
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.DuplicateAttributeAfterManyAttributesIsATypeError and Avm2Xml.ManyDistinctAttributesParseAndReadBack.
+
+## Radicle/src/avm2/swf_runtime.cpp:broadcast_frame_event (a tracked object on another movie's stage is not delivered by this movie, #807 review item 7)
+
+The tracked-object loop adds an object only when its stage() is null. Before, a Sprite on movie 1's stage got enterFrame again from movie 2's advance.
+
+Test: Radicle/tests/test_avm2_frame_listeners.cpp:Avm2FrameListeners.AnObjectOnAnotherMoviesStageIsNotDeliveredByThisMovie. Revert (the stage filter removed): the test fails; the log reads "aaa" where "" is expected, then "aaaaaa" where "aaa" is expected.
+
+Open: a tracked object on no stage is delivered by every movie advanced on the Runtime. See the two-movie limit in the broadcast_frame_event section above.
+
+## Radicle/src/avm2/interpreter_coerce.cpp:Interpreter::coerce_value (one-node XMLList and XML coerce, #807 review item 8a)
+
+An XMLList holding one node coerces to XML. An XML value coerces to an XMLList holding the same node. An XMLList with 0 or 2 or more nodes stays a TypeError when the target is XML, as in Radicle/src/avm2/native_xml.cpp:convert. AS3 behaviour (unverified, from memory): a one-node XMLList assigned to an XML-typed variable succeeds, and XML assigned to an XMLList-typed variable gives a one-node list.
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.OneNodeXmlListCoercesToXml and Avm2Xml.XmlCoercesToAOneNodeXmlList. The two-node case stays Avm2Xml.CoercingAnXmlListToXmlIsATypeError. Revert (the HEAD file): both new tests fail with "value is not of type XML" and "value is not of type XMLList".
+
+## Radicle/src/avm2/xml_parse.cpp:add_top_text (a byte order mark before the root is refused, #807 review item 8c)
+
+A UTF-8 byte order mark in top-level text is refused with "a byte order mark is not allowed outside the root element". XML() already refused it as text outside the root element. XMLList() (a fragment) accepted it as a text node before the change. AS3 behaviour: unverified (from memory).
+
+Test: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.AByteOrderMarkBeforeTheRootIsATypeError. Its XML half passes with and without the refusal; its XMLList half fails without it.
+
+## Radicle/src/avm2/xml_parse.cpp:run and parse_element (a comment or processing-instruction opener is not its own terminator, #807 review item 8d)
+
+skip_past searches for "-->" or "?>" from just after the opener (4 bytes for "<!--", 2 for "<?"), at the top level (run) and inside an element (parse_element). Before the change, the search started at the opener, so "<!-->" closed itself. AS3 behaviour: unverified (from memory).
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.AnOpenerWithoutContentIsNotAClosedComment, Avm2Xml.AProcessingInstructionOpenerWithoutContentIsNotClosed, and Avm2Xml.AnOpenerInsideAnElementWithoutContentIsNotClosed. Revert (the search from the opener at all four sites): all three fail.
+
+## Radicle/src/avm2/xml.cpp:escape (CR, LF and TAB are written as character references, #807 review item 8e)
+
+A raw CR in text is written as &#13;, in text and in attributes. In attributes, LF is written as &#10; and TAB as &#9;. Before the change these went out raw, so the markup did not round-trip. AS3 behaviour: unverified (from memory).
+
+Tests: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.AttributeLineBreaksAndTabsRoundTripAsCharacterReferences and Avm2Xml.CarriageReturnInTextRoundTripsAsACharacterReference. Revert (the three branches removed): both fail.
+
+## Radicle/src/avm2/xml.cpp:xml_default_string (not reproduced; no code change, #807 review item 8b)
+
+The brief cited xml.cpp lines 172-181 for a concatenation of list items. The file is 142 lines, and xml_default_string already joins the items with "\n". Guard test: Radicle/tests/test_avm2_xml.cpp:Avm2Xml.XmlListToStringJoinsItsItemsWithNewlines. It passes with and without this round's changes, so it guards the behaviour and is not a revert proof.
+
+## Radicle/src/avm2/runtime.cpp:Runtime::track_frame_listener (linear duplicate scan kept, #807 review item 9)
+
+Not changed. A set would change the container and the release order, which is a bigger change than this round's fixes. The real-data replays register one off-list ticker (see the broadcast_frame_event section above).
+
+## Radicle/tests/test_c_api_runtime_real.cpp:ReplaysTheSevenProgramsDeterministically (fails at HEAD too; not changed in this round)
+
+With FO4_DATA_DIR set, five programs replay (AtomicCommand, Grognak, PipFall, RedMenace, ZetaInvaders) with the same replay lines as at HEAD. GJ_Defrag and TurretHack fail on their first run at the SetPlatform call in drive_movie, because their root has no SetPlatform member. The control check fails for AtomicCommand and PipFall ("the frame hashes ignore the scripts"). A HEAD-only build gives the same results. ran is 5, not 7. Open: the harness calls SetPlatform unconditionally; the #1040 brief (item 3) covers it.
+
+TurretHack is not reached past InitProgram in the replay, because this branch lacks the host call getTextReplaceID (the #1040 brief, item 4).
+
+## Open XML items (#807 review item 8, left as listed)
+
+Unchanged: empty XMLList truthiness, text trimming, adjacent text and CDATA merging, and for-each over XMLList.
+
+For-each survey (a temporary probe on hasnext2, nextname and nextvalue for XML and XMLList objects, removed afterwards): in the real-data replays, the count was 0 for every program that ran frames (AtomicCommand, GJ_Defrag, Grognak, PipFall, RedMenace, ZetaInvaders). GJ_Defrag ran only in a probe that skipped SetPlatform. TurretHack is not established, because it stops at InitProgram. This covers only the paths the replays drive, not the whole program code.
+
+- Whitespace-only text is not round-tripped (#807 review item 3, round 4, not changed): `x.b = " "` writes a text node " " under `b`, so `toXMLString` gives `<a><b> </b></a>`. The parser drops whitespace-only text in `Radicle/src/avm2/xml_parse.cpp:add_child_text`, so the reparsed `b` has text "". Checked with a temporary probe, removed afterwards. Writing `x.b = " "` in `Radicle/src/avm2/native_xml.cpp:write_xml_property` is unchanged.
+- A listener failure inside a nested `addChild` or `stage.focus` call is counted twice when the outer listener fails (round 4, not changed). The inner dispatch records the failure in `Radicle/src/avm2/events.cpp:invoke_listeners`; the native (`Radicle/src/avm2/native_display.cpp:attach_child` for addChild, `Radicle/src/avm2/interpreter_property.cpp` for the focus setter) returns it to the outer script, which throws, and the outer listener's failure is recorded again. Only `Radicle/src/avm2/native_events.cpp:dispatcher_dispatch_event` swallows the nested failure, so a nested `dispatchEvent` is counted once. Checked with temporary probes, removed afterwards: a nested addChild and a nested focus each give a handler count of 2 for one failing listener.
+
+## Radicle/src/avm2/native_display.cpp:detach_child (a failing removed listener still removes the child, #807 review item 1, round 4)
+
+`detach_child` always unlinks the child from its container after the `removed` and `removedFromStage` dispatches, and returns the first failure of those dispatches. Before, a failing `removed` listener returned before `remove_child`, so the child stayed attached and the next `removeChild` dispatched `removedFromStage` again. Decision (coordinator): the child is always removed and the first failure is still returned, so `removeChild` reports it to its caller. A second `removeChild` on a child that is no longer attached returns without dispatching, because `detach_child` returns early when `child->parent()` is not the container.
+
+Test: `Radicle/tests/test_avm2_handler_failures.cpp:Avm2HandlerFailures.AFailingRemovedListenerStillRemovesTheChildOnce` (the first `removeChild` result is not ok; `parent()` and `stage()` are null; the handler count stays at 2 after a second `removeChild`). Revert (the early return restored): the test fails, with `parent()` still set, and the count is 4 after the second call instead of 2.
+
+## Radicle/src/avm2/native_display.cpp:attach_child (a failed move completes, #807 review item 1, round 4)
+
+`attach_child` detaches from the old parent, then always adds the child to the new parent and dispatches `added` and `addedToStage`. It returns the detach failure if there was one, otherwise the `added` result. Decision: the move goes ahead after a failed `removed`, because the fixed `detach_child` has already unlinked the child, so the child is never on two parents or half attached. `DisplayObjectContainer::add_child_at` (`Radicle/src/avm2/display.cpp`) also unlinks a child from its previous container, so a second parent is not possible even if the detach did not run. Before, a failed detach returned before the add, leaving the child on neither parent.
+
+Test: `Radicle/tests/test_avm2_handler_failures.cpp:Avm2HandlerFailures.AFailingRemovedListenerDuringAMoveLeavesTheChildOnTheNewParentOnly` (the result is not ok; the child's parent is the new container; the old container is empty; three handler failures: `removed`, `removedFromStage` and `addedToStage`). Revert (the early return restored after the detach): the test fails, with `parent()` null and two failures instead of three. Reverting only the detach fix does not fail this test, because `add_child_at` unlinks the child anyway; `AFailingRemovedListenerStillRemovesTheChildOnce` is the test for the detach fix.
+
+## Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip::detach (a listener failure does not stop the movie, #807 review item 1, round 4)
+
+Timeline removals (RemoveObject, and a PlaceObject that replaces a depth) and the timeline's `added` events now record a listener failure and continue, the same rule as the frame broadcast in round 3 item 1. `SwfTimelineClip::detach` removes the object even when a `removed` listener fails, and returns nothing. Before, `detach` returned the failure to `SwfTimelineClip::apply_frame_state`, which returned it to `SwfRuntime::advance`, so the movie stopped (`playing_` false). The `added` loop in `apply_frame_state` no longer returns at the first failure, so every object placed in a frame gets its `added` event (the same early return as round 3 item 2). Frame script failures (DoAction, a child clip's frame) are unchanged: they still return to `SwfRuntime::advance` and stop the movie (not tested in this round).
+
+Tests (`Radicle/tests/test_avm2_stage_events.cpp`): `Avm2StageEvents.TimelineRemovalWithAFailingRemovedListenerKeepsPlaying` (the stage's `removed` listener throws on RemoveObject; the movie still plays; one handler failure) and `Avm2StageEvents.TimelinePlacementWithAFailingAddedListenerSendsEveryAddedEvent` (two objects placed in one frame, the stage's `added` listener throws for each; the movie plays; two handler failures). Revert (propagation restored in `detach` and its two callers): the RemoveObject test fails with `playing()` false and the placement test still passes. Revert (the `added` loop returns at the first failure): the placement test fails with `playing()` false and one failure.
+
+## Radicle/src/avm2/native_xml.cpp:write_xml_property (a name the parser would not accept is refused, #807 review item 2, round 4)
+
+A write that would create an element or attribute with a name the parser would reject returns TypeError: `"<name>" is not a valid XML name`. The check is `Radicle/src/avm2/xml_parse.cpp:is_xml_name`, which uses the parser's own predicates. Refused: names with a space or `<`, the empty name, names starting with a digit, and names with a quote. Accepted: plain names and names with a colon (`ns:good`, which `is_name_start` accepts), and a written document reparses to the same markup. Before, `x["b c"] = "t"` produced `<a><b c>t</b c></a>`, which does not reparse.
+
+AS3 behaviour: unverified (from memory). This code refuses such names with a TypeError; what Flash Player does with an invalid name was not checked.
+
+Tests: `Radicle/tests/test_avm2_xml.cpp:Avm2Xml.ElementAndAttributeNamesThatWouldNotReparseAreATypeError` (the names `b c`, `b<c`, empty, `1x` and `b"c`, as element and as attribute) and `Avm2Xml.PlainAndNamespacedNamesWriteAndReparse` (a guard: `good`, `ns:good` and `ns:k` are written and the document reparses). Revert (the check removed): the refusal test fails for all ten name and kind combinations; the guard passes both ways.
+
+## Radicle/src/avm2/xml_parse.cpp:is_xml_name (the name rule for writes, #807 review item 2, round 4)
+
+A name is valid when it is not empty, its first character passes `is_name_start` (letters, `_`, `:`, and bytes 0x80 and up), and every character passes `is_name_char` (which adds digits, `-` and `.`). These are the predicates `Parser::parse_name` uses, so reading and writing names share one rule. The parser's own loop is unchanged.

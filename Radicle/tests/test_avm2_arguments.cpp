@@ -29,8 +29,8 @@ TEST(Avm2Arguments, OptionalParameterTakesItsDefaultWhenTheArgumentIsOmitted) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("pick", function_code.bytes(), 3);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.pushbyte(5);
   script_code.call(1);
   script_code.returnvalue();
@@ -57,8 +57,8 @@ TEST(Avm2Arguments, CallWithTooFewArgumentsIsAnArgumentError) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("need", function_code.bytes(), 2);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.call(0);
   script_code.returnvalue();
   const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
@@ -84,8 +84,8 @@ TEST(Avm2Arguments, DeclaredParameterTypeCoercesTheArgument) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("typed", function_code.bytes(), 2);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.pushdouble(fraction);
   script_code.call(1);
   script_code.returnvalue();
@@ -113,8 +113,8 @@ TEST(Avm2Arguments, NullForAStringParameterStaysNull) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("echo", function_code.bytes(), 2);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.pushnull();
   script_code.call(1);
   script_code.returnvalue();
@@ -142,8 +142,8 @@ TEST(Avm2Arguments, NeedArgumentsBuildsAnArgumentsObjectWithEveryArgument) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("count", function_code.bytes(), 3);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.pushbyte(1);
   script_code.pushbyte(2);
   script_code.pushbyte(3);
@@ -174,8 +174,8 @@ TEST(Avm2Arguments, ClassParameterAcceptsAClassObject) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("take", function_code.bytes(), 2);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.getlex(object_class);
   script_code.call(1);
   script_code.returnvalue();
@@ -204,8 +204,8 @@ TEST(Avm2Arguments, FunctionParameterRejectsAClassObject) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("take", function_code.bytes(), 2);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.getlex(object_class);
   script_code.call(1);
   script_code.returnvalue();
@@ -234,8 +234,8 @@ TEST(Avm2Arguments, ObjectParameterAcceptsAClassObject) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("take", function_code.bytes(), 2);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.getlex(object_class);
   script_code.call(1);
   script_code.returnvalue();
@@ -267,8 +267,8 @@ TEST(Avm2Arguments, FunctionParameterAcceptsAClosure) {
   closure_code.returnvalue();
   const std::uint32_t closure_method = script.method("closure", closure_code.bytes(), 1);
   avm2_test::CodeBuilder script_code;
-  script_code.pushnull();
   script_code.newfunction(function_method);
+  script_code.pushnull();
   script_code.newfunction(closure_method);
   script_code.call(1);
   script_code.returnvalue();

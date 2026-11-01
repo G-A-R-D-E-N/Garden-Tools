@@ -456,6 +456,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/native_net.cpp
   src/avm2/native_system.cpp
   src/avm2/native_bytearray.cpp
+  src/avm2/xml.cpp
+  src/avm2/xml_parse.cpp
+  src/avm2/native_xml.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
@@ -1034,6 +1037,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_runtime.cpp
     tests/test_avm2_call_indexed.cpp
     tests/test_avm2_interpreter.cpp
+    tests/test_avm2_class_call.cpp
+    tests/test_avm2_xml.cpp
     tests/test_avm2_types.cpp
     tests/test_avm2_arguments.cpp
     tests/test_avm2_stage_events.cpp
@@ -1057,6 +1062,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_display_snapshot.cpp
     tests/test_avm2_document_class.cpp
     tests/test_avm2_events.cpp
+    tests/test_avm2_handler_failures.cpp
+    tests/test_avm2_frame_listeners.cpp
     tests/test_avm2_focus_events.cpp
     tests/test_avm2_text.cpp
     tests/test_avm2_string_utf16.cpp

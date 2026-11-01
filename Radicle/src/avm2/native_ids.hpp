@@ -230,6 +230,14 @@ enum class Id : std::uint32_t {
   bytearray_write_utf_bytes,
   bytearray_read_utf_bytes,
   bytearray_clear,
+  xml_construct,
+  xmllist_construct,
+  xml_children,
+  xml_length,
+  xml_to_string,
+  xml_to_xml_string,
+  xml_text,
+  xml_copy,
 };
 
 }  // namespace fo4::avm2::native
