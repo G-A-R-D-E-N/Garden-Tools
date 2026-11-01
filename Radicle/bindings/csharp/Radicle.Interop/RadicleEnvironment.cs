@@ -67,6 +67,8 @@ public sealed record LightInfo(int Time, uint Radius, ByteColor Color, uint Flag
 
 public sealed record LightRecord(LightInfo? Data, float? Fade, string? Gobo, FormKey? Lens, FormKey? GodRays);
 
+public sealed record AddOnNodeRecord(uint? NodeIndex, FormKey? Light, string? Model, ushort? MasterParticleCap, ushort? Flags);
+
 public sealed record BendableSpline(float? DefaultTiles, ushort? DefaultSlices, bool? TilesRelativeToLength,
                                     (float R, float G, float B)? DefaultColor, float? WindSensibility,
                                     float? WindFlexibility, FormKey? Texture);
@@ -478,6 +480,16 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
         }
         return new LightRecord(data, l.HasFade != 0 ? l.Fade : null, Utf8.Read(l.Gobo), FormKey.FromNative(l.Lens),
                                FormKey.FromNative(l.GodRays));
+    }
+
+    public AddOnNodeRecord AddOnNode(Record record)
+    {
+        using var use = Use(record);
+        Native.AddOnNodeInfo a;
+        Call.Check(RadicleNative.AddOnNodeGetInfo(use.Pointer, record.Handle, &a));
+        return new AddOnNodeRecord(a.HasNodeIndex != 0 ? a.NodeIndex : null, FormKey.FromNative(a.Light),
+                                   Utf8.Read(a.Model), a.HasDnam != 0 ? a.MasterParticleCap : null,
+                                   a.HasDnam != 0 ? a.Flags : null);
     }
 
     public BendableSpline BendableSpline(Record record)

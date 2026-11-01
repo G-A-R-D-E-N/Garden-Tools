@@ -35,13 +35,20 @@ public class ShippedDocsTests
 
     private static string[] ToolNames()
     {
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "native", "apps", "fo4ide", "McpTools.cpp"));
-        var names = Regex.Matches(source, @"\badd\(\s*\{?\s*""([a-z0-9_]+)""|\.name = ""([a-z0-9_]+)""")
-            .Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value)
-            .Distinct()
-            .ToArray();
-        names.Should().NotBeEmpty("McpTools.cpp should register the native tools");
-        return names;
+        var directory = Path.Combine(RepoRoot(), "native", "apps", "fo4ide");
+        var names = new List<string>();
+        var source = File.ReadAllText(Path.Combine(directory, "McpTools.cpp"));
+        names.AddRange(Regex.Matches(source, @"\badd\(\s*\{?\s*""([a-z0-9_]+)""|\.name = ""([a-z0-9_]+)""")
+            .Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value));
+        foreach (var catalog in new[] { "McpCatalogRead.cpp", "McpCatalogEdit.cpp", "McpCatalogService.cpp" })
+        {
+            var text = File.ReadAllText(Path.Combine(directory, catalog));
+            names.AddRange(Regex.Matches(text, @"^\s*\{""([a-z0-9_]+)""", RegexOptions.Multiline)
+                .Select(m => m.Groups[1].Value));
+        }
+        var distinct = names.Distinct().ToArray();
+        distinct.Should().NotBeEmpty("McpTools.cpp should register the native tools");
+        return distinct;
     }
 
     [Theory]
