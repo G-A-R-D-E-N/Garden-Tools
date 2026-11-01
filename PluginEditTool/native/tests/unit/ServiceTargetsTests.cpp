@@ -157,7 +157,8 @@ TEST_CASE("NifTarget Import passes the collision argument to the service") {
     CHECK(plainBytes.find("bhkPhysicsSystem") == std::string::npos);
 }
 
-// Regression: a stray non-UTF-8 byte in a path makes the error reply throw type_error.316 on the service thread.
+#ifndef _WIN32
+// Constraint: POSIX only, because Windows refuses this byte in the path conversion before any reply is built.
 TEST_CASE("NifTarget Tree replaces a stray UTF-8 byte in its error reply") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -173,6 +174,7 @@ TEST_CASE("NifTarget Tree replaces a stray UTF-8 byte in its error reply") {
     const auto parsed = nlohmann::json::parse(result->get<std::string>());
     CHECK(parsed.at("error").get<std::string>().find("missing") != std::string::npos);
 }
+#endif
 
 TEST_CASE("NifTarget ApplyEdits takes the editor's JSON string and saves in-process") {
     const auto root = tempRoot();

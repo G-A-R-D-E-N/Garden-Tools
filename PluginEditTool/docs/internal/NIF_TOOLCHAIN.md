@@ -22,7 +22,7 @@ Blender ──OBJ──▶ fo4::nif::import_obj (Radicle) ──▶ FO4 .nif ─
                         │
    FO4RecordEditor (C#/WPF + React WebView2)
      • native host  NifService (PluginEditTool/native) → Radicle, JSON out
-     • MCP tools    nif_inspect / nif_verify / nif_tree / nif_geometry / nif_fix / nif_import  → NifService
+     • MCP tools    nif_inspect / nif_verify / nif_tree / nif_geometry / nif_import / fix  → NifService
      • GUI panel    View / Edit / Import / Inspect / Verify / Fix       → NifInterop → NifService
      • 3D viewport  (three.js) with DDS textures via Texconv
 ```

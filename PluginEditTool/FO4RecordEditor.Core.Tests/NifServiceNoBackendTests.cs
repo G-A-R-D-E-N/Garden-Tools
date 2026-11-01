@@ -48,7 +48,9 @@ public sealed class NifServiceNoBackendTests : IDisposable
             "ApplyEdits must not write a temp edits file");
 
         var batch = NifService.GeoBatch(new[] { mesh, "Meshes/No/Such/Mesh.nif" });
-        batch.Should().Contain("FO4IDE", "a path that resolves gets the no-backend reply");
+        // Constraint: ResolveNif turns separators into backslashes, so an absolute path resolves only on Windows.
+        if (OperatingSystem.IsWindows())
+            batch.Should().Contain("FO4IDE", "a path that resolves gets the no-backend reply");
         batch.Should().Contain("Not found (loose or in any indexed archive).", "a path that does not resolve says so");
         NifService.GeoBatchDone.Should().Be(NifService.GeoBatchTotal,
             "a progress poll must reach its total instead of waiting on a verb");

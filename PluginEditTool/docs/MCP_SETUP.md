@@ -5,9 +5,9 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **160 tools**: 64 hand-written tools and 96 catalog tools. The 64 are 20 for plugins and records,
+It advertises **161 tools**: 65 hand-written tools and 96 catalog tools. The 65 are 20 for plugins and records,
 23 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects and weapons), 5 for MO2 profile
-and host state, 5 for Papyrus, and 11 for NIFs, materials, audio and BA2 archives (4 NIF, 2 material, 4 audio, 1
+and host state, 5 for Papyrus, and 12 for NIFs, materials, audio and BA2 archives (5 NIF, 2 material, 4 audio, 1
 archive). The 96 catalog tools are the editor parity set: 24 read-side (`McpCatalogRead.cpp`), 46 edit-side
 (`McpCatalogEdit.cpp`) and 26 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
 blueprint graphs and `load_script`).
@@ -315,7 +315,6 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 |---|---|---|---|
 | `nif_inspect`, `nif_geometry` | `path` | no | Read a NIF: summary and geometry, in process through Radicle. |
 | `nif_verify`, `nif_tree` | `path` | no | Verification and block tree, in process through Radicle. |
-| `nif_fix` | `path`, `out_nif` | disk | Repairs a NIF in process and writes the result to `out_nif`. |
 | `nif_import` | `obj_path`, `out_nif` [`material`, `tex_diffuse`, `tex_normal`, `collision`, `from_blender`] | disk | Builds a NIF from an OBJ in process. `collision` adds a static box collision body around the mesh; a generated box has not been tested in the game. |
 | `material_inspect` | `path` | no | Reads a BGSM or BGEM material: `fileName`, `format`, `version` and its named `fields`. |
 | `material_set_fields` | `path`, `fields` [`output`] | disk | Sets named material fields (`fields` maps a name to a text value) and writes the result atomically to `output`, or back to `path` when no output is given. A conditional field such as `EmittanceColor` can be set only when its switch (`EmitEnabled`) is already true in the saved file: set the switch in one call and the field in the next. |

@@ -305,15 +305,6 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
     if (!add({"nif_geometry", "Return geometry data, read in-process", nifPathSchema},
              "nif", "Geo", {"path"})) return false;
     if (!add({
-            "nif_fix",
-            "Repair a NIF in process and write the result to out_nif: tangents, a missing BSX flag, "
-            "the editor marker, and texture and material name whitespace.",
-            objectSchema({
-                {"path", {{"type", "string"}, {"description", "Path to the NIF file"}}},
-                {"out_nif", {{"type", "string"}, {"description", "Path to write the repaired NIF"}}}
-            }, nlohmann::json::array({"path", "out_nif"}))},
-            "nif", "Fix", {"path", "out_nif"})) return false;
-    if (!add({
             "nif_import",
             "Build a NIF from an OBJ in process. Set collision to add a static box collision body "
             "around the mesh.",
