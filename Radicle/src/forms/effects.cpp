@@ -20,6 +20,7 @@ constexpr auto k_alch = Signature::from_string("ALCH");
 constexpr auto k_ench = Signature::from_string("ENCH");
 constexpr auto k_ingr = Signature::from_string("INGR");
 constexpr auto k_spel = Signature::from_string("SPEL");
+constexpr auto k_mgef = Signature::from_string("MGEF");
 constexpr auto k_efid = Signature::from_string("EFID");
 constexpr auto k_efit = Signature::from_string("EFIT");
 constexpr auto k_ctda = Signature::from_string("CTDA");
@@ -50,6 +51,19 @@ bool block_is_contiguous(const std::vector<Subrecord>& subrecords, std::size_t f
     if (!is_effect_subrecord(subrecords[i].signature)) return false;
   }
   return true;
+}
+
+bool is_magic_effect_target(const Plugin& plugin, const FormKey& effect) {
+  try {
+    const auto context = plugin_form_id_context(plugin);
+    const auto raw = encode_plugin_form_id(effect, context);
+    if (raw.is_null()) return false;
+    if (effect.owner() != context.current_plugin) return true;
+    const auto* record = find_record(plugin, resolve_plugin_form_id(raw, context));
+    return record != nullptr && record->header.signature == k_mgef;
+  } catch (const FormIdError&) {
+    return false;
+  }
 }
 
 std::uint32_t read_u32(const std::vector<std::byte>& data, std::size_t offset) {
@@ -151,6 +165,21 @@ std::vector<Subrecord> encode_effects(const PluginFormIdContext& context,
   return encoded;
 }
 
+EffectListWrite decode_mutable_effects(Plugin& plugin,
+                                       const FormKey& key,
+                                       std::vector<MagicEffectEntry>& entries) {
+  assign_record_form_keys(plugin);
+  const auto* record = fo4::detail::find_mutable_record(plugin, key);
+  if (record == nullptr) return EffectListWrite::record_missing;
+  if (!carries_effects(record->header.signature)) return EffectListWrite::unsupported_record;
+  try {
+    entries = decode_effects(plugin, *record);
+  } catch (const MagicEffectError&) {
+    return EffectListWrite::unexpected_layout;
+  }
+  return EffectListWrite::written;
+}
+
 }  // namespace
 
 std::vector<MagicEffectEntry> read_magic_effects(const Plugin& plugin, const Record& record) {
@@ -178,6 +207,47 @@ EffectListWrite set_magic_effects(Plugin& plugin,
                             std::make_move_iterator(encoded.end()));
   fo4::detail::mark_record_modified(plugin, *record);
   return EffectListWrite::written;
+}
+
+EffectListWrite add_magic_effect(Plugin& plugin,
+                                 const FormKey& key,
+                                 MagicEffectEntry entry,
+                                 std::size_t* out_index) {
+  std::vector<MagicEffectEntry> entries;
+  const auto decoded = decode_mutable_effects(plugin, key, entries);
+  if (decoded != EffectListWrite::written) return decoded;
+  if (!is_magic_effect_target(plugin, entry.effect)) {
+    return EffectListWrite::effect_not_magic_effect;
+  }
+  const auto index = entries.size();
+  entries.push_back(std::move(entry));
+  const auto result = set_magic_effects(plugin, key, entries);
+  if (result == EffectListWrite::written && out_index != nullptr) *out_index = index;
+  return result;
+}
+
+EffectListWrite set_magic_effect(Plugin& plugin,
+                                 const FormKey& key,
+                                 std::size_t index,
+                                 MagicEffectEntry entry) {
+  std::vector<MagicEffectEntry> entries;
+  const auto decoded = decode_mutable_effects(plugin, key, entries);
+  if (decoded != EffectListWrite::written) return decoded;
+  if (index >= entries.size()) return EffectListWrite::index_out_of_range;
+  if (!is_magic_effect_target(plugin, entry.effect)) {
+    return EffectListWrite::effect_not_magic_effect;
+  }
+  entries[index] = std::move(entry);
+  return set_magic_effects(plugin, key, entries);
+}
+
+EffectListWrite remove_magic_effect(Plugin& plugin, const FormKey& key, std::size_t index) {
+  std::vector<MagicEffectEntry> entries;
+  const auto decoded = decode_mutable_effects(plugin, key, entries);
+  if (decoded != EffectListWrite::written) return decoded;
+  if (index >= entries.size()) return EffectListWrite::index_out_of_range;
+  entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index));
+  return set_magic_effects(plugin, key, entries);
 }
 
 }  // namespace fo4::forms
