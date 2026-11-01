@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
+using System.Threading.Tasks;
 using OpenCommonwealth.Services.Hkx;
 using Xunit;
 
@@ -49,19 +50,39 @@ public sealed class PredictivePlaybackTests
     }
 
     [Theory]
-    [InlineData("width", "width 15")]
-    [InlineData("truncated", "truncated")]
-    [InlineData("float", "float-track")]
-    [InlineData("boundary", "float/bone boundary")]
-    [InlineData("static", "static track")]
-    [InlineData("renorm", "renormalization")]
-    [InlineData("mixed", "mixed fixed/ranged")]
-    [InlineData("reference", "reference/default")]
-    public void UndefinedAndMalformedSitesRefuse(string fault, string message)
+    [InlineData("width")]
+    [InlineData("float")]
+    [InlineData("boundary")]
+    [InlineData("static")]
+    [InlineData("renorm")]
+    [InlineData("mixed")]
+    [InlineData("reference")]
+    public void UndefinedSitesAreRefusedWithoutDecoding(string fault)
     {
-        Exception error = Assert.ThrowsAny<Exception>(() => new HkxBinaryReader().ReadAnimation(Fixture(31, 1, false, fault)));
-        Assert.True(error is NotSupportedException or InvalidDataException, error.ToString());
-        Assert.Contains(message, error.Message, StringComparison.OrdinalIgnoreCase);
+        byte[] bytes = Fixture(31, 1, false, fault);
+
+        Assert.False(new HkxBinaryReader().TryReadAnimation(bytes, out var animation));
+        Assert.Equal(AnimationCompression.PredictiveClass, animation.AnimationClass);
+        Assert.False(animation.CompressionDecoded);
+        Assert.True(animation.HasUnsupportedAnimation);
+        Assert.Throws<UnsupportedAnimationException>(() => new HkxBinaryReader().ReadAnimation(bytes));
+    }
+
+    [Fact]
+    public void TruncatedPayloadIsMalformedNotRefused()
+    {
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().TryReadAnimation(Fixture(31, 1, false, "truncated"), out _));
+    }
+
+    [Fact(Timeout = 60000)]
+    public async Task NegativeFixupTableStartIsRefusedWithoutScanning()
+    {
+        byte[] bytes = Fixture(32, 1, true);
+        bytes[243] = 0xa5;
+        bytes[252] = 0x40;
+        bytes[350] = 0xff;
+
+        await Task.Run(() => Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadAnimation(bytes)));
     }
 
     [Fact]

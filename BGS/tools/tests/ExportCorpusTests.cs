@@ -93,7 +93,7 @@ public sealed class ExportCorpusTests
             new PackfileObjects(PackfileImage.Read(bytes)).Instances.Select(instance => instance.ClassName),
             StringComparer.Ordinal);
         return classes.Contains("hkaSkeleton")
-            || classes.Any(name => Array.IndexOf(HkxAnimationData.DecodedAnimationClasses, name) >= 0)
+            || classes.Any(name => Array.IndexOf(HkxAnimationData.ExportableAnimationClasses, name) >= 0)
             || classes.Contains("hkbBehaviorGraph")
             || classes.Contains("hkbStateMachine");
     }

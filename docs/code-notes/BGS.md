@@ -1548,3 +1548,23 @@ Layout assumptions, labelled: the block-offset table must hold at least two entr
 Padding lanes: the lanes of the last group beyond the dynamic lane count are never field-decoded, only skipped by their descriptor-implied byte count, because the game decodes junk there and a junk width nibble must not refuse a legitimate file; width 15 is refused only on a used lane.
 
 Runtime-only unverified: no shipped file uses this codec; sampling a hand-built 31-frame predictive file in the game at 14.5 and 15 still needs doing. The quantized eight-pattern game-runtime check above also remains unverified. Float/boundary consumers, STATIC_* walks, RENORM consumption and mixed-range cursor association remain unresolved and are not claimed implemented. Complete R2 support is not claimed.
+
+## `BGS/src/Hkx/HkxBinaryReader.Sections.cs:ParseHkx` — negative `__data__` table offsets (hang)
+
+A negative `VirtualFixupAbs` (or `DataStart`, `LocalFixupAbs`, `GlobalFixupAbs`) started the fixup walks about 2^31 bytes before the file. `ReadI32` returns 0 outside the file, so the walks never met their 0xFFFFFFFF end marker and ran tens of millions of times. On a 944-byte mutated predictive file the `hkaSkeleton` candidate walk took about 49 s and `ParseObjectOffsets` about 22 s. `ParseHkx` now refuses these offsets with `InvalidDataException` before any walk. Regression: `BGS/tools/tests/PredictivePlaybackTests.cs:NegativeFixupTableStartIsRefusedWithoutScanning`.
+
+## `BGS/src/Hkx/HkxBinaryReader.Sections.cs:ParseHkx` — refused predictive and quantized layouts
+
+`ParsePredictiveAnimation` and `ParseQuantizedAnimation` throw `NotSupportedException` for layouts the game-decoder evidence does not resolve. `ParseHkx` catches that exception and leaves `CompressionDecoded` false, so `TryReadAnimation` returns false with `AnimationClass` set and `AnimationCompression.Describe` supplies the sentence. Malformed bytes still throw `InvalidDataException`. Tests: `BGS/tools/tests/PredictivePlaybackTests.cs:UndefinedSitesAreRefusedWithoutDecoding` and `TruncatedPayloadIsMalformedNotRefused`.
+
+## `BGS/src/Hkx/AnimationPose.cs:AnimationPose.At` — one float entry per track
+
+`Pose.Floats` gets one entry per `HkxAnimationData.FloatTracks` element, in order. A track shorter than the clip repeats its last sample, so later tracks keep their index. Test: `BGS/tools/tests/QuantizedPlaybackTests.cs:PoseFloatsKeepOneEntryPerTrackWhenATrackIsShort`.
+
+## `BGS/src/Hkx/RoundTripReport.cs:ForBytes` — decoded clips that cannot be saved
+
+A clip that decodes but whose class is not in `NativeAnimation.Compressed` is reported as a loss with `NativeAnimation.SaveRefusal`, the same text `Recompress` and `Interleave` throw. That covers predictive and quantized clips, and also interleaved clips, because `Interleave` reads its source from the same list. Test: `BGS/tools/tests/HkxAnimationCompressionTests.cs:ADecodedPredictiveClipStaysUnsavableAndTheReportSaysSo`.
+
+## `BGS/src/Hkx/HkxDataStructures.cs:HkxAnimationData.ExportableAnimationClasses` — export list
+
+`ExportableAnimationClasses` (spline, lossless, interleaved) is the list that `AnimationExport.Json`, `ExportRunner` and the corpus pin accept. `DecodedAnimationClasses` stays the playback list and includes predictive and quantized, so decoded predictive and quantized clips play but are not exported. Test: `BGS/tools/tests/ExportRecoveryTests.cs:ADecodedPredictiveClipIsNotExportedYet`.

@@ -133,4 +133,18 @@ public sealed class HkxAnimationCompressionTests
         Assert.False(animation.HasUnsupportedAnimation);
         Assert.Equal("hkaLosslessCompressedAnimation", animation.AnimationClass);
     }
+    [Fact]
+    public void ADecodedPredictiveClipStaysUnsavableAndTheReportSaysSo()
+    {
+        byte[] bytes = PredictivePlaybackTests.Fixture(31, 1, false);
+        var animation = new HkxBinaryReader().ReadAnimation(bytes);
+
+        var refused = Assert.Throws<InvalidOperationException>(() => NativeAnimation.Recompress(bytes, animation));
+        Assert.Contains("saving it is not supported yet", refused.Message, StringComparison.Ordinal);
+
+        var loss = Assert.Single(RoundTripReport.ForBytes(bytes).Losses);
+        Assert.Equal(RoundTripLossKind.UnsupportedAnimation, loss.Kind);
+        Assert.Equal(refused.Message, loss.Message);
+    }
+
 }

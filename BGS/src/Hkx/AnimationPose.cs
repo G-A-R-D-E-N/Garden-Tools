@@ -52,7 +52,11 @@ public static class AnimationPose
             pose.Frame = frame;
             pose.Time = sample * animation.FrameDuration;
             foreach (var values in animation.FloatTracks)
-                if (frame < values.Count) pose.Floats.Add(float.Lerp(values[frame], values[Math.Min(frame + 1, values.Count - 1)], sample - frame));
+            {
+                if (values.Count == 0) { pose.Floats.Add(0f); continue; }
+                int at = Math.Min(frame, values.Count - 1);
+                pose.Floats.Add(float.Lerp(values[at], values[Math.Min(at + 1, values.Count - 1)], sample - frame));
+            }
         }
 
         var trackForBone = TracksByBone(skeleton, animation);
