@@ -2,6 +2,8 @@
 
 #include <fo4/avm2/class.hpp>
 
+#include "interpreter_internal.hpp"
+
 #include <algorithm>
 #include <utility>
 
@@ -23,6 +25,8 @@ const Trait* find_accessor_counterpart(const std::vector<Trait>& traits, const T
   }
   return nullptr;
 }
+
+}  // namespace
 
 /* Requires a linked chain; a matching trait must fill result from class or instance traits. */
 bool lookup_class_traits(Class* start, bool static_traits, const Multiname& multiname,
@@ -78,8 +82,6 @@ bool lookup_class_traits(Class* start, bool static_traits, const Multiname& mult
   return false;
 }
 
-}  // namespace
-
 const char* object_kind_name(ObjectKind kind) noexcept {
   switch (kind) {
     case ObjectKind::Object:
@@ -100,6 +102,8 @@ const char* object_kind_name(ObjectKind kind) noexcept {
       return "event";
     case ObjectKind::ByteArray:
       return "bytearray";
+    case ObjectKind::Xml:
+      return "xml";
   }
   return "unknown";
 }

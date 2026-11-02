@@ -52,8 +52,8 @@ ExecutionResult run_closure_reading_outer_scope(std::uint32_t outer_index) {
   code.pushbyte(7);
   code.newobject(1);
   code.pushscope();
-  code.pushnull();
   code.newfunction(function_method);
+  code.pushnull();
   code.call(0);
   code.returnvalue();
   const std::uint32_t method = script.method("init", code.bytes(), 1);
@@ -98,8 +98,8 @@ TEST(Avm2OuterScope, GetouterscopeRefusesAnIndexPastTheCapturedScope) {
   function_code.returnvalue();
   const std::uint32_t function_method = script.method("read", function_code.bytes(), 1);
   avm2_test::CodeBuilder code;
-  code.pushnull();
   code.newfunction(function_method);
+  code.pushnull();
   code.call(0);
   code.returnvalue();
   const std::uint32_t method = script.method("init", code.bytes(), 1);

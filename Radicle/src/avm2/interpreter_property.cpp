@@ -1,6 +1,7 @@
 #include <fo4/avm2/interpreter.hpp>
 
 #include "interpreter_internal.hpp"
+#include "native_internal.hpp"
 
 #include <fo4/avm2/bytearray.hpp>
 #include <fo4/avm2/class.hpp>
@@ -8,6 +9,7 @@
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/events.hpp>
 #include <fo4/avm2/text.hpp>
+#include <fo4/avm2/xml.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -55,9 +57,30 @@ InterpreterStatus Interpreter::pop_runtime_operands(Frame& frame, std::size_t ab
   return InterpreterStatus::Ok;
 }
 
-ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
+namespace {
+
+std::shared_ptr<FunctionObject> bind_method(const std::shared_ptr<Object>& receiver,
+                                            const FunctionObject& method) {
+  std::weak_ptr<FunctionObject>& cached = receiver->bound_methods()[&method];
+  if (std::shared_ptr<FunctionObject> existing = cached.lock()) {
+    return existing;
+  }
+  auto bound =
+      std::make_shared<FunctionObject>(method.name(), method.file(), method.method_index());
+  bound->set_native_id(method.native_id());
+  bound->set_owner_class(method.owner_class());
+  bound->set_instance_class(method.instance_class());
+  bound->bind_receiver(receiver);
+  cached = bound;
+  return bound;
+}
+
+}  // namespace
+
+ExecutionResult Interpreter::get_property(Frame& frame, const std::shared_ptr<Object>& owner,
                                           const Multiname& multiname, std::size_t depth) {
   (void)frame;
+  Object& object = *owner;
   if (object.has_primitive() && object.primitive().is_string() && multiname.has_fixed_name()) {
     const std::string& text = object.primitive().as_string();
     if (multiname.name == "length") {
@@ -116,7 +139,10 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
       return result;
     }
   }
-  if (object.kind() == ObjectKind::Event) {
+  const PropertyLookup lookup = object.lookup(multiname);
+  const bool declared_in_abc =
+      lookup.found() && lookup.owner != nullptr && lookup.owner->file != nullptr;
+  if (object.kind() == ObjectKind::Event && !declared_in_abc) {
     Value event_value;
     if (read_event_property(*this, static_cast<EventObject&>(object), multiname, event_value)) {
       ExecutionResult result;
@@ -124,7 +150,7 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
       return result;
     }
   }
-  if (object.kind() == ObjectKind::Display) {
+  if (object.kind() == ObjectKind::Display && !declared_in_abc) {
     Value display_value;
     if (read_display_property(*this, static_cast<DisplayObject&>(object), multiname,
                               display_value)) {
@@ -132,6 +158,11 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
       result.value = std::move(display_value);
       return result;
     }
+  }
+  if (object.kind() == ObjectKind::Xml && multiname.has_fixed_name()) {
+    ExecutionResult result;
+    result.value = read_xml_property(*this, static_cast<XmlObject&>(object), multiname);
+    return result;
   }
   if (object.kind() == ObjectKind::Function && multiname.has_fixed_name()) {
     const auto& function = static_cast<const FunctionObject&>(object);
@@ -179,7 +210,6 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
       return result;
     }
   }
-  const PropertyLookup lookup = object.lookup(multiname);
   if (!lookup.found()) {
     return ExecutionResult{};
   }
@@ -191,7 +221,7 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
   if (lookup.kind == LookupKind::Method) {
     ExecutionResult result;
     if (lookup.trait != nullptr && lookup.trait->function != nullptr) {
-      result.value = Value::object(lookup.trait->function);
+      result.value = Value::object(bind_method(owner, *lookup.trait->function));
     }
     return result;
   }
@@ -199,15 +229,16 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
     if (lookup.getter == nullptr) {
       return ExecutionResult{};
     }
-    return invoke(*lookup.getter, borrowed_object(object), {}, {}, depth);
+    return invoke(*lookup.getter, Value::object(owner), {}, {}, depth);
   }
   return ExecutionResult{};
 }
 
-ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
+ExecutionResult Interpreter::set_property(Frame& frame, const std::shared_ptr<Object>& owner,
                                           const Multiname& multiname, const Value& value,
                                           bool define, std::size_t depth) {
   (void)frame;
+  Object& object = *owner;
   bool handled = false;
   Value ignored = value;
   std::string message;
@@ -243,7 +274,10 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
       return result;
     }
   }
-  if (object.kind() == ObjectKind::Event) {
+  const PropertyLookup lookup = object.lookup(multiname);
+  const bool declared_in_abc =
+      lookup.found() && lookup.owner != nullptr && lookup.owner->file != nullptr;
+  if (object.kind() == ObjectKind::Event && !declared_in_abc) {
     Value event_value;
     if (read_event_property(*this, static_cast<EventObject&>(object), multiname, event_value)) {
       ExecutionResult result;
@@ -251,7 +285,7 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
       return result;
     }
   }
-  if (object.kind() == ObjectKind::Display) {
+  if (object.kind() == ObjectKind::Display && !declared_in_abc) {
     if (multiname.has_fixed_name() && multiname.name == "focus") {
       std::shared_ptr<DisplayObject> target;
       if (value.is_object() && value.as_object()->kind() == ObjectKind::Display) {
@@ -279,18 +313,24 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
       return ExecutionResult{};
     }
   }
+  if (object.kind() == ObjectKind::Xml) {
+    return write_xml_property(static_cast<XmlObject&>(object), multiname, value);
+  }
   if (define) {
     if (!multiname.has_fixed_name()) {
       return fail(InterpreterStatus::TypeError, "initproperty needs a fixed property name");
+    }
+    if (lookup.kind == LookupKind::Slot && lookup.slot < object.slots().size()) {
+      object.slots()[lookup.slot] = value;
+      return ExecutionResult{};
     }
     Property& property = object.define_own_property(primary_key(multiname));
     property.kind = PropertyKind::Value;
     property.value = value;
     return ExecutionResult{};
   }
-  const PropertyLookup lookup = object.lookup(multiname);
   if (lookup.kind == LookupKind::Accessor && lookup.setter != nullptr) {
-    return invoke(*lookup.setter, borrowed_object(object), {value}, {}, depth);
+    return invoke(*lookup.setter, Value::object(owner), {value}, {}, depth);
   }
   if (object.write_value(multiname, value)) {
     return ExecutionResult{};
@@ -300,13 +340,40 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
                   object_kind_name(object.kind()));
 }
 
+namespace {
+
+bool scope_has_property(Interpreter& interpreter, Object& object, const Multiname& multiname) {
+  if (object.has_property(multiname)) {
+    return true;
+  }
+  Value probe;
+  return object.kind() == ObjectKind::Display &&
+         read_display_property(interpreter, static_cast<DisplayObject&>(object), multiname, probe);
+}
+
+}  // namespace
+
 InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname& multiname,
-                                                  bool create_on_global, Object*& owner,
-                                                  bool& found, std::string& message) {
+                                                  bool create_on_global,
+                                                  std::shared_ptr<Object>& owner, bool& found,
+                                                  std::string& message) {
   found = false;
   for (auto current = frame.scopes.rbegin(); current != frame.scopes.rend(); ++current) {
-    if (*current != nullptr && (*current)->has_property(multiname)) {
-      owner = current->get();
+    if (*current != nullptr && scope_has_property(*this, **current, multiname)) {
+      owner = *current;
+      found = true;
+      return InterpreterStatus::Ok;
+    }
+  }
+  const std::shared_ptr<Object>& registry = runtime_.global_object_shared();
+  if (registry != nullptr && scope_has_property(*this, *registry, multiname)) {
+    owner = registry;
+    found = true;
+    return InterpreterStatus::Ok;
+  }
+  for (const ScriptEntry& script : runtime_.scripts()) {
+    if (script.global != nullptr && scope_has_property(*this, *script.global, multiname)) {
+      owner = script.global;
       found = true;
       return InterpreterStatus::Ok;
     }
@@ -318,14 +385,14 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
         !multiname.name.empty() && multiname.name.front() >= 'A' && multiname.name.front() <= 'Z';
     if (package_named || capitalised) {
       if (runtime_.resolve_or_create_global_class(multiname) != nullptr) {
-        owner = runtime_.global_object();
+        owner = runtime_.global_object_shared();
         found = owner != nullptr;
         return InterpreterStatus::Ok;
       }
     }
   }
   if (create_on_global && !frame.scopes.empty() && multiname.has_fixed_name()) {
-    Object* global = frame.scopes.front().get();
+    const std::shared_ptr<Object>& global = frame.scopes.front();
     if (global != nullptr && global->is_dynamic()) {
       Property& property = global->define_own_property(primary_key(multiname));
       property.kind = PropertyKind::Value;
@@ -338,13 +405,14 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
   return InterpreterStatus::Ok;
 }
 
-ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
+ExecutionResult Interpreter::call_property(Frame& frame, const std::shared_ptr<Object>& owner,
                                            const Multiname& multiname,
                                            const std::vector<Value>& arguments,
                                            std::size_t depth) {
   (void)frame;
+  Object& receiver = *owner;
   if (receiver.kind() == ObjectKind::Class) {
-    ExecutionResult initialized = initialize_class_value(borrowed_object(receiver), depth);
+    ExecutionResult initialized = initialize_class_value(Value::object(owner), depth);
     if (!initialized.ok()) {
       return initialized;
     }
@@ -367,16 +435,20 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
       return fail(InterpreterStatus::CannotCall,
                   "method trait " + property_text(multiname) + " has no function");
     }
-    return invoke(*lookup.trait->function, borrowed_object(receiver), arguments, {}, depth);
+    return invoke(*lookup.trait->function, Value::object(owner), arguments, {}, depth);
   }
   if (lookup.kind == LookupKind::Accessor) {
     if (lookup.getter == nullptr) {
       return fail(InterpreterStatus::CannotCall,
                   "property " + property_text(multiname) + " has no getter to call");
     }
-    ExecutionResult getter = invoke(*lookup.getter, borrowed_object(receiver), {}, {}, depth);
+    ExecutionResult getter = invoke(*lookup.getter, Value::object(owner), {}, {}, depth);
     if (!getter.ok()) {
       return getter;
+    }
+    if (getter.value.is_object() && getter.value.as_object()->kind() == ObjectKind::Class) {
+      return call_class(static_cast<const ClassObject&>(*getter.value.as_object()), arguments,
+                        depth);
     }
     if (!getter.value.is_object() ||
         getter.value.as_object()->kind() != ObjectKind::Function) {
@@ -387,7 +459,10 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
                   "property " + property_text(multiname) + " is not callable");
     }
     return invoke(static_cast<const FunctionObject&>(*getter.value.as_object()),
-                  borrowed_object(receiver), arguments, {}, depth);
+                  Value::object(owner), arguments, {}, depth);
+  }
+  if (lookup.value.is_object() && lookup.value.as_object()->kind() == ObjectKind::Class) {
+    return call_class(static_cast<const ClassObject&>(*lookup.value.as_object()), arguments, depth);
   }
   if (!lookup.value.is_object() || lookup.value.as_object()->kind() != ObjectKind::Function) {
     if (limits_.lenient_builtins) {
@@ -397,7 +472,7 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
                 "property " + property_text(multiname) + " is not callable");
   }
   return invoke(static_cast<const FunctionObject&>(*lookup.value.as_object()),
-                borrowed_object(receiver), arguments, {}, depth);
+                Value::object(owner), arguments, {}, depth);
 }
 
 ExecutionResult Interpreter::call_indexed(Frame& frame, const abc::AbcInstruction& instruction,
@@ -456,7 +531,7 @@ ExecutionResult Interpreter::outer_scope_value(const Frame& frame, std::uint32_t
                 "getouterscope " + std::to_string(index) + " is a null scope");
   }
   ExecutionResult result;
-  result.value = borrowed_object(*(*frame.outer_scope)[index]);
+  result.value = Value::object((*frame.outer_scope)[index]);
   return result;
 }
 
@@ -487,7 +562,11 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
     result.value = Value::object(std::move(array));
     return result;
   }
-  auto instance = std::make_shared<Object>();
+  const Class* display_object = find_display_class(runtime_, "flash.display::DisplayObject");
+  std::shared_ptr<Object> instance =
+      display_object != nullptr && klass->is_subclass_of(display_object)
+          ? std::shared_ptr<Object>(make_display_object(runtime_, *klass))
+          : std::make_shared<Object>();
   instance->set_instance_class(klass);
   klass->apply_slot_defaults(*instance);
   if (klass->iinit != kNoMethod && klass->file != nullptr) {
@@ -536,72 +615,6 @@ std::vector<Key>& Interpreter::enumeration_keys(Frame& frame, Object& object) {
     }
   }
   return keys;
-}
-
-bool Interpreter::is_instance_of(const Value& value, const Value& type) const {
-  if (!value.is_object() || !type.is_object() || type.as_object()->kind() != ObjectKind::Class) {
-    return false;
-  }
-  const Class* target = static_cast<const ClassObject&>(*type.as_object()).represented_class();
-  if (target == nullptr) {
-    return false;
-  }
-  const Class* value_class = value.as_object()->instance_class();
-  if (value_class == nullptr) {
-    return false;
-  }
-  return value_class->is_subclass_of(target) || value_class->implements_interface(target);
-}
-
-InterpreterStatus Interpreter::coerce_value(const Multiname& multiname, Value& value,
-                                            std::string& message) {
-  const std::string name = property_text(multiname);
-  if (name == "*" || name == "Object") {
-    return InterpreterStatus::Ok;
-  }
-  if (name == "int") {
-    value = Value::int32(to_int32(value));
-    return InterpreterStatus::Ok;
-  }
-  if (name == "uint") {
-    value = Value::uint32(to_uint32(value));
-    return InterpreterStatus::Ok;
-  }
-  if (name == "Number" || name == "double") {
-    value = Value::number(to_number(value));
-    return InterpreterStatus::Ok;
-  }
-  if (name == "Boolean") {
-    value = Value::boolean(to_boolean(value));
-    return InterpreterStatus::Ok;
-  }
-  if (name == "String") {
-    value = Value::string(to_string(value));
-    return InterpreterStatus::Ok;
-  }
-  if (name.find("Vector.<") == 0 || name.find("__AS3__.vec::Vector") == 0) {
-    return InterpreterStatus::Ok;
-  }
-  const Class* target = runtime_.find_class(multiname);
-  if (target == nullptr) {
-    message = "cannot resolve the type " + name;
-    return InterpreterStatus::TypeError;
-  }
-  if (value.is_nullish()) {
-    value = Value::null();
-    return InterpreterStatus::Ok;
-  }
-  if (!value.is_object()) {
-    message = std::string{"cannot coerce "} + value_kind_name(value.kind()) + " to " + name;
-    return InterpreterStatus::TypeError;
-  }
-  const Class* value_class = value.as_object()->instance_class();
-  if (value_class != nullptr &&
-      (value_class->is_subclass_of(target) || value_class->implements_interface(target))) {
-    return InterpreterStatus::Ok;
-  }
-  message = "value is not of type " + name;
-  return InterpreterStatus::TypeError;
 }
 
 namespace {

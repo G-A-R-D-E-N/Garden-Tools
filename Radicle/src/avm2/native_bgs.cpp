@@ -21,20 +21,29 @@ namespace {
 struct BgsFunction {
   const char* name;
   native::Id id;
+  bool forwards_arguments;
+  bool returns_answer;
 };
 
 constexpr BgsFunction kBgsFunctions[] = {
-    {"registerSound", native::Id::bgs_register_sound},
-    {"playSound", native::Id::bgs_play_sound},
-    {"playRegisteredSound", native::Id::bgs_play_registered_sound},
-    {"stopRegisteredSound", native::Id::bgs_stop_registered_sound},
-    {"pauseRegisteredSound", native::Id::bgs_pause_registered_sound},
-    {"getHighscore", native::Id::bgs_get_highscore},
-    {"setHighscore", native::Id::bgs_set_highscore},
-    {"getSaveData", native::Id::bgs_get_save_data},
-    {"setSaveData", native::Id::bgs_set_save_data},
-    {"closeHolotape", native::Id::bgs_close_holotape},
-    {"showTutorialOverlay", native::Id::bgs_show_tutorial_overlay},
+    {"registerSound", native::Id::bgs_register_sound, true, true},
+    {"playSound", native::Id::bgs_play_sound, true, true},
+    {"playRegisteredSound", native::Id::bgs_play_registered_sound, true, true},
+    {"stopRegisteredSound", native::Id::bgs_stop_registered_sound, true, true},
+    {"pauseRegisteredSound", native::Id::bgs_pause_registered_sound, true, true},
+    {"getHighscore", native::Id::bgs_get_highscore, true, false},
+    {"setHighscore", native::Id::bgs_set_highscore, true, true},
+    {"getSaveData", native::Id::bgs_get_save_data, true, false},
+    {"setSaveData", native::Id::bgs_set_save_data, true, true},
+    {"closeHolotape", native::Id::bgs_close_holotape, true, true},
+    {"showTutorialOverlay", native::Id::bgs_show_tutorial_overlay, true, true},
+    {"notifyScripts", native::Id::bgs_notify_scripts, true, true},
+    {"getTextReplaceID", native::Id::bgs_get_text_replace_id, true, true},
+    {"getTextReplaceValue", native::Id::bgs_get_text_replace_value, true, true},
+    {"playActionAnim", native::Id::bgs_play_action_anim, false, true},
+    {"playLeftAnim", native::Id::bgs_play_left_anim, false, true},
+    {"playRightAnim", native::Id::bgs_play_right_anim, false, true},
+    {"executeCommand", native::Id::bgs_execute_command, true, true},
 };
 
 }  // namespace
@@ -63,12 +72,15 @@ bool try_bgs_native(Interpreter& interpreter, native::Id id, const std::vector<V
       continue;
     }
     std::vector<std::string> forwarded;
-    for (const Value& argument : arguments) {
-      forwarded.push_back(to_string(argument));
+    if (entry.forwards_arguments) {
+      for (const Value& argument : arguments) {
+        forwarded.push_back(to_string(argument));
+      }
     }
     const std::optional<std::string> answer = interpreter.runtime().host().call_host(
         std::string{"bgs."} + entry.name, std::move(forwarded));
-    out = native_value(answer.has_value() ? Value::string(*answer) : Value::null());
+    const bool returned = entry.returns_answer && answer.has_value();
+    out = native_value(returned ? Value::string(*answer) : Value::null());
     return true;
   }
   return false;

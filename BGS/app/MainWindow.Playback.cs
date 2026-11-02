@@ -141,8 +141,8 @@ public partial class MainWindow : Window
             _skeleton.InvalidateVisual();
         };
 
-        ToolTip.SetTip(_travelToggle, "Move the character along the path the clip carries, instead of " +
-                                      "playing it on the spot the way the file stores it.");
+        ToolTip.SetTip(_travelToggle, "Keep the travelling character centred with the shared camera. " +
+                                      "Off leaves the camera still so you can see travel; root motion is always applied.");
         _travelToggle.IsCheckedChanged += (_, _) =>
         {
             _followTravel = _travelToggle.IsChecked == true;
@@ -611,6 +611,7 @@ public partial class MainWindow : Window
             SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             return;
         }
+        PrepareSkinSkeleton(key, archiveEntry);
 
         HkxAnimationData animation;
         try
@@ -646,6 +647,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        RebindMesh(_poseSkeleton!);
         _poseAnimation = animation;
         _poseSource = key;
         _poseRefusal = "";
@@ -655,8 +657,10 @@ public partial class MainWindow : Window
         catch { _poseMotion = new RootMotion.Motion(); }
 
         var reference = AnimationPose.ReferencePose(_poseSkeleton!);
-        var opening = AnimationPose.At(_poseSkeleton!, animation, 0);
+        var opening = WithTravel(AnimationPose.At(_poseSkeleton!, animation, 0));
         _skeleton.Show(opening, reference);
+        if (_pendingSkinMesh is { } pendingMesh) LoadMesh(pendingMesh);
+        ResetRootMotionView();
         UpdateMesh(opening, _poseSkeleton!);
 
         _scrubbing = true;
@@ -667,18 +671,14 @@ public partial class MainWindow : Window
         int driven = 0;
         foreach (int track in AnimationPose.TracksByBone(_poseSkeleton!, animation)) if (track >= 0) driven++;
 
-        string travelled = _poseMotion.Any
-            ? $"   travels {_poseMotion.Travel.Length():F0} units" +
-              (Math.Abs(_poseMotion.Turn) > 0.02f
-                  ? $" and turns {_poseMotion.Turn * 180 / MathF.PI:F0} degrees"
-                  : "")
-            : "   stays on the spot";
+        string travelled = "   " + _poseMotion;
 
         string from = source == "loose" ? "" : $"   read from {source}";
         SetPlaybackSummary(
             $"{label}   {animation.NumFrames} frames at {1f / Math.Max(animation.FrameDuration, 0.0001f):F0} fps, " +
             $"{animation.Duration:F2}s   {driven} of {_poseSkeleton!.BoneNames.Count} bones driven   " +
-            $"on {_poseSkeleton.Name}{travelled}{from}", Ux.MetaBrush);
+            $"on {_poseSkeleton.Name}{travelled}{from}" +
+            (_meshShapes.Count > 0 ? "   " + SkinResolutionSummary() : ""), Ux.MetaBrush);
         UpdateFrameLabel();
         AppendPhysicsNotes();
         UpdateTransportState();

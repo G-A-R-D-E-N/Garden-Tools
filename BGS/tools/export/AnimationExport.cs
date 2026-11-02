@@ -9,8 +9,8 @@ public static class AnimationExport
 {
     public static string Json(HkxAnimationData animation, string source)
     {
-        if (Array.IndexOf(HkxAnimationData.DecodedAnimationClasses, animation.AnimationClass) < 0)
-            throw new InvalidDataException($"this file holds {Describe(animation)}, which is not decoded");
+        if (Array.IndexOf(HkxAnimationData.ExportableAnimationClasses, animation.AnimationClass) < 0)
+            throw new InvalidDataException($"this file holds {Describe(animation)}, which is not exported yet");
 
         if (animation.NumFrames <= 0 || animation.NumTracks <= 0)
             throw new InvalidDataException(

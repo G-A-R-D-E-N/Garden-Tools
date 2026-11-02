@@ -4,6 +4,7 @@
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/swf_runtime.hpp>
 #include <fo4/avm2/value.hpp>
 #include <fo4/swf/swf.hpp>
@@ -137,6 +138,8 @@ std::shared_ptr<DisplayObject> make_sprite(Runtime& runtime) {
       fo4::avm2::make_display_object(runtime, *klass));
 }
 
+using avm2_test::set_box_hit_area;
+
 fo4::swf::SwfFile minimal_movie() {
   fo4::swf::SwfFile file;
   file.header.frame_rate = 24u * 256u;
@@ -171,6 +174,9 @@ TEST(Avm2FocusEvents, RollOverAndRollOutFollowTheAncestorBoundary) {
   other->set_x(200.0);
   other->set_width(50.0);
   other->set_height(50.0);
+  set_box_hit_area(*outer);
+  set_box_hit_area(*inner);
+  set_box_hit_area(*other);
   ASSERT_TRUE(root->add_child(outer));
   ASSERT_TRUE(static_cast<DisplayObjectContainer*>(outer.get())->add_child(inner));
   ASSERT_TRUE(root->add_child(other));
@@ -224,6 +230,9 @@ TEST(Avm2FocusEvents, MouseDownOnATabEnabledObjectMovesStageFocus) {
   plain->set_x(200.0);
   plain->set_width(50.0);
   plain->set_height(50.0);
+  set_box_hit_area(*first);
+  set_box_hit_area(*second);
+  set_box_hit_area(*plain);
   ASSERT_TRUE(root->add_child(first));
   ASSERT_TRUE(root->add_child(second));
   ASSERT_TRUE(root->add_child(plain));
@@ -262,6 +271,8 @@ TEST(Avm2FocusEvents, RollStateSurvivesRemovingTheHoveredChild) {
   outer->set_height(100.0);
   inner->set_width(50.0);
   inner->set_height(50.0);
+  set_box_hit_area(*outer);
+  set_box_hit_area(*inner);
   ASSERT_TRUE(root->add_child(outer));
   ASSERT_TRUE(static_cast<DisplayObjectContainer*>(outer.get())->add_child(inner));
   ASSERT_TRUE(fo4::avm2::add_event_listener(*outer, "rollOver",
@@ -302,6 +313,8 @@ TEST(Avm2FocusEvents, RollEventsCarryTheObjectMovedFromOrTo) {
   other->set_x(200.0);
   other->set_width(50.0);
   other->set_height(50.0);
+  set_box_hit_area(*outer);
+  set_box_hit_area(*other);
   ASSERT_TRUE(root->add_child(outer));
   ASSERT_TRUE(root->add_child(other));
   ASSERT_TRUE(fo4::avm2::add_event_listener(*outer, "rollOut",

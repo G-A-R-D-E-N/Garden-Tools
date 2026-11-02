@@ -1524,3 +1524,124 @@ When `--out` names the file that was read, `MapperOne` writes with `FileSafety.R
 ## `src/Hkx/NifCollisionDecoder.cs:ShapeReader.Compound` — total instance cap
 
 The 8192-instance limit applied to each compound, not to the decode. Up to 8192 compounds of 8192 instances each, about 67 million records with their transform and scale arrays, were allowed. `ShapeReader` now counts instances across one decode and stops at `MaxInstances` (65536), recording `instances capped at 65536` in `NifCollisionModel.Notes`. Like the other caps, that note is part of the manifest hash, so a capped decode cannot collide with an uncapped one.
+
+## BGS/src/Hkx/QuantizedAnimationDecoder.cs — quantized sample decoding (#683)
+
+Provenance: Fallout4.exe 1.10.163; GT #520 comment 16773; RE-026 README game-decoder runtime section 1 and independent review items 2–6, 13. The review corrects the earlier table: w9 is static float tracks, w10+w12 dynamic transform scalars, w11 dynamic rotations, w13 dynamic float tracks; w18 is offsets and w19 scales. Only the sums w6+w8 and w10+w12 are consumed, so their unresolved individual meanings are not guessed. Packed rotations use the eight independently executed spare-bit patterns. All declared nonempty regions must fit without overlapping; scatter destinations must be unique, in range and fully define the meaningful pose components. Omitted defaults/reference reconstruction and nonzero endian are refused. The header duration determines uniform sample timing.
+
+The packfile reader dispatches into the same HkxTrackData lists as spline playback; FloatTracks also reach AnimationPose.Pose.Floats. The existing Animation tab, Playback and symrm readers consume that shared path without a separate codec branch. Synthetic packfile fixtures and test-only inverse value packing exercise parsing, static/dynamic translation/rotation/scale, float tracks, pose construction and PlaybackSession. Primitive tests additionally cover random quaternion/scalar quantization round trips. This is application-path evidence, not game-runtime verification.
+
+Runtime-only unverified: no shipped file uses this codec; a hand-built file carrying every bit-15 pattern still needs sampling in the game. No claim of runtime conformance or complete R2 support is made.
+
+Layout assumptions, labelled: the record does not state two things the reader enforces fail-closed. The rotation scatter index is a multiple of four inside the twelve float slots per bone (inferred from the slot bound the game uses), and a packed rotation whose stored components overshoot unit length by more than a quantisation slack of 0.001 is refused (smaller overshoot rounds the omitted component to zero). Both are assumptions, not facts from the RE record; a file that violates them is refused with the message "layout assumption violated" or "does not describe a rotation". The omitted component otherwise follows the record exactly: sign times the square root of one minus the sum of squares.
+
+## BGS/src/Hkx/PredictiveCompressedAnimationDecoder.cs — bounded dynamic-bone playback (#683)
+
+Provenance: Fallout4.exe 1.10.163 game-decoder statements in GT #520 comment 16773 and RE-026 README independent review items 7, 9, 10, 11 and 13 (the game-decoder statements only). The bone-group nesting is settled: one 16-descriptor decode per group of up to 16 scalar lanes. Each descriptor nibble is a half-payload byte count minus one; each half reads a full 16-byte reverse look-behind, including preceding bytes, and extracts four pairs of signed w-bit fields multiplied by four. Widths 0..14 are supported; width 15 is refused. Three int16-wrapping prefix sums followed by arithmetic shift-right two reconstruct the samples. BLOCK_OFFSETS are u32 byte offsets stored in a u16 array with u16-element section offsets. Blocks contain 16 samples at a 15-frame stride, not 15 samples plus an unused pad.
+
+The reader dispatch supports only fully defined dynamic bone components: every translation, quaternion and scale component must be explicitly scattered once (padding components are optional). All used lanes must be homogeneous ranged or fixed. Ranged lanes use per-lane float scales/offsets; fixed lanes use the exact float bit pattern 0x39000400 with zero bias. Mixed fixed/ranged cursor association, any float-track/boundary table or selector, static value/index walks, reference/default reconstruction and quaternion-renormalization lists are refused with the unresolved feature named. Truncated arrays, bad section/block bounds, duplicate/out-of-range scatter slots and nonfinite dequantization are rejected. Sample 15 of a block is real data and the next block starts at frame 15, so no equality between sample 15 and the next block's sample 0 is required: the record does not state one. AnimationPose.At accepts fractional frames and interpolates local transforms before hierarchy composition. PlaybackSession remains integer-frame based.
+
+Test-only inverse packing was derived by reversing the stated game-decoder operations, not imported from a production compressor. Tests cover all widths 0..14 (450 randomized field blocks), 100 wrap-heavy random sample blocks, descriptor nibbles, reverse look-behind contamination, u32 offsets in u16 units, finite arithmetic, one/two-bone groups, homogeneous fixed/ranged playback, nonmultiple-of-15 frame counts, and explicit unsupported-site refusals. Synthetic packfiles exercise parse, decode, AnimationPose and PlaybackSession, including a 31-frame clip at 14.5 and 15. Their successful application sampling does not establish game conformance.
+
+Layout assumptions, labelled: the block-offset table must hold at least two entries per block, the dynamic scale and bias arrays at least one entry per dynamic lane, and IS_ANIMATED_BITMAP is only size-checked (its contents are not consumed because the record does not say how they select tracks). These are minimum-size checks that fail closed; they are assumptions, not facts from the RE record.
+
+Padding lanes: the lanes of the last group beyond the dynamic lane count are never field-decoded, only skipped by their descriptor-implied byte count, because the game decodes junk there and a junk width nibble must not refuse a legitimate file; width 15 is refused only on a used lane.
+
+Runtime-only unverified: no shipped file uses this codec; sampling a hand-built 31-frame predictive file in the game at 14.5 and 15 still needs doing. The quantized eight-pattern game-runtime check above also remains unverified. Float/boundary consumers, STATIC_* walks, RENORM consumption and mixed-range cursor association remain unresolved and are not claimed implemented. Complete R2 support is not claimed.
+
+## `BGS/src/Hkx/HkxBinaryReader.Sections.cs:ParseHkx` — negative `__data__` table offsets (hang)
+
+A negative `VirtualFixupAbs` (or `DataStart`, `LocalFixupAbs`, `GlobalFixupAbs`) started the fixup walks about 2^31 bytes before the file. `ReadI32` returns 0 outside the file, so the walks never met their 0xFFFFFFFF end marker and ran tens of millions of times. On a 944-byte mutated predictive file the `hkaSkeleton` candidate walk took about 49 s and `ParseObjectOffsets` about 22 s. `ParseHkx` now refuses these offsets with `InvalidDataException` before any walk. Regression: `BGS/tools/tests/PredictivePlaybackTests.cs:NegativeFixupTableStartIsRefusedWithoutScanning`.
+
+## `BGS/src/Hkx/HkxBinaryReader.Sections.cs:ParseHkx` — refused predictive and quantized layouts
+
+`ParsePredictiveAnimation` and `ParseQuantizedAnimation` throw `NotSupportedException` for layouts the game-decoder evidence does not resolve. `ParseHkx` catches that exception and leaves `CompressionDecoded` false, so `TryReadAnimation` returns false with `AnimationClass` set and `AnimationCompression.Describe` supplies the sentence. Malformed bytes still throw `InvalidDataException`. Tests: `BGS/tools/tests/PredictivePlaybackTests.cs:UndefinedSitesAreRefusedWithoutDecoding` and `TruncatedPayloadIsMalformedNotRefused`.
+
+## `BGS/src/Hkx/AnimationPose.cs:AnimationPose.At` — one float entry per track
+
+`Pose.Floats` gets one entry per `HkxAnimationData.FloatTracks` element, in order. A track shorter than the clip repeats its last sample, so later tracks keep their index. Test: `BGS/tools/tests/QuantizedPlaybackTests.cs:PoseFloatsKeepOneEntryPerTrackWhenATrackIsShort`.
+
+## `BGS/src/Hkx/RoundTripReport.cs:ForBytes` — decoded clips that cannot be saved
+
+A clip that decodes but whose class is not in `NativeAnimation.Compressed` is reported as a loss with `NativeAnimation.SaveRefusal`, the same text `Recompress` and `Interleave` throw. That covers predictive and quantized clips, and also interleaved clips, because `Interleave` reads its source from the same list. Test: `BGS/tools/tests/HkxAnimationCompressionTests.cs:ADecodedPredictiveClipStaysUnsavableAndTheReportSaysSo`.
+
+## `BGS/src/Hkx/HkxDataStructures.cs:HkxAnimationData.ExportableAnimationClasses` — export list
+
+`ExportableAnimationClasses` (spline, lossless, interleaved) is the list that `AnimationExport.Json`, `ExportRunner` and the corpus pin accept. `DecodedAnimationClasses` stays the playback list and includes predictive and quantized, so decoded predictive and quantized clips play but are not exported. Test: `BGS/tools/tests/ExportRecoveryTests.cs:ADecodedPredictiveClipIsNotExportedYet`.
+## `BGS/src/Nif/NodeTree.cs:NodeTree.Resolve` — skin bones outside the Havok skeleton
+
+A skin bone that the Havok skeleton does not name is looked up in the NIF node trees, in order: `skeleton.nif` (the skeleton's own NIF, added by `BGS/app/MainWindow.Skinning.cs:MeshNodeTree`) and then the body mesh. From the named node the walk goes up through parents until a node names a skeleton bone, and the local transforms passed on the way are kept as `Link.LocalChain`, so the bone is posed with the offset its NIF node carries. A parent cycle stops after one pass over the tree. Only when neither tree yields a skeleton bone does `Resolve` fall back to `SkinnedMesh.ResolveSkinBoneName` (`X_skin` to `X`) with an identity chain, reported as the source `interim approximation`. That fallback places the bone where dev's helper approximation did.
+
+## `BGS/app/MainWindow.Pose.cs:ApproximateHelperBoneInterim` — kept for its tests and the corpus baseline
+
+`ApproximateHelperBoneInterim` is not deleted. `BGS/tools/tests/Viewport3DTests.cs:SkinBoneNamesResolveAgainstTheSkeleton` pins its rename, and `BGS/tools/tests/SkinCorpusTests.cs:ReferencePoseCorpusComparesActualInterimAndNodeResolver` uses it as the baseline the resolver is measured against. `BGS/app/MainWindow.Pose.cs:LoadMesh` no longer calls it, because renaming a helper bone first would hide its NIF node offset from the resolver.
+
+## `BGS/app/MainWindow.Skinning.cs:RebindMesh` — a mesh follows the skeleton it is shown on
+
+A mesh chosen before any skeleton exists is kept as `_pendingSkinMesh` and drawn when an animation supplies one, from `BGS/app/MainWindow.Playback.cs:LoadPoseBody`. When an animation with a skeleton opens, `RebindMesh` rebinds every loaded shape against it, so a binding never outlives the skeleton it was resolved against. `BGS/app/MainWindow.Pose.cs:ClearMesh` drops the pending mesh, so choosing no mesh, opening a document and a successful load all cancel it.
+
+## `BGS/app/MainWindow.Playback.cs:SkeletonBytesOrNull` — Radicle native-load failures stay visible
+
+Dev's `SkeletonBytesOrNull` (#700) swallows only what `GameData.IsSkippableArchiveFailure` accepts. That predicate lets a Radicle native-load failure through, so `LoadPose` reports it. `BGS/tools/tests/Ba2RadicleTests.cs:PlaybackSkeletonLookupReportsNativeLoadFailureButSkipsCorruptArchives` pins that split. Catching `InvalidDataException` directly, as the salvaged `ArchiveSkeleton` did, would hide the native-load failure, so dev's helper stays.
+
+
+## `BGS/src/Hkx/RootMotion.cs:RootMotion.Read` — provenance and frame kinds
+
+Provenance: Fallout4.exe 1.10.163, GT #520 comments 16593 and 16778 (RE-025). Default reference frames with frameType 0 contain 16-byte samples: xyz translation and w, an unwrapped angle in radians about up, sampled at 30 Hz. Queries clamp and interpolate components; positive w turns left. `RootMotion.Read` accepts frameType 0 and 1, and only on the class `hkaDefaultAnimatedReferenceFrame`: all 15,193 shipped default frames store 0, and tag 1 is the same DEFAULT payload under the other enum name, so refusing it would make trim, loop and save read such a frame as no motion at all, while frameType 2 (PARAMETRIC), every other tag and every other reference-frame class are refused and named in the unsupported reason as `<class>, frameType <n>`. No windowed/blended query is inferred.
+
+## `BGS/app/MainWindow.RootMotion.cs:UpdateRootMotionView` — placement, camera and loop
+
+Playback places the pose with the sampled translation and rotation. Follow travel OFF keeps the camera fixed; ON offsets its centre by the sampled translation, holding travel in the viewport without changing world placement. Loop queries restart the clip rather than accumulating its transform; during playback with Follow travel OFF a loop offset, not the base centre, is moved backwards by the clip travel on each wrap so the pose does not jump in the viewport, and Stop, a scrub, a pause and a fresh open clear that offset back to the base centre (Stop calls `ResetRootTravelLoop` and `ResetRootMotionView` clears it on every open). The ground overlay shows the path, one-second ticks and the final facing arrow.
+
+## `BGS/tools/symrm/MotionCli.cs:MotionData` — archive census
+
+Installed archive census through GameData/Ba2: 13,990 animation entries, 13,162 carrying samples, 828 without samples, zero unsupported or unreadable. Three carrying clips exceed the preview bound of 1,000,000 units: Character/Animations/Weapon/Pistol/Stand_to_Run_L180.hkx (131,548,976 units), Character/Animations/Stand_to_Run_L180.hkx and its Weapon/GripRifleStraight variant (78,007,424 each). The next largest distance is Vertibird/Animations/TakeoffUntrained.hkx at 7,544.326 units. Final sample angles are reported unwrapped in degrees, ranging from -372.605 to 360.000; multi-turn angles are valid.
+
+## `BGS/tools/symrm/MotionCli.cs:DumpMotionFrame` — the pistol outlier
+
+The pistol outlier is stored data, not a wrong pointer or stride: its default frame is at data-section offset 0x9ed0, array header 0x9f18 has a local fixup to 0x9f30 (frame + 0x60), and its 31 contiguous vec4 samples end exactly at the next object, hkaAnimationBinding at 0xa120. Sample 1 raw bytes are B57384485DF8184A8062F6CA00000000; xyz decode to 271261.66, 2506263.2, -8073536. Sample 6 z is 17265380 while w advances smoothly to pi. These values genuinely reside in the reference-frame payload. How the game treats this broken-looking content is not established here.
+
+## `BGS/app/MainWindow.RootMotion.cs:ResetRootMotionView` — camera framing limit
+
+With Follow travel OFF the camera centre is the one captured when the file opened (the frame-0 pose centre) and the fit is that pose's radius, so framing comes from the frame-0 pose alone: a clip whose path travels more than a few body radii walks out of the viewport, and the ground path with its ticks is drawn beyond the framing. `SkeletonView` has no fit-to-arbitrary-bounds helper - `SkeletonView.Frame()` reframes on the current pose, the mesh or the measured bodies - so widening the fit to the path bounds needs a new helper; until then the fixed camera is the manual answer and the drawn path shows where the clip goes.
+
+## `BGS/src/Hkx/RootMotion.cs:RootMotion.Motion` — invalid travel
+
+Raw distance and samples remain reportable. Non-finite samples/metadata or total travel above 1,000,000 units show `root motion looks invalid (x units)`, are neither applied to the pose/camera nor drawn, and are counted separately (within the carrying total) by the corpus report. This is a viewer sanity bound, not a claimed game limit.
+
+## `BGS/src/Hkx/AnimationEdit.cs:TrimMotion` — known gap: refused frames are not trimmed or retimed
+
+A frame that `RootMotion.Read` refuses (frameType 2, or a reference-frame class other than the default) reports `Any` false. `BGS/src/Hkx/AnimationEdit.cs:TrimMotion` and `RetimeMotion` return such a motion unchanged, and the `replacingMotion` test in `BGS/src/Hkx/NativeAnimation.cs:Interleave` and `BGS/src/Hkx/NativeAnimation.cs:Recompress` then keeps the original reference frame rather than rewriting it. No bytes are lost, but a trimmed or retimed clip keeps its untrimmed root motion, so the root travel no longer lines up with its frames. `Loop` leaves root motion as it is by design. The census above found no shipped clip in that state; a modded clip can be. Not guarded in this change.
+
+## `BGS/tools/tests/RootMotionTests.cs` — the regression each test detects
+
+- `RootMotionTests.cs:InterpolatesComponentsAndAccumulatesCurvedDistance` — component interpolation, curved (summed) distance and the unwrapped turn.
+- `RootMotionTests.cs:QueriesClamp` — queries outside the clip clamp to its ends.
+- `RootMotionTests.cs:ExplicitLoopQueriesWrapWithoutAccumulatingPastCycles` — loop queries wrap instead of accumulating cycles.
+- `RootMotionTests.cs:PositiveAngleTurnsForwardLeftAboutUp` — the sign of a positive turn (left about up).
+- `RootMotionTests.cs:SyntheticDefaultFrameParsesThenPlacesWithoutMutatingPose` — a parsed default frame places bones without changing the source pose.
+- `RootMotionTests.cs:FrameKindsHaveExplicitRefusals` — only frameType 0 and 1 of the default class are read; every other kind is refused with its reason.
+- `RootMotionTests.cs:NullExtractedPointerDoesNotBorrowAnUnrelatedFrame` — a null `extractedMotion` pointer does not pick up an unrelated frame object.
+- `RootMotionTests.cs:CommittedTurningFixtureHasPositiveAngle` — the committed RadRoach turn clip reads as a positive turn.
+- `RootMotionTests.cs:InvalidTravelIsRetainedButNeverPlaced` — travel above 1,000,000 units, infinite or NaN is kept but never placed.
+- `RootMotionTests.cs:FiniteTravelDoesNotHideNonFiniteAngle` — a finite distance does not hide a NaN angle from the previewable check.
+- `RootMotionTests.cs:MetricsFollowSamplesAddedAfterAQuery` — the cached distance is recomputed after samples are added.
+- `RootMotionTests.cs:MultiTurnAnglesStayUnwrapped` — multi-turn angles stay unwrapped.
+
+## `BGS/tools/tests/NodeTreeTests.cs` — the regression each test detects
+
+- `NodeTreeTests.cs:ResolverUsesNearestExactAncestorAndOrderedSources` — a farther ancestor, or the body tree ranked above `skeleton.nif`, would move a helper bone.
+- `NodeTreeTests.cs:DisconnectedAndCyclicTreesFallBackWithoutChangingExactBind` — a cyclic parent chain must end, and an unresolved name must fall back without changing the exact-name bind.
+- `NodeTreeTests.cs:VanillaMaleRestPoseReproducesVerticesAfterOutputPlacementRemoval` — on the vanilla male body the reference pose reproduces the mesh vertices; needs `BGS_SKIN_DATA`.
+
+## `BGS/tools/tests/SkinCorpusTests.cs:ReferencePoseCorpusComparesActualInterimAndNodeResolver` — resolver accuracy gate
+
+Compares the interim rename and the node resolver against the vanilla rest pose over 55 files. It asserts that exactly 55 files were measured, that every compared vertex error is finite, and that the resolver never leaves more bones unmatched than the exact bind; it writes each file's interim and resolver errors to test output, and does not assert a threshold on them. Needs `BGS_SKIN_DATA`. `BGS/tools/tests/TestSupport.cs:SkinDataFactAttribute` marks it and the vanilla `NodeTreeTests` case as skipped, not passed, when that variable is unset.
+
+## `BGS/tools/uismoke/Smoke.RootMotion.cs:RootMotionSmoke` and `RootMotionLoopSmoke` — UI regressions
+
+`RootMotionSmoke` detects Follow travel OFF moving the camera, Follow travel OFF leaving the placed skeleton still, Follow travel ON changing the placed skeleton, Follow travel ON not holding the travel in the viewport, and the camera not returning at frame 0. `RootMotionLoopSmoke` detects playback across the loop wrap not moving the fixed camera, and a scrub to frame 0 not clearing the loop offset. Both run in the ragdoll lifecycle smoke runner (`BGS/tools/uismoke/RagdollLifecycleSmoke.cs:LifecycleSmoke`).
+
+## `BGS/tools/uismoke/Smoke.Skinning.cs:SkinningSmoke` — skin binding through the UI
+
+Detects a mesh chosen before an animation failing to bind when the skeleton arrives, a mesh that does not rebind when the animation changes, and a malformed `skeleton.nif` failing to fall back to the body tree. Returns 0 without `BGS_SKIN_DATA`, as the smoke runner has no skip state.

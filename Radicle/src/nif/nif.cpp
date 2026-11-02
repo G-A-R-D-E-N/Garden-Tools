@@ -230,6 +230,7 @@ NifFile read_nif(std::span<const std::byte> bytes) {
     node.name = header.name;
     node.children = nif.children_[i];
     node.local = header.transform;
+    if (type == "BSValueNode" && block.remaining() >= 4) node.value = block.read_i32();
     nif.node_of_block_[i] = static_cast<std::int32_t>(nif.nodes_.size());
     nif.nodes_.push_back(std::move(node));
   }

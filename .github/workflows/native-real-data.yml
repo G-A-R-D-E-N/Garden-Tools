@@ -4,7 +4,21 @@ name: native-real-data
 on:
   push:
     branches: [main, nomad/dev]
+    paths:
+      - 'Radicle/**'
+      - 'PluginEditTool/native/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/scripts/**'
+      - '.github/workflows/native-real-data.yml'
   pull_request:
+    paths:
+      - 'Radicle/**'
+      - 'PluginEditTool/native/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/scripts/**'
+      - '.github/workflows/native-real-data.yml'
   workflow_dispatch:
 
 permissions:

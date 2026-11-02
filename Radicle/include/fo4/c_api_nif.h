@@ -32,6 +32,10 @@ RADICLE_API radicle_status radicle_nif_node_transform(const radicle_nif* nif,
                                                       float* out_rotation,
                                                       float* out_scale);
 RADICLE_API radicle_status radicle_nif_node_for_block(const radicle_nif* nif, uint32_t block, int32_t* out_node);
+RADICLE_API radicle_status radicle_nif_node_value(const radicle_nif* nif,
+                                                  size_t index,
+                                                  int32_t* out_has_value,
+                                                  int32_t* out_value);
 
 RADICLE_API radicle_status radicle_nif_shape_count(const radicle_nif* nif, size_t* out_count);
 RADICLE_API radicle_status radicle_nif_shape_name(const radicle_nif* nif,

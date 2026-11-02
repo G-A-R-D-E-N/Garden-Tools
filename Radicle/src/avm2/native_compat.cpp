@@ -8,10 +8,12 @@
 #include <fo4/avm2/net.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/value.hpp>
 
 #include "native_internal.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -44,6 +46,7 @@ class GraphicsObject : public Object {
   }
 
   std::vector<GraphicsCommand> commands;
+  mutable std::shared_ptr<const ShapeGeometry> geometry;
 };
 
 Class* class_from_self(const Value& self) {
@@ -201,7 +204,183 @@ ExecutionResult graphics_command(const Value& self, std::uint8_t op,
     }
   }
   graphics->commands.push_back(command);
+  graphics->geometry.reset();
   return native_value(Value::undefined());
+}
+
+// NaN must map to zero, and infinite or huge coordinates must clamp on every platform.
+std::int32_t twip_coord(double pixels) {
+  if (std::isnan(pixels)) {
+    return 0;
+  }
+  const double twips = pixels * 20.0;
+  if (twips >= 2147483647.0) {
+    return INT32_MAX;
+  }
+  if (twips <= -2147483648.0) {
+    return INT32_MIN;
+  }
+  return static_cast<std::int32_t>(std::lround(twips));
+}
+
+struct GraphicsPen {
+  std::int32_t x{0};
+  std::int32_t y{0};
+};
+
+void emit_move(std::vector<swf::SwfShapeRecord>& records, GraphicsPen& pen, double x, double y) {
+  swf::SwfShapeRecord record;
+  record.kind = swf::SwfShapeRecordKind::move;
+  record.x = twip_coord(x);
+  record.y = twip_coord(y);
+  pen.x = record.x;
+  pen.y = record.y;
+  records.push_back(record);
+}
+
+std::int32_t twip_delta(std::int32_t from, std::int32_t to) {
+  // A clamped pen and a clamped end must still subtract without wrapping.
+  const std::int64_t delta = static_cast<std::int64_t>(to) - static_cast<std::int64_t>(from);
+  if (delta >= 2147483647LL) {
+    return INT32_MAX;
+  }
+  if (delta <= -2147483648LL) {
+    return INT32_MIN;
+  }
+  return static_cast<std::int32_t>(delta);
+}
+
+void emit_edge(std::vector<swf::SwfShapeRecord>& records, GraphicsPen& pen,
+               swf::SwfShapeRecordKind kind, double control_x, double control_y, double x,
+               double y) {
+  // Deltas must run from the quantized pen, so the reader rebuilds the emitted positions exactly.
+  const std::int32_t control_twip_x = twip_coord(control_x);
+  const std::int32_t control_twip_y = twip_coord(control_y);
+  const std::int32_t end_twip_x = twip_coord(x);
+  const std::int32_t end_twip_y = twip_coord(y);
+  const bool curved = kind == swf::SwfShapeRecordKind::curved_edge;
+  swf::SwfShapeRecord record;
+  record.kind = kind;
+  record.control_x = twip_delta(pen.x, control_twip_x);
+  record.control_y = twip_delta(pen.y, control_twip_y);
+  record.x = twip_delta(curved ? control_twip_x : pen.x, end_twip_x);
+  record.y = twip_delta(curved ? control_twip_y : pen.y, end_twip_y);
+  pen.x = end_twip_x;
+  pen.y = end_twip_y;
+  // A stroke-only edge must still be recorded, since the reader's pen follows every edge record.
+  records.push_back(record);
+}
+
+void emit_fill_break(std::vector<swf::SwfShapeRecord>& records, std::uint16_t fill1) {
+  // Fill state must ride a style record, matching what the SWF parser emits for real shapes.
+  swf::SwfShapeRecord record;
+  record.kind = swf::SwfShapeRecordKind::style_change;
+  record.has_fill0 = true;
+  record.has_fill1 = true;
+  record.fill0 = 0;
+  record.fill1 = fill1;
+  records.push_back(record);
+}
+
+// A recorded path must become edge records, because the snapshot and hit test read records.
+std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& graphics) {
+  std::vector<swf::SwfShapeRecord> records;
+  bool filling = false;
+  std::uint16_t fill_index = 0;
+  GraphicsPen pen;
+  GraphicsPen subpath;
+  auto edge_to = [&](double x, double y) {
+    emit_edge(records, pen, swf::SwfShapeRecordKind::straight_edge, 0.0, 0.0, x, y);
+  };
+  // An open fill must close back to its subpath start before it ends or restarts.
+  auto close_subpath = [&]() {
+    if (filling && (pen.x != subpath.x || pen.y != subpath.y)) {
+      edge_to(subpath.x / 20.0, subpath.y / 20.0);
+    }
+  };
+  auto begin_subpath = [&](double x, double y) {
+    close_subpath();
+    emit_move(records, pen, x, y);
+    subpath = pen;
+  };
+  for (const GraphicsCommand& command : graphics.commands) {
+    switch (command.op) {
+      case 0:
+      case 1:
+        // A gradient fill must read as a flat fill, since the runtime keeps no raster state.
+        close_subpath();
+        filling = true;
+        subpath = pen;
+        // Each fill must take its own style, so overlapping fills union instead of cancelling.
+        if (fill_index < 0xFFFFu) {
+          ++fill_index;
+        }
+        emit_fill_break(records, fill_index);
+        break;
+      case 2:
+        close_subpath();
+        filling = false;
+        emit_fill_break(records, 0);
+        break;
+      case 4:
+        begin_subpath(command.values[0], command.values[1]);
+        break;
+      case 5:
+        edge_to(command.values[0], command.values[1]);
+        break;
+      case 6:
+        emit_edge(records, pen, swf::SwfShapeRecordKind::curved_edge, command.values[0],
+                  command.values[1], command.values[2], command.values[3]);
+        break;
+      case 7: {
+        const double x = command.values[0];
+        const double y = command.values[1];
+        const double right = x + command.values[2];
+        const double bottom = y + command.values[3];
+        begin_subpath(x, y);
+        edge_to(right, y);
+        edge_to(right, bottom);
+        edge_to(x, bottom);
+        edge_to(x, y);
+        break;
+      }
+      case 8: {
+        // A circle must become an octagon, since records carry no arc primitive.
+        const double x = command.values[0];
+        const double y = command.values[1];
+        const double radius = command.values[2];
+        begin_subpath(x + radius, y);
+        for (int step = 1; step <= 8; ++step) {
+          const double angle = step * 3.141592653589793 / 4.0;
+          edge_to(x + radius * std::cos(angle), y + radius * std::sin(angle));
+        }
+        break;
+      }
+      case 9: {
+        // A round rect must become a chamfered polygon, for the same reason as the circle.
+        const double x = command.values[0];
+        const double y = command.values[1];
+        const double right = x + command.values[2];
+        const double bottom = y + command.values[3];
+        const double cut_x = command.values[4] / 2.0;
+        const double cut_y = command.values[5] / 2.0;
+        begin_subpath(x + cut_x, y);
+        edge_to(right - cut_x, y);
+        edge_to(right, y + cut_y);
+        edge_to(right, bottom - cut_y);
+        edge_to(right - cut_x, bottom);
+        edge_to(x + cut_x, bottom);
+        edge_to(x, bottom - cut_y);
+        edge_to(x, y + cut_y);
+        edge_to(x + cut_x, y);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  close_subpath();
+  return records;
 }
 
 Value rectangle_value(Interpreter& interpreter, double x, double y, double width, double height) {
@@ -258,8 +437,11 @@ ExecutionResult display_hit_test(const Value& self, const std::vector<Value>& ar
   if (const DisplayObject* other = display_argument(arguments)) {
     return native_value(Value::boolean(hit_test_object(*object, *other)));
   }
+  // A point hit must read the third argument as shapeFlag, matching the AS3 signature.
+  const bool shape_flag = arguments.size() > 2 && to_boolean(arguments[2]);
   return native_value(Value::boolean(hit_test_point(*object, to_number(argument_at(arguments, 0)),
-                                                    to_number(argument_at(arguments, 1)))));
+                                                    to_number(argument_at(arguments, 1)),
+                                                    shape_flag)));
 }
 
 ExecutionResult display_hit_test_point(const Value& self, const std::vector<Value>& arguments) {
@@ -267,8 +449,10 @@ ExecutionResult display_hit_test_point(const Value& self, const std::vector<Valu
   if (object == nullptr) {
     return native_value(Value::boolean(false));
   }
+  const bool shape_flag = arguments.size() > 2 && to_boolean(arguments[2]);
   return native_value(Value::boolean(hit_test_point(*object, to_number(argument_at(arguments, 0)),
-                                                    to_number(argument_at(arguments, 1)))));
+                                                    to_number(argument_at(arguments, 1)),
+                                                    shape_flag)));
 }
 
 ExecutionResult display_hit_test_object(const Value& self, const std::vector<Value>& arguments) {
@@ -359,7 +543,10 @@ Value make_loader_info(Interpreter& interpreter,
 Value content_loader_info(Interpreter& interpreter, LoaderObject& loader) {
   if (loader.content_loader_info.is_object()) return loader.content_loader_info;
   Value value = make_loader_info(interpreter, loader.domain);
-  if (value.is_object()) loader.content_loader_info = value;
+  if (value.is_object()) {
+    loader.content_loader_info = value;
+    refresh_content_loader_info(interpreter, loader);
+  }
   return value;
 }
 
@@ -367,6 +554,12 @@ ExecutionResult loader_content_loader_info(Interpreter& interpreter, const Value
   auto* loader = self.is_object() ? dynamic_cast<LoaderObject*>(self.as_object().get()) : nullptr;
   if (loader == nullptr) return native_value(Value::null());
   return native_value(content_loader_info(interpreter, *loader));
+}
+
+ExecutionResult loader_content(const Value& self) {
+  auto* loader = self.is_object() ? dynamic_cast<LoaderObject*>(self.as_object().get()) : nullptr;
+  if (loader == nullptr || loader->content == nullptr) return native_value(Value::null());
+  return native_value(Value::object(loader->content));
 }
 
 ExecutionResult display_loader_info(Interpreter& interpreter, const Value& self) {
@@ -397,9 +590,40 @@ ExecutionResult event_format_to_string(const Value& self, const std::vector<Valu
 
 }  // namespace
 
+std::shared_ptr<const ShapeGeometry> drawn_geometry_of(const DisplayObject& object) {
+  static const std::shared_ptr<const ShapeGeometry> kNone =
+      std::make_shared<const ShapeGeometry>();
+  if (!object.graphics().is_object()) {
+    return kNone;
+  }
+  const Object& graphics_value = *object.graphics().as_object();
+  const Class* klass = graphics_value.instance_class();
+  if (klass == nullptr || klass->name != "flash.display::Graphics") {
+    return kNone;
+  }
+  const auto& graphics = static_cast<const GraphicsObject&>(graphics_value);
+  if (graphics.geometry == nullptr) {
+    // Graphics records must stay twips, so sub-pixel drawing survives the pixel conversion.
+    graphics.geometry = std::make_shared<const ShapeGeometry>(
+        geometry_from_shape_records(graphics_shape_records(graphics), 20.0));
+  }
+  return graphics.geometry;
+}
+
+std::shared_ptr<const ShapeGeometry> effective_shape_geometry(const DisplayObject& object) {
+  if (const auto& placed = object.shape_geometry()) {
+    return placed;
+  }
+  return drawn_geometry_of(object);
+}
+
 void refresh_content_loader_info(Interpreter& interpreter, LoaderObject& loader) {
   if (loader.content_loader_info.is_object()) {
     set_info_domain(interpreter, *loader.content_loader_info.as_object(), loader.domain);
+    if (loader.content != nullptr) {
+      set_property(*loader.content_loader_info.as_object(), "content",
+                   Value::object(loader.content));
+    }
   }
 }
 
@@ -466,7 +690,10 @@ bool try_compat_native(Interpreter& interpreter, native::Id id, const Value& sel
       out = graphics_command(self, 9, arguments);
       return true;
     case native::Id::graphics_clear:
-      if (GraphicsObject* graphics = graphics_self(self)) graphics->commands.clear();
+      if (GraphicsObject* graphics = graphics_self(self)) {
+        graphics->commands.clear();
+        graphics->geometry.reset();
+      }
       out = native_value(Value::undefined());
       return true;
     case native::Id::graphics_copy_from:
@@ -495,6 +722,9 @@ bool try_compat_native(Interpreter& interpreter, native::Id id, const Value& sel
       return true;
     case native::Id::loader_content_loader_info:
       out = loader_content_loader_info(interpreter, self);
+      return true;
+    case native::Id::loader_content:
+      out = loader_content(self);
       return true;
     case native::Id::loader_unload_and_stop:
       out = compat_undefined(self);
