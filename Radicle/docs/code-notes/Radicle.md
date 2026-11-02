@@ -10093,7 +10093,7 @@ master index in the `.cdx` plugin's own master list: on exterior rows it names a
 WRLD, on interior rows an interior CELL. Exterior `word0` packs
 `(x & 0xFFF) << 20 | (y & 0xFFF) << 8 | kind`, with `x` and `y` signed 12-bit
 grid coordinates; interior rows carry `kind` in the low byte and a zero grid.
-Interior kinds are `0x80` and above (measured `128, 129, 131, 132, 134, 135`);
+Interior kinds are `0x80` and above (measured `128, 129, 130, 131, 132, 134, 135, 136`);
 exterior kinds are below `0x80` (measured `0, 1, 2, 3, 4, 6, 7`). The row table
 is sorted ascending by `(word1, word0)` in every shipped file, and the last two
 words are opaque: their meaning is not established, so a writer must preserve

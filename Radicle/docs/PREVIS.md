@@ -14,7 +14,7 @@ and skip-and-report live in `include/fo4/previs/detect.hpp` (plan D10/D11).
   `(x & 0xFFF) << 20 | (y & 0xFFF) << 8 | kind` with signed 12-bit grid
   coordinates (Commonwealth grid x -35..30, y -39..28); interior rows keep
   the kind in the low byte and a zero grid. Interior kinds are `128, 129,
-  131, 132, 134, 135`; exterior kinds are `0, 1, 2, 3, 4, 6, 7`. `word2` and
+  130, 131, 132, 134, 135, 136`; exterior kinds are `0, 1, 2, 3, 4, 6, 7`. `word2` and
   `word3` are opaque. `Fallout4.cdx` is 1,460,027 rows (8 + 1460027 * 16
   bytes); the six files total 2,413,992 rows. Rows collapse onto a cell key
   of `(form, word0 >> 8)`, so one lookup answers a cell instead of scanning

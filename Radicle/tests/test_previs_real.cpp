@@ -156,8 +156,8 @@ TEST(PrevisReal, CdxParsesAndRoundTrips) {
       }
     }
     for (const auto kind : interior_kinds) {
-      EXPECT_TRUE(kind == 128 || kind == 129 || kind == 131 || kind == 132 || kind == 134 ||
-                  kind == 135)
+      EXPECT_TRUE(kind == 128 || kind == 129 || kind == 130 || kind == 131 || kind == 132 ||
+                  kind == 134 || kind == 135 || kind == 136)
           << "unexpected interior kind " << static_cast<int>(kind);
     }
     if (exact_counts_known(build)) {
@@ -445,8 +445,8 @@ TEST(PrevisReal, VanillaLoadOrderGate) {
     EXPECT_EQ(data.summary().tome_files, 1422u);
     EXPECT_EQ(data.summary().oc_nif_files, 176569u);
     EXPECT_TRUE(data.summary().problems.empty());
-    EXPECT_EQ(data.summary().cdx_rows, 2413992u);
-    EXPECT_EQ(data.summary().csg_rows, 64869u);
+    EXPECT_EQ(data.summary().cdx_rows, 2328992u);
+    EXPECT_EQ(data.summary().csg_rows, 69869u);
     EXPECT_EQ(data.summary().csg_chunks, 13851u);
   }
 
