@@ -28,6 +28,7 @@ const CatalogTool kTools[] = {
     {"get_geometry_batch", "cell", "GetGeometryBatch", "rel_model_paths_json:string", "Editor query: get geometry batch. Same RPC the desktop editor uses."},
     {"search_cells", "cell", "SearchCells", "query:string,limit:integer?", "Editor query: search cells. Placed-reference or cell operation."},
     {"get_geometry_batch_progress", "cell", "GetGeometryBatchProgress", "", "Editor query: get geometry batch progress. Same RPC the desktop editor uses."},
+    {"previs_scan", "previs", "Scan", "data_dir:string?", "Read-only previs report for the saved load order: broken, outdated and skipped cells with capped rows. The scan reads the saved files, so unsaved edits are not included; pendingPlugins names the loaded plugins that have them. Same RPC the FO4IDE previs panel uses."},
 };
 
 }

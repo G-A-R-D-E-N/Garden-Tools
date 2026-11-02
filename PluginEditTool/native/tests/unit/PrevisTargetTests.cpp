@@ -1,5 +1,7 @@
 #include <filesystem>
+#include <fstream>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -22,11 +24,12 @@ public:
             const auto nested = target->invoke("Scan", nlohmann::json::array());
             busy_seen = !nested && nested.error().type == "PrevisScanBusy";
         }
-        return nlohmann::json::array();
+        return plugins_;
     }
 
     std::filesystem::path dataDirectory() const override { return dataDirectory_; }
 
+    nlohmann::json plugins_ = nlohmann::json::array();
     std::filesystem::path dataDirectory_;
     fo4ide::rpc::PrevisTarget* target{nullptr};
     bool probed{false};
@@ -50,6 +53,15 @@ public:
 private:
     std::filesystem::path path_;
 };
+
+void writeMinimalPlugin(const std::filesystem::path& path) {
+    const std::vector<unsigned char> bytes{
+        'T', 'E', 'S', '4', 18, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 131, 0, 0, 0,
+        'H', 'E', 'D', 'R', 12, 0, 0, 0, 0x80, 0x3F, 0, 0, 0, 0, 0, 8, 0, 0};
+    std::ofstream out(path, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+}
 
 }
 
@@ -141,4 +153,21 @@ TEST_CASE("previs target refuses a second concurrent scan") {
     REQUIRE_FALSE(second.has_value());
     CHECK(second.error().type != "PrevisScanBusy");
     CHECK(second.error().type == "PrevisNoEnvironment");
+}
+
+// Detects: a scan that hides a loaded plugin with unsaved edits, instead of naming it as not reflected, must fail.
+TEST_CASE("previs scan names the loaded plugins with unsaved edits that it does not read") {
+    TemporaryDirectory directory;
+    const auto plugin = directory.path() / "Pending.esp";
+    writeMinimalPlugin(plugin);
+    FakeBackend backend;
+    backend.plugins_ = nlohmann::json(nlohmann::json::array({nlohmann::json{
+        {"FilePath", plugin.string()}, {"Pending", true}}}).dump());
+    fo4ide::settings::SharedSettings settings;
+    fo4ide::rpc::PrevisTarget target(backend, settings);
+
+    const auto result = target.invoke("Scan", nlohmann::json::array({directory.path().string()}));
+    REQUIRE(result.has_value());
+    CHECK((*result)["pendingPlugins"] == nlohmann::json::array({"Pending.esp"}));
+    CHECK((*result)["summary"]["cells"] == 0);
 }

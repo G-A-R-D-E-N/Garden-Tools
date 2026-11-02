@@ -28,6 +28,7 @@ const report = {
     ocNifFiles: 176569,
     problems: 0,
   },
+  pendingPlugins: [],
   problems: [],
   broken: [{
     cell: '00DC49:Fallout4.esm',
@@ -116,6 +117,16 @@ describe('previs report panel', () => {
     expect(await screen.findByText('0012AB:Fallout4.esm')).toBeTruthy();
     expect(screen.getByText(/Skipped cells/)).toBeTruthy();
     expect(document.querySelector('.previs-stat-ok')).toBeNull();
+  });
+
+  // Detects: a scan that hides plugins with unsaved edits, instead of naming them as not in the scan, must fail.
+  it('names the plugins with unsaved edits that the scan does not read', async () => {
+    bridge.folder.mockResolvedValue({ dataDir: '', source: 'unset' });
+    bridge.scan.mockResolvedValue({ ...report, pendingPlugins: ['Mod.esp'] });
+    render(<PrevisPanel onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /scan/i }));
+
+    expect(await screen.findByText(/Unsaved edits in Mod\.esp are not in this scan/)).toBeTruthy();
   });
 
   it('says so when the desktop bridge is missing', () => {

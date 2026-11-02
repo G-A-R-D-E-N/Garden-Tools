@@ -136,6 +136,11 @@ export default function PrevisPanel({ onClose }: { onClose: () => void }) {
 
           {scan && summary && (
             <>
+              {scan.pendingPlugins.length > 0 && (
+                <div className="papyrus-warn">
+                  Unsaved edits in {scan.pendingPlugins.join(', ')} are not in this scan, which reads the saved files. Save them and scan again.
+                </div>
+              )}
               <div className="previs-summary">
                 <span className="previs-stat"><b>{summary.cells.toLocaleString()}</b> cells</span>
                 <span className={`previs-stat ${clean ? 'previs-stat-ok' : 'previs-stat-bad'}`}>

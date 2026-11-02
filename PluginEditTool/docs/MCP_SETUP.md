@@ -5,10 +5,10 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **160 tools**: 64 hand-written tools and 96 catalog tools. The 64 are 20 for plugins and records,
+It advertises **161 tools**: 64 hand-written tools and 97 catalog tools. The 64 are 20 for plugins and records,
 23 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects and weapons), 5 for MO2 profile
 and host state, 5 for Papyrus, and 11 for NIFs, materials, audio and BA2 archives (4 NIF, 2 material, 4 audio, 1
-archive). The 96 catalog tools are the editor parity set: 24 read-side (`McpCatalogRead.cpp`), 46 edit-side
+archive). The 97 catalog tools are the editor parity set: 25 read-side (`McpCatalogRead.cpp`), 46 edit-side
 (`McpCatalogEdit.cpp`) and 26 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
 blueprint graphs and `load_script`).
 
@@ -296,6 +296,12 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `reload_mo2_profile` | [`discard_pending`] | memory | Reloads the enabled plugins from the configured profile, replacing everything that is loaded (plugins added with `open_plugin` included), and returns the `get_mo2_status` fields. Refused with `PluginHasPendingChanges` while any plugin has unsaved edits, unless `discard_pending` is `true`, which throws those edits away. Also saves the instance path to `settings.json`. |
 | `release_memory` | [`drop_conflict_graph`] | memory | Pages the process working set out to the OS after a large load, save or reload. Plugin data stays loaded and pages back in on the next access, so use it when the editor is idle and memory use matters. The result reports the working set before and after the trim. `drop_conflict_graph: true` also drops the cached conflict/reference graph (the largest optional allocation); it rebuilds on the next conflict or reference query. The reference half of that graph is also released automatically after an idle period. |
 | `get_settings` | none | no | The current settings: folders, tool paths and flags, including values that came from environment variables. Secrets are redacted. |
+
+### Previs
+
+| Tool | Arguments | Writes | What it does |
+|---|---|---|---|
+| `previs_scan` | [`data_dir`] | no | Read-only previs report for the saved load order: the summary counts, and the broken, outdated and skipped cells, each list capped at 5,000 rows (`truncated` says so). `data_dir` defaults to the configured Data folder. The scan reads the saved files on disk, so unsaved edits are not part of it; `pendingPlugins` names the loaded plugins that have unsaved edits. A second scan while one runs is refused with `PrevisScanBusy`, and a full scan can take a minute or more. |
 
 ### Papyrus
 

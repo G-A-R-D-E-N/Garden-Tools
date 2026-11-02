@@ -497,6 +497,7 @@ export interface PrevisScanSummary {
 export interface PrevisScanResult {
   dataDir: string;
   summary: PrevisScanSummary;
+  pendingPlugins: string[];
   problems: string[];
   broken: PrevisCellReport[];
   outdated: PrevisCellReport[];

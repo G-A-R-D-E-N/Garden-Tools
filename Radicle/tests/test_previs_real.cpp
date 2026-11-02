@@ -103,6 +103,22 @@ std::string lowered(std::string text) {
   return text;
 }
 
+std::string archive_entry_key(const std::string& stored) {
+  auto key = lowered(stored);
+  std::replace(key.begin(), key.end(), '/', '\\');
+  return key;
+}
+
+// Load order invariant: light plugins are the .esl files, lowest priority first.
+std::vector<fs::path> light_plugins(const fs::path& dir) {
+  std::vector<fs::path> paths;
+  for (const auto& entry : fs::directory_iterator(dir)) {
+    if (lowered(entry.path().extension().string()) == ".esl") paths.push_back(entry.path());
+  }
+  std::sort(paths.begin(), paths.end());
+  return paths;
+}
+
 std::string issue_codes(const fo4::previs::CellPrevisStatus& status) {
   std::vector<std::string> codes;
   codes.reserve(status.issues.size());
@@ -594,4 +610,124 @@ TEST(PrevisReal, CApiReportSurface) {
   radicle_env_destroy(env);
   std::error_code cleanup_error;
   fs::remove_all(scratch, cleanup_error);
+}
+
+// Detects: a .psg anywhere in the Data tree or a General archive, or a light plugin that ships a CDX, Geometry CSG, Vis tome folder or PreCombined folder, must fail the measured inventory.
+TEST(PrevisReal, ShippedPsgAndLightPluginContainersAreAbsent) {
+  const auto maybe_dir = data_dir_from_env();
+  if (!maybe_dir) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const fs::path& dir = *maybe_dir;
+  const auto build = detect_game_build(dir);
+  record_game_build(build);
+  std::set<std::string> light_loose;
+  std::vector<std::string> light_prefixes;
+  for (const auto& light : light_plugins(dir)) {
+    const auto name = lowered(light.filename().string());
+    const auto stem = name.substr(0, name.size() - 4);
+    light_loose.insert(stem + ".cdx");
+    light_loose.insert(stem + " - geometry.csg");
+    light_prefixes.push_back("vis\\" + name + "\\");
+    light_prefixes.push_back("meshes\\precombined\\" + name + "\\");
+  }
+  std::vector<std::string> offenders;
+  std::error_code walk_error;
+  for (fs::recursive_directory_iterator it(dir, walk_error), end; !walk_error && it != end;
+       it.increment(walk_error)) {
+    const auto name = lowered(it->path().filename().string());
+    if (lowered(it->path().extension().string()) == ".psg" || light_loose.contains(name)) {
+      offenders.push_back(it->path().string());
+    }
+  }
+  ASSERT_FALSE(walk_error) << walk_error.message();
+  std::size_t entries = 0;
+  for (const auto& entry : fs::directory_iterator(dir)) {
+    if (lowered(entry.path().extension().string()) != ".ba2") continue;
+    if (!is_general_archive(entry.path())) continue;
+    const auto reader = fo4::archive::Ba2Reader::open(entry.path());
+    for (const auto& info : reader.entries()) {
+      ++entries;
+      const auto key = archive_entry_key(info.path);
+      if (key.ends_with(".psg")) offenders.push_back(entry.path().string() + ": " + key);
+      for (const auto& prefix : light_prefixes) {
+        if (key.starts_with(prefix)) offenders.push_back(entry.path().string() + ": " + key);
+      }
+    }
+  }
+  RecordProperty("archive_entries", static_cast<int>(entries));
+  if (!exact_counts_known(build)) GTEST_SKIP() << "the shipped container inventory is not measured for this build";
+  for (std::size_t i = 0; i < offenders.size() && i < 10; ++i) ADD_FAILURE() << offenders[i];
+  EXPECT_EQ(offenders.size(), 0u);
+}
+
+// Detects: a light winner that stops being a skip, a light previs cell that no longer overrides a Fallout4 cell, or a light winner whose Fallout4.cdx row is missing, must fail.
+TEST(PrevisReal, LightPluginPrevisOverridesBaseCellsAndStaysSkipped) {
+  const auto maybe_dir = data_dir_from_env();
+  if (!maybe_dir) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const fs::path& dir = *maybe_dir;
+  const auto build = detect_game_build(dir);
+  record_game_build(build);
+  auto paths = official_masters(dir);
+  if (paths.empty()) GTEST_SKIP() << "the six installed masters are not present";
+  const auto lights = light_plugins(dir);
+  if (lights.empty()) GTEST_SKIP() << "no light plugins are installed";
+  paths.insert(paths.end(), lights.begin(), lights.end());
+  const auto env = fo4::env::Environment::load(paths);
+  const std::filesystem::path roots[]{dir};
+  const auto data = fo4::previs::PrevisData::load(roots, env);
+  const auto indexes = data.indexes();
+  const auto base = env.find_plugin("Fallout4.esm");
+  ASSERT_TRUE(base.has_value());
+  const auto cell_signature = fo4::Signature::from_string("CELL");
+  const auto xcri_signature = fo4::Signature::from_string("XCRI");
+
+  std::size_t light_previs_cells = 0;
+  std::size_t light_own_previs_cells = 0;
+  for (std::size_t plugin = 0; plugin < env.plugins().size(); ++plugin) {
+    if (env.plugins()[plugin].kind != fo4::PluginKind::light) continue;
+    for (const auto* ref : env.plugin_records(plugin)) {
+      if (ref == nullptr || ref->record == nullptr) continue;
+      if (ref->record->header.signature != cell_signature) continue;
+      const bool previs = find_subrecord(*ref->record, xcri_signature) != nullptr ||
+                          find_subrecord(*ref->record, fo4::Signature::from_string("VISI")) != nullptr ||
+                          find_subrecord(*ref->record, fo4::Signature::from_string("PCMB")) != nullptr ||
+                          find_subrecord(*ref->record, fo4::Signature::from_string("RVIS")) != nullptr;
+      if (!previs) continue;
+      ++light_previs_cells;
+      if (ref->record->form_key.owner().filename() != "Fallout4.esm") ++light_own_previs_cells;
+    }
+  }
+
+  std::size_t light_xcri = 0;
+  std::size_t owner_rows = 0;
+  for (const auto& diagnosis : fo4::previs::diagnose_load_order(env, indexes)) {
+    if (env.plugins()[diagnosis.plugin].kind != fo4::PluginKind::light) continue;
+    // Skip invariant: a light winner stays unmeasured, never a verdict, until its layout is measured.
+    EXPECT_TRUE(diagnosis.status.skip_unsupported) << diagnosis.cell.to_string();
+    EXPECT_FALSE(diagnosis.status.broken) << diagnosis.cell.to_string();
+    const auto* ref = env.winner(diagnosis.cell);
+    if (ref == nullptr || ref->record == nullptr) continue;
+    if (find_subrecord(*ref->record, xcri_signature) == nullptr) continue;
+    ++light_xcri;
+    const auto cell_data = fo4::env::decode_cell(env, *ref);
+    fo4::previs::CdxCellTarget target;
+    target.cell = diagnosis.cell;
+    target.world = cell_data.worldspace;
+    if (cell_data.grid) target.grid = *cell_data.grid;
+    const auto row = indexes.cdx_row(*base, target);
+    if (row.has_value() && *row) {
+      ++owner_rows;
+    } else {
+      ADD_FAILURE() << "no Fallout4.cdx row for light winner " << diagnosis.cell.to_string();
+    }
+  }
+
+  RecordProperty("light_plugins", static_cast<int>(lights.size()));
+  RecordProperty("light_previs_cells", static_cast<int>(light_previs_cells));
+  RecordProperty("light_xcri", static_cast<int>(light_xcri));
+  if (!exact_counts_known(build)) GTEST_SKIP() << "exact light counts are not measured for this build";
+  EXPECT_EQ(lights.size(), 9u);
+  EXPECT_EQ(light_previs_cells, 32u);
+  EXPECT_EQ(light_own_previs_cells, 0u);
+  EXPECT_EQ(light_xcri, 31u);
+  EXPECT_EQ(owner_rows, 31u);
 }

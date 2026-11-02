@@ -2929,3 +2929,27 @@ Code 8 is one enumerator. It adds no export and changes no C struct, so `RADICLE
 ## Radicle/tests/test_previs_units.cpp:PrevisDetect — test file split
 
 `Radicle/tests/test_previs.cpp` was already 890 lines at HEAD, and the edit gate refuses any change that leaves a file above 750 lines. The codec tests (`PrevisCdx`, `PrevisCsg`, `PrevisXcri`, `PrevisUvd`, `PrevisDate`) and the pure `diagnose_cell` tests (`PrevisDetect`) moved unchanged to `Radicle/tests/test_previs_units.cpp`, and the byte helpers they share with the load-order tests moved to `Radicle/tests/previs_test_support.hpp` (`fo4::test::previs`). `test_previs.cpp` keeps the environment and asset-scan tests (`PrevisLoadOrderTest`). All 29 original tests are still present.
+
+## Radicle/src/previs/detect.cpp:diagnose_load_order — light winners stay skipped
+
+The light skip is kept. The `.esl` plugins in the Data folder ship previs CELL records, but only as overrides of Fallout4-owned cells, and no light plugin ships a CDX, a Geometry CSG, a tome folder or an OC NIF folder. The verdict path reads a winner's indexes from the winning plugin's own CDX, so a light winner with XCRI would be reported `cdx_row_missing` for all 31 XCRI cells even though the owner's CDX holds every row. Which index the engine reads for such an override is not measured, and a light plugin's own previs records (where the form-index mapping would matter) do not exist in the shipped data. A verdict here would therefore be a guess either way, so the skip with its reason stays. The numbers are pinned by `Radicle/tests/test_previs_real.cpp:LightPluginPrevisOverridesBaseCellsAndStaysSkipped`, which fails if a light winner stops being a skip or a light previs cell stops overriding a Fallout4 cell.
+
+## Radicle/tests/test_previs_real.cpp:ShippedPsgAndLightPluginContainersAreAbsent — container inventory
+
+This is the measured inventory behind the skip and behind the `.psg` rule in `Radicle/src/previs/previs_data.cpp:PrevisData::scan_csg`. It walks the Data tree for loose `.psg` files and for light-plugin `.cdx` and `- Geometry.csg` names, and walks the General archives for `.psg` entries and for `vis\<plugin>\` and `meshes\precombined\<plugin>\` entries. The DX10 archives are not read because `Ba2Reader` supports GNRL only; their name tables were checked once outside the test and hold no `.psg`.
+
+## Radicle/src/previs/previs_data.cpp:PrevisData::scan_csg — clean-mode psg
+
+A `.psg` file is reported as an unsupported problem and is never accepted as geometry. Nothing shipped uses it on 1.11.240.0 (see the inventory test above), so no decoder exists or is needed yet. The scan only looks at the loose files in the root folder, which is where the Fallout 4 `.psg` twin would be.
+
+## PluginEditTool/native/src/rpc/PrevisTarget.cpp:PrevisTarget::scan — unsaved edits
+
+The scan reads the saved files, and the result names the loaded plugins that have unsaved edits in `pendingPlugins` rather than reading the in-memory plugins. The in-memory plugins are owned by `RadiclePluginBackend::plugins_` behind its operation lock; `IPluginBackend` exposes only JSON invocations, and `Environment::from_plugins` takes whole `Plugin` objects by value, so using them would copy the entire load order (Fallout 4 alone is 330 MB on disk) and hold the backend lock for the whole scan. The unit test is `PluginEditTool/native/tests/unit/PrevisTargetTests.cpp` (`previs scan names the loaded plugins with unsaved edits that it does not read`). Its fixture writes a 42-byte TES4 header with one HEDR subrecord and no records, the smallest plugin that `Environment::load` accepts.
+
+## PluginEditTool/native/apps/fo4ide/McpCatalogRead.cpp:readCatalogTools — previs_scan row
+
+The row maps the `previs_scan` MCP tool to the existing `previs` target's `Scan` method with one optional `data_dir`. The catalog sends a null for an absent optional argument, and `PrevisTarget` treats a null as "use the configured Data folder", so the tool needs no handler of its own. Its schema is checked by the same catalog path as the other read tools.
+
+## PluginEditTool/web/src/PrevisPanel.tsx:PrevisPanel — unsaved-edit warning
+
+The panel shows a warning above the summary whenever `pendingPlugins` is non-empty, naming those plugins, because a scan with unsaved edits reports the saved files. `PluginEditTool/web/src/PrevisPanel.test.tsx` pins the banner text.

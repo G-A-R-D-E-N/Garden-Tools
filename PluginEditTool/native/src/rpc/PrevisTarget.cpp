@@ -47,7 +47,12 @@ nlohmann::json cellJson(const fo4::previs::CellDiagnosis& diagnosis,
     return row;
 }
 
-Result<std::vector<std::filesystem::path>> loadOrderFromJson(const nlohmann::json& value) {
+struct LoadOrder {
+    std::vector<std::filesystem::path> paths;
+    std::vector<std::string> pending;
+};
+
+Result<LoadOrder> loadOrderFromJson(const nlohmann::json& value) {
     nlohmann::json rows = value;
     if (rows.is_string()) {
         try {
@@ -60,19 +65,22 @@ Result<std::vector<std::filesystem::path>> loadOrderFromJson(const nlohmann::jso
     if (!rows.is_array()) {
         return std::unexpected(Error{"PrevisEnvironment", "plugin list is not an array"});
     }
-    std::vector<std::filesystem::path> paths;
-    paths.reserve(rows.size());
+    LoadOrder order;
+    order.paths.reserve(rows.size());
     for (const auto& row : rows) {
         if (!row.is_object()) continue;
         const auto path = row.value("FilePath", std::string{});
         if (path.empty()) continue;
-        paths.emplace_back(path);
+        order.paths.emplace_back(path);
+        if (row.value("Pending", false)) {
+            order.pending.push_back(std::filesystem::path(path).filename().string());
+        }
     }
-    if (paths.empty()) {
+    if (order.paths.empty()) {
         return std::unexpected(Error{"PrevisNoEnvironment",
                                      "no plugin paths are loaded; load an MO2 profile first"});
     }
-    return paths;
+    return order;
 }
 
 }
@@ -140,12 +148,12 @@ Result<nlohmann::json> PrevisTarget::scan(const nlohmann::json& args) {
 
     auto plugins = backend_.invoke("appInterop.GetPlugins", nlohmann::json::array());
     if (!plugins) return std::unexpected(plugins.error());
-    auto paths = loadOrderFromJson(*plugins);
-    if (!paths) return std::unexpected(paths.error());
+    auto loadOrder = loadOrderFromJson(*plugins);
+    if (!loadOrder) return std::unexpected(loadOrder.error());
 
     fo4::env::Environment environment;
     try {
-        environment = fo4::env::Environment::load(*paths);
+        environment = fo4::env::Environment::load(loadOrder->paths);
     } catch (const std::exception& problem) {
         return std::unexpected(Error{"PrevisEnvironment",
                                      std::string("could not load the plugin list: ") + problem.what()});
@@ -186,6 +194,7 @@ Result<nlohmann::json> PrevisTarget::scan(const nlohmann::json& args) {
     const auto& summary = data.summary();
     return nlohmann::json{
         {"dataDir", folder.string()},
+        {"pendingPlugins", loadOrder->pending},
         {"summary",
          {
              {"cells", report.size()},

@@ -29,9 +29,14 @@ and skip-and-report live in `include/fo4/previs/detect.hpp` (plan D10/D11).
   meaning is unestablished, so it stays opaque: there is no per-cell CSG
   verdict. The container is checked once per plugin instead, and a plugin with
   a CDX must ship a validating `<plugin> - Geometry.csg` or the report names
-  the missing/invalid container. Only `bcsg` is accepted: the clean-mode
-  `.psg` twin has no file in the measured data, so a `.psg`-shaped file is an
-  unsupported problem and never passes as geometry.
+  the missing/invalid container. Only `bcsg` is accepted. No shipped file uses
+  `.psg`: measured on 1.11.240.0, the Data tree (recursive) holds none and the
+  name tables of all 79 BA2 archives (507,570 entries) hold none. The clean-mode
+  `.psg` therefore stays fail-closed: a `.psg`-shaped file is an unsupported
+  problem and never passes as geometry. The real-data test
+  `PrevisReal.ShippedPsgAndLightPluginContainersAreAbsent` asserts zero `.psg`
+  in the loose files and the 465,489 General-archive entries it reads; the DX10
+  archives were checked by name table only.
 - UVD: u32 magic `0xD6000012`, u32 CRC-32C over bytes [8, end), banner
   C string at +0xBC (Umbra 3.3.17), file size multiple of 16 and at least
   `0x100`. A banner with no NUL in the image is rejected. Read and validate
@@ -95,7 +100,26 @@ measured:
   XCRI-index findings (CDX row, OC NIF) are dropped because the plugin ships no
   index for them. Vanilla never hits it, and the DLCCoast overrides `00008393`
   and `000083B1` stay broken because Coast does ship a CDX;
-- a light plugin ("light plugin layout not measured").
+- a light plugin ("light plugin layout not measured"). Measured on 1.11.240.0
+  by `PrevisReal.LightPluginPrevisOverridesBaseCellsAndStaysSkipped` and
+  `PrevisReal.ShippedPsgAndLightPluginContainersAreAbsent`: the nine `.esl`
+  plugins in the Data folder ship no `.cdx`, no `- Geometry.csg`, no
+  `Vis\<plugin>` tome folder and no `Meshes\PreCombined\<plugin>` folder, in
+  loose files or General archives. They carry 32 previs CELL records (31 with
+  XCRI, 32 with PCMB, 31 with VISI, 25 with RVIS), and every one is an override
+  of a Fallout4-owned cell (owner index `00`); none is an own record. For the
+  31 XCRI winners, all 1,319 mesh ids resolve to base `_OC.NIF` files, all 25
+  RVIS roots have tomes under `Vis\Fallout4.esm`, and each winner has an exact
+  row in `Fallout4.cdx` (6 interior, 25 exterior at world `0x0000003C`). A light
+  plugin has no CDX of its own, so a lookup in the winning plugin's CDX, the
+  rule every CDX-shipping plugin is checked by, finds no row for them. Measured
+  outside the tests, on the DLC winners that do ship a CDX: 279 Coast winners
+  carry XCRI on a base
+  cell, 177 with rows in both CDXs, 100 only in `DLCCoast.cdx`, and 2 in neither
+  (`008393`, `0083B1`); the Robot, Nuka World and workshop03 winners have rows
+  in both. Whether the engine reads an override's rows from the owner's CDX when
+  the winning plugin ships no CDX is not measured, and no own light record with
+  previs exists to measure the light-index (FE) rule, so the light skip stays.
 
 A `false` presence flag means "verified absent", never "not checked": each
 index answer carries a `*_checked` flag, and a needed-but-unchecked index
@@ -186,4 +210,9 @@ capped broken, outdated and skipped rows; the panel shows the skipped table,
 states that the base game itself reports cells here, and keeps the green state
 off while broken, skipped or problem counts are non-zero. The RPC path loads
 the saved on-disk load order, so unsaved editor edits are not part of a previs
-scan. All verdict logic stays in Radicle C++; the panel only renders.
+scan. The result's `pendingPlugins` names the loaded plugins with unsaved
+edits; the panel shows them in a warning and the `previs_scan` MCP tool
+returns the same field. Scanning the in-memory plugins instead would need every
+loaded `Plugin` copied out of the backend (`Environment::from_plugins` takes
+them by value) and the backend's operation lock held for the whole scan, so it
+is not done. All verdict logic stays in Radicle C++; the panel only renders.
