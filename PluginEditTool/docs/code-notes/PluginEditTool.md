@@ -233,11 +233,13 @@ sort); PET's `compileFile` is file-local in Radicle; the Radicle parser and code
 ASCII `lower` and `iequals` helpers in `Radicle/src/papyrus/parser_detail.hpp` and `codegen_detail.hpp`. Only comments and blank
 lines differ otherwise.
 
-## PluginEditTool/native/src/graph/GraphCompiler.cpp:GraphCompiler (compileScript stays on PET)
+## PluginEditTool/native/src/app/GraphTarget.cpp:GraphTarget::compiler
 
-The graph compile still calls PET's `papyrus::compileScript` with PET's `ScriptIndex` and returns PET's `PexFile`. Radicle's
-`fo4::papyrus::compileScript` has the same pass order but returns Radicle types, so moving it means moving the graph's script index
-and PEX type too. It is left for the graph lift.
+`GraphTarget` keeps one `fo4::graph::GraphCompiler` and one `fo4::papyrus::ScriptIndex` per distinct base-import list, keyed on the
+joined roots, and rebuilds both when that list changes; `Refresh` drops them. The compile itself is
+`Radicle/src/graph/graph_compiler.cpp:GraphCompiler::compile`, so PET holds no graph or F4SE code: `PluginEditTool/native/src/graph/`,
+`src/f4se/` and their headers are deleted, and the Graph RPCs, `LoadScript`, the palette reads and the pinned-radicle graph test
+helper all call `fo4::graph`.
 
 ## PluginEditTool/native/tests/unit/PapyrusTargetTests.cpp:PapyrusTarget analysis RPCs match the PET oracle on real sources
 
@@ -413,3 +415,7 @@ Open items, not verified here:
 - `PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::requireUnderRoots`: the containment check compares `fs::path` components, which may be case-sensitive on Windows, while the C# `ToolPaths.IsUnder` uses `OrdinalIgnoreCase`. No Windows build or test was run for this.
 - `PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::open`: accepts file paths only (`OpenArchived` takes an archive entry name). The C# `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Open` falls back to `SwfDocument.OpenResolved` (the asset resolver) for a path that is not a file; that branch is refused here.
 - `PluginEditTool/native/src/settings/Settings.cpp:from_json`: applies the `FALLOUT4_PATH` and `FO4_DATA_PATH` environment variables over settings.json, so the roots follow the environment here. The C# roots (`PluginEditTool/FO4RecordEditor.Core/Services/ToolPaths.cs:ToolPaths.RequireDataOrProjectPath`) come from settings.json only; C# reads environment variables for tool paths such as `NIFTOOL_PATH`, not for the roots.
+
+## PluginEditTool/native/tests/helpers/GraphTestSupport.hpp:fixtureRoot
+
+`PluginEditTool/native/tests/helpers/GraphTestSupport.hpp:fixtureRoot` joins `FO4IDE_TEST_FIXTURES_DIR` with a folder name, which is how `baseStubs()` and `graphScripts()` reach `PluginEditTool/native/tests/fixtures`. The define comes from `PluginEditTool/native/tests/CMakeLists.txt` (`FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"`), and the graph and Papyrus target cases feed those paths into `Settings::papyrusBaseImports`, so a target that drops the define fails to compile here, and a moved or renamed fixtures tree makes those cases resolve imports from the wrong directory. The header carries no comment saying so, because the value lives in CMake where a reader of the header cannot check it.

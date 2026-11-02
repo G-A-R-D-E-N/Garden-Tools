@@ -17,11 +17,11 @@
 #include <fo4ide/settings/Settings.hpp>
 #include <fo4ide/tools/ToolLocator.hpp>
 
-namespace fo4ide::papyrus {
+namespace fo4::papyrus {
 class ScriptIndex;
 }
 
-namespace fo4ide::graph {
+namespace fo4::graph {
 class GraphCompiler;
 }
 
@@ -135,13 +135,13 @@ public:
                                   const nlohmann::json& args) override;
 
 private:
-    graph::GraphCompiler& compiler();
+    fo4::graph::GraphCompiler& compiler();
 
     platform::Services& platform_;
     tools::Locator& locator_;
     std::mutex mutex_;
-    std::unique_ptr<papyrus::ScriptIndex> index_;
-    std::unique_ptr<graph::GraphCompiler> compiler_;
+    std::unique_ptr<fo4::papyrus::ScriptIndex> index_;
+    std::unique_ptr<fo4::graph::GraphCompiler> compiler_;
     std::string rootsKey_;
 };
 

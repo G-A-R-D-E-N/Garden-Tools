@@ -1,7 +1,10 @@
 #pragma once
 
+#include <gtest/gtest.h>
+
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
@@ -39,6 +42,27 @@ inline bool endsWithIgnoreCase(std::string_view value, std::string_view suffix) 
         }
     }
     return true;
+}
+
+// A staged .pex corpus must be present when FO4RE_PEX_REQUIRE=1; a skip would look green.
+inline void skipOrFailPexCorpus(const char* message) {
+    const char* require = std::getenv("FO4RE_PEX_REQUIRE");
+    if (require == nullptr || std::string_view(require) != "1") GTEST_SKIP() << message;
+    FAIL() << message;
+}
+
+// Only an unset or empty value may fall back; anything else must parse as a positive integer.
+inline std::size_t corpusFloor(const char* variable, std::size_t fallback) {
+    const char* raw = std::getenv(variable);
+    if (raw == nullptr || *raw == '\0') return fallback;
+    const std::string_view text(raw);
+    long long value = 0;
+    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || value <= 0) {
+        ADD_FAILURE() << variable << " must be a positive integer, not '" << text << "'";
+        return fallback;
+    }
+    return static_cast<std::size_t>(value);
 }
 
 inline std::vector<std::filesystem::path> rootsFromEnv(const char* variable) {
