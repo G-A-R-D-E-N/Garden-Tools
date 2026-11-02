@@ -40,6 +40,7 @@ namespace {
 constexpr double kMinimumIdenticalFraction = 0.95;
 constexpr double kMinimumDecompileFidelity = 0.802;
 constexpr std::size_t kDecompileSampleLimit = 1500;
+constexpr std::size_t kMinimumVanillaPairs = 6800;
 
 struct Pair {
   fs::path pex;
@@ -230,16 +231,30 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
   auto pexRoots = helper::rootsFromEnv("FO4RE_PEX_CORPUS");
   if (pexRoots.empty()) pexRoots = helper::rootsFromEnv("FO4_PEX_CORPUS");
   if (pexRoots.empty()) {
-    GTEST_SKIP() << "FO4RE_PEX_CORPUS is not set to a directory holding .pex files";
+    helper::skipOrFailPexCorpus("FO4RE_PEX_CORPUS is not set to a directory holding .pex files");
+    return;
   }
 
-  const auto extra = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
+  // Must test the variable itself: a set-but-empty value must not fall back to User imports.
+  auto extra = helper::rootsFromEnv("FO4RE_PEX_IMPORT_ROOTS");
+  if (std::getenv("FO4RE_PEX_IMPORT_ROOTS") == nullptr) {
+    extra = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
+  }
   const auto release = envValue("FO4RE_PEX_RELEASE") == "1";
   const auto pairs = pairsFrom(pexRoots);
 
   std::cout << "mode=" << (release ? "release" : "debug")
             << " (set FO4RE_PEX_RELEASE=1 for a vanilla corpus)\n";
-  if (pairs.empty()) GTEST_SKIP() << "FO4RE_PEX_CORPUS holds no .psc/.pex pairs";
+  if (pairs.empty()) {
+    helper::skipOrFailPexCorpus("FO4RE_PEX_CORPUS holds no .psc/.pex pairs");
+    return;
+  }
+  if (release) {
+    // A thin vanilla corpus must fail the gate: a handful of pairs clears 0.95 by luck.
+    const auto floor = helper::corpusFloor("FO4RE_PEX_MIN_PAIRS", kMinimumVanillaPairs);
+    ASSERT_GE(pairs.size(), floor) << "staged corpus holds " << pairs.size()
+                                   << " .psc/.pex pairs, below the " << floor << " floor";
+  }
 
   fp::PapyrusCompileOptions options;
   options.emitDebugOnlyCode = !release;
@@ -251,11 +266,23 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
   std::map<std::string, Group> refusals;
   std::map<std::string, Group> differences;
 
+  // Invariant: ScriptIndex holds no per-compile state, only its roots and a path-keyed parse cache.
+  std::map<std::string, fp::ScriptIndex> indexes;
+  const auto indexFor = [&indexes](const std::vector<fs::path>& roots) -> fp::ScriptIndex& {
+    std::string key;
+    for (const auto& root : roots) key += fs::absolute(root).lexically_normal().string() + ';';
+    const auto [entry, added] = indexes.try_emplace(key);
+    if (added) {
+      for (const auto& root : roots) entry->second.addRoot(root);
+    }
+    return entry->second;
+  };
+
   for (const auto& pair : pairs) {
     const auto name = pair.psc.filename().string();
-    fp::ScriptIndex index;
-    for (const auto& root : rootsFor(pair.psc)) index.addRoot(root);
-    for (const auto& root : extra) index.addRoot(root);
+    auto roots = rootsFor(pair.psc);
+    roots.insert(roots.end(), extra.begin(), extra.end());
+    auto& index = indexFor(roots);
 
     const auto* script = index.parseCached(pair.psc);
     if (!script) {

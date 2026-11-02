@@ -9,17 +9,21 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace helper = fo4::papyrus::test;
 
 namespace {
+
+constexpr std::size_t kMinimumVanillaFiles = 6800;
 
 std::vector<std::filesystem::path> collectLoosePex(
     const std::vector<std::filesystem::path>& roots) {
@@ -61,11 +65,20 @@ TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThr
   auto roots = helper::rootsFromEnv("FO4RE_PEX_CORPUS");
   if (roots.empty()) roots = helper::rootsFromEnv("FO4_PEX_CORPUS");
   if (roots.empty()) {
-    GTEST_SKIP() << "set FO4RE_PEX_CORPUS to one or more directories of .pex files";
+    helper::skipOrFailPexCorpus("set FO4RE_PEX_CORPUS to one or more directories of .pex files");
+    return;
   }
   const auto files = collectLoosePex(roots);
   if (files.empty()) {
-    GTEST_SKIP() << "no .pex files under the FO4RE_PEX_CORPUS roots";
+    helper::skipOrFailPexCorpus("no .pex files under the FO4RE_PEX_CORPUS roots");
+    return;
+  }
+  const char* release = std::getenv("FO4RE_PEX_RELEASE");
+  if (release != nullptr && std::string_view(release) == "1") {
+    // A thin vanilla corpus must fail here too: a few files cannot stand in for the archive.
+    const auto floor = helper::corpusFloor("FO4RE_PEX_MIN_PAIRS", kMinimumVanillaFiles);
+    ASSERT_GE(files.size(), floor) << "staged corpus holds " << files.size()
+                                   << " .pex files, below the " << floor << " floor";
   }
 
   std::size_t decompiled = 0;
