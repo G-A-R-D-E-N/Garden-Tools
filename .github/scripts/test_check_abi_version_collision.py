@@ -565,6 +565,8 @@ class StackMainTest(unittest.TestCase):
         check.open_pulls = lambda api, repo, token: pulls
 
         def fake_json(url, token):
+            if "/files?" in url:
+                return [{"filename": "Radicle/include/fo4/c_api_nif.h"}]
             if "/compare/" in url:
                 if order is None:
                     return {"total_commits": 1}
