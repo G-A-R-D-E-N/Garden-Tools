@@ -417,6 +417,8 @@ RecordDeepCopyResult copy_record_deep(Plugin& destination,
 
   std::vector<FormKey> keys{record};
   collect_child_record_keys(*child_group, keys);
+  const auto original_groups = collect_groups(destination).size();
+  const auto original_records = collect_records(destination).size();
   auto next = destination;
   add_required_masters(next, source, keys);
 
@@ -449,6 +451,10 @@ RecordDeepCopyResult copy_record_deep(Plugin& destination,
   }
 
   next.original_range.clear();
+  if (collect_groups(next).size() != original_groups ||
+      collect_records(next).size() != original_records) {
+    next.original_structure_fingerprint = 0;
+  }
   destination = std::move(next);
   result.status = parent_status;
   return result;

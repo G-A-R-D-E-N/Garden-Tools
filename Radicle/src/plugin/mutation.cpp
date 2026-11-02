@@ -238,6 +238,7 @@ FormKey create_local_record(Plugin& plugin,
   group->children.emplace_back(std::move(record));
 
   plugin.original_range.clear();
+  plugin.original_structure_fingerprint = 0;
   return key;
 }
 
@@ -266,6 +267,7 @@ RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key
   }
 
   next.original_range.clear();
+  next.original_structure_fingerprint = 0;
   plugin = std::move(next);
   return RecordDeleteStatus::deleted;
 }
@@ -639,6 +641,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   }
 
   next.original_range.clear();
+  if (!replaced || nested_plan) next.original_structure_fingerprint = 0;
   destination = std::move(next);
   return replaced ? RecordCopyStatus::replaced : RecordCopyStatus::inserted;
 }

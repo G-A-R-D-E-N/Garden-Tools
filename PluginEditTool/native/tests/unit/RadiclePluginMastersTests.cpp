@@ -294,6 +294,25 @@ TEST_CASE("Native plugin kind follows the filename when the TES4 flags are clear
     CHECK(user.at("masters")[0].at("kind") == "light");
 }
 
+// Detects: explicit HEDR repair must stage and persist the recursive count without changing the plugin first.
+TEST_CASE("Native HEDR repair stages and saves a stale count") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto masterA = root / "MasterA.esm";
+    const auto masterB = root / "MasterB.esp";
+    writeBytes(masterA, makeMaster("MasterAKeyword"));
+    writeBytes(masterB, makeMaster("MasterBKeyword"));
+    writeBytes(path, makePatch());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, masterA, masterB, path);
+    REQUIRE(fo4::read_plugin_file(path).header.record_count == 1u);
+    REQUIRE(backend.invoke("backend.RepairHedrCount", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(fo4::read_plugin_file(path).header.record_count == 1u);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(fo4::read_plugin_file(path).header.record_count == 2u);
+}
+
 TEST_CASE("Native UpdateOnam treats a filename .esm without the master flag as a master") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

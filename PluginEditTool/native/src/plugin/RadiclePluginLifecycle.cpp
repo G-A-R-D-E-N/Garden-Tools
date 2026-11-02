@@ -28,55 +28,12 @@ Result<fo4::FormKey> createRichSchemaRecordLocked(fo4::Plugin& mutated,
     if (!editorId) return std::unexpected(editorId.error());
 
     const auto record = fo4::Signature::from_string(signature);
-    std::vector<fo4::schema::SubrecordAuthoringConstraint> rules;
-    bool explicitRules = false;
-    if (signature == "GLOB") {
-        const auto type = payload.find("type");
-        if (type == payload.end() || !type->is_string()) {
-            return std::unexpected(Error{
-                "InvalidRecordCreationPayload",
-                "GLOB creation requires a string type: short, long, float or boolean"});
-        }
-        static constexpr std::uint8_t codes[] = {115, 108, 102, 98};  // Short, Long, Float, Boolean
-        const auto name = type->get_ref<const std::string&>();
-        const int index = name == "short"   ? 0
-                          : name == "long"    ? 1
-                          : name == "float"   ? 2
-                          : name == "boolean" ? 3
-                                              : -1;
-        const std::uint8_t* data = index < 0 ? nullptr : &codes[static_cast<std::size_t>(index)];
-        if (data == nullptr) {
-            return std::unexpected(Error{
-                "InvalidRecordCreationPayload",
-                "GLOB type must be short, long, float or boolean"});
-        }
-        const auto constraint = fo4::schema::record_authoring_constraint(record);
-        if (!constraint) {
-            return std::unexpected(Error{
-                "RecordCreationRequiresSchema",
-                "No authoring schema is registered for GLOB"});
-        }
-        const auto generated = fo4::schema::authoring_subrecords(*constraint);
-        rules.assign(generated.begin(), generated.end());
-        bool found = false;
-        for (auto& rule : rules) {
-            if (rule.signature != fo4::Signature::from_string("FNAM")) continue;
-            rule.minimum = 1;
-            rule.maximum = 1;
-            rule.default_data = data;
-            rule.default_size = 1;
-            found = true;
-        }
-        if (!found) {
-            return std::unexpected(Error{
-                "RecordCreationRequiresSchema",
-                "GLOB's FNAM type subrecord is not in the authoring schema"});
-        }
-        explicitRules = true;
-    }
+    std::vector<std::uint8_t> ruleStorage;
+    const auto explicitRules = explicitCreationRules(signature, payload, mutated.header.tes4_flags.is_localized(), ruleStorage);
+    if (!explicitRules) return std::unexpected(explicitRules.error());
 
-    const auto created = explicitRules
-        ? fo4::create_record(mutated, record, *editorId, std::span<const fo4::schema::SubrecordAuthoringConstraint>(rules))
+    const auto created = *explicitRules
+        ? fo4::create_record(mutated, record, *editorId, std::span<const fo4::schema::SubrecordAuthoringConstraint>(**explicitRules))
         : fo4::create_record(mutated, record, *editorId);
     switch (created.status) {
         case fo4::RecordCreateStatus::created:

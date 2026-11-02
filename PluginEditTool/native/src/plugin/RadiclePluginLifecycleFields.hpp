@@ -16,6 +16,8 @@
 #include <vector>
 
 #include <fo4/forms/armor.hpp>
+#include <fo4/schema/record_constraints.hpp>
+#include <fo4/text/encoding.hpp>
 #include <fo4/forms/cell.hpp>
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/faction.hpp>
@@ -328,6 +330,139 @@ inline std::optional<Error> validateProvidedVec3(const nlohmann::json& object,
         }
     }
     return std::nullopt;
+}
+
+inline bool unsignedPayloadField(const nlohmann::json& payload,
+                                 const char* key,
+                                 std::uint32_t maximum,
+                                 std::uint32_t& value) {
+    const auto found = payload.find(key);
+    if (found == payload.end()) return true;
+    if (!found->is_number_integer()) return false;
+    if (!found->is_number_unsigned() && found->get<std::int64_t>() < 0) return false;
+    const auto raw = found->get<std::uint64_t>();
+    if (raw > maximum) return false;
+    value = static_cast<std::uint32_t>(raw);
+    return true;
+}
+
+// Constraint: rule defaults point into storage, which the caller keeps alive across create_record.
+inline Result<std::optional<std::vector<fo4::schema::SubrecordAuthoringConstraint>>> explicitCreationRules(
+    std::string_view signature, const nlohmann::json& payload, bool localized, std::vector<std::uint8_t>& storage) {
+    using Rules = std::vector<fo4::schema::SubrecordAuthoringConstraint>;
+    const auto record = fo4::Signature::from_string(signature);
+    if (signature == "GLOB") {
+        const auto type = payload.find("type");
+        if (type == payload.end() || !type->is_string()) {
+            return std::unexpected(Error{
+                "InvalidRecordCreationPayload",
+                "GLOB creation requires a string type: short, long, float or boolean"});
+        }
+        static constexpr std::uint8_t codes[] = {115, 108, 102, 98};  // Short, Long, Float, Boolean
+        const auto name = type->get_ref<const std::string&>();
+        const int index = name == "short"   ? 0
+                          : name == "long"    ? 1
+                          : name == "float"   ? 2
+                          : name == "boolean" ? 3
+                                              : -1;
+        const std::uint8_t* data = index < 0 ? nullptr : &codes[static_cast<std::size_t>(index)];
+        if (data == nullptr) {
+            return std::unexpected(Error{
+                "InvalidRecordCreationPayload",
+                "GLOB type must be short, long, float or boolean"});
+        }
+        const auto constraint = fo4::schema::record_authoring_constraint(record);
+        if (!constraint) {
+            return std::unexpected(Error{
+                "RecordCreationRequiresSchema",
+                "No authoring schema is registered for GLOB"});
+        }
+        const auto generated = fo4::schema::authoring_subrecords(*constraint);
+        Rules rules(generated.begin(), generated.end());
+        bool found = false;
+        for (auto& rule : rules) {
+            if (rule.signature != fo4::Signature::from_string("FNAM")) continue;
+            rule.minimum = 1;
+            rule.maximum = 1;
+            rule.default_data = data;
+            rule.default_size = 1;
+            found = true;
+        }
+        if (!found) {
+            return std::unexpected(Error{
+                "RecordCreationRequiresSchema",
+                "GLOB's FNAM type subrecord is not in the authoring schema"});
+        }
+        return std::optional<Rules>{std::move(rules)};
+    }
+    if (signature == "QUST") {
+        const auto constraint = fo4::schema::record_authoring_constraint(record);
+        if (!constraint) {
+            return std::unexpected(Error{
+                "RecordCreationRequiresSchema",
+                "No authoring schema is registered for QUST"});
+        }
+        const auto generated = fo4::schema::authoring_subrecords(*constraint);
+        std::uint32_t flags = 0;
+        std::uint32_t priority = 0;
+        std::uint32_t type = 0;
+        if (!unsignedPayloadField(payload, "flags", 0xFFFFu, flags) ||
+            !unsignedPayloadField(payload, "priority", 0xFFu, priority) ||
+            !unsignedPayloadField(payload, "type", 0xFFu, type)) {
+            return std::unexpected(Error{
+                "InvalidRecordCreationPayload",
+                "QUST flags must be 0..65535 and priority and type must be 0..255"});
+        }
+        storage.clear();
+        const auto name = payload.find("name");
+        if (name != payload.end()) {
+            if (!name->is_string()) {
+                return std::unexpected(Error{"InvalidRecordCreationPayload", "QUST name must be a string"});
+            }
+            if (localized) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "QUST name in a localized plugin needs a string-table ID, which create_record does not allocate"});
+            }
+            const auto encoded = fo4::text::utf8_to_windows1252(name->get<std::string>());
+            if (!encoded || encoded->find('\0') != std::string::npos ||
+                encoded->size() >= std::numeric_limits<std::uint16_t>::max()) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "QUST name must be Windows-1252 text without NUL bytes and fit in a subrecord"});
+            }
+            storage.insert(storage.end(), encoded->begin(), encoded->end());
+            storage.push_back(0);
+        }
+        const auto dnamOffset = storage.size();
+        storage.resize(dnamOffset + 12, 0);
+        storage[dnamOffset] = static_cast<std::uint8_t>(flags);
+        storage[dnamOffset + 1] = static_cast<std::uint8_t>(flags >> 8);
+        storage[dnamOffset + 2] = static_cast<std::uint8_t>(priority);
+        storage[dnamOffset + 8] = static_cast<std::uint8_t>(type);
+        static constexpr std::uint8_t nextAliasId[4] = {0, 0, 0, 0};
+        fo4::schema::SubrecordAuthoringConstraint anam;
+        anam.signature = fo4::Signature::from_string("ANAM");
+        anam.minimum = 1;
+        anam.maximum = 1;
+        anam.default_data = nextAliasId;
+        anam.default_size = sizeof(nextAliasId);
+        Rules rules(generated.begin(), generated.end());
+        for (auto& rule : rules) {
+            if (rule.signature == fo4::Signature::from_string("DNAM")) {
+                rule.default_data = storage.data() + dnamOffset;
+                rule.default_size = 12;
+            }
+            if (name != payload.end() && rule.signature == fo4::Signature::from_string("FULL")) {
+                rule.minimum = 1;
+                rule.default_data = storage.data();
+                rule.default_size = static_cast<std::uint16_t>(dnamOffset);
+            }
+        }
+        rules.push_back(anam);
+        return std::optional<Rules>{std::move(rules)};
+    }
+    return std::optional<Rules>{};
 }
 
 }

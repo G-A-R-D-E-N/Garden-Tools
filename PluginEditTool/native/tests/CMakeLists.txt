@@ -133,6 +133,10 @@ endforeach()
 add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
+    unit/RadiclePluginNameFieldTests.cpp
+    unit/RadiclePluginQuestObjectiveTests.cpp
+    unit/RadiclePluginQuestAuthorTests.cpp
+    unit/RadiclePluginHedrCountTests.cpp
     unit/RadiclePluginStringsTests.cpp
     unit/RadiclePluginWorklistTests.cpp
     unit/RadiclePluginMastersTests.cpp

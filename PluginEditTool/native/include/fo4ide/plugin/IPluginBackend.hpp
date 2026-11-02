@@ -79,6 +79,9 @@ public:
             "Native ONAM update is unavailable for this backend"
         });
     }
+    virtual Result<nlohmann::json> repairHedrCount(const nlohmann::json&) {
+        return std::unexpected(Error{"RepairHedrCountUnavailable", "Native HEDR repair is unavailable for this backend"});
+    }
     virtual Result<nlohmann::json> compactToEsl(const nlohmann::json&) {
         return std::unexpected(Error{
             "CompactToEslUnavailable",

@@ -174,6 +174,30 @@ Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::
     }
 }
 
+Result<nlohmann::json> RadiclePluginBackend::repairHedrCount(const nlohmann::json& arguments) {
+    const auto name = support::stringArgument(arguments, 0);
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    OpLock lock(*this, OpLock::Mode::Write, {name});
+    auto* loaded = findPlugin(name);
+    if (loaded == nullptr) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{"PluginChangedOnDisk", "Plugin was modified on disk after it was loaded; reload it before writing: " + loaded->path.string()});
+    }
+    try {
+        auto repaired = loaded->plugin;
+        fo4::repair_hedr_record_count(repaired);
+        if (repaired.header.record_count == loaded->plugin.header.record_count) {
+            return nlohmann::json("HEDR count in " + name + " is already up to date.");
+        }
+        const auto count = repaired.header.record_count;
+        stagePluginMutationLocked(*loaded, std::move(repaired));
+        return nlohmann::json("Repaired HEDR count in " + name + " (" + std::to_string(count) + "). SavePlugin to persist.");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"RepairHedrCountFailed", error.what()});
+    }
+}
+
 Result<nlohmann::json> RadiclePluginBackend::updateOnam(const nlohmann::json& arguments) {
     const auto name = support::stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});

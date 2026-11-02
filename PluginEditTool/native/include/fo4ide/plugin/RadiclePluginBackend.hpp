@@ -72,6 +72,7 @@ public:
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json& arguments) override;
     Result<nlohmann::json> updateOnam(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> repairHedrCount(const nlohmann::json& arguments) override;
     Result<nlohmann::json> copyAsDisabledOverride(const nlohmann::json& arguments) override;
     Result<nlohmann::json> copyAsWrapper(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
@@ -227,6 +228,10 @@ private:
     Result<nlohmann::json> setComponents(const nlohmann::json& arguments);
     Result<nlohmann::json> setQuestAliases(const nlohmann::json& arguments);
     Result<nlohmann::json> setQuestStages(const nlohmann::json& arguments);
+    Result<nlohmann::json> setQuestObjectives(const nlohmann::json& arguments);
+    Result<nlohmann::json> getQuestObjectives(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getQuestStages(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getQuestAliases(const nlohmann::json& arguments) const;
     // Resolves a list value (FormKey text or EditorID) to a FormKey against the
     // loaded plugins, mirroring WriteService.ResolveFk.
     std::optional<fo4::FormKey> resolveListValue(std::string_view value) const;

@@ -169,6 +169,19 @@ TEST(RecordDeepCopy, ReplacesAndAddsChildrenUnderOverwrite) {
   EXPECT_EQ(children->children.size(), 3u);
 }
 
+// Detects: overwriting existing parent and child records must preserve an unrelated stale HEDR count.
+TEST(RecordDeepCopy, ReplacingExistingHierarchyPreservesHedrCount) {
+  auto destination = fo4::read_plugin(
+      make_plugin_bytes({"Base.esm"}, true, {{0x801, "Old"}, {0x802, "Bye"}}), "Patch.esp");
+  ASSERT_EQ(destination.header.record_count, 1u);
+  const auto source = base_plugin({{0x801, "Changed"}, {0x802, "Bye"}});
+  ASSERT_EQ(fo4::copy_record_deep(destination, source, k_dial_key, true).status,
+            fo4::RecordCopyStatus::replaced);
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(destination), "Patch.esp");
+  EXPECT_EQ(reloaded.header.record_count, 1u);
+  EXPECT_EQ(editor_id_of(reloaded, k_first_info), "Changed");
+}
+
 TEST(RecordDeepCopy, ARecordWithoutChildRecordsIsAPlainOverride) {
   const auto source = fo4::read_plugin(make_plugin_bytes({}, false, {}, true), "Base.esm");
   const auto misc = fo4::FormKey::parse("000810:Base.esm");

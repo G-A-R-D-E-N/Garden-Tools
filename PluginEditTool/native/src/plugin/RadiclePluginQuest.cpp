@@ -34,6 +34,7 @@
 #include <fo4/schema/localized_fields.hpp>
 #include <fo4/schema/vmad.hpp>
 #include <fo4/signature.hpp>
+#include <fo4/text/encoding.hpp>
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 
 #include "RadiclePluginQuestInternal.hpp"
@@ -449,6 +450,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                         "note cannot contain an embedded NUL"
                     });
                 }
+                const auto encoded = fo4::text::utf8_to_windows1252(*note);
+                if (!encoded) return std::unexpected(Error{"InvalidQuestStagePayload", "note must be representable in Windows-1252"});
+                note = *encoded;
                 entry.note = note;
                 fo4::Subrecord nam2;
                 nam2.signature = fo4::Signature::from_string("NAM2");
@@ -461,6 +465,11 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                         "InvalidQuestStagePayload",
                         "logText cannot contain an embedded NUL"
                     });
+                }
+                if (!localized) {
+                    const auto encoded = fo4::text::utf8_to_windows1252(*logText);
+                    if (!encoded) return std::unexpected(Error{"InvalidQuestStagePayload", "logText must be representable in Windows-1252"});
+                    logText = *encoded;
                 }
                 fo4::schema::LocalizedString value;
                 value.text = logText;

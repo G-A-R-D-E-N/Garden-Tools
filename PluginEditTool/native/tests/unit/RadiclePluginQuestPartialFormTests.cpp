@@ -47,7 +47,7 @@ std::vector<std::byte> questBytes(bool full, std::string_view master = {}) {
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
     fo4::test::ByteWriter hedr;
     hedr.f32(1.0f);
-    hedr.u32(1);
+    hedr.u32(2);
     hedr.u32(0x801);
     fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
     if (!master.empty()) {

@@ -194,6 +194,10 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "SetComponents") return setComponents(arguments);
     if (method == "SetQuestAliases") return setQuestAliases(arguments);
     if (method == "SetQuestStages") return setQuestStages(arguments);
+    if (method == "SetQuestObjectives") return setQuestObjectives(arguments);
+    if (method == "GetQuestObjectives") return getQuestObjectives(arguments);
+    if (method == "GetQuestStages") return getQuestStages(arguments);
+    if (method == "GetQuestAliases") return getQuestAliases(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "CopyElementToSelected") return copyElementToSelected(arguments);
