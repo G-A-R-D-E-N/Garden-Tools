@@ -69,6 +69,7 @@ def main():
     entries = []
     for line in filter(None, git("ls-tree", "-r", "-z", "--full-tree", ref).split("\0")):
         meta, path = line.split("\t", 1)
+        if "\n" in path: raise SystemExit("export refuses a path with a newline")
         mode, kind, sha = meta.split()
         if path.startswith(PUBLIC_WORKFLOWS) and path.endswith(".yml"):
             entries.append(f"100644 {sha}\t.github/workflows/{path[len(PUBLIC_WORKFLOWS):]}")
