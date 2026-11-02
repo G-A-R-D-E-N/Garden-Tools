@@ -476,7 +476,7 @@ TEST_CASE("Staged string edits save as loose files and keep untouched ids byte-i
 
     REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Apple tart"})).has_value());
     const auto added = rowsOf(backend, "AddString", nlohmann::json::array({"Patch.esp", "", "STRINGS", "Fig"}));
-    CHECK(added["id"] == 51);
+    CHECK(added["id"] == 1001);
     REQUIRE(backend.invoke("strings.RemoveString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 50})).has_value());
 
     const auto staged = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));

@@ -244,6 +244,8 @@ private:
                                           LocalizedStringAllocation& strings) const;
     Result<LocalizedStringAllocation> openLocalizedStrings(const LoadedPlugin& loaded,
                                                            std::string_view language) const;
+    std::set<std::string> localizationLanguages(const LoadedPlugin& loaded) const;
+    Result<std::uint32_t> nextLocalizedStringId(const LoadedPlugin& loaded) const;
     Result<std::uint32_t> allocateLocalizedString(LocalizedStringAllocation& allocation,
                                                   fo4::env::StringSource source,
                                                   std::string_view text) const;

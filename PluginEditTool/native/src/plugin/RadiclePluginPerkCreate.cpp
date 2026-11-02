@@ -76,6 +76,9 @@ Result<fo4::FormKey> RadiclePluginBackend::createPerkLocked(const LoadedPlugin& 
     const auto textValue = [&](const std::optional<std::string>& utf8, fo4::env::StringSource source,
                                std::optional<fo4::schema::LocalizedString>& out) -> std::optional<Error> {
         if (!utf8.has_value() || utf8->empty()) return std::nullopt;
+        if (utf8->find('\0') != std::string::npos) {
+            return Error{"InvalidRecordCreationPayload", "PERK full and desc must not contain a NUL byte"};
+        }
         fo4::schema::LocalizedString value;
         if (localized) {
             auto id = allocateLocalizedString(strings, source, *utf8);
@@ -103,6 +106,9 @@ Result<fo4::FormKey> RadiclePluginBackend::createPerkLocked(const LoadedPlugin& 
             "InvalidRecordCreationPayload",
             "PERK trait, level, ranks and playable must be uint8"
         });
+    }
+    if (swf.has_value() && swf->find('\0') != std::string::npos) {
+        return std::unexpected(Error{"InvalidRecordCreationPayload", "PERK swf must not contain a NUL byte"});
     }
     creation.swf = optionalStringView(swf).value_or(std::string_view{});
 

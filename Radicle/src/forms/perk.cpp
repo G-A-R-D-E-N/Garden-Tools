@@ -415,6 +415,8 @@ PerkLinkWrite write_perk_link(Plugin& plugin,
 }  // namespace
 
 PerkLinkWrite set_perk_next(Plugin& plugin, const FormKey& key, const FormKey& next_perk) {
+  if (next_perk == FormKey{}) return PerkLinkWrite::null_target;
+  if (next_perk == key) return PerkLinkWrite::self_link;
   const auto raw = u32_bytes(encode_plugin_form_id(next_perk, plugin_form_id_context(plugin)).value());
   return write_perk_link(plugin, key, k_nnam, raw, 4, k_followers_next);
 }
@@ -434,6 +436,13 @@ PerkLinkWrite set_perk_swf(Plugin& plugin, const FormKey& key, std::string_view 
 }
 
 FormKey create_perk(Plugin& plugin, const PerkCreation& creation) {
+  const auto embeds_nul = [](const std::optional<schema::LocalizedString>& value) {
+    return value.has_value() && value->text.has_value() && value->text->find('\0') != std::string::npos;
+  };
+  if (embeds_nul(creation.full_name) || embeds_nul(creation.description) ||
+      creation.swf.find('\0') != std::string_view::npos) {
+    throw PerkError("PERK text must not contain a NUL byte; it would be stored cut short");
+  }
   const bool localized = plugin.header.tes4_flags.is_localized();
   if (creation.full_name.has_value() && creation.full_name->localized() != localized) {
     throw PerkError(localized ? "PERK FULL in a localized plugin must be a string ID"

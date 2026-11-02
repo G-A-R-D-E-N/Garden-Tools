@@ -98,6 +98,8 @@ enum class PerkLinkWrite {
   record_missing,
   unsupported_record,
   unexpected_layout,
+  null_target,
+  self_link,
 };
 
 FormKey create_perk(Plugin& plugin, const PerkCreation& creation);

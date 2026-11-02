@@ -1,8 +1,10 @@
 #include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <limits>
@@ -17,6 +19,8 @@
 #include <fo4/environment/strings.hpp>
 #include <fo4/io/path_text.hpp>
 #include <fo4/localization/strings.hpp>
+#include <fo4/plugin/reader.hpp>
+#include <fo4/schema/localized_fields.hpp>
 #include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin {
@@ -189,14 +193,15 @@ Result<nlohmann::json> RadiclePluginBackend::addString(const nlohmann::json& arg
     auto tables = readStringTables(*loaded, target->language);
     if (!tables) return std::unexpected(tables.error());
     auto table = effectiveTable(*tables, target->source);
-    std::uint32_t id = 0;
+    const auto next = nextLocalizedStringId(*loaded);
+    if (!next) return std::unexpected(next.error());
     try {
-        id = fo4::localization::add_string(table, *text);
+        fo4::localization::insert_string(table, *next, *text);
     } catch (const std::exception& error) {
         return std::unexpected(Error{"StringEditFailed", error.what()});
     }
     stageStringTable(loaded->name, target->language, target->source, std::move(table));
-    return support::dumpPayload({{"id", id}, {"pending", true}});
+    return support::dumpPayload({{"id", *next}, {"pending", true}});
 }
 
 Result<nlohmann::json> RadiclePluginBackend::removeString(const nlohmann::json& arguments) {
@@ -368,23 +373,95 @@ bool RadiclePluginBackend::hasStagedStringTables(std::string_view plugin) const 
     });
 }
 
+namespace {
+
+bool isLanguageToken(std::string_view text) {
+    return !text.empty() && std::all_of(text.begin(), text.end(), [](unsigned char ch) {
+        return std::isalnum(ch) != 0;
+    });
+}
+
+}
+
+std::set<std::string> RadiclePluginBackend::localizationLanguages(const LoadedPlugin& loaded) const {
+    std::set<std::string> languages;
+    const auto stem = loaded.path.stem().string();
+    const auto prefix = [](std::string text) {
+        std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        return text;
+    }(stem + "_");
+    try {
+        for (const auto& entry : std::filesystem::directory_iterator(loaded.path.parent_path() / "Strings")) {
+            const auto name = entry.path().filename().string();
+            const auto dot = name.rfind('.');
+            if (dot == std::string::npos) continue;
+            auto extension = name.substr(dot + 1);
+            std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::toupper(ch));
+            });
+            if (extension != "STRINGS" && extension != "DLSTRINGS" && extension != "ILSTRINGS") continue;
+            const auto base = name.substr(0, dot);
+            if (base.size() <= prefix.size()) continue;
+            auto folded = base.substr(0, prefix.size());
+            std::transform(folded.begin(), folded.end(), folded.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            if (folded != prefix) continue;
+            const auto language = base.substr(prefix.size());
+            if (isLanguageToken(language)) languages.insert(language);
+        }
+    } catch (const std::filesystem::filesystem_error&) {
+    }
+    std::scoped_lock staged(stagedStringsMutex_);
+    for (const auto& entry : stagedStrings_) {
+        if (std::get<0>(entry.first) == loaded.name) languages.insert(std::get<1>(entry.first));
+    }
+    return languages;
+}
+
+Result<std::uint32_t> RadiclePluginBackend::nextLocalizedStringId(const LoadedPlugin& loaded) const {
+    std::uint32_t maximum = 0;
+    for (const auto& language : localizationLanguages(loaded)) {
+        auto tables = readStringTables(loaded, language);
+        if (!tables) return std::unexpected(tables.error());
+        for (const auto& found : *tables) {
+            for (const auto& entry : found.table.entries) maximum = std::max(maximum, entry.id);
+        }
+    }
+    if (loaded.plugin.header.tes4_flags.is_localized()) {
+        for (const auto* record : fo4::collect_records(loaded.plugin)) {
+            for (const auto& subrecord : record->subrecords) {
+                if (subrecord.data.size() != sizeof(std::uint32_t) ||
+                    !fo4::schema::is_localized_field(record->header.signature, subrecord.signature)) {
+                    continue;
+                }
+                std::uint32_t id = 0;
+                std::memcpy(&id, subrecord.data.data(), sizeof(id));
+                maximum = std::max(maximum, id);
+            }
+        }
+    }
+    if (maximum == std::numeric_limits<std::uint32_t>::max()) {
+        return std::unexpected(Error{"LocalizedStringTableFull", "localized string-table ID space is exhausted"});
+    }
+    return maximum + 1;
+}
+
 Result<LocalizedStringAllocation> RadiclePluginBackend::openLocalizedStrings(
     const LoadedPlugin& loaded, std::string_view language) const {
     if (loaded.stagedLocalization.has_value()) return std::unexpected(pendingLocalizationError());
     auto tables = readStringTables(loaded, language);
     if (!tables) return std::unexpected(tables.error());
+    auto next = nextLocalizedStringId(loaded);
+    if (!next) return std::unexpected(next.error());
     LocalizedStringAllocation allocation;
     allocation.language = std::string(language);
-    std::uint32_t maximum = 0;
+    allocation.nextId = *next;
     for (const auto source : {StringSource::normal, StringSource::dl, StringSource::il}) {
-        auto table = effectiveTable(*tables, source);
-        for (const auto& entry : table.entries) maximum = std::max(maximum, entry.id);
-        allocation.tables.emplace(source, std::move(table));
+        allocation.tables.emplace(source, effectiveTable(*tables, source));
     }
-    if (maximum == std::numeric_limits<std::uint32_t>::max()) {
-        return std::unexpected(Error{"LocalizedStringTableFull", "localized string-table ID space is exhausted"});
-    }
-    allocation.nextId = maximum + 1;
     return allocation;
 }
 

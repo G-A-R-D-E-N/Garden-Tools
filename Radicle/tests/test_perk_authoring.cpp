@@ -313,6 +313,40 @@ TEST(PerkAuthoring, SetPerkSoundAndSwfInsertInSchemaOrderRewriteAndRemove) {
             fo4::forms::PerkLinkWrite::record_missing);
 }
 
+// Detects: set_perk_next must refuse a null FormKey and a self link, and must leave the record unchanged on either refusal.
+TEST(PerkAuthoring, SetPerkNextRefusesNullAndSelfLinkAndLeavesTheRecordUnchanged) {
+  auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
+  fo4::forms::PerkCreation creation;
+  creation.editor_id = "RadicleSelfLink";
+  const auto key = fo4::forms::create_perk(plugin, creation);
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, key, fo4::FormKey{}), fo4::forms::PerkLinkWrite::null_target);
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, key, key), fo4::forms::PerkLinkWrite::self_link);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+// Detects: create_perk must refuse a NUL byte in inline FULL, DESC or SWF text instead of storing it cut short.
+TEST(PerkAuthoring, CreatePerkRefusesNulInInlineTextAndSwf) {
+  auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  fo4::forms::PerkCreation full;
+  full.editor_id = "RadicleNulFull";
+  full.full_name = inline_text(std::string("a\0b", 3));
+  EXPECT_THROW(fo4::forms::create_perk(plugin, full), fo4::forms::PerkError);
+
+  fo4::forms::PerkCreation description;
+  description.editor_id = "RadicleNulDesc";
+  description.description = inline_text(std::string("a\0b", 3));
+  EXPECT_THROW(fo4::forms::create_perk(plugin, description), fo4::forms::PerkError);
+
+  fo4::forms::PerkCreation swf;
+  swf.editor_id = "RadicleNulSwf";
+  swf.swf = std::string_view{"a\0b", 3};
+  EXPECT_THROW(fo4::forms::create_perk(plugin, swf), fo4::forms::PerkError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 TEST(PerkAuthoring, RefusesOutOfRangeTraitAndLeavesThePluginUnchanged) {
   auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
   const auto before = fo4::write_plugin(plugin);

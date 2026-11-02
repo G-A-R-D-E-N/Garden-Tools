@@ -62,10 +62,15 @@ Result<nlohmann::json> RadiclePluginBackend::setPerkNext(const nlohmann::json& a
     if (!next) return std::unexpected(Error{"InvalidPerkNext", "PERK next must be a PERK FormKey"});
 
     std::optional<Error> refusal;
+    if (*next == *key) return std::unexpected(Error{"InvalidPerkNext", "PERK cannot link to itself: " + key->to_string()});
     const auto edit = [&](fo4::Plugin& mutated) {
         const auto* record = fo4::find_record(mutated, *key);
         if (const auto error = wrongPerkType(*record, *key)) {
             refusal = *error;
+            return;
+        }
+        if (*next == fo4::FormKey{}) {
+            refusal = Error{"InvalidPerkNext", "PERK next must be a PERK FormKey, not null"};
             return;
         }
         if (const auto error = checkLoadedSlot(graph_, *next, {"PERK"}, "PERK next")) {
@@ -101,7 +106,9 @@ Result<nlohmann::json> RadiclePluginBackend::setPerkSound(const nlohmann::json& 
     fo4::FormKey sound;
     if (!text.empty()) {
         const auto parsed = support::formKeyArgument(text);
-        if (!parsed) return std::unexpected(Error{"InvalidPerkSound", "PERK sound must be an SNDR FormKey or empty"});
+        if (!parsed || *parsed == fo4::FormKey{}) {
+            return std::unexpected(Error{"InvalidPerkSound", "PERK sound must be an SNDR FormKey or empty"});
+        }
         sound = *parsed;
     }
 
@@ -146,6 +153,7 @@ Result<nlohmann::json> RadiclePluginBackend::setPerkSwf(const nlohmann::json& ar
         return std::unexpected(Error{"InvalidPerkSwf", "PERK swf must be a string; empty removes the FNAM"});
     }
     const auto text = arguments[2].get<std::string>();
+    if (text.find('\0') != std::string::npos) return std::unexpected(Error{"InvalidPerkSwf", "PERK swf must not contain a NUL byte"});
     const auto stored = fo4::text::utf8_to_windows1252(text);
     if (!stored) return std::unexpected(Error{"InvalidPerkSwf", "PERK swf is not representable in Windows-1252"});
 

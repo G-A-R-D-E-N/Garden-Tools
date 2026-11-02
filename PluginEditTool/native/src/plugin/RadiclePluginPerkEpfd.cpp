@@ -152,6 +152,7 @@ std::optional<Error> parametersFromJson(const nlohmann::json& object,
             if (context.plugin.header.tes4_flags.is_localized()) {
                 return invalidEffects("PERK buttonLabel text needs a non-localized plugin; use buttonLabelId");
             }
+            if (label->find('\0') != std::string::npos) return invalidEffects("PERK buttonLabel must not contain a NUL byte");
             auto stored = fo4::text::utf8_to_windows1252(*label);
             if (!stored) return invalidEffects("PERK buttonLabel is not representable in Windows-1252");
             value.text = std::move(*stored);
@@ -170,7 +171,6 @@ std::optional<Error> typedDataFromJson(const nlohmann::json& object,
         return presentField(object, key);
     });
     if (!anyTyped) return std::nullopt;
-    if (data.has_value()) return invalidEffects("PERK parameters take data or typed fields, not both");
     if (!effect.parameters.type.has_value()) return invalidEffects("PERK typed parameter fields need parameters.type");
 
     const auto type = std::to_string(*effect.parameters.type);
@@ -219,10 +219,15 @@ std::optional<Error> typedDataFromJson(const nlohmann::json& object,
         bool valid = true;
         const auto text = optionalStringField(object, "text", valid);
         if (!valid || !text.has_value()) return invalidEffects("PERK parameter text must be a string");
+        if (text->find('\0') != std::string::npos) return invalidEffects("PERK parameter text must not contain a NUL byte");
         const auto stored = fo4::text::utf8_to_windows1252(*text);
         if (!stored) return invalidEffects("PERK parameter text is not representable in Windows-1252");
         for (const char ch : *stored) bytes.push_back(static_cast<std::byte>(ch));
         bytes.push_back(std::byte{0});
+    }
+    if (data.has_value() && *data != bytes) {
+        return invalidEffects("PERK parameter data " + hexEncode(*data) + " does not match the typed fields, which encode " +
+                              hexEncode(bytes));
     }
     data = std::move(bytes);
     return std::nullopt;
