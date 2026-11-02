@@ -8,12 +8,13 @@ document. Radicle exposes them through `Radicle/include/fo4/c_api_papyrus*.h`, `
 `c_api_graph.h`. The `.pex` model, reader and writer are `Radicle/include/fo4/pex/pex.hpp` and
 `Radicle/src/pex/pex.cpp`.
 
-The tool still runs PET's own copies, `PluginEditTool/native/src/papyrus/` (headers in
-`native/include/fo4ide/papyrus/`) and `PluginEditTool/native/src/graph/`. Those are `fo4ide::papyrus` and
-`fo4ide::graph`, and they stay the parity oracle until the real-data gates in
-`docs/papyrus-real-data-gates.md` pass on the data machine. The PET side that calls Radicle instead is
-PR #921, which is held. It is not on `origin/nomad/dev`: PET's Papyrus RPCs still reach the native copies.
-The UI and MCP surface is `native/src/app/PapyrusTarget.cpp`. It builds and tests on Linux and Windows.
+The tool still runs PET's own Papyrus copy, `PluginEditTool/native/src/papyrus/` (headers in
+`native/include/fo4ide/papyrus/`). That is `fo4ide::papyrus`, and it stays the parity oracle until the
+real-data gates in `docs/papyrus-real-data-gates.md` pass on the data machine. The PET side that calls
+Radicle instead is PR #921, which is held. It is not on `origin/nomad/dev`: PET's Papyrus RPCs still
+reach the native copy. PET's graph and F4SE copies are gone; `native/src/app/GraphTarget.cpp` and
+`native/include/fo4ide/app/ServiceTargets.hpp` reach `fo4::graph` and `fo4::papyrus` directly. The UI and
+MCP surface is `native/src/app/PapyrusTarget.cpp`. It builds and tests on Linux and Windows.
 
 The C# files named below (`FO4RecordEditor.Core/Services/Papyrus/`, 22 files, 9,645 lines by `wc -l`)
 are the original implementation that the native code was ported from. They are legacy and stay in the

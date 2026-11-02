@@ -8,6 +8,7 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <string>
 #include <utility>
 #include <vector>
@@ -70,6 +71,19 @@ enum class PerkEffectWrite {
   unsupported_record,
   unexpected_layout,
 };
+
+struct PerkCreation {
+  std::string_view editor_id;
+  std::string_view full_name;
+  std::string_view description;
+  std::uint8_t trait{0};
+  std::uint8_t level{0};
+  std::uint8_t ranks{1};
+  std::uint8_t playable{1};
+  std::vector<PerkEffectEntry> effects;
+};
+
+FormKey create_perk(Plugin& plugin, const PerkCreation& creation);
 
 std::vector<PerkEffectEntry> read_perk_effects(const Plugin& plugin, const Record& record);
 

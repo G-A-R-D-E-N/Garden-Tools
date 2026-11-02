@@ -88,6 +88,8 @@ public:
     Result<nlohmann::json> editLeveledListEntry(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getNpc(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> editNpcEntries(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getPerkEffects(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> setPerkEffects(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> setScriptValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> releaseMemory(const nlohmann::json& arguments) override;
@@ -224,6 +226,7 @@ private:
     Result<fo4::FormKey> createProjectileLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
     Result<fo4::FormKey> createExplosionLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
     Result<fo4::FormKey> createHazardLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
+    Result<fo4::FormKey> createPerkLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
 
     Result<nlohmann::json> describeElement(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> addElement(const nlohmann::json& arguments) override;

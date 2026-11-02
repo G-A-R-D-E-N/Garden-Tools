@@ -40,7 +40,17 @@ struct PluginArgument {
     const char* name;
     const char* type;
     bool optional{false};
+    const char* itemsSchema{nullptr};
 };
+
+constexpr const char* k_perk_effect_items =
+    R"({"type":"object","properties":{"type":{"type":"string","enum":["quest_stage","ability","entry_point"]},)"
+    R"("rank":{"type":"integer"},"priority":{"type":"integer"},"quest":{"type":"string"},"questStage":{"type":"integer"},)"
+    R"("ability":{"type":"string"},"entryPoint":{"type":"integer"},"function":{"type":"integer"},)"
+    R"("tabs":{"type":"array","items":{"type":"object","properties":{"runOn":{"type":"integer"},"conditions":{"type":"array"}}}},)"
+    R"("parameters":{"type":"object","properties":{"type":{"type":"integer"},"entryId":{"type":"integer"},)"
+    R"("scriptFlags":{"type":"integer"},"data":{"type":"string"},"buttonLabel":{"type":"string"},"buttonLabelId":{"type":"integer"}}}},)"
+    R"("required":["type"]})";
 
 bool registerPluginTools(fo4ide::mcp::Registry& registry,
                          const fo4ide::rpc::Dispatcher& rpc,
@@ -54,6 +64,7 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
         std::vector<std::string> order;
         for (const auto& field : fields) {
             properties[field.name] = {{"type", field.type}};
+            if (field.itemsSchema) properties[field.name]["items"] = nlohmann::json::parse(field.itemsSchema);
             if (!field.optional) required.push_back(field.name);
             order.emplace_back(field.name);
         }
@@ -76,7 +87,7 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"path", "string"}})) return false;
     if (!add("create_plugin", "Create an empty ESP in the trusted MO2 overwrite folder; later edits require save_plugin", "backend", "CreatePlugin",
              {{"plugin", "string"}})) return false;
-    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults", "backend", "CreateRecord",
+    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PERK, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults. PERK takes an editorId and optional full, desc, trait, level, ranks, playable and effects (the set_perk_effects array)", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
     if (!add("release_memory", "Page the process working set out to the OS after a large load, save or reload. Plugin data stays loaded; the next access pages it back in. drop_conflict_graph also drops the cached conflict/reference graph (the largest optional allocation; it rebuilds on the next conflict or reference query). Use when the editor is idle and memory use matters", "backend", "ReleaseMemory",
              {{"drop_conflict_graph", "boolean", true}})) return false;
@@ -185,6 +196,10 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}, {"property_index", "integer"}})) return false;
     if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
              {{"form_key", "string"}})) return false;
+    if (!add("get_perk_effects", "Get a PERK record's effects by FormKey from plugin's version (read-only). Each effect has type, rank, priority, quest and questStage, ability, or entryPoint and function, condition tabs and parameters (data is hex)", "backend", "GetPerkEffects",
+             {{"plugin", "string"}, {"form_key", "string"}})) return false;
+    if (!add("set_perk_effects", "Replace a PERK record's whole effect list in memory with the effects array (see get_perk_effects for the item shape; an effect without tabs clears its condition tabs). Call save_plugin to persist", "backend", "SetPerkEffects",
+             {{"plugin", "string"}, {"form_key", "string"}, {"effects", "array", false, k_perk_effect_items}})) return false;
     return true;
 }
 

@@ -11,7 +11,7 @@
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 
-#include "../helpers/GraphBuilder.hpp"
+#include "../helpers/GraphTestSupport.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
 #include "../../src/app/PapyrusStaging.hpp"
 
@@ -368,7 +368,7 @@ TEST_CASE("PapyrusTarget Check resolves Extends from Settings base imports witho
     FakePlatform platform;
     fo4ide::settings::Settings settings;
     settings.fallout4Path = root / "Fallout 4";
-    settings.papyrusBaseImports = fo4ide::graph::test::baseStubs();
+    settings.papyrusBaseImports = fo4::graph::test::baseStubs();
     PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
     auto& target = fixture.target;
 
@@ -510,13 +510,13 @@ TEST_CASE("PapyrusTarget analysis RPCs match the PET oracle on real sources") {
     FakeRunner runner;
     FakePlatform platform;
     fo4ide::settings::Settings settings;
-    settings.papyrusBaseImports = fo4ide::graph::test::baseStubs();
+    settings.papyrusBaseImports = fo4::graph::test::baseStubs();
     PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
     auto& target = fixture.target;
     const auto imports = fixture.locator.papyrusBaseImports();
 
-    const auto event = fo4ide::graph::test::graphScripts() / "FixtureEventSource.psc";
-    const auto actor = fo4ide::graph::test::baseStubs() / "Actor.psc";
+    const auto event = fo4::graph::test::graphScripts() / "FixtureEventSource.psc";
+    const auto actor = fo4::graph::test::baseStubs() / "Actor.psc";
     const auto bad = root / "Bad.psc";
     touch(bad, "Scriptname Bad\nFunction Broken(\nEndFunction\n");
 
