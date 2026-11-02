@@ -510,6 +510,9 @@ TEST_F(PrevisLoadOrderTest, OverrideWithoutPrevisSkips) {
   indexes.cdx_row = [](std::size_t, const fo4::previs::CdxCellTarget&) {
     return std::optional<bool>{false};
   };
+  indexes.missing_oc_nifs = [](const fo4::FormKey&, std::span<const std::uint32_t>) {
+    return std::optional<std::uint32_t>{0u};
+  };
   indexes.plugin_ships_previs = [](std::size_t plugin) { return plugin == 0; };
   const auto report = fo4::previs::diagnose_load_order(env, indexes);
   ASSERT_EQ(report.size(), 2u);
@@ -777,6 +780,7 @@ TEST_F(PrevisLoadOrderTest, ArchiveEntryLosesToLooseFile) {
   const auto good_tome = make_uvd_bytes("T 512.0 SO 128.0");
   stream.write(reinterpret_cast<const char*>(good_tome.data()),
                static_cast<std::streamsize>(good_tome.size()));
+  stream.close();
 
   const std::filesystem::path roots[]{root_};
   const auto data = fo4::previs::PrevisData::load(roots, env);

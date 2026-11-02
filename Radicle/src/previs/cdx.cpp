@@ -74,8 +74,8 @@ bool cdx_kind_is_interior(std::uint32_t key) noexcept {
 }
 
 CdxGrid decode_cdx_grid(std::uint32_t key) noexcept {
-  const auto raw_x = static_cast<std::int32_t>((key >> 20u) & 0xFFFu);
-  const auto raw_y = static_cast<std::int32_t>((key >> 8u) & 0xFFFu);
+  const auto raw_x = static_cast<std::int32_t>((key >> 12u) & 0xFFFu);
+  const auto raw_y = static_cast<std::int32_t>(key & 0xFFFu);
   return CdxGrid{raw_x >= 0x800 ? raw_x - 0x1000 : raw_x, raw_y >= 0x800 ? raw_y - 0x1000 : raw_y};
 }
 
