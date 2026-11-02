@@ -180,5 +180,7 @@ TEST(PerkEffectsReal, SetPerkEffectsRewritesEveryOfficialMasterPerkByteForByte) 
   ASSERT_GT(total, 0u);
   RecordProperty("OfficialPerkCount", static_cast<int>(total));
   RecordProperty("OfficialMasterCount", static_cast<int>(masters.size()));
-  if (masters.size() == 7) EXPECT_EQ(total, 656u);
+  if (masters.size() == 7) {
+    EXPECT_EQ(total, 656u);
+  }
 }
