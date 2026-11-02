@@ -3030,3 +3030,7 @@ GitHub delays cron heavily on the public repo: the 30-minute `Delete finished CI
 ## .github/scripts/check_abi_version_collision.py:without_inherited — a child that only carries its parent's number
 
 One number must name one surface, so siblings on a stack that each edit the C API under the same number still collide (`.github/scripts/test_check_abi_version_collision.py:test_sibling_pulls_on_one_stack_parent_collide`). A stacked pull request whose own diff never edits a `Radicle/include/fo4/c_api*.h` header adds no surface: it only carries the number it got from its parent, so it holds no claim. Before this, six children of #1049 that touch no header failed #1049's gate. `.github/scripts/check_abi_version_collision.py:pull_touches_header` reads the pull request's file list, and a list it cannot read exits 2 instead of passing.
+
+## ci/real-data-service/install_task.ps1 — the task restarts a stopped service
+
+On 2026-11-02 the service process ended after a run without logging why, and the logon-only trigger never started it again, so real-data and the public CI sync stopped for hours. The task now also fires every 15 minutes; `-MultipleInstances IgnoreNew` and the run lock keep a running service from being doubled. `ci/real-data-service/real_data_service.py` logs any fatal exception as "service stopped" before exiting, so the next stop leaves a reason.
