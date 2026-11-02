@@ -417,7 +417,6 @@ RuntimeStatus Runtime::resolve_hierarchy() {
   for (Class* klass : classes_) {
     std::vector<const Class*> walk;
     const Class* current = klass;
-    std::size_t guard = 0;
     while (current != nullptr) {
       if (std::find(walk.begin(), walk.end(), current) != walk.end()) {
         return RuntimeStatus::ClassCycle;
@@ -427,7 +426,6 @@ RuntimeStatus Runtime::resolve_hierarchy() {
         return RuntimeStatus::ClassCycle;
       }
       current = current->super;
-      ++guard;
     }
   }
   return RuntimeStatus::Ok;
