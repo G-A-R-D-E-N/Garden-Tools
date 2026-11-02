@@ -232,11 +232,13 @@ sort); PET's `compileFile` is file-local in Radicle; the Radicle parser and code
 ASCII `lower` and `iequals` helpers in `Radicle/src/papyrus/parser_detail.hpp` and `codegen_detail.hpp`. Only comments and blank
 lines differ otherwise.
 
-## PluginEditTool/native/src/graph/GraphCompiler.cpp:GraphCompiler (compileScript stays on PET)
+## PluginEditTool/native/src/app/GraphTarget.cpp:GraphTarget::compiler
 
-The graph compile still calls PET's `papyrus::compileScript` with PET's `ScriptIndex` and returns PET's `PexFile`. Radicle's
-`fo4::papyrus::compileScript` has the same pass order but returns Radicle types, so moving it means moving the graph's script index
-and PEX type too. It is left for the graph lift.
+`GraphTarget` keeps one `fo4::graph::GraphCompiler` and one `fo4::papyrus::ScriptIndex` per distinct base-import list, keyed on the
+joined roots, and rebuilds both when that list changes; `Refresh` drops them. The compile itself is
+`Radicle/src/graph/graph_compiler.cpp:GraphCompiler::compile`, so PET holds no graph or F4SE code: `PluginEditTool/native/src/graph/`,
+`src/f4se/` and their headers are deleted, and the Graph RPCs, `LoadScript`, the palette reads and the pinned-radicle graph test
+helper all call `fo4::graph`.
 
 ## PluginEditTool/native/tests/unit/PapyrusTargetTests.cpp:PapyrusTarget analysis RPCs match the PET oracle on real sources
 
@@ -374,3 +376,7 @@ The preview's number input in `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel` ign
 ## PluginEditTool/web/src/SwfPanel.tsx:SwfPanel (preview redraw from document-change handlers)
 
 `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel` no longer redraws the preview from an effect: even through the `useEffectEvent` wrapper, calling `showFrame` in the effect body trips `react-hooks/set-state-in-effect` (the v6 rule flags the wrapped call too). The seven edit handlers in `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel` (`renameLabel`, `applyEditText`, `addLabel`, `applyTransform`, `insertKeyframe`, `applyDepth`, `removeLabel`) and `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.refresh` on the undo/redo/save path now call `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.applyRevision` after `setState`; it redraws through `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.redrawPreview` only when the `revision` moved, and `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.open` seeds `previewRevision` so a re-open does not double-draw. Regression: a moved `showFrame` call back inside any effect, or a new edit handler that sets state without calling `applyRevision` (the preview would keep the pre-edit image).
+
+## PluginEditTool/native/tests/helpers/GraphTestSupport.hpp:fixtureRoot
+
+`PluginEditTool/native/tests/helpers/GraphTestSupport.hpp:fixtureRoot` joins `FO4IDE_TEST_FIXTURES_DIR` with a folder name, which is how `baseStubs()` and `graphScripts()` reach `PluginEditTool/native/tests/fixtures`. The define comes from `PluginEditTool/native/tests/CMakeLists.txt` (`FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"`), and the graph and Papyrus target cases feed those paths into `Settings::papyrusBaseImports`, so a target that drops the define fails to compile here, and a moved or renamed fixtures tree makes those cases resolve imports from the wrong directory. The header carries no comment saying so, because the value lives in CMake where a reader of the header cannot check it.

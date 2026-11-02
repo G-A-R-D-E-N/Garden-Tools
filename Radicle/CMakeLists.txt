@@ -1202,6 +1202,12 @@ if(RADICLE_BUILD_TESTS)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120
+    TEST_FILTER "*:-GraphCompiler.GraphCompilerOracle*"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  # The GraphCompiler Oracle cases must keep PET's 60 s limit; an unbounded scratch sweep stalls them.
+  gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120
+    TEST_FILTER "GraphCompiler.GraphCompilerOracle*"
+    PROPERTIES TIMEOUT 60
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
