@@ -3029,3 +3029,19 @@ Failed names come only from the `The following tests FAILED:` section, not from 
 ## ci/real-data-service/test_real_data_service.py:RealCtestOutputTest — real ctest output
 
 `test_summary_and_failed_name_from_a_real_run` detects the summary or failure-line format drifting from real CTest output. `test_skipped_tests_are_never_reported_as_the_failure` detects a skipped test reported as the failing one, which the earlier parser did on this sample.
+
+## ci/real-data-service/real_data_service.py:prepare_checkout — zlib copy removed before each run
+
+`/build/` is kept between runs so builds stay incremental, but `.github/scripts/pinned-zlib-windows.ps1` copies its cache to `build\zlib-src` and then deletes `.git` there. When the folder already exists, `Copy-Item` nests the copy inside it, `.git` is missing, and the step stops the job within seconds. That script comes from each PR's checkout, so the service clears the folder rather than the script handling it.
+
+Git pack files are read-only and `shutil.rmtree` cannot delete those on Windows, so `remove_tree` clears the flag and retries. It does not ignore errors: a delete that fails stops that target with a logged exception and posts no status, instead of a false test failure.
+
+## ci/real-data-service/real_data_service.py:public_sync_loop — why this PC starts the public sync
+
+GitHub delays cron heavily on the public repo: the 30-minute `Delete finished CI branches` job fired about every four hours on 2026-11-01, and the 5-minute `sync-from-private.yml` schedule had not fired at all two and a half hours after it was added. The service therefore dispatches the sync every five minutes from a thread, because a real-data job blocks the main loop for up to three hours. The cron stays as the fallback when this PC is off, and the workflow's concurrency group keeps runs from overlapping.
+
+`ci/real-data-service/install_task.ps1` restarts the task and stops any running job first, because stopping the task leaves the job alive and the new service would then build in the same folder.
+
+## .github/scripts/check_abi_version_collision.py:without_inherited — a child that only carries its parent's number
+
+One number must name one surface, so siblings on a stack that each edit the C API under the same number still collide (`.github/scripts/test_check_abi_version_collision.py:test_sibling_pulls_on_one_stack_parent_collide`). A stacked pull request whose own diff never edits a `Radicle/include/fo4/c_api*.h` header adds no surface: it only carries the number it got from its parent, so it holds no claim. Before this, six children of #1049 that touch no header failed #1049's gate. `.github/scripts/check_abi_version_collision.py:pull_touches_header` reads the pull request's file list, and a list it cannot read exits 2 instead of passing.
