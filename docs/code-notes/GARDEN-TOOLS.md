@@ -2905,3 +2905,115 @@ The job runs only for changes to what it builds: `Radicle/`, `PluginEditTool/nat
 ## Radicle/tools/parity_matrix.py:main
 
 The build no longer runs `--check`, and `PluginEditTool/FO4RecordEditor.Tests/ShippedDocsTests.cs` is gone: a stale document must not fail a build or test. Run `python Radicle/tools/parity_matrix.py` by hand to refresh `Radicle/docs/FO4_PARITY.md`.
+
+## ci/real-data-service/real_data_service.py:open_targets — which heads are checked, and in what order
+
+The service lists open PRs with `gh pr list` (number, head sha, base, `updatedAt`, `isDraft`) and adds the `nomad/dev` head as a push-style target. `order` puts `nomad/dev` first, then PRs by newest `updatedAt`, so active work gets a result soonest. Draft PRs are skipped before any API call and never get a status. Changed paths for a PR come from its files list; for `nomad/dev` they are the diff against its first parent, which matches a push. The Radicle, PluginEditTool, cmake, root CMakeLists, `.github/scripts` and workflow paths are checked against the list in `TOUCHES`, which mirrors the `pull_request` paths of `.github/workflows/native-real-data.yml`. The list is hand-kept: when that workflow's paths change, change `TOUCHES` in the same commit.
+
+## ci/real-data-service/real_data_service.py:prepare_checkout — merge ref and clean tree
+
+A PR job runs on `refs/pull/<n>/merge` in the dedicated clone. The merge commit's second parent must equal the head that was listed; otherwise the head is left due with no status, because a newer merge ref will be picked up on a later pass. `git clean -ffdx -e /build/` keeps `build/native` (CMake objects, zlib copy) and the tracked `build/evidence` folder, so ccache and incremental builds survive between runs. The clone path is fixed, so the ccache base directory is the same on every run.
+
+## ci/real-data-service/real_data_service.py:wait_job — superseded heads and the 3-hour limit
+
+The job is polled every `POLL` seconds. When the head has moved, the process tree is killed and only `error` "superseded" is posted for the old sha. When `TIMEOUT` (3 hours) passes, the tree is killed and `error` "timed out" is posted. Statuses for superseded and timed-out heads are not retried; a new commit is the way to get a new run. `run_target` checks the head again after the process exits, so an old head never gets `success` or `failure` after a newer head arrives.
+
+## ci/real-data-service/real_data_service.py:acquire_lock — one run at a time
+
+The lock file records the owner's pid and start time. It is stale when that pid no longer exists (`pid_alive` uses `OpenProcess` and `GetExitCodeProcess`), when it is older than `LOCK_MAX_AGE` (the run timeout plus 10 minutes), or when it cannot be parsed and is older than 60 seconds, which is long enough for a write in progress. A fresh lock held by a live process blocks the pass, so a second service instance does nothing.
+
+## ci/real-data-service/real_data_service.py:clean — status text that may reach GitHub
+
+Every description passes through `clean` before it is sent. It removes the Windows user name (case-insensitive), any whitespace-separated token that contains a slash or backslash, and any character outside a small allowlist; the result is cut to 140 characters. Counts come from ctest's summary line and the first failing name from its "Failed" lines. `post` never sets `target_url`, so no link points at a local file.
+
+## ci/real-data-service/real_data_service.py:outcome — counts in the status
+
+`outcome` returns `N tests, M failed: <first failing name>` from ctest's `N tests failed out of T` summary, or `N tests, 0 failed` on success. A build or configure failure has no ctest summary, so it posts "no test summary (exit X), 0 tests run". The summary and the failed-name lines were checked against a real native-real-data run log (see `failed_names`).
+
+## ci/real-data-service/real_data_service.py:start_job — environment and priority of the job
+
+The job reads `FO4_DATA_DIR`, `CMAKE_BUILD_PARALLEL_LEVEL` and the profile-alias variables from the data runner's `.env`, read-only. Only these keys are copied; values are never logged. The job runs at below-normal priority, and its child processes inherit that class. Full output goes to `C:\ci\real-data\logs\<sha>.log`; `prune_logs` keeps the newest 50.
+
+## ci/real-data-service/run_real_data.ps1:Read-Workflow — steps and regex come from the workflow file that runs
+
+The steps and `REAL_DATA_TEST_REGEX` are read from the workflow file passed as `-Workflow`, which the service sets to `.github/workflows/native-real-data.yml` of the commit under test, or to the `nomad/dev` copy when the commit lacks it (`workflow_file`). The regex therefore cannot drift from the workflow, and a PR that edits the workflow runs its own steps. Each `run:` body is written to a temporary file and run in a child `powershell.exe` or `cmd.exe`, as the Actions runner does. `GITHUB_ENV` and `GITHUB_PATH` are read back after each step. A failed step stops the rest unless it is marked `if: always()`. The `has_data` gate is not evaluated: the Check step exits non-zero when data is missing, and the service refuses to start without `FO4_DATA_DIR`. The `Print Fallout 4 build` step runs as written. The parsed regex and all 9 `run:` bodies were compared with the YAML and matched exactly.
+
+## ci/real-data-service/install_task.ps1:Register-ScheduledTask — the logon task and its service copy
+
+The task `GardenRealDataService` runs `python -I -B <copy>\real_data_service.py --gh <gh.exe>` at logon for the current user, with interactive logon, limited run level (no administrator rights), restart on failure (up to 999 times, 1 minute apart), no execution time limit and `IgnoreNew` for multiple instances. The install copies the files of `ci/real-data-service` to `C:\ci\real-data\service` and the task runs that copy, so removing or switching the worktree does not break it. Re-running the install from the source folder overwrites the copy; running it from the copy skips the copy. `-WhatIf` resolves and prints the paths without copying or registering. The restart count of 999 is not checked against this machine's cmdlet, and the task has not been registered here. The install does not read or change the existing data runner service.
+
+## ci/real-data-service/test_real_data_service.py:DueDecisionTest — due and not-affected decisions
+
+`test_scope_path_without_status_is_due` detects a PR touching `Radicle/` with no status being skipped. `test_posted_status_is_done_without_listing_files` detects a head with a result being rebuilt on every two-minute pass. `test_pending_status_left_by_a_dead_run_is_due_again` detects a crashed run's `pending` status blocking its head forever. `test_untouched_paths_are_not_affected` detects a prefix match such as `Radiclexx/` counting as `Radicle/`. `test_root_cmakelists_matches_exactly_and_workflow_file_is_in_scope` detects a nested `CMakeLists.txt` triggering a build, or the workflow file itself being left out.
+
+## ci/real-data-service/test_real_data_service.py:NotAffectedTest — out-of-scope PRs
+
+`test_untouched_target_gets_success_without_running_a_job` detects an out-of-scope PR leaving with no status (blocking merge), or an out-of-scope PR starting a build on the single data runner.
+
+## ci/real-data-service/test_real_data_service.py:StatusTextTest — status text
+
+`test_failure_text_has_no_path_or_username` detects a failing test name carrying a drive-letter path or the Windows user name into a GitHub status. `test_counts_and_first_failing_name` detects a count or first-failure name being posted wrong. `test_success_text` and `test_no_summary_means_build_failed_with_no_counts` detect the success and build-failure wording changing silently.
+
+## ci/real-data-service/test_real_data_service.py:RunTargetTest — superseded, timeout and result
+
+`test_newer_head_stops_job_and_posts_only_superseded` detects an old head still building after a push, or posting a result for it. `test_head_moving_before_exit_posts_superseded_not_the_result` detects a result posted for a head that is no longer the PR's head. `test_job_past_the_run_timeout_is_killed_and_posts_timed_out` detects a hung job that never ends and never reports. `test_final_result_is_read_from_the_local_log` detects the wrong log or count being reported for the head.
+
+## ci/real-data-service/test_real_data_service.py:LockTest — stale and live locks
+
+`test_stale_lock_from_a_dead_process_is_taken_over` detects a crashed service blocking every later run. `test_fresh_lock_held_by_a_live_process_blocks` detects a second instance starting a run while the first is still building on the same clone. `test_lock_older_than_the_limit_is_stale_even_when_the_pid_lives` detects a reused pid blocking the service forever.
+
+## ci/real-data-service/test_real_data_service.py:OneAtATimeTest — one pass at a time
+
+`test_second_acquire_fails_until_release` detects two runs owning the lock at once. `test_pass_does_nothing_while_another_run_holds_the_lock` detects a pass that lists PRs or starts jobs while another run is active on the single clone.
+
+## ci/real-data-service/test_real_data_service.py:CheckoutTest — merge ref check before a build
+
+`test_merge_ref_whose_second_parent_is_an_older_head_is_left_due` detects a PR whose merge ref was computed for an older head being built and reported against the new head. `test_current_merge_ref_is_checked_out_after_a_clean_that_keeps_build` detects the clean step deleting `build/native` (and the ccache-friendly build tree) or the checkout being skipped for a current merge ref.
+
+## ci/real-data-service/real_data_service.py:plan — decision order per target
+
+Draft first (no API call), then done (any `real-data` status except `pending`), then earlier (a successful check-run named after `CHECK_RUN`: that job already passed on the earlier runner, so `run_pass` posts `success` "passed on the earlier runner" and no build runs), then run or not affected from the changed paths. Failed, cancelled and missing check-runs do not count as passed. `passed_earlier` reads all check-runs of the head through the commits API.
+
+## ci/real-data-service/real_data_service.py:in_scope — what counts as touching
+
+`in_scope` applies `TOUCHES` and two deliberate exclusions: `EXCLUDED_PREFIXES` (`Radicle/docs/`) and `EXCLUDED_SUFFIXES` (`.md`). A docs-only PR is therefore "not affected" and is posted `success` without a build. This differs from the workflow, whose `pull_request` paths still match any `Radicle/**` change; the service deliberately does not build docs-only heads.
+
+## ci/real-data-service/real_data_service.py:workflow_file — which workflow file runs
+
+The job uses `.github/workflows/native-real-data.yml` of the commit under test. A commit without that file (older branches, stale merges) falls back to the copy on `nomad/dev`, fetched into `refs/real-data/dev` and written to `C:\ci\real-data\fallback\native-real-data.yml`. `start_job` passes the chosen path to `run_real_data.ps1` as `-Workflow`.
+
+## ci/real-data-service/real_data_service.py:failed_names — which test names are reported
+
+Failed names come only from the `The following tests FAILED:` section, not from every `***state` line. A skipped test prints `***Skipped` in the progress output and is listed under `did not run`; the earlier line-based pattern reported such a skipped test as the failure. The `outcome` sample in `test_real_data_service.py` is a short extract of a real native-real-data run (501 tests, 1 failed, from run 41278444834) with timestamps, log prefixes and paths removed. Its progress-line dot leaders were shortened to keep the sample readable.
+
+## ci/real-data-service/install_task.ps1:Resolve-Python — absolute paths written into the task
+
+`Resolve-Python` returns the `-Python` value, refusing the Windows Store alias under WindowsApps with a message, or else the first `python.exe` on PATH outside WindowsApps. `gh` is resolved the same way. Both absolute paths go into the task: python as the action executable and gh as the `--gh` argument, which sets the service's `GH` for every `gh` call. `git` is still found by name on PATH.
+
+## ci/real-data-service/test_real_data_service.py:DocsExclusionTest — docs are not build triggers
+
+`test_docs_and_markdown_are_not_in_scope` detects a docs or markdown change starting a real-data build on the single runner. `test_source_under_the_same_roots_is_still_in_scope` detects the exclusion removing real source from the trigger. `test_docs_only_pr_is_not_affected` detects a docs-only PR left without any status.
+
+## ci/real-data-service/test_real_data_service.py:EarlierPassTest — heads that already passed
+
+`test_successful_check_run_counts_without_listing_files_or_building` detects a head that already passed on the earlier runner being built again. `test_failed_cancelled_or_missing_check_run_does_not_count` detects a failed or cancelled check being taken as a pass. `test_run_pass_posts_earlier_success_and_builds_nothing` detects an earlier pass that starts a job or posts nothing.
+
+## ci/real-data-service/test_real_data_service.py:DraftTest — drafts stay unstatused
+
+`test_draft_is_skipped_without_any_github_call` detects drafts costing API calls or builds. `test_run_pass_leaves_drafts_unstatused` detects a draft getting a status, which would block or mislead a merge decision.
+
+## ci/real-data-service/test_real_data_service.py:OrderTest — dev head first, then newest updated
+
+`test_dev_head_first_then_newest_updated_pr` detects active PRs queued behind old ones, and the dev head missing its place at the front.
+
+## ci/real-data-service/test_real_data_service.py:WorkflowFileTest — which workflow runs
+
+`test_checkout_workflow_is_used_when_the_commit_has_it` detects the service running a stale copy of the steps when the commit carries its own workflow. `test_dev_copy_is_used_when_the_commit_lacks_the_workflow` detects a commit without the workflow file failing with nothing to run.
+
+## ci/real-data-service/test_real_data_service.py:GhPathTest — gh path from the install
+
+`test_gh_path_given_at_install_is_used_for_the_run` detects the logon task calling a `gh` that is not on its PATH.
+
+## ci/real-data-service/test_real_data_service.py:RealCtestOutputTest — real ctest output
+
+`test_summary_and_failed_name_from_a_real_run` detects the summary or failure-line format drifting from real CTest output. `test_skipped_tests_are_never_reported_as_the_failure` detects a skipped test reported as the failing one, which the earlier parser did on this sample.
