@@ -44,12 +44,25 @@ struct PluginArgument {
 };
 
 constexpr const char* k_perk_effect_items =
-    R"({"type":"object","properties":{"type":{"type":"string","enum":["quest_stage","ability","entry_point"]},)"
-    R"("rank":{"type":"integer"},"priority":{"type":"integer"},"quest":{"type":"string"},"questStage":{"type":"integer"},)"
-    R"("ability":{"type":"string"},"entryPoint":{"type":"integer"},"function":{"type":"integer"},)"
-    R"("tabs":{"type":"array","items":{"type":"object","properties":{"runOn":{"type":"integer"},"conditions":{"type":"array"}}}},)"
-    R"("parameters":{"type":"object","properties":{"type":{"type":"integer"},"entryId":{"type":"integer"},)"
-    R"("scriptFlags":{"type":"integer"},"data":{"type":"string"},"buttonLabel":{"type":"string"},"buttonLabelId":{"type":"integer"}}}},)"
+    R"({"type":"object","properties":{"type":{"type":"string","enum":["quest_stage","ability","entry_point"],)"
+    R"("description":"Effect kind; quest_stage uses quest and questStage, ability uses ability, entry_point uses entryPoint and function"},)"
+    R"("rank":{"type":"integer","minimum":0,"maximum":255},"priority":{"type":"integer","minimum":0,"maximum":255},)"
+    R"("quest":{"type":"string","description":"quest_stage only: a loaded QUST FormKey"},)"
+    R"("questStage":{"type":"integer","minimum":0,"maximum":65535},)"
+    R"("ability":{"type":"string","description":"ability only: a loaded SPEL FormKey"},)"
+    R"("entryPoint":{"type":"integer","minimum":0,"maximum":255},"function":{"type":"integer","minimum":0,"maximum":255},)"
+    R"("tabs":{"type":"array","description":"Condition tabs; an effect without tabs clears them","items":{"type":"object",)"
+    R"("properties":{"runOn":{"type":"integer"},"conditions":{"type":"array","items":{"type":"object","properties":{)"
+    R"("function":{"type":"string"},"operator":{"type":"string"},"value":{"type":"number"},"compareGlobal":{"type":"string"},)"
+    R"("param1":{"type":["integer","string"]},"param2":{"type":["integer","string"]},"runOn":{"type":["string","integer"]},)"
+    R"("reference":{"type":"string"},"flags":{"type":"string"},"cis1":{"type":"string"},"cis2":{"type":"string"}}}}}}},)"
+    R"("parameters":{"type":"object","description":"Use data (hex) or the typed fields for parameters.type, not both. value: EPFT 1, 2 (float pair) and 8; value2: EPFT 2 float pair; form: EPFT 3, 4, 5; actorValue: EPFT 8 or EPFT 2 with an actor-value function; text: EPFT 6",)"
+    R"("properties":{"type":{"type":"integer","minimum":0,"maximum":255},"entryId":{"type":"integer","minimum":0,"maximum":65535},)"
+    R"("scriptFlags":{"type":"integer","minimum":0,"maximum":65535},"data":{"type":"string","description":"EPFD bytes as hex"},)"
+    R"("buttonLabel":{"type":"string"},"buttonLabelId":{"type":"integer","minimum":0},)"
+    R"("value":{"type":"number"},"value2":{"type":"number"},)"
+    R"("form":{"type":"string","description":"FormKey or editor ID of a loaded LVLI for EPFT 3, or SPEL for EPFT 4 and 5"},)"
+    R"("actorValue":{"type":"string","description":"FormKey or editor ID of a loaded AVIF"},"text":{"type":"string"}}}},)"
     R"("required":["type"]})";
 
 bool registerPluginTools(fo4ide::mcp::Registry& registry,
@@ -87,7 +100,7 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"path", "string"}})) return false;
     if (!add("create_plugin", "Create an empty ESP in the trusted MO2 overwrite folder; later edits require save_plugin", "backend", "CreatePlugin",
              {{"plugin", "string"}})) return false;
-    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PERK, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults. PERK takes an editorId and optional full, desc, trait, level, ranks, playable and effects (the set_perk_effects array)", "backend", "CreateRecord",
+    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PERK, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults. PERK takes an editorId and optional full, desc, trait, level, ranks, playable, effects (the set_perk_effects array), conditions (the array shape set_conditions takes), nextPerk (a PERK FormKey), sound (an SNDR FormKey), swf (text) and language (localized plugins: the table language, default en). In a localized plugin full and desc are written as new string IDs in the staged string tables; call strings_save to persist them", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
     if (!add("release_memory", "Page the process working set out to the OS after a large load, save or reload. Plugin data stays loaded; the next access pages it back in. drop_conflict_graph also drops the cached conflict/reference graph (the largest optional allocation; it rebuilds on the next conflict or reference query). Use when the editor is idle and memory use matters", "backend", "ReleaseMemory",
              {{"drop_conflict_graph", "boolean", true}})) return false;
@@ -200,6 +213,14 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"form_key", "string"}})) return false;
     if (!add("set_perk_effects", "Replace a PERK record's whole effect list in memory with the effects array (see get_perk_effects for the item shape; an effect without tabs clears its condition tabs). Call save_plugin to persist", "backend", "SetPerkEffects",
              {{"plugin", "string"}, {"form_key", "string"}, {"effects", "array", false, k_perk_effect_items}})) return false;
+    if (!add("get_perk_links", "Get a PERK record's links from plugin's version (read-only): nextPerk (NNAM, a PERK FormKey or null), sound (SNAM, an SNDR FormKey or null), swf (FNAM, the SWF text or null) and conditions (the root condition list that gates the perk, in the get_conditions shape)", "backend", "GetPerkLinks",
+             {{"plugin", "string"}, {"form_key", "string"}})) return false;
+    if (!add("set_perk_next", "Set a PERK record's next-perk link (NNAM) in memory. next must be a PERK FormKey; a record without NNAM gets one inserted before its FNAM or effects. Call save_plugin to persist. Sound and swf are set with set_perk_sound and set_perk_swf", "backend", "SetPerkNext",
+             {{"plugin", "string"}, {"form_key", "string"}, {"next", "string"}})) return false;
+    if (!add("set_perk_sound", "Set a PERK record's sound (SNAM) in memory to an SNDR FormKey. The SNAM is inserted after DATA when absent and rewritten in place otherwise; an empty sound removes it. Call save_plugin to persist", "backend", "SetPerkSound",
+             {{"plugin", "string"}, {"form_key", "string"}, {"sound", "string"}})) return false;
+    if (!add("set_perk_swf", "Set a PERK record's SWF text (FNAM) in memory from UTF-8 text that must be representable in Windows-1252. The FNAM is inserted before the effects when absent and rewritten in place otherwise; an empty swf removes it. Call save_plugin to persist", "backend", "SetPerkSwf",
+             {{"plugin", "string"}, {"form_key", "string"}, {"swf", "string"}})) return false;
     return true;
 }
 

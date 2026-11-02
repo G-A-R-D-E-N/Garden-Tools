@@ -1,6 +1,7 @@
 #include "fo4/forms/perk.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/condition_scopes.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -29,6 +30,24 @@ Bytes make_patch(std::uint32_t flags) {
   fo4::test::write_subrecord(out, "DATA", Bytes(8));
   fo4::test::end_record(out, tes4);
   return out.bytes;
+}
+
+fo4::schema::LocalizedString inline_text(std::string text) {
+  fo4::schema::LocalizedString value;
+  value.text = std::move(text);
+  return value;
+}
+
+fo4::schema::LocalizedString string_id(std::uint32_t id) {
+  fo4::schema::LocalizedString value;
+  value.id = id;
+  return value;
+}
+
+fo4::CtdaCondition function_condition(std::uint16_t function) {
+  fo4::CtdaCondition condition;
+  condition.function = function;
+  return condition;
 }
 
 fo4::forms::PerkEffectEntry quest_effect() {
@@ -72,8 +91,8 @@ TEST(PerkAuthoring, CreatesHeaderTextAndEffectsInSchemaOrder) {
   auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
   fo4::forms::PerkCreation creation;
   creation.editor_id = "RadicleCreated";
-  creation.full_name = "Created";
-  creation.description = "Made in test";
+  creation.full_name = inline_text("Created");
+  creation.description = inline_text("Made in test");
   creation.trait = 1;
   creation.level = 5;
   creation.ranks = 3;
@@ -132,8 +151,199 @@ TEST(PerkAuthoring, RefusesLocalizedTextAndLeavesThePluginUnchanged) {
   const auto before = fo4::write_plugin(plugin);
   fo4::forms::PerkCreation creation;
   creation.editor_id = "RadicleLocalized";
-  creation.full_name = "Localized";
+  creation.full_name = inline_text("Localized");
   EXPECT_THROW(fo4::forms::create_perk(plugin, creation), fo4::forms::PerkError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+// Detects: create_perk must write FULL and DESC as four-byte string IDs in a localized plugin and refuse inline text there.
+TEST(PerkAuthoring, CreatesLocalizedFullAndDescAsStringIds) {
+  constexpr std::uint32_t localized_flag = 0x80;
+  auto plugin = fo4::read_plugin(make_patch(localized_flag), "Patch.esp");
+  fo4::forms::PerkCreation creation;
+  creation.editor_id = "RadicleStringIds";
+  creation.full_name = string_id(7);
+  creation.description = string_id(9);
+
+  const auto key = fo4::forms::create_perk(plugin, creation);
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(signatures(*record), (std::vector<std::string>{"EDID", "FULL", "DESC", "DATA"}));
+  EXPECT_EQ(record->subrecords[1].data,
+            (Bytes{std::byte{7}, std::byte{0}, std::byte{0}, std::byte{0}}));
+  EXPECT_EQ(record->subrecords[2].data,
+            (Bytes{std::byte{9}, std::byte{0}, std::byte{0}, std::byte{0}}));
+
+  fo4::forms::PerkCreation inline_creation;
+  inline_creation.editor_id = "RadicleInlineRefused";
+  inline_creation.full_name = inline_text("Inline");
+  EXPECT_THROW(fo4::forms::create_perk(plugin, inline_creation), fo4::forms::PerkError);
+}
+
+// Detects: create_perk must write root CTDA before DATA and SNAM, NNAM, FNAM after DATA, in schema order, and read them back.
+TEST(PerkAuthoring, CreatesConditionsLinksAndSoundInSchemaOrder) {
+  auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
+  fo4::forms::PerkCreation creation;
+  creation.editor_id = "RadicleLinks";
+  creation.full_name = inline_text("Linked");
+  creation.conditions = {function_condition(7)};
+  creation.sound = fo4::FormKey::parse("000B00:Fallout4.esm");
+  creation.next_perk = fo4::FormKey::parse("000C00:Fallout4.esm");
+  creation.swf = "Interface\\Perk.swf";
+  creation.effects = {ability_effect()};
+
+  const auto key = fo4::forms::create_perk(plugin, creation);
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(signatures(*record),
+            (std::vector<std::string>{"EDID", "FULL", "CTDA", "DATA", "SNAM", "NNAM", "FNAM",
+                                      "PRKE", "DATA", "PRKF"}));
+
+  const auto links = fo4::forms::read_perk_links(plugin, *record);
+  EXPECT_EQ(links.sound, fo4::FormKey::parse("000B00:Fallout4.esm"));
+  EXPECT_EQ(links.next_perk, fo4::FormKey::parse("000C00:Fallout4.esm"));
+  ASSERT_TRUE(links.swf.has_value());
+  EXPECT_EQ(*links.swf, "Interface\\Perk.swf");
+  const auto root = fo4::schema::read_root_conditions(*record);
+  ASSERT_TRUE(root.ok);
+  ASSERT_EQ(root.conditions.size(), 1u);
+  EXPECT_EQ(root.conditions[0].function, 7);
+  EXPECT_EQ(fo4::forms::read_perk_effects(plugin, *record).size(), 1u);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* persisted = fo4::find_record(reread, key);
+  ASSERT_NE(persisted, nullptr);
+  EXPECT_EQ(signatures(*persisted), signatures(*record));
+}
+
+// Detects: set_perk_next must insert NNAM before the first FNAM or PRKE and rewrite an existing NNAM in place.
+TEST(PerkAuthoring, SetPerkNextInsertsBeforeEffectsAndRewritesInPlace) {
+  auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
+  fo4::forms::PerkCreation creation;
+  creation.editor_id = "RadicleNext";
+  creation.effects = {ability_effect()};
+  const auto key = fo4::forms::create_perk(plugin, creation);
+
+  const auto first = fo4::FormKey::parse("000C00:Fallout4.esm");
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, key, first), fo4::forms::PerkLinkWrite::written);
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(signatures(*record), (std::vector<std::string>{"EDID", "DATA", "NNAM", "PRKE", "DATA", "PRKF"}));
+  EXPECT_EQ(fo4::forms::read_perk_links(plugin, *record).next_perk, first);
+
+  const auto second = fo4::FormKey::parse("000D00:Fallout4.esm");
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, key, second), fo4::forms::PerkLinkWrite::written);
+  record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(signatures(*record), (std::vector<std::string>{"EDID", "DATA", "NNAM", "PRKE", "DATA", "PRKF"}));
+  EXPECT_EQ(fo4::forms::read_perk_links(plugin, *record).next_perk, second);
+
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, fo4::FormKey::parse("000E01:Patch.esp"), second),
+            fo4::forms::PerkLinkWrite::record_missing);
+}
+
+// Detects: perk_function_type must select actor_value for EPFT 2 only when the entry function is 5, 12, 13 or 14.
+TEST(PerkAuthoring, PerkFunctionTypeFollowsEpftAndEntryFunction) {
+  fo4::forms::PerkEffectEntry effect;
+  effect.type = fo4::forms::PerkEffectType::entry_point;
+  effect.function = 5;
+  effect.parameters.type = 2;
+  EXPECT_EQ(fo4::forms::perk_function_type(effect), fo4::forms::PerkFunctionType::actor_value);
+  effect.function = 4;
+  EXPECT_EQ(fo4::forms::perk_function_type(effect), fo4::forms::PerkFunctionType::float_pair);
+  effect.parameters.type = 8;
+  EXPECT_EQ(fo4::forms::perk_function_type(effect), fo4::forms::PerkFunctionType::actor_value);
+  effect.parameters.type = 1;
+  EXPECT_EQ(fo4::forms::perk_function_type(effect), fo4::forms::PerkFunctionType::single_float);
+  effect.parameters.type.reset();
+  EXPECT_EQ(fo4::forms::perk_function_type(effect), fo4::forms::PerkFunctionType::none);
+}
+
+// Detects: set_perk_sound and set_perk_swf must insert SNAM and FNAM at their schema positions, rewrite them in place, and remove them on an empty value.
+TEST(PerkAuthoring, SetPerkSoundAndSwfInsertInSchemaOrderRewriteAndRemove) {
+  auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
+  fo4::forms::PerkCreation creation;
+  creation.editor_id = "RadicleSoundSwf";
+  creation.effects = {ability_effect()};
+  const auto key = fo4::forms::create_perk(plugin, creation);
+  const auto signatures_now = [&plugin, &key]() {
+    const auto* record = fo4::find_record(plugin, key);
+    return signatures(*record);
+  };
+
+  EXPECT_EQ(fo4::forms::set_perk_swf(plugin, key, "Interface\\Perk.swf"), fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(fo4::forms::set_perk_sound(plugin, key, fo4::FormKey::parse("000B00:Fallout4.esm")),
+            fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, key, fo4::FormKey::parse("000C00:Fallout4.esm")),
+            fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(signatures_now(),
+            (std::vector<std::string>{"EDID", "DATA", "SNAM", "NNAM", "FNAM", "PRKE", "DATA", "PRKF"}));
+
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  auto links = fo4::forms::read_perk_links(plugin, *record);
+  EXPECT_EQ(links.sound, fo4::FormKey::parse("000B00:Fallout4.esm"));
+  ASSERT_TRUE(links.swf.has_value());
+  EXPECT_EQ(*links.swf, "Interface\\Perk.swf");
+
+  EXPECT_EQ(fo4::forms::set_perk_sound(plugin, key, fo4::FormKey::parse("000D00:Fallout4.esm")),
+            fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(fo4::forms::set_perk_swf(plugin, key, "Other.swf"), fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(signatures_now(),
+            (std::vector<std::string>{"EDID", "DATA", "SNAM", "NNAM", "FNAM", "PRKE", "DATA", "PRKF"}));
+  record = fo4::find_record(plugin, key);
+  links = fo4::forms::read_perk_links(plugin, *record);
+  EXPECT_EQ(links.sound, fo4::FormKey::parse("000D00:Fallout4.esm"));
+  ASSERT_TRUE(links.swf.has_value());
+  EXPECT_EQ(*links.swf, "Other.swf");
+
+  EXPECT_EQ(fo4::forms::set_perk_sound(plugin, key, fo4::FormKey{}), fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(signatures_now(), (std::vector<std::string>{"EDID", "DATA", "NNAM", "FNAM", "PRKE", "DATA", "PRKF"}));
+  EXPECT_EQ(fo4::forms::set_perk_swf(plugin, key, ""), fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(signatures_now(), (std::vector<std::string>{"EDID", "DATA", "NNAM", "PRKE", "DATA", "PRKF"}));
+  record = fo4::find_record(plugin, key);
+  links = fo4::forms::read_perk_links(plugin, *record);
+  EXPECT_EQ(links.sound, fo4::FormKey{});
+  EXPECT_FALSE(links.swf.has_value());
+  EXPECT_EQ(links.next_perk, fo4::FormKey::parse("000C00:Fallout4.esm"));
+
+  EXPECT_EQ(fo4::forms::set_perk_swf(plugin, fo4::FormKey::parse("000E01:Patch.esp"), "x"),
+            fo4::forms::PerkLinkWrite::record_missing);
+  EXPECT_EQ(fo4::forms::set_perk_sound(plugin, fo4::FormKey::parse("000E01:Patch.esp"), fo4::FormKey{}),
+            fo4::forms::PerkLinkWrite::record_missing);
+}
+
+// Detects: set_perk_next must refuse a null FormKey and a self link, and must leave the record unchanged on either refusal.
+TEST(PerkAuthoring, SetPerkNextRefusesNullAndSelfLinkAndLeavesTheRecordUnchanged) {
+  auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
+  fo4::forms::PerkCreation creation;
+  creation.editor_id = "RadicleSelfLink";
+  const auto key = fo4::forms::create_perk(plugin, creation);
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, key, fo4::FormKey{}), fo4::forms::PerkLinkWrite::null_target);
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, key, key), fo4::forms::PerkLinkWrite::self_link);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+// Detects: create_perk must refuse a NUL byte in inline FULL, DESC or SWF text instead of storing it cut short.
+TEST(PerkAuthoring, CreatePerkRefusesNulInInlineTextAndSwf) {
+  auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  fo4::forms::PerkCreation full;
+  full.editor_id = "RadicleNulFull";
+  full.full_name = inline_text(std::string("a\0b", 3));
+  EXPECT_THROW(fo4::forms::create_perk(plugin, full), fo4::forms::PerkError);
+
+  fo4::forms::PerkCreation description;
+  description.editor_id = "RadicleNulDesc";
+  description.description = inline_text(std::string("a\0b", 3));
+  EXPECT_THROW(fo4::forms::create_perk(plugin, description), fo4::forms::PerkError);
+
+  fo4::forms::PerkCreation swf;
+  swf.editor_id = "RadicleNulSwf";
+  swf.swf = std::string_view{"a\0b", 3};
+  EXPECT_THROW(fo4::forms::create_perk(plugin, swf), fo4::forms::PerkError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 

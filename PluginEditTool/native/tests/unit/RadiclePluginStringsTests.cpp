@@ -476,7 +476,7 @@ TEST_CASE("Staged string edits save as loose files and keep untouched ids byte-i
 
     REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Apple tart"})).has_value());
     const auto added = rowsOf(backend, "AddString", nlohmann::json::array({"Patch.esp", "", "STRINGS", "Fig"}));
-    CHECK(added["id"] == 51);
+    CHECK(added["id"] == 1001);
     REQUIRE(backend.invoke("strings.RemoveString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 50})).has_value());
 
     const auto staged = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
@@ -487,7 +487,7 @@ TEST_CASE("Staged string edits save as loose files and keep untouched ids byte-i
     CHECK(page["pending"] == true);
     REQUIRE(page["rows"].size() == 5);
     CHECK(page["rows"][0]["text"] == "Apple tart");
-    CHECK(page["rows"][4]["id"] == 51);
+    CHECK(page["rows"][4]["id"] == 1001);
 
     REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
     const auto saved = fo4::localization::read_string_table_file(path, StringTableKind::strings);
@@ -495,7 +495,7 @@ TEST_CASE("Staged string edits save as loose files and keep untouched ids byte-i
     CHECK(fo4::localization::find_string(saved, 50) == nullptr);
     REQUIRE(fo4::localization::find_string(saved, 10) != nullptr);
     CHECK(fo4::localization::find_string(saved, 10)->text == rawBytes("Apple tart"));
-    CHECK(fo4::localization::find_string(saved, 51)->text == rawBytes("Fig"));
+    CHECK(fo4::localization::find_string(saved, 1001)->text == rawBytes("Fig"));
     for (const std::uint32_t id : {20u, 30u, 40u}) {
         REQUIRE(fo4::localization::find_string(original, id) != nullptr);
         REQUIRE(fo4::localization::find_string(saved, id) != nullptr);

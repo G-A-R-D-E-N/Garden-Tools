@@ -8,6 +8,7 @@
 #include "../plugin/record_edit.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -36,6 +37,9 @@ constexpr auto k_cis1 = Signature::from_string("CIS1");
 constexpr auto k_cis2 = Signature::from_string("CIS2");
 constexpr auto k_full = Signature::from_string("FULL");
 constexpr auto k_desc = Signature::from_string("DESC");
+constexpr auto k_snam = Signature::from_string("SNAM");
+constexpr auto k_nnam = Signature::from_string("NNAM");
+constexpr auto k_fnam = Signature::from_string("FNAM");
 
 constexpr std::size_t k_prke_size = 3;
 constexpr std::size_t k_quest_stage_size = 6;
@@ -104,15 +108,6 @@ Subrecord make_subrecord(Signature signature, std::vector<std::byte> data) {
   subrecord.signature = signature;
   subrecord.data = std::move(data);
   return subrecord;
-}
-
-std::uint8_t epfd_decider(const PerkEffectEntry& effect) {
-  if (!effect.parameters.type.has_value()) return 0;
-  const auto type = *effect.parameters.type;
-  if (type != 2) return type;
-  const bool actor_value = effect.function == 5 || effect.function == 12 ||
-                           effect.function == 13 || effect.function == 14;
-  return actor_value ? 8 : 2;
 }
 
 PerkFunctionParameters decode_parameters(const Plugin& plugin,
@@ -355,11 +350,107 @@ PerkEffectWrite set_perk_effects(Plugin& plugin,
   return PerkEffectWrite::written;
 }
 
+PerkLinks read_perk_links(const Plugin& plugin, const Record& record) {
+  if (record.header.signature != k_perk) {
+    throw PerkError("record does not carry perk links: " + record.header.signature.to_string());
+  }
+  PerkLinks links;
+  const auto context = plugin_form_id_context(plugin);
+  bool saw_next = false;
+  bool saw_sound = false;
+  for (const auto& subrecord : record.subrecords) {
+    const auto& payload = subrecord.data;
+    if (subrecord.signature == k_nnam || subrecord.signature == k_snam) {
+      const bool next = subrecord.signature == k_nnam;
+      if (payload.size() != 4) throw PerkError("PERK " + subrecord.signature.to_string() + " must be four bytes");
+      if (next ? saw_next : saw_sound) throw PerkError("duplicate PERK " + subrecord.signature.to_string());
+      (next ? saw_next : saw_sound) = true;
+      (next ? links.next_perk : links.sound) = resolve_plugin_form_id(RawFormId{read_u32(payload, 0)}, context);
+    } else if (subrecord.signature == k_fnam) {
+      if (links.swf.has_value()) throw PerkError("duplicate PERK FNAM");
+      if (payload.empty() || payload.back() != std::byte{0}) throw PerkError("PERK FNAM must be NUL-terminated");
+      const auto* begin = reinterpret_cast<const char*>(payload.data());
+      links.swf = std::string(begin, begin + payload.size() - 1);
+    }
+  }
+  return links;
+}
+
+namespace {
+
+constexpr std::array<Signature, 3> k_followers_sound{k_nnam, k_fnam, k_prke};
+constexpr std::array<Signature, 2> k_followers_next{k_fnam, k_prke};
+constexpr std::array<Signature, 1> k_followers_swf{k_prke};
+
+PerkLinkWrite write_perk_link(Plugin& plugin,
+                              const FormKey& key,
+                              Signature signature,
+                              std::optional<std::vector<std::byte>> payload,
+                              std::size_t fixed_size,
+                              std::span<const Signature> followers) {
+  assign_record_form_keys(plugin);
+  auto* record = fo4::detail::find_mutable_record(plugin, key);
+  if (record == nullptr) return PerkLinkWrite::record_missing;
+  if (record->header.signature != k_perk) return PerkLinkWrite::unsupported_record;
+
+  const auto existing = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+                                     [signature](const Subrecord& subrecord) { return subrecord.signature == signature; });
+  if (!payload.has_value()) {
+    if (existing != record->subrecords.end()) record->subrecords.erase(existing);
+  } else if (existing != record->subrecords.end()) {
+    if (fixed_size != 0 && existing->data.size() != fixed_size) return PerkLinkWrite::unexpected_layout;
+    existing->data = std::move(*payload);
+  } else {
+    const auto before = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+                                     [followers](const Subrecord& subrecord) {
+                                       return std::find(followers.begin(), followers.end(), subrecord.signature) !=
+                                              followers.end();
+                                     });
+    record->subrecords.insert(before, make_subrecord(signature, std::move(*payload)));
+  }
+  fo4::detail::mark_record_modified(plugin, *record);
+  return PerkLinkWrite::written;
+}
+
+}  // namespace
+
+PerkLinkWrite set_perk_next(Plugin& plugin, const FormKey& key, const FormKey& next_perk) {
+  if (next_perk == FormKey{}) return PerkLinkWrite::null_target;
+  if (next_perk == key) return PerkLinkWrite::self_link;
+  const auto raw = u32_bytes(encode_plugin_form_id(next_perk, plugin_form_id_context(plugin)).value());
+  return write_perk_link(plugin, key, k_nnam, raw, 4, k_followers_next);
+}
+
+PerkLinkWrite set_perk_sound(Plugin& plugin, const FormKey& key, const FormKey& sound) {
+  std::optional<std::vector<std::byte>> payload;
+  if (sound != FormKey{}) {
+    payload = u32_bytes(encode_plugin_form_id(sound, plugin_form_id_context(plugin)).value());
+  }
+  return write_perk_link(plugin, key, k_snam, std::move(payload), 4, k_followers_sound);
+}
+
+PerkLinkWrite set_perk_swf(Plugin& plugin, const FormKey& key, std::string_view stored_swf) {
+  std::optional<std::vector<std::byte>> payload;
+  if (!stored_swf.empty()) payload = zstring_bytes(stored_swf);
+  return write_perk_link(plugin, key, k_fnam, std::move(payload), 0, k_followers_swf);
+}
+
 FormKey create_perk(Plugin& plugin, const PerkCreation& creation) {
-  const bool has_text = !creation.full_name.empty() || !creation.description.empty();
-  if (has_text && plugin.header.tes4_flags.is_localized()) {
-    throw PerkError(
-        "PERK FULL and DESC creation in localized plugins is disabled until string-table authoring is implemented");
+  const auto embeds_nul = [](const std::optional<schema::LocalizedString>& value) {
+    return value.has_value() && value->text.has_value() && value->text->find('\0') != std::string::npos;
+  };
+  if (embeds_nul(creation.full_name) || embeds_nul(creation.description) ||
+      creation.swf.find('\0') != std::string_view::npos) {
+    throw PerkError("PERK text must not contain a NUL byte; it would be stored cut short");
+  }
+  const bool localized = plugin.header.tes4_flags.is_localized();
+  if (creation.full_name.has_value() && creation.full_name->localized() != localized) {
+    throw PerkError(localized ? "PERK FULL in a localized plugin must be a string ID"
+                              : "PERK FULL in a non-localized plugin must be inline text");
+  }
+  if (creation.description.has_value() && creation.description->localized() != localized) {
+    throw PerkError(localized ? "PERK DESC in a localized plugin must be a string ID"
+                              : "PERK DESC in a non-localized plugin must be inline text");
   }
 
   auto next = plugin;
@@ -372,13 +463,33 @@ FormKey create_perk(Plugin& plugin, const PerkCreation& creation) {
   const auto data = std::find_if(record->subrecords.begin(), record->subrecords.end(),
                                  [](const Subrecord& subrecord) { return subrecord.signature == k_data; });
   std::vector<Subrecord> text;
-  if (!creation.full_name.empty()) {
-    text.push_back(make_subrecord(k_full, zstring_bytes(stored_inline_text(creation.full_name, "PERK full name"))));
+  if (creation.full_name.has_value()) {
+    text.push_back(make_subrecord(k_full, schema::write_localized_string(*creation.full_name)));
   }
-  if (!creation.description.empty()) {
-    text.push_back(make_subrecord(k_desc, zstring_bytes(stored_inline_text(creation.description, "PERK description"))));
+  if (creation.description.has_value()) {
+    text.push_back(make_subrecord(k_desc, schema::write_localized_string(*creation.description)));
   }
   record->subrecords.insert(data, std::make_move_iterator(text.begin()), std::make_move_iterator(text.end()));
+
+  if (!creation.conditions.empty() &&
+      set_record_conditions(next, key, creation.conditions) != ConditionMutationStatus::updated) {
+    throw PerkError("PERK conditions could not be written");
+  }
+
+  const auto context = plugin_form_id_context(next);
+  std::vector<Subrecord> links;
+  if (creation.sound != FormKey{}) {
+    links.push_back(make_subrecord(k_snam, u32_bytes(encode_plugin_form_id(creation.sound, context).value())));
+  }
+  if (creation.next_perk != FormKey{}) {
+    links.push_back(make_subrecord(k_nnam, u32_bytes(encode_plugin_form_id(creation.next_perk, context).value())));
+  }
+  if (!creation.swf.empty()) {
+    links.push_back(make_subrecord(k_fnam, zstring_bytes(stored_inline_text(creation.swf, "PERK SWF"))));
+  }
+  const auto after_data = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+                                       [](const Subrecord& subrecord) { return subrecord.signature == k_data; }) + 1;
+  record->subrecords.insert(after_data, std::make_move_iterator(links.begin()), std::make_move_iterator(links.end()));
 
   set_header_scalar(next, key, "PERK\\Trait", creation.trait);
   set_header_scalar(next, key, "PERK\\Level", creation.level);
@@ -397,9 +508,20 @@ FormKey create_perk(Plugin& plugin, const PerkCreation& creation) {
   return key;
 }
 
+PerkFunctionType perk_function_type(const PerkEffectEntry& effect) {
+  if (!effect.parameters.type.has_value()) return PerkFunctionType::none;
+  const auto type = *effect.parameters.type;
+  if (type != 2) return static_cast<PerkFunctionType>(type);
+  const bool actor_value = effect.function == 5 || effect.function == 12 ||
+                           effect.function == 13 || effect.function == 14;
+  return actor_value ? PerkFunctionType::actor_value : PerkFunctionType::float_pair;
+}
+
 std::optional<float> perk_epfd_float(const PerkEffectEntry& effect) {
   const auto& data = effect.parameters.data;
-  if (!data.has_value() || epfd_decider(effect) != 1 || data->size() != 4) return std::nullopt;
+  if (!data.has_value() || perk_function_type(effect) != PerkFunctionType::single_float || data->size() != 4) {
+    return std::nullopt;
+  }
   float value = 0.0f;
   std::memcpy(&value, data->data(), sizeof(value));
   return value;
@@ -407,7 +529,9 @@ std::optional<float> perk_epfd_float(const PerkEffectEntry& effect) {
 
 std::optional<std::pair<float, float>> perk_epfd_float_pair(const PerkEffectEntry& effect) {
   const auto& data = effect.parameters.data;
-  if (!data.has_value() || epfd_decider(effect) != 2 || data->size() != 8) return std::nullopt;
+  if (!data.has_value() || perk_function_type(effect) != PerkFunctionType::float_pair || data->size() != 8) {
+    return std::nullopt;
+  }
   std::pair<float, float> value{0.0f, 0.0f};
   std::memcpy(&value.first, data->data(), sizeof(float));
   std::memcpy(&value.second, data->data() + 4, sizeof(float));
@@ -415,16 +539,19 @@ std::optional<std::pair<float, float>> perk_epfd_float_pair(const PerkEffectEntr
 }
 
 std::optional<FormKey> perk_epfd_form(const Plugin& plugin, const PerkEffectEntry& effect) {
-  const auto decider = epfd_decider(effect);
+  const auto shape = perk_function_type(effect);
   const auto& data = effect.parameters.data;
   if (!data.has_value() || data->size() != 4) return std::nullopt;
-  if (decider != 3 && decider != 4 && decider != 5) return std::nullopt;
+  if (shape != PerkFunctionType::leveled_item && shape != PerkFunctionType::labeled_spell &&
+      shape != PerkFunctionType::spell) {
+    return std::nullopt;
+  }
   return resolve_plugin_form_id(RawFormId{read_u32(*data, 0)}, plugin_form_id_context(plugin));
 }
 
 std::optional<std::string> perk_epfd_text(const PerkEffectEntry& effect) {
   const auto& data = effect.parameters.data;
-  if (!data.has_value() || epfd_decider(effect) != 6) return std::nullopt;
+  if (!data.has_value() || perk_function_type(effect) != PerkFunctionType::text) return std::nullopt;
   if (data->empty() || data->back() != std::byte{0}) return std::nullopt;
   const auto* begin = reinterpret_cast<const char*>(data->data());
   return std::string(begin, begin + data->size() - 1);
@@ -433,7 +560,9 @@ std::optional<std::string> perk_epfd_text(const PerkEffectEntry& effect) {
 std::optional<std::pair<FormKey, float>> perk_epfd_actor_value(const Plugin& plugin,
                                                                const PerkEffectEntry& effect) {
   const auto& data = effect.parameters.data;
-  if (!data.has_value() || epfd_decider(effect) != 8 || data->size() != 8) return std::nullopt;
+  if (!data.has_value() || perk_function_type(effect) != PerkFunctionType::actor_value || data->size() != 8) {
+    return std::nullopt;
+  }
   std::pair<FormKey, float> value{};
   value.first = resolve_plugin_form_id(RawFormId{read_u32(*data, 0)}, plugin_form_id_context(plugin));
   std::memcpy(&value.second, data->data() + 4, sizeof(float));
