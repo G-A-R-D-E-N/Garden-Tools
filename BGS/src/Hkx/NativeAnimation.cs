@@ -50,9 +50,7 @@ public static class NativeAnimation
 
         var objects = new PackfileObjects(image);
         var source = objects.Instances.FirstOrDefault(i => Array.IndexOf(Compressed, i.ClassName) >= 0)
-            ?? throw new InvalidOperationException(
-                "This file holds no animation of a class that can be decoded, so there was nothing " +
-                "to write out.");
+            ?? throw NothingToWrite(objects);
 
         int at = source.Offset;
         int floatTracks = BitConverter.ToInt32(data.Data, at + FloatTracks);
@@ -220,7 +218,8 @@ public static class NativeAnimation
         Recompress(InputFilePolicy.ReadHkx(hkxPath), decoded, options, dropReplaced, cut);
 
     public static Result Recompress(byte[] hkx, HkxAnimationData decoded,
-        SplineEncoder.Options? options = null, bool dropReplaced = true, Timeline? cut = null)
+        SplineEncoder.Options? options = null, bool dropReplaced = true, Timeline? cut = null,
+        bool keepAnnotations = true)
     {
         ArgumentNullException.ThrowIfNull(hkx);
         ArgumentNullException.ThrowIfNull(decoded);
@@ -234,9 +233,7 @@ public static class NativeAnimation
 
         var objects = new PackfileObjects(image);
         var source = objects.Instances.FirstOrDefault(i => Array.IndexOf(Compressed, i.ClassName) >= 0)
-            ?? throw new InvalidOperationException(
-                "This file holds no animation of a class that can be decoded, so there was nothing " +
-                "to write out.");
+            ?? throw NothingToWrite(objects);
 
         int at = source.Offset;
         int floatTracks = BitConverter.ToInt32(data.Data, at + FloatTracks);
@@ -291,7 +288,7 @@ public static class NativeAnimation
         BitConverter.GetBytes(blob.FrameDuration).CopyTo(data.Data, made + SplineFrameDuration);
         BitConverter.GetBytes(0).CopyTo(data.Data, made + Endian);
 
-        if (annotations is { Count: > 0 })
+        if (keepAnnotations && annotations is { Count: > 0 })
         {
             int copied = CopyStructRun(image, data, annotations.At, annotations.Count, "hkaAnnotationTrack");
             data.SetLocal(made + AnnotationTracks, copied);
@@ -587,5 +584,17 @@ public static class NativeAnimation
         float length = MathF.Sqrt(q.X * q.X + q.Y * q.Y + q.Z * q.Z + q.W * q.W);
         return length > 1e-6f ? new Quaternion(q.X / length, q.Y / length, q.Z / length, q.W / length)
                               : Quaternion.Identity;
+    }
+
+    public static string SaveRefusal(string animationClass) =>
+        $"This clip uses {animationClass}. It can be played and inspected, but saving it is not supported yet, so nothing was written.";
+
+    private static InvalidOperationException NothingToWrite(PackfileObjects objects)
+    {
+        var unsupported = objects.Instances.FirstOrDefault(i =>
+            i.ClassName is AnimationCompression.QuantizedClass or AnimationCompression.PredictiveClass);
+        return new InvalidOperationException(unsupported != null
+            ? SaveRefusal(unsupported.ClassName)
+            : "This file holds no animation of a class that can be decoded, so there was nothing to write out.");
     }
 }

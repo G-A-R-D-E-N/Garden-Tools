@@ -19,7 +19,7 @@ public sealed class SymrmHelpTests
             "conditions", "savedelete", "classcheck", "types", "chain", "crash", "hash", "sweep",
             "diff", "notes", "saveevent", "savewide", "savenumbers", "walk", "signatures", "paths",
             "elements", "nesting", "objects", "capacity", "qstransform", "splinestats", "spline",
-            "savespline", "editframe", "trim", "retime", "run", "weights", "cliptime", "cliptrim",
+            "savespline", "editframe", "trim", "retime", "gltf", "run", "weights", "cliptime", "cliptrim",
             "mesh", "meshpng", "lifecycle", "test", "defaults",
         };
 

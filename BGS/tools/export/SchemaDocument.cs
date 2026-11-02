@@ -32,7 +32,7 @@ public static class SchemaDocument
                 new Field("format", "string", "always " + ExportFormats.Animation),
                 new Field("version", "integer", "format version, currently 1"),
                 new Field("source", "string", "input path as given, relative to the batch root"),
-                new Field("class", "string", "decoded animation class, one of HkxAnimationData.DecodedAnimationClasses"),
+                new Field("class", "string", "decoded animation class, one of HkxAnimationData.ExportableAnimationClasses"),
                 new Field("duration", "number", "clip duration in seconds as stored"),
                 new Field("numFrames", "integer", "frames decoded per track"),
                 new Field("numTracks", "integer", "transform tracks; equal to the length of tracks"),
