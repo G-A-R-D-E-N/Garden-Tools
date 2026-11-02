@@ -267,6 +267,17 @@ void BodyEmitter::emitArrayBuiltin(const CallExpression& call, const Binding& bi
     };
 
     const auto key = lower(binding.name);
+    if (key == "findstruct" || key == "rfindstruct") {
+        const auto* name = dynamic_cast<const LiteralExpression*>(arguments[0]);
+        if (!name || name->kind != LiteralKind::String) {
+            gen_.report(DiagnosticCode::CannotEmit,
+                        "'" + binding.name +
+                            "' needs the member name as a string literal, so the member type is "
+                            "known and the search value can be converted to it.",
+                        call.span);
+            return;
+        }
+    }
     if (key == "find") {
         add("array_findelement",
             {array, id(destination), valueAs(arguments[0], element), argumentAt(1, Type::int_(), 0)});

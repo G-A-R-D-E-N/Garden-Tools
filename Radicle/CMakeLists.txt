@@ -106,14 +106,6 @@ add_custom_target(radicle_hkx_layout_check ALL
   COMMENT "Checking generated Havok class layout table"
   VERBATIM
 )
-add_custom_target(radicle_parity_matrix_check ALL
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tools/parity_matrix.py"
-    --check
-  COMMENT "Checking generated Fallout 4 parity matrix"
-  VERBATIM
-)
 
 function(fo4_apply_warnings target)
   if(MSVC)

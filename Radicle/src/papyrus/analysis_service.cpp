@@ -599,6 +599,9 @@ std::string AnalysisService::compile(const std::string& source, const std::strin
         try {
             std::filesystem::create_directories(target.parent_path());
             writeBytes(target, result.pex->toBytes());
+            for (const auto& d : result.diagnostics) {
+                if (d.severity == Severity::Warning) sb << d.toString() << "\n";
+            }
             succeeded++;
         } catch (const std::exception& ex) {
             failed++;

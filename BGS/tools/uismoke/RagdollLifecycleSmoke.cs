@@ -82,6 +82,9 @@ public static class LifecycleSmoke
         int animationIndex = AnimationIndexSmoke.Run();
         int skeletonSibling = Smoke.SkeletonSiblingSmoke();
         int meshViewport = MeshViewportSmoke.Run();
+        int skinning = Smoke.SkinningSmoke();
+        int rootMotion = Smoke.RootMotionSmoke();
+        int rootMotionLoop = Smoke.RootMotionLoopSmoke();
         string lifecycleSettings = Path.Combine(Path.GetTempPath(), $"bgs-lifecycle-{Guid.NewGuid():N}.cfg");
         Settings.SettingsPathForTest = lifecycleSettings;
         Settings.TrySet("tour_done", "1", out _);
@@ -93,7 +96,8 @@ public static class LifecycleSmoke
             Settings.SettingsPathForTest = null;
         }
         return existing == 0 && workspace == 0 && lifecycle == 0 && geometry == 0 && tools == 0 &&
-               animationIndex == 0 && skeletonSibling == 0 && meshViewport == 0 ? 0 : 1;
+               animationIndex == 0 && skeletonSibling == 0 && meshViewport == 0 && skinning == 0 &&
+               rootMotion == 0 && rootMotionLoop == 0 ? 0 : 1;
     }
 
     private static int RagdollLifecycle()
