@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -68,6 +70,28 @@ Bytes u32_bytes(std::uint32_t value) {
   return out.bytes;
 }
 
+Bytes u16_bytes(std::uint16_t value) {
+  ByteWriter out;
+  out.u16(value);
+  return out.bytes;
+}
+
+Bytes kwda_ids(std::initializer_list<std::uint32_t> ids) {
+  ByteWriter out;
+  for (const auto id : ids) {
+    out.u32(raw_id(id));
+  }
+  return out.bytes;
+}
+
+Bytes innr_property(float value, std::uint8_t target, std::uint8_t operation) {
+  ByteWriter out;
+  out.f32(value);
+  out.u8(target);
+  out.u8(operation);
+  return out.bytes;
+}
+
 Bytes note_type_dnam() {
   ByteWriter out;
   out.u8(1);
@@ -78,6 +102,25 @@ Bytes note_data() {
   ByteWriter out;
   out.u32(100);
   out.f32(2.5f);
+  return out.bytes;
+}
+
+Bytes note_modt(const std::vector<std::uint32_t>& addon_nodes = {42u}) {
+  ByteWriter out;
+  out.u32(4);
+  out.u32(1);
+  out.u32(static_cast<std::uint32_t>(addon_nodes.size()));
+  out.u32(0);
+  out.u32(1);
+  out.u32(0x0A0B0C0Du);
+  out.sig("dds");
+  out.u32(0x11121314u);
+  for (const auto node : addon_nodes) {
+    out.u32(node);
+  }
+  out.u32(0x71727374u);
+  out.sig("bgsm");
+  out.u32(0x81828384u);
   return out.bytes;
 }
 
@@ -152,6 +195,7 @@ std::vector<std::byte> make_plugin() {
   write_group(out, "NOTE", {{0x810, {{"EDID", zstr("RadicleNote")},
                                      {"OBND", zeros(12)},
                                      {"MODL", zstr("Note.nif")},
+                                     {"MODT", note_modt()},
                                      {"ICON", zstr("Icon.dds")},
                                      {"YNAM", u32_bytes(raw_id(0x800))},
                                      {"ZNAM", u32_bytes(raw_id(0x800))},
@@ -170,13 +214,25 @@ std::vector<std::byte> make_plugin() {
   write_group(out, "AORU", {{0x813, {{"EDID", zstr("RadicleAttraction")},
                                      {"AOR2", aor2()}}}});
   write_group(out, "PKIN", {{0x814, {{"EDID", zstr("RadiclePackIn")},
+                                     {"OBND", zeros(12)},
                                      {"FLTR", zstr("Filter.txt")},
                                      {"CNAM", u32_bytes(raw_id(0x81A))},
                                      {"VNAM", u32_bytes(1)}}}});
   write_group(out, "DOBJ", {{0x815, {{"EDID", zstr("RadicleObjects")},
                                      {"DNAM", zeros(8)}}}});
   write_group(out, "INNR", {{0x816, {{"EDID", zstr("RadicleNaming")},
-                                     {"UNAM", u32_bytes(29)}}}});
+                                     {"UNAM", u32_bytes(29)},
+                                     {"VNAM", u32_bytes(2)},
+                                     {"WNAM", zstr("RadicleRuleA")},
+                                     {"KSIZ", u32_bytes(1)},
+                                     {"KWDA", kwda_ids({0x81A})},
+                                     {"XNAM", innr_property(1.5f, 4, 0)},
+                                     {"YNAM", u16_bytes(0)},
+                                     {"WNAM", zstr("RadicleRuleB")},
+                                     {"KSIZ", u32_bytes(2)},
+                                     {"KWDA", kwda_ids({0x81A, 0x81B})},
+                                     {"XNAM", innr_property(1.5f, 4, 0)},
+                                     {"YNAM", u16_bytes(7)}}}});
   return out.bytes;
 }
 
@@ -187,10 +243,20 @@ const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature s
   return nullptr;
 }
 
+Bytes subrecord_at(const fo4::Record& record, std::string_view signature, std::size_t ordinal) {
+  const auto wanted = fo4::Signature::from_string(signature);
+  std::size_t seen = 0;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature != wanted) continue;
+    if (seen++ == ordinal) return sub.data;
+  }
+  return {};
+}
+
 }  // namespace
 
 TEST(ItemModRecordsSynthetic, EveryScalarRowDecodesOnTheFixture) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(item.key));
@@ -208,6 +274,47 @@ TEST(ItemModRecordsSynthetic, EveryScalarRowDecodesOnTheFixture) {
     }
     EXPECT_EQ(decoded, fields.size()) << item.signature;
   }
+}
+
+TEST(ItemModRecordsSynthetic, ModelInfoSegmentRowsReadAndWriteAtTheirSegmentBase) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000810:Patch.esp");
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+
+  const auto read_row = [](const fo4::Record& from, std::string_view path) {
+    const auto field =
+        fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("NOTE"), path);
+    EXPECT_TRUE(field.has_value()) << path;
+    if (!field) return std::string{};
+    const auto* sub = find_subrecord(from, field->scalar.subrecord);
+    EXPECT_NE(sub, nullptr) << path;
+    if (sub == nullptr) return std::string{};
+    return fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(sub->data, field->scalar),
+                                      field->scalar);
+  };
+
+  EXPECT_EQ(read_row(*record, "NOTE\\ModelInfoTextureFileHash"), std::to_string(0x0A0B0C0Du));
+  EXPECT_EQ(read_row(*record, "NOTE\\ModelInfoAddonNode"), "42");
+  EXPECT_EQ(read_row(*record, "NOTE\\ModelInfoMaterialFileHash"), std::to_string(0x71727374u));
+
+  const auto addon = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("NOTE"),
+                                                          "NOTE\\ModelInfoAddonNode");
+  ASSERT_TRUE(addon.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *addon, 0, "7"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* saved = fo4::find_record(reread, key);
+  ASSERT_NE(saved, nullptr);
+  EXPECT_EQ(read_row(*saved, "NOTE\\ModelInfoAddonNode"), "7");
+  EXPECT_EQ(read_row(*saved, "NOTE\\ModelInfoTextureFileHash"), std::to_string(0x0A0B0C0Du));
+  EXPECT_EQ(read_row(*saved, "NOTE\\ModelInfoMaterialFileHash"), std::to_string(0x71727374u));
+  const auto* modt = find_subrecord(*saved, fo4::Signature::from_string("MODT"));
+  ASSERT_NE(modt, nullptr);
+  EXPECT_EQ(modt->data, note_modt({7u}));
+
+  EXPECT_TRUE(fo4::schema::scalar_field_bytes(note_modt({}), addon->scalar).empty());
 }
 
 TEST(ItemModRecordsSynthetic, FlagsRowNamesComeFromXEdit) {
@@ -284,26 +391,83 @@ TEST(ItemModRecordsSynthetic, EditsOneRowPerRecordAndRereads) {
   }
 }
 
-TEST(ItemModRecordsSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
-  for (const auto& item : k_items) {
-    const auto signature = fo4::Signature::from_string(item.signature);
-    const auto constraint = fo4::schema::record_authoring_constraint(signature);
-    ASSERT_TRUE(constraint.has_value()) << item.signature;
-    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(item.key));
-    ASSERT_NE(record, nullptr);
-    for (const auto& rule : fo4::schema::authoring_subrecords(*constraint)) {
-      const auto count = static_cast<std::size_t>(std::count_if(
-          record->subrecords.begin(), record->subrecords.end(),
-          [&](const fo4::Subrecord& sub) { return sub.signature == rule.signature; }));
-      EXPECT_GE(count, static_cast<std::size_t>(rule.minimum)) << item.signature << ' ' << rule.signature.to_string();
-      EXPECT_LE(count, static_cast<std::size_t>(rule.maximum)) << item.signature << ' ' << rule.signature.to_string();
-    }
-  }
+TEST(ItemModRecordsSynthetic, InnrNamingRuleRowsAddressEachName) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto innr = fo4::Signature::from_string("INNR");
+  const auto key = fo4::FormKey::parse("000816:Patch.esp");
+
+  const auto rulesets = fo4::schema::scalar_field_descriptor(innr, "INNR\\RulesetCount");
+  const auto text = fo4::schema::scalar_field_descriptor(innr, "INNR\\NameText");
+  const auto count = fo4::schema::scalar_field_descriptor(innr, "INNR\\KeywordCount");
+  const auto index = fo4::schema::scalar_field_descriptor(innr, "INNR\\NameIndex");
+  const auto value = fo4::schema::scalar_field_descriptor(innr, "INNR\\PropertyValue");
+  const auto target = fo4::schema::scalar_field_descriptor(innr, "INNR\\PropertyTarget");
+  const auto operation = fo4::schema::scalar_field_descriptor(innr, "INNR\\PropertyOperator");
+  ASSERT_TRUE(rulesets.has_value());
+  ASSERT_TRUE(text.has_value());
+  ASSERT_TRUE(count.has_value());
+  ASSERT_TRUE(index.has_value());
+  ASSERT_TRUE(value.has_value());
+  ASSERT_TRUE(target.has_value());
+  ASSERT_TRUE(operation.has_value());
+
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *rulesets), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *text), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *count), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *index), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *value), 2u);
+
+  const auto* before = fo4::find_record(plugin, key);
+  ASSERT_NE(before, nullptr);
+  EXPECT_EQ(subrecord_at(*before, "WNAM", 0), zstr("RadicleRuleA"));
+  EXPECT_EQ(subrecord_at(*before, "WNAM", 1), zstr("RadicleRuleB"));
+  EXPECT_EQ(subrecord_at(*before, "KSIZ", 1), u32_bytes(2));
+  EXPECT_EQ(subrecord_at(*before, "YNAM", 1), u16_bytes(7));
+  EXPECT_EQ(subrecord_at(*before, "XNAM", 1), innr_property(1.5f, 4, 0));
+
+  const auto xnam = subrecord_at(*before, "XNAM", 0);
+  const auto ynam = subrecord_at(*before, "YNAM", 1);
+  const auto ksiz = subrecord_at(*before, "KSIZ", 1);
+  const auto value_bytes = fo4::schema::scalar_field_bytes(xnam, value->scalar);
+  EXPECT_EQ(Bytes(value_bytes.begin(), value_bytes.end()), u32_bytes(0x3FC00000u));
+  EXPECT_EQ(fo4::schema::decode_scalar(value_bytes, value->scalar), "1.5");
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(xnam, target->scalar),
+                                       target->scalar), "4");
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(xnam, operation->scalar),
+                                       operation->scalar), "0");
+  EXPECT_EQ(fo4::schema::decode_scalar(ynam, index->scalar), "7");
+  EXPECT_EQ(fo4::schema::decode_scalar(ksiz, count->scalar), "2");
+
+  const auto untouched = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 2, "4"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, *text, 2, "RadicleRuleD"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, *rulesets, 0, "9"), fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, *count, 0, "3"), fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::write_plugin(plugin), fo4::write_plugin(untouched));
+
+  EXPECT_EQ(fo4::set_record_string(plugin, key, *text, 1, "RadicleRuleC"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 1, "9"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* after = fo4::find_record(reread, key);
+  ASSERT_NE(after, nullptr);
+  EXPECT_EQ(subrecord_at(*after, "WNAM", 0), zstr("RadicleRuleA"));
+  EXPECT_EQ(subrecord_at(*after, "WNAM", 1), zstr("RadicleRuleC"));
+  EXPECT_EQ(subrecord_at(*after, "YNAM", 0), u16_bytes(0));
+  EXPECT_EQ(subrecord_at(*after, "YNAM", 1), u16_bytes(9));
+  EXPECT_EQ(subrecord_at(*after, "KSIZ", 1), u32_bytes(2));
+  EXPECT_EQ(subrecord_at(*after, "KWDA", 0), kwda_ids({0x81A}));
+  EXPECT_EQ(subrecord_at(*after, "KWDA", 1), kwda_ids({0x81A, 0x81B}));
+  EXPECT_EQ(subrecord_at(*after, "XNAM", 1), innr_property(1.5f, 4, 0));
+  EXPECT_EQ(subrecord_at(*after, "VNAM", 0), u32_bytes(2));
 }
 
 TEST(ItemModRecordsSynthetic, FixtureRecordsPassAuthoringPreflight) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto issues =
         fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(item.key));

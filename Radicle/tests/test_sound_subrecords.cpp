@@ -77,7 +77,7 @@ TEST(SoundSubrecords, MarkerMusicAndFootstepAuthoringHonoursRequiredAndCoupledEn
   EXPECT_EQ(remove(plugin, k_music, "TNAM"), Remove::removed);
   EXPECT_EQ(add(plugin, k_music, "TNAM"), Add::added);
   EXPECT_EQ(payloads(plugin, k_music, "TNAM").at(0), filled(4, 0));
-  EXPECT_EQ(link(plugin, k_music, "MUSC\\Tracks", 0, key(k_must)), fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(list_link(plugin, k_music, "MUSC\\Tracks", 0, key(k_must)), fo4::schema::FormLinkListMutationStatus::updated);
   for (const char* required : {"FNAM", "PNAM", "WNAM"}) {
     EXPECT_EQ(remove(plugin, k_music, required), Remove::below_minimum) << required;
   }
@@ -107,10 +107,8 @@ TEST(SoundSubrecords, UnknownSubrecordsBlockAddButKeepFieldEdits) {
 
 TEST(SoundSubrecords, CreateUsesProvenDefaultsAndRefusesUnprovableRecords) {
   auto plugin = read(build({}));
-  const auto before = fo4::write_plugin(plugin);
-  EXPECT_EQ(fo4::create_record(plugin, sig("SOUN"), "NewMarker").status, fo4::RecordCreateStatus::no_default);
-  EXPECT_EQ(fo4::create_record(plugin, sig("FSTS"), "NewSet").status, fo4::RecordCreateStatus::not_authorable);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::create_record(plugin, sig("SOUN"), "NewMarker").status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(fo4::create_record(plugin, sig("FSTS"), "NewSet").status, fo4::RecordCreateStatus::created);
 
   const auto descriptor = fo4::create_record(plugin, sig("SNDR"), "NewDescriptor");
   ASSERT_EQ(descriptor.status, fo4::RecordCreateStatus::created);
@@ -147,7 +145,7 @@ TEST(SoundSubrecords, CreateUsesProvenDefaultsAndRefusesUnprovableRecords) {
 }
 
 TEST(SoundSubrecords, FormLinkScanVisitsExactlyTheLinkSlots) {
-  const auto plugin = read(build(fixture()));
+  auto plugin = read(build(fixture()));
   std::set<std::tuple<std::uint32_t, std::string, std::size_t, std::size_t>> hits;
   for (const auto& hit : fo4::collect_form_links(plugin)) {
     const auto id = hit.record.local().value();

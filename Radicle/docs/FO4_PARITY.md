@@ -35,45 +35,45 @@ Opaque preservation is the generic writer contract in tests/test_writer.cpp. Rec
 
 Derived from the repository by `Radicle/tools/parity_matrix.py`; 147 signatures from `schema/fallout4/xedit_signatures.txt`. Regenerate with `python -I Radicle/tools/parity_matrix.py --write`.
 
-Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
+Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Scalar rows counts only rows whose kind is `scalar` and String rows only `string`, while the generated `k_scalar_fields` table and `schema::scalar_fields()` carry both, so a record's row-table size is Scalar rows plus String rows - a record with one string row reports one less in the Scalar column than `scalar_fields()` returns for it. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
 
-Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
+Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. A record with an authoring constraint but no scalar, string or FormLink field rows is still L4, and the tier counts break those out. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
+Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constraint and no scalar, string or FormLink field rows: DEBR, DFOB, DMGT, DOBJ, EYES, FLST, NAVM, OTFT, OVIS, PLYR, STAG; FormLink list rows are also present on DFOB, FLST, OTFT).
 
 ### Per-signature coverage
 
 | Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests naming it | Tier |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
-| AACT | 6970 | 1 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
-| ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
-| ACTI | 5611 | 7 | 1 | 8 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
-| ADDN | 7796 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
-| AECH | 12206 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ALCH | 5691 | 11 | 3 | 7 | - | 3 | yes | yes | - | yes | 1 | L4 |
+| AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
+| ACHR | 4483 | 37 | 1 | 21 | 1 | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 3 | L4 |
+| ADDN | 7796 | 16 | 1 | 3 | - | - | yes | - | environment/base_records | - | 1 | L4 |
+| AECH | 12206 | 12 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| ALCH | 5691 | 29 | 5 | 11 | - | 3 | yes | yes | - | yes | 2 | L4 |
 | AMDL | 12246 | 16 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| AMMO | 5741 | 12 | 2 | 5 | - | 3 | yes | yes | - | - | 1 | L4 |
-| ANIO | 5777 | - | 1 | - | - | - | yes | - | - | - | 1 | L4 |
+| AMMO | 5741 | 30 | 4 | 9 | - | 3 | yes | yes | - | - | 2 | L4 |
+| ANIO | 5777 | 7 | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ARMA | 5845 | - | - | - | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
-| ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
-| ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
-| ASPC | 7057 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
-| ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
+| ARMA | 5845 | 16 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 2 | L4 |
+| ARMO | 5786 | 27 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 2 | L4 |
+| ARTO | 9362 | 15 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
+| ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
+| ASTP | 9135 | 1 | 4 | - | - | - | yes | - | - | - | - | L4 |
 | AVIF | 7826 | 3 | - | - | - | 3 | yes | - | - | - | 2 | L4 |
-| BNDS | 12280 | 8 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
-| BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | yes | 1 | L4 |
+| BNDS | 12280 | 14 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
+| BOOK | 5891 | 30 | 5 | 10 | - | 3 | yes | yes | - | yes | 2 | L4 |
 | BPTD | 7693 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
-| CAMS | 7880 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
-| CELL | 5953 | - | - | - | - | 1 | - | - | forms/cell, environment/world | yes | 1 | L2 |
-| CLAS | 6102 | 1 | 1 | - | - | 2 | yes | - | - | - | 1 | L4 |
+| CAMS | 7880 | 23 | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
+| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | yes | - | forms/cell, environment/world | yes | 2 | L4 |
+| CLAS | 6102 | 2 | 1 | 1 | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
-| CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
-| CMPO | 12294 | 1 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
-| COBJ | 10266 | - | - | - | - | 1 | - | - | forms/components | yes | - | L2 |
-| COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
-| CONT | 6176 | 10 | 1 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
-| CPTH | 7930 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
+| CLMT | 6115 | 14 | 3 | 2 | - | - | yes | - | environment/base_records | - | 4 | L4 |
+| CMPO | 12294 | 7 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
+| COBJ | 10266 | 2 | - | 5 | 1 | 1 | yes | - | forms/components | yes | 1 | L4 |
+| COLL | 9547 | 6 | 1 | - | 1 | 1 | yes | - | - | yes | 2 | L4 |
+| CONT | 6176 | 31 | 3 | 14 | - | 1 | yes | yes | - | - | 2 | L4 |
+| CPTH | 7930 | 1 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | DEBR | 7388 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | DFOB | 12304 | - | - | - | 1 | - | yes | - | - | - | 1 | L4 |
@@ -82,115 +82,115 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | DLVW | 8819 | - | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | DMGT | 12310 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | DOBJ | 8618 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| DOOR | 6477 | 7 | 1 | 6 | - | 3 | yes | yes | - | - | 1 | L4 |
-| DUAL | 9452 | 1 | - | 5 | - | - | yes | - | - | - | 1 | L4 |
+| DOOR | 6477 | 27 | 3 | 10 | 1 | 3 | yes | yes | - | - | 1 | L4 |
+| DUAL | 9452 | 7 | - | 5 | - | - | yes | - | - | - | 1 | L4 |
 | ECZN | 8022 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
-| EFSH | 6510 | - | 5 | - | - | - | yes | - | - | yes | 1 | L4 |
-| ENCH | 6726 | 7 | - | 2 | - | 1 | yes | - | - | - | 2 | L4 |
-| EQUP | 8835 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| EXPL | 7334 | 15 | - | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
+| EFSH | 6510 | 7 | 6 | 1 | - | - | yes | - | - | yes | 1 | L4 |
+| ENCH | 6726 | 13 | - | 2 | - | 1 | yes | - | - | - | 2 | L4 |
+| EQUP | 8835 | 1 | - | - | 1 | - | yes | - | - | yes | 1 | L4 |
+| EXPL | 7334 | 28 | 1 | 7 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
 | FACT | 6785 | 18 | - | 9 | - | 3 | yes | - | forms/faction | yes | 1 | L4 |
-| FLOR | 12167 | 5 | - | 2 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
-| FLST | 7574 | - | - | - | 1 | 1 | - | - | - | - | - | L3 |
+| FLOR | 12167 | 33 | 3 | 9 | - | 3 | yes | yes | environment/vegetation | - | 2 | L4 |
+| FLST | 7574 | - | - | - | 1 | 1 | yes | - | - | - | - | L4 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FURN | 6848 | 9 | 2 | 6 | - | 2 | yes | yes | - | yes | 1 | L4 |
+| FSTS | 8692 | 5 | - | 1 | 5 | - | yes | - | environment/sound | yes | 3 | L4 |
+| FURN | 6848 | 49 | 4 | 14 | 1 | 2 | yes | yes | - | yes | 2 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| GMST | 6936 | 3 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| GRAS | 9612 | 10 | - | - | - | - | yes | - | environment/vegetation | - | 1 | L4 |
-| HAZD | 7180 | 9 | - | 4 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
-| HDPT | 7006 | 2 | - | 3 | 1 | 1 | yes | - | - | - | 1 | L4 |
+| GMST | 6936 | 3 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
+| GRAS | 9612 | 23 | 1 | 1 | - | - | yes | - | environment/vegetation | - | 2 | L4 |
+| HAZD | 7180 | 22 | 1 | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
+| HDPT | 7006 | 10 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
-| IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
-| IMAD | 7466 | 64 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| IDLM | 7098 | 17 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
+| IMAD | 7466 | 184 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
-| INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
-| INGR | 9788 | 11 | 3 | 5 | - | 1 | yes | yes | - | - | 1 | L4 |
-| INNR | 12337 | 1 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
-| IPCT | 7978 | 8 | - | 6 | - | - | yes | - | - | - | 1 | L4 |
-| IPDS | 8014 | - | - | - | - | - | yes | - | - | - | 2 | L4 |
-| KEYM | 9823 | 9 | 3 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
+| INFO | 9672 | 15 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 3 | L4 |
+| INGR | 9788 | 29 | 5 | 9 | - | 1 | yes | yes | - | - | 2 | L4 |
+| INNR | 12337 | 7 | 1 | - | - | 1 | yes | - | - | - | 1 | L4 |
+| IPCT | 7978 | 27 | 1 | 7 | - | - | yes | - | - | - | 1 | L4 |
+| IPDS | 8014 | - | - | 2 | - | - | yes | - | - | - | 2 | L4 |
+| KEYM | 9823 | 27 | 5 | 8 | - | 1 | yes | yes | - | - | 2 | L4 |
 | KSSM | 12387 | 1 | - | 3 | 1 | - | yes | - | - | yes | 1 | L4 |
-| KYWD | 6947 | 1 | 2 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
+| KYWD | 6947 | 5 | 2 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | yes | - | L2 |
 | LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
-| LCRT | 6962 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| LCTN | 8039 | 2 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
-| LENS | 12405 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| LGTM | 8629 | 16 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
-| LIGH | 9871 | 19 | 1 | 3 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
+| LCRT | 6962 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| LCTN | 8039 | 16 | - | 30 | - | 1 | yes | yes | - | yes | 1 | L4 |
+| LENS | 12405 | 12 | 2 | - | - | - | yes | - | - | - | 2 | L4 |
+| LGTM | 8629 | 81 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
+| LIGH | 9871 | 44 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 4 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
-| LTEX | 9967 | - | - | - | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
-| LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
-| LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
-| LVSP | 10033 | - | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
-| MATO | 9375 | 7 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
+| LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 2 | L4 |
+| LVLI | 10009 | 10 | - | 3 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVLN | 9986 | 17 | 1 | 3 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVSP | 10033 | 9 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
+| MATO | 9375 | 19 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
+| MATT | 7958 | 12 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
-| MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | yes | 1 | L4 |
-| MISC | 10212 | - | - | - | - | 1 | - | yes | forms/components | yes | 1 | L2 |
-| MOVT | 9393 | 5 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
-| MSTT | 7067 | 7 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
-| MSWP | 12437 | - | - | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
-| MUSC | 8665 | 4 | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| MUST | 8795 | 6 | 2 | 1 | - | - | yes | - | - | yes | 1 | L4 |
+| MGEF | 10052 | 17 | - | 18 | 1 | 2 | yes | yes | - | yes | 1 | L4 |
+| MISC | 10212 | 18 | 2 | 4 | - | 1 | yes | yes | forms/components | yes | 2 | L4 |
+| MOVT | 9393 | 61 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
+| MSTT | 7067 | 26 | 3 | 8 | - | 1 | yes | yes | - | - | 1 | L4 |
+| MSWP | 12437 | 1 | 2 | - | - | - | yes | - | environment/material_swap | - | 2 | L4 |
+| MUSC | 8665 | 4 | - | - | 1 | - | yes | - | environment/sound | yes | 2 | L4 |
+| MUST | 8795 | 7 | 2 | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
-| NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| NOTE | 12470 | 3 | 3 | 3 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 47 | - | - | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
-| OMOD | 12501 | - | - | - | - | 2 | - | - | - | yes | - | L0 |
-| OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
+| NOCM | 12453 | 1 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
+| NOTE | 12470 | 16 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
+| NPC_ | 10286 | 93 | 4 | 55 | 3 | 3 | yes | yes | forms/npc | yes | 2 | L4 |
+| OMOD | 12501 | 15 | 1 | 2 | 2 | 2 | yes | - | - | yes | 1 | L4 |
+| OTFT | 9357 | - | - | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
-| PARW | 5944 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PBAR | 5945 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PBEA | 5946 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PCON | 5947 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PERK | 7582 | - | - | - | - | 3 | - | - | - | yes | 1 | L0 |
-| PFLA | 5948 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PGRE | 5949 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PHZD | 5950 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PKIN | 12571 | 1 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
+| PACK | 10526 | 26 | - | 12 | - | - | yes | - | environment/behavior | - | 5 | L4 |
+| PARW | 5944 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PBAR | 5945 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PBEA | 5946 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PCON | 5947 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PERK | 7582 | 5 | 2 | 2 | - | 3 | yes | - | - | yes | 2 | L4 |
+| PFLA | 5948 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PGRE | 5949 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PHZD | 5950 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PKIN | 12571 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
-| QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
-| RACE | 11054 | - | 4 | - | 8 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
-| REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| REGN | 11870 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
+| PMIS | 5951 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PROJ | 7115 | 40 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
+| QUST | 10684 | 6 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 8 | L4 |
+| RACE | 11054 | 133 | 19 | 47 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 3 | L4 |
+| REFR | 11347 | 80 | - | 34 | 1 | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | 1 | L4 |
+| REGN | 11870 | 12 | 1 | 7 | - | 1 | yes | - | - | yes | 1 | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | RFGP | 12582 | - | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| SCCO | 12593 | - | - | 1 | - | - | yes | - | - | - | 1 | L4 |
+| SCCO | 12593 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
-| SCOL | 12627 | - | - | - | - | 1 | - | - | forms/static_collection | - | - | L2 |
-| SCSN | 12650 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
+| SCOL | 12627 | 13 | 2 | 2 | - | 1 | yes | - | forms/static_collection | - | - | L4 |
+| SCSN | 12650 | 2 | - | 1 | - | - | yes | - | - | yes | 1 | L4 |
 | SMBN | 8720 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
-| SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
+| SMQN | 8735 | 4 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
-| SNDR | 9406 | 10 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
-| SOPM | 9489 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
-| SOUN | 11961 | 3 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
-| SPEL | 12030 | 8 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
+| SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 7 | L4 |
+| SOPM | 9489 | 24 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
+| SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 3 | L4 |
+| SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 4 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| STAT | 12045 | 3 | 1 | 1 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
-| TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
-| TERM | 12671 | 8 | 2 | 2 | - | 7 | yes | yes | - | yes | 1 | L4 |
-| TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 7 | L0 |
-| TREE | 12134 | 16 | - | 2 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
+| STAT | 12045 | 19 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 3 | L4 |
+| TACT | 5672 | 24 | 3 | 7 | - | 1 | yes | yes | - | - | 1 | L4 |
+| TERM | 12671 | 29 | 7 | 7 | - | 7 | yes | yes | - | yes | 2 | L4 |
+| TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 5 | L0 |
+| TREE | 12134 | 29 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 2 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| TXST | 6984 | 13 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
+| TXST | 6984 | 19 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
-| WEAP | 12877 | 45 | - | 13 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
-| WRLD | 13110 | - | - | - | - | 1 | - | - | environment/world | yes | 1 | L2 |
-| WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
+| WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 2 | L4 |
+| WEAP | 12877 | 67 | 3 | 34 | - | 2 | yes | yes | forms/weapon | yes | 3 | L4 |
+| WRLD | 13110 | 37 | 4 | 8 | - | 1 | yes | - | environment/world | yes | 2 | L4 |
+| WTHR | 13034 | 131 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 
 ### Field-kind coverage
@@ -199,32 +199,34 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
-| AACT | - | - | 1 | - | 1 | u32 | - | - | - | existing_only |
-| ACTI | 6 | - | - | 1 | 1 | i16, u16 | - | - | - | existing_only |
-| ADDN | 2 | - | 1 | - | - | u16, u32 | - | - | - | existing_only |
-| AECH | - | - | - | - | - | - | - | - | - | - |
-| ALCH | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
+| AACT | 4 | - | 1 | - | 1 | u32, u8 | - | - | - | existing_only |
+| ACHR | 29 | 1 | 4 | 3 | 1 | f32, i32, u32, u8 | 8 | 11 | - | existing_only |
+| ACTI | 25 | 1 | - | 3 | 3 | f32, i16, i32, u16, u32, u8 | 12 | 11 | - | existing_only |
+| ADDN | 15 | - | 1 | - | 1 | i16, u16, u32 | - | 7 | - | existing_only |
+| AECH | 9 | - | 3 | - | - | f32, u32 | 12 | - | 10 | existing_only |
+| ALCH | 25 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
 | AMDL | 16 | - | - | - | - | f32, u32 | - | - | - | existing_only |
-| AMMO | 11 | - | - | 1 | 2 | f32, i16, u32, u8 | - | - | - | existing_only |
-| ANIO | - | - | - | - | 1 | - | - | - | - | existing_only |
+| AMMO | 26 | 1 | - | 3 | 4 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
+| ANIO | 7 | - | - | - | 2 | u32 | - | 7 | - | existing_only |
 | AORU | 3 | - | 2 | - | - | f32, u8 | - | - | - | existing_only |
-| ARMA | - | - | - | - | - | - | - | - | - | - |
-| ARMO | - | - | - | - | - | - | - | - | - | - |
-| ARTO | 7 | - | 1 | - | 1 | f32, i16, u32 | - | - | - | existing_only |
-| ASPC | 1 | - | 1 | - | - | u16, u8 | - | - | - | existing_only |
+| ARMA | 9 | - | 1 | 6 | 4 | f32, u32, u8 | 2 | - | - | existing_only |
+| ARMO | 23 | 1 | 1 | 2 | 8 | f32, i16, i32, u16, u32, u8 | 15 | 4 | - | existing_only |
+| ARTO | 14 | - | 1 | - | 1 | f32, i16, u32 | - | 7 | - | existing_only |
+| ASPC | 7 | - | 1 | - | - | i16, u16, u8 | - | - | - | existing_only |
+| ASTP | - | - | - | 1 | 4 | u32 | - | - | - | existing_only |
 | AVIF | 1 | - | 1 | 1 | - | f32, u32 | - | - | - | existing_only |
-| BNDS | 7 | - | 1 | - | - | f32, u16 | - | - | - | existing_only |
-| BOOK | 11 | - | - | 1 | 3 | f32, i16, u32, u8 | - | - | - | existing_only |
+| BNDS | 13 | - | 1 | - | - | f32, i16, u16 | - | - | - | existing_only |
+| BOOK | 26 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
 | BPTD | - | - | - | - | - | - | - | - | - | - |
-| CAMS | 12 | - | 3 | 1 | - | f32, u32 | - | - | - | existing_only |
-| CELL | - | - | - | - | - | - | - | - | - | - |
-| CLAS | 1 | - | - | - | 1 | f32 | - | - | - | existing_only |
+| CAMS | 19 | - | 3 | 1 | 1 | f32, u32 | - | 7 | - | existing_only |
+| CELL | 32 | - | - | 2 | 1 | f32, i32, u16, u32, u8 | - | 4 | - | existing_only |
+| CLAS | 2 | - | - | - | 1 | f32 | - | 2 | - | existing_only |
 | CLFM | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
-| CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
-| CMPO | 1 | - | - | - | - | u32 | - | - | - | existing_only |
-| COBJ | - | - | - | - | - | - | - | - | - | - |
-| COLL | 2 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
-| CONT | 9 | - | - | 1 | 1 | f32, i16, i32, u32, u8 | 2 | - | - | existing_only |
+| CLMT | 14 | - | - | - | 3 | i32, u32, u8 | - | 10 | - | existing_only |
+| CMPO | 7 | - | - | - | - | i16, u32 | - | - | - | existing_only |
+| COBJ | 2 | - | - | - | - | u16 | - | - | - | existing_only |
+| COLL | 5 | - | - | 1 | 1 | u32, u8 | - | - | - | existing_only |
+| CONT | 26 | 1 | - | 4 | 3 | f32, i16, i32, u32, u8 | 14 | 11 | - | existing_only |
 | CPTH | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DEBR | - | - | - | - | - | - | - | - | - | - |
@@ -234,113 +236,113 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | DLVW | - | - | - | - | - | - | - | - | - | existing_only |
 | DMGT | - | - | - | - | - | - | - | - | - | - |
 | DOBJ | - | - | - | - | - | - | - | - | - | - |
-| DOOR | 6 | - | - | 1 | 1 | i16, u8 | - | - | - | existing_only |
-| DUAL | - | - | - | 1 | - | u32 | - | - | - | existing_only |
+| DOOR | 22 | 1 | - | 4 | 3 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
+| DUAL | 6 | - | - | 1 | - | i16, u32 | - | - | - | existing_only |
 | ECZN | 3 | - | - | 1 | - | i8, u8 | - | - | - | existing_only |
-| EFSH | - | - | - | - | 5 | - | - | - | - | existing_only |
-| ENCH | 3 | - | 3 | 1 | - | f32, i32, u32 | - | - | - | existing_only |
+| EFSH | 7 | - | - | - | 6 | u32 | - | 7 | - | existing_only |
+| ENCH | 9 | - | 3 | 1 | - | f32, i16, i32, u32 | - | - | - | existing_only |
 | EQUP | - | - | - | 1 | - | u32 | - | - | - | existing_only |
-| EXPL | 15 | - | - | - | - | f32, u32 | - | - | - | existing_only |
+| EXPL | 28 | - | - | - | 1 | f32, i16, u32 | - | 7 | - | existing_only |
 | EYES | - | - | - | - | - | - | - | - | - | - |
 | FACT | 12 | - | 5 | 1 | - | f32, u16, u32, u8 | 1 | - | - | existing_only |
-| FLOR | 5 | - | - | - | - | u16, u8 | - | - | - | existing_only |
+| FLOR | 30 | 1 | - | 2 | 3 | f32, i16, i32, u16, u32, u8 | 12 | 11 | - | existing_only |
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
-| FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
-| FURN | 6 | - | 1 | 2 | 2 | i16, u16, u32, u8 | - | - | - | existing_only |
+| FSTS | 5 | - | - | - | - | u32 | - | 1 | - | existing_only |
+| FURN | 38 | 1 | 3 | 7 | 4 | f32, i16, i32, u16, u32, u8 | 24 | 22 | - | existing_only |
 | GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GLOB | 1 | - | 1 | - | - | f32, u8 | - | - | - | existing_only |
-| GMST | 2 | - | 1 | - | - | f32, i32, u32 | - | - | 3 | existing_only |
-| GRAS | 10 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
-| HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
-| HDPT | - | - | 1 | 1 | - | u32, u8 | - | - | - | existing_only |
+| GMST | 2 | - | 1 | - | 1 | f32, i32, u32 | - | - | 4 | existing_only |
+| GRAS | 23 | - | - | - | 1 | f32, i16, u16, u32, u8 | - | 7 | - | existing_only |
+| HAZD | 22 | - | - | - | 1 | f32, i16, u32 | - | 7 | - | existing_only |
+| HDPT | 7 | - | 2 | 1 | 2 | u32, u8 | 2 | 7 | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
-| IDLM | 9 | - | - | 1 | 1 | f32, i16, u8 | - | - | - | existing_only |
-| IMAD | 60 | - | 3 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| IDLM | 16 | - | - | 1 | 1 | f32, i16, u32, u8 | - | 7 | - | existing_only |
+| IMAD | 180 | - | 3 | 1 | - | f32, u32, u8 | - | 120 | - | existing_only |
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
-| INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
-| INGR | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
-| INNR | - | - | 1 | - | - | u32 | - | - | - | existing_only |
-| IPCT | 4 | - | 3 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
-| IPDS | - | - | - | - | - | - | - | - | - | - |
-| KEYM | 9 | - | - | - | 3 | f32, i16, i32 | - | - | - | existing_only |
+| INFO | 15 | - | - | - | 7 | bytes, i32, u16, u32, u8 | 16 | - | - | existing_only |
+| INGR | 25 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
+| INNR | 4 | - | 3 | - | 1 | f32, u16, u32, u8 | 7 | - | - | existing_only |
+| IPCT | 22 | - | 3 | 2 | 1 | f32, u32, u8 | - | 7 | - | existing_only |
+| IPDS | - | - | - | - | - | - | 2 | - | - | existing_only |
+| KEYM | 24 | 1 | - | 2 | 5 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
 | KSSM | 1 | - | - | - | - | f32 | - | - | - | existing_only |
-| KYWD | - | - | 1 | - | 2 | u32 | - | - | - | existing_only |
+| KYWD | 4 | - | 1 | - | 2 | u32, u8 | - | - | - | existing_only |
 | LAYR | - | - | - | - | - | - | - | - | - | existing_only |
-| LCRT | - | - | 1 | - | - | u32 | - | - | - | existing_only |
-| LCTN | 2 | - | - | - | - | f32 | - | - | - | existing_only |
-| LENS | 1 | - | - | - | - | f32 | - | - | - | existing_only |
-| LGTM | 16 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
-| LIGH | 18 | - | - | 1 | 1 | f32, i32, u32, u8 | - | - | - | existing_only |
+| LCRT | 4 | - | 1 | - | - | u32, u8 | - | - | - | existing_only |
+| LCTN | 14 | - | - | 2 | - | f32, i16, u8 | 3 | 33 | - | existing_only |
+| LENS | 11 | - | - | 1 | 2 | f32, u32 | 11 | - | - | existing_only |
+| LGTM | 81 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
+| LIGH | 40 | 1 | - | 3 | 6 | f32, i16, i32, u32, u8 | 12 | 11 | - | existing_only |
 | LSCR | 4 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
-| LTEX | - | - | - | - | - | - | - | - | - | - |
-| LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
-| LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
-| LVSP | - | - | - | - | - | - | - | - | - | - |
-| MATO | 7 | - | - | - | - | f32 | - | - | - | existing_only |
-| MATT | 4 | - | - | 1 | 2 | f32, u32 | - | - | - | existing_only |
+| LTEX | 3 | - | - | - | - | u8 | - | - | - | existing_only |
+| LVLI | 10 | - | - | - | - | i16, u32, u8 | - | 2 | - | existing_only |
+| LVLN | 17 | - | - | - | 1 | i16, u32, u8 | - | 9 | - | existing_only |
+| LVSP | 9 | - | - | - | - | i16, u8 | - | - | - | existing_only |
+| MATO | 18 | - | 1 | - | 1 | f32, u32 | - | 7 | - | existing_only |
+| MATT | 11 | - | - | 1 | 2 | f32, u32 | - | 7 | - | existing_only |
 | MESG | 1 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | MGEF | 12 | - | 4 | 1 | - | f32, u32 | - | - | - | existing_only |
-| MISC | - | - | - | - | - | - | - | - | - | - |
-| MOVT | 5 | - | - | - | 1 | f32 | - | - | - | existing_only |
-| MSTT | 6 | - | 1 | - | 1 | i16, u8 | - | - | - | existing_only |
-| MSWP | - | - | - | - | - | - | - | - | - | - |
-| MUSC | 4 | - | - | - | - | f32, u16, u32 | - | 1 | - | existing_only |
-| MUST | 5 | - | 1 | - | 2 | f32, u32 | - | 1 | - | existing_only |
+| MISC | 15 | 1 | - | 2 | 2 | f32, i32, u32, u8 | 12 | 9 | - | existing_only |
+| MOVT | 61 | - | - | - | 1 | f32 | - | - | - | existing_only |
+| MSTT | 22 | 1 | 1 | 2 | 3 | f32, i16, i32, u32, u8 | 12 | 11 | - | existing_only |
+| MSWP | 1 | - | - | - | 2 | f32 | 3 | - | - | existing_only |
+| MUSC | 4 | - | - | - | - | f32, u16, u32 | - | - | - | existing_only |
+| MUST | 6 | - | 1 | - | 2 | f32, u32 | - | 1 | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
-| NOCM | - | - | - | - | - | - | - | - | - | - |
-| NOTE | 2 | - | 1 | - | 3 | f32, u32, u8 | - | - | - | existing_only |
-| NPC_ | 37 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
-| OMOD | - | - | - | - | - | - | - | - | - | - |
+| NOCM | 1 | - | - | - | 1 | u32 | 2 | - | - | existing_only |
+| NOTE | 15 | - | 1 | - | 3 | f32, i16, u32, u8 | - | 7 | 3 | existing_only |
+| NPC_ | 77 | 1 | 10 | 5 | 4 | f32, i16, i32, u16, u32, u8 | 52 | 4 | - | existing_only |
+| OMOD | 12 | - | 3 | - | 1 | u32, u8 | - | 7 | - | existing_only |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
-| PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
-| PARW | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PBAR | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PBEA | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PCON | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PERK | - | - | - | - | - | - | - | - | - | - |
-| PFLA | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PGRE | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PHZD | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PKIN | 1 | - | - | - | 1 | u32 | - | - | - | existing_only |
+| PACK | 24 | - | - | 2 | - | i32, i8, u16, u32, u8 | 23 | - | 17 | existing_only |
+| PARW | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PBAR | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PBEA | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PCON | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PERK | 2 | - | 3 | - | 2 | u8 | - | - | - | existing_only |
+| PFLA | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PGRE | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PHZD | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PKIN | 7 | - | - | - | 1 | i16, u32 | - | - | - | existing_only |
 | PLYR | - | - | - | - | - | - | - | - | - | - |
-| PMIS | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PROJ | 16 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
-| QUST | - | - | - | - | - | - | - | - | - | - |
-| RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |
-| REFR | 6 | 1 | - | - | - | f32, u32 | - | 4 | - | existing_only |
-| REGN | - | - | - | - | - | - | - | - | - | - |
+| PMIS | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PROJ | 37 | 1 | - | 2 | 4 | f32, i16, i32, u16, u32, u8 | 12 | 9 | - | existing_only |
+| QUST | 3 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
+| RACE | 116 | - | 12 | 5 | 19 | f32, i16, i32, u16, u32, u8 | 111 | 8 | - | existing_only |
+| REFR | 68 | 1 | 6 | 5 | - | f32, i32, u32, u8 | 15 | 13 | - | existing_only |
+| REGN | 9 | - | 2 | 1 | 1 | f32, u32, u8 | 7 | 8 | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |
 | RFGP | - | - | - | - | 1 | - | - | - | - | existing_only |
-| SCCO | - | - | - | - | - | - | - | - | - | existing_only |
+| SCCO | 2 | - | - | - | - | i32 | 3 | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
-| SCOL | - | - | - | - | - | - | - | - | - | - |
-| SCSN | 1 | - | - | - | - | u16 | - | - | - | existing_only |
+| SCOL | 13 | - | - | - | 2 | i16, u32 | 1 | 7 | - | existing_only |
+| SCSN | 2 | - | - | - | - | f32, u16 | 2 | - | - | existing_only |
 | SMBN | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
 | SMEN | 1 | - | 1 | 1 | - | u32 | - | - | - | existing_only |
 | SMQN | 3 | - | - | 1 | - | f32, u32 | - | - | - | existing_only |
 | SNCT | 4 | - | - | 1 | - | f32, u16, u32 | - | - | - | existing_only |
-| SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
-| SOPM | 14 | - | 1 | 1 | - | f32, i16, u32, u8 | - | - | - | existing_only |
-| SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
-| SPEL | 4 | - | 3 | 1 | - | f32, u32 | - | - | - | existing_only |
+| SNDR | 10 | - | 1 | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
+| SOPM | 22 | - | 1 | 1 | - | f32, i16, u32, u8 | - | 8 | - | existing_only |
+| SOUN | 9 | - | - | - | - | f32, i16, u8 | - | - | - | existing_only |
+| SPEL | 10 | - | 3 | 1 | - | f32, i16, u32 | - | - | - | existing_only |
 | SPGD | 11 | - | 1 | - | 1 | f32, u32 | - | - | - | existing_only |
 | STAG | - | - | - | - | - | - | - | - | - | - |
-| STAT | 3 | - | - | - | 1 | f32 | - | - | - | existing_only |
-| TACT | 6 | - | - | - | 1 | i16 | - | - | - | existing_only |
-| TERM | 6 | - | - | 2 | 2 | i16, u16, u32 | - | - | - | existing_only |
-| TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| STAT | 18 | - | - | 1 | 5 | f32, i16, u32, u8 | - | 9 | - | existing_only |
+| TACT | 21 | 1 | - | 2 | 3 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
+| TERM | 25 | - | 1 | 3 | 7 | f32, i16, i32, u16, u32, u8 | 10 | 20 | - | existing_only |
+| TREE | 29 | - | - | - | 1 | f32, i16, u32, u8 | - | 7 | - | existing_only |
 | TRNS | 9 | - | - | - | - | f32 | - | - | - | existing_only |
-| TXST | 11 | - | - | 2 | 9 | f32, u16, u8 | - | - | - | existing_only |
+| TXST | 17 | - | - | 2 | 9 | f32, i16, u16, u8 | - | - | - | existing_only |
 | VTYP | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
-| WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
-| WRLD | - | - | - | - | - | - | - | - | - | - |
-| WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
+| WEAP | 55 | 1 | 6 | 5 | 3 | f32, i16, i32, u16, u32, u8 | 12 | 11 | - | existing_only |
+| WRLD | 35 | - | - | 2 | 4 | f32, i16, i32, i8, u16, u32, u8 | 4 | 7 | - | existing_only |
+| WTHR | 131 | - | - | - | 33 | f32, u32, u8 | 25 | 68 | - | existing_only |
 | ZOOM | 4 | - | 1 | - | - | f32, u32 | - | - | - | existing_only |
 
 ### Unsupported or opaque (not attributable by the script)
@@ -391,7 +393,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | CMPO | U | U | U | U | U | U | U | G | field audit pending |
 | COBJ | P | P | P | P | U | P | P | G | forms/components.hpp |
 | COLL | U | U | U | U | U | U | U | G | field audit pending |
-| CONT | I | I | I | I | U | U | I | G | field audit pending |
+| CONT | I | I | I | I | U | U | I | G | field audit: Radicle/docs/code-notes/Radicle.md (NPC_/DOOR/vendor audit); MODT model information rowed |
 | CPTH | U | U | U | U | U | U | U | G | field audit pending |
 | CSTY | U | U | U | U | U | U | U | G | field audit pending; PR #408 |
 | DEBR | U | U | U | U | U | U | U | G | field audit pending |
@@ -401,7 +403,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | DLVW | U | U | U | U | U | U | U | G | field audit pending |
 | DMGT | U | U | U | U | U | U | U | G | field audit pending |
 | DOBJ | U | U | U | U | U | P | U | G | field audit pending |
-| DOOR | I | I | I | I | U | U | I | G | field audit pending |
+| DOOR | I | I | I | I | U | U | I | G | field audit: Radicle/docs/code-notes/Radicle.md (NPC_/DOOR/vendor audit); MODT model information rowed |
 | DUAL | U | U | U | U | U | U | U | G | field audit pending |
 | ECZN | U | U | U | U | U | U | U | G | field audit pending |
 | EFSH | U | U | U | U | U | U | U | G | field audit pending |
@@ -409,7 +411,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | EQUP | U | U | U | U | U | P | U | G | field audit pending |
 | EXPL | P | P | U | U | P | P | P | G | forms/proj_expl_hazd.hpp |
 | EYES | P | P | P | U | P | P | P | G | forms/eyes.hpp |
-| FACT | P | P | P | P | P | P | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp, test_faction_creation.cpp, tests/test_packed_formlink_arrays.cpp (XNAM and PLVD remap); docs/FACTIONS.md |
+| FACT | P | P | P | P | P | P | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp, tests/test_packed_formlink_arrays.cpp (XNAM and PLVD remap); docs/FACTIONS.md |
 | FLOR | I | I | I | I | U | U | I | G | field audit pending; PR #404 |
 | FLST | P | P | P | P | U | P | P | G | environment / plugin headers |
 | FSTP | U | U | U | U | U | U | U | G | field audit pending; PR #400 |
@@ -459,7 +461,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | NAVM | U | U | U | U | U | P | U | G | field audit pending; PR #402 |
 | NOCM | U | U | U | U | U | U | U | G | field audit pending |
 | NOTE | U | U | U | U | U | U | U | G | field audit pending |
-| NPC_ | P | P | P | P | U | P | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit pending for unlisted fields |
+| NPC_ | P | P | P | P | U | P | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit: Radicle/docs/code-notes/Radicle.md (NPC_/DOOR/vendor audit) |
 | OMOD | U | U | U | U | U | P | U | G | field audit pending |
 | OTFT | U | U | U | U | U | U | U | G | field audit pending |
 | OVIS | U | U | U | U | U | U | U | G | field audit pending |
@@ -498,7 +500,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | SPEL | I | I | I | I | U | U | I | G | field audit pending |
 | SPGD | U | U | U | U | U | U | U | G | field audit pending |
 | STAG | U | U | U | U | U | U | U | G | field audit pending |
-| STAT | P | U | U | U | U | U | P | G | environment / plugin headers |
+| STAT | P | U | U | U | U | U | P | G | environment / plugin headers; field audit: Radicle/docs/code-notes/Radicle.md (NPC_/DOOR/vendor audit) |
 | TACT | I | I | I | I | U | U | I | G | field audit pending |
 | TERM | I | I | I | I | U | U | I | G | field audit pending |
 | TES4 | P | U | U | U | U | P | P | G | environment / plugin headers |
@@ -520,11 +522,11 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | EYES EDID / FULL / DATA | forms/eyes.hpp; tests/test_eyes.cpp | Localized/opaque FULL cannot be rewritten as inline text; broad deletion not proven |
 | LVSP settings / entries | forms/leveled_spell.hpp, forms/leveled_list.hpp; tests/test_lvsp.cpp | LVLI/LVLN share the entry code but have no creator; creation defaults need separate evidence |
 | PROJ / EXPL / HAZD fixed values | forms/proj_expl_hazd.hpp; tests/test_scalar_embedded.cpp | Complete per-field edited round-trips, C ABI/C# mutation exposure |
-| QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection_authoring.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
+| QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
 | RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
-| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction_creation.cpp); see docs/FACTIONS.md |
+| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction.cpp); see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
-| CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
+| CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors and interior creation |
 | MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | Other record members and whole-record creation |
 | WTHR MNAM | forms/weather_concept.hpp; tests/test_weather_concept.cpp | Other weather fields; missing/duplicate MNAM refuses mutation |
 | FLST / generated keywords | schema/formlink_lists.hpp; tests/test_formlink_lists.cpp | Each record's empty-list anchors and save/reload proof; unrelated fields |
@@ -584,16 +586,16 @@ I is deliberately weaker than complete acceptance: generated offsets and setters
 
 ## Open parser PR audit
 
-Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metadata or existing generic capabilities.
+Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metadata or existing generic capabilities. The #396, #398, #404, #427 and #428 gap cells were refreshed on 2026-10-25 after their writer tranches landed; the other rows keep the 2026-10-05 snapshot.
 
 | PR / issue | Stored-format tranche | READ | WRITE / ADD / REMOVE / CREATE gap | REMAP / VALIDATE / OPAQUE boundary |
 | --- | --- | --- | --- | --- |
-| #396 / #341 | WATR visual data; effective cell/world selection | Partial C++/C/C# | WATR visual mutation and creation absent; derived effective selection is not a stored field to write | Existing raw links; unknown visual layouts preserved; runtime selection evidence separate |
-| #398 / #343 | CLMT timing and moon byte; WTHR DATA | Partial C++/C/C# | CLMT timing edit/write/reparse first; WTHR MNAM already writable; other fields remain follow-ups | WLST/WTHR known links remap; raw bytes retained; weather execution separate |
+| #396 / #341 | WATR visual data; effective cell/world selection | Partial C++/C/C# | Visual fields, strings, links and optional subrecords write in place and WATR is created from proven defaults (`tests/test_water_authoring.cpp`, `tests/test_water_real.cpp`); derived effective selection is not a stored field to write | Existing raw links; unknown visual layouts preserved; runtime selection evidence separate |
+| #398 / #343 | CLMT timing and moon byte; WTHR DATA | Partial C++/C/C# | CLMT timing edit/write/reparse delivered, WTHR MNAM already writable and the fixed DATA fields write in place (`tests/test_climate_weather_authoring.cpp`); other fields remain follow-ups | WLST/WTHR known links remap; raw bytes retained; weather execution separate |
 | #400 / #340 | SNDR variants, SOUN, MUSC, FSTP/FSTS | Partial C++/C/C# | Variant-aware existing edits, file/link add/remove and valid creation absent | Discriminator-specific references must be proved; playback is separate |
 | #402 / #339 | NAVM geometry and NAVI maps | Partial C++/C/C# | Geometry/container mutation and valid grouped creation absent | Existing form ID grammar only; opaque NVPP/island/cover data cannot be reconstructed by guessing |
-| #404 / #342 | GRAS DATA, TREE CNAM, FLOR seasons/links, LTEX grass | Partial C++/C/C# | Existing value edits first, then proven optional insertion/deletion and creation | FLOR keywords exist separately; numeric bytes cannot be remapped as links; placement algorithms separate |
-| #406 / #344 | DIAL, INFO responses, SCEN phases/actions | Partial C++/C/C# | Response/action editing and container add/remove/create absent | INFO copy-as-new and SCEN keyword editing already exist; action/VMAD ownership remains scoped |
+| #404 / #342 | GRAS DATA, TREE CNAM, FLOR seasons/links, LTEX grass | Partial C++/C/C# | Delivered by the #428 writer tranche: value edits, optional insertion/deletion, PFIG/SNAM link writes, LTEX GNAM list edits and GRAS/TREE/FLOR/LTEX creation (`tests/test_vegetation_authoring.cpp`, `tests/test_vegetation_real.cpp`) | FLOR keywords exist separately; numeric bytes cannot be remapped as links; placement algorithms separate |
+| #406 / #344 | DIAL, INFO responses, SCEN phases/actions | Partial C++/C/C# | INFO response groups add and remove as one unit with their in-place field edits (`tests/test_dialogue_writer.cpp`); SCEN phase and action insert, removal and reorder keep the action indices, phase start/end references and VMAD phase fragments consistent (`tests/test_scene_phase_edit.cpp`, `tests/test_scene_actor_action_edit.cpp`, `tests/test_vmad_fragments.cpp`); container add/remove/create beyond those groups stays refused | INFO copy-as-new exists; scene action payload lists stay opaque |
 | #408 / #345 | PACK headers/schedule/locations/targets, CSTY, IDLE | Partial C++/C/C# | Existing fixed data edits first; procedure/input/tree mutation and creation unproven | Discriminators distinguish IDs from numeric values; preserve opaque procedure streams |
 | #409 / #15 | VMAD variable evidence | Known properties and empty type 16 | Type 6 / nonempty 16 mutation/remap remains refused; variable authoring absent | Empty type 16 remaps surrounding object references; strict traversal required; no unsafe runtime error recovery |
 | #410 / #28 | Context-driven runtime light IDs | Context API | No stored-format writer prerequisite | Runtime table construction is separate from on-disk MAST ordinals |
@@ -604,8 +606,8 @@ Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metad
 | #419 / #422 | CI workflow / runner tooling | Infrastructure | No semantic editing promotion | #384 managed execution still required; audit shared CI changes independently |
 | #424 / #287 | Operation matrix | Documentation | Main baseline and branch capabilities stay separate; full field/helper expansion pending | No new format or runtime acceptance |
 | #426 / #384 | Required managed CI | Infrastructure | Native/C ABI/managed checks required; no field promotion | Verified both runners and clean Windows teardown at its head; adopted into feature branches (ledger below); not yet adopted: #392, #419 |
-| #427 / #425 | Existing CLMT timing edits | Partial C++/C/C# | Existing WRITE tested; TNAM ADD/REMOVE and CLMT CREATE absent | See bounded writer ledger below; no runtime weather reproduction |
-| #428 / #342 | Existing GRAS/TREE/FLOR fixed fields | Partial C++/C/C# | Existing WRITE tested; ADD/REMOVE/CREATE, PFIG/SNAM link writes and LTEX GNAM list edits absent | See vegetation writer ledger below |
+| #427 / #425 | Existing CLMT timing edits | Partial C++/C/C# | Existing WRITE tested; TNAM ADD/REMOVE delivered (`tests/test_climate_weather_authoring.cpp`), CLMT CREATE from proven defaults delivered, and WLST entries add and remove (`tests/test_clmt_weather_entries.cpp`) | See bounded writer ledger below; no runtime weather reproduction |
+| #428 / #342 | Existing GRAS/TREE/FLOR fixed fields | Partial C++/C/C# | Existing WRITE tested; ADD/REMOVE/CREATE, PFIG/SNAM link writes and LTEX GNAM list edits delivered (`tests/test_vegetation_authoring.cpp`, `tests/test_vegetation_real.cpp`) | See vegetation writer ledger below |
 
 ### Managed CI adoption ledger
 

@@ -1,12 +1,17 @@
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
+#include <tuple>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 
+#include "../helpers/GraphBuilder.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
 #include "../../src/app/PapyrusStaging.hpp"
 
@@ -32,6 +37,11 @@ std::filesystem::path buildPex(const std::filesystem::path& sourceFile,
     const auto result = fo4ide::papyrus::AnalysisService::compile(sourceFile.string(), &out);
     REQUIRE(result.find("RESULT: 1 succeeded") != std::string::npos);
     return outDir / "Greeter.pex";
+}
+
+std::string readBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 }
 
 }
@@ -190,66 +200,31 @@ TEST_CASE("PapyrusStaging reports an unstageable namespace part as an error, not
     CHECK_FALSE(std::filesystem::exists(staging));
 }
 
-TEST_CASE("PapyrusStaging refuses a ScriptName with a wildcard or query character and creates nothing") {
+TEST_CASE("PapyrusStaging refuses an unsafe ScriptName and writes nothing outside staging") {
+    const std::vector<std::tuple<std::string, std::string, std::string>> rows = {
+        {"ScriptName A:B?:C", "", "unsafe namespace part"},
+        {"ScriptName ..:..:Evil", "../Evil.psc", "Refused to compile"},
+        {"ScriptName A:..:B", "", "Refused to compile"},
+        {"ScriptName MyMod:/fo4ide_gt086_escape:Evil", "/fo4ide_gt086_escape/Evil.psc", "Refused to compile"},
+    };
+    const auto& [scriptLine, escapeText, fragment] =
+        rows[GENERATE(std::size_t{0}, std::size_t{1}, std::size_t{2}, std::size_t{3})];
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    const auto source = root / "src" / "Query.psc";
-    touch(source, "ScriptName A:B?:C\nFunction Ping()\nEndFunction\n");
+    const auto source = root / "src" / "Evil.psc";
+    touch(source, scriptLine + "\nFunction Ping()\nEndFunction\n");
     const auto staging = root / "staging";
+    const bool hasEscape = !escapeText.empty();
+    const auto escaped = hasEscape ? root / escapeText : std::filesystem::path{};
 
     const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
+    const bool escapedWritten = hasEscape && std::filesystem::exists(escaped);
+    std::error_code ec;
+    if (hasEscape) std::filesystem::remove(escaped, ec);
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "UnsafeScriptName");
-    CHECK(result.error().message.find("unsafe namespace part") != std::string::npos);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging refuses a ScriptName that climbs out with ..") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Evil.psc";
-    touch(source, "ScriptName ..:..:Evil\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-    const auto escaped = root.parent_path() / "Evil.psc";
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    const bool escapedWritten = std::filesystem::exists(escaped);
-    std::error_code ec;
-    std::filesystem::remove(escaped, ec);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
-    CHECK_FALSE(escapedWritten);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging refuses a ScriptName with a parent part in the middle") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Evil.psc";
-    touch(source, "ScriptName A:..:B\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging refuses a ScriptName with a rooted part") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Evil.psc";
-    touch(source, "ScriptName MyMod:/fo4ide_gt086_escape:Evil\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-    const auto escaped = std::filesystem::path("/fo4ide_gt086_escape") / "Evil.psc";
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    const bool escapedWritten = std::filesystem::exists(escaped);
-    std::error_code ec;
-    std::filesystem::remove(escaped, ec);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
-    CHECK_FALSE(escapedWritten);
+    CHECK(result.error().message.find(fragment) != std::string::npos);
+    if (hasEscape) CHECK_FALSE(escapedWritten);
     CHECK_FALSE(std::filesystem::exists(staging));
 }
 
@@ -383,6 +358,25 @@ TEST_CASE("PapyrusTarget Check reports clean and broken scripts") {
     CHECK(syntaxOnly->get<std::string>().find("Syntax only") != std::string::npos);
 }
 
+TEST_CASE("PapyrusTarget Check resolves Extends from Settings base imports without the env var") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto script = root / "Greeter.psc";
+    touch(script, "Scriptname Greeter extends ObjectReference\n");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    settings.fallout4Path = root / "Fallout 4";
+    settings.papyrusBaseImports = fo4ide::graph::test::baseStubs();
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto result = target.invoke("Check", nlohmann::json::array({script.string(), true, ""}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().find("not on the roots") == std::string::npos);
+}
+
 TEST_CASE("PapyrusTarget SymbolAt returns the symbol JSON contract") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -508,4 +502,72 @@ TEST_CASE("PapyrusTarget StageDroppedFile mirrors the NIF staging contract") {
     CHECK(contents == "Scriptname X.");
     std::error_code ec;
     std::filesystem::remove_all(path.parent_path(), ec);
+}
+
+TEST_CASE("PapyrusTarget analysis RPCs match the PET oracle on real sources") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    settings.papyrusBaseImports = fo4ide::graph::test::baseStubs();
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+    const auto imports = fixture.locator.papyrusBaseImports();
+
+    const auto event = fo4ide::graph::test::graphScripts() / "FixtureEventSource.psc";
+    const auto actor = fo4ide::graph::test::baseStubs() / "Actor.psc";
+    const auto bad = root / "Bad.psc";
+    touch(bad, "Scriptname Bad\nFunction Broken(\nEndFunction\n");
+
+    SECTION("Check") {
+        for (const auto& file : {event, actor, bad}) {
+            const auto path = file.string();
+            const auto oracle =
+                fo4ide::papyrus::AnalysisService::check(path, true, true, nullptr, imports);
+            auto result = target.invoke("Check", nlohmann::json::array({path, true, ""}));
+            REQUIRE(result.has_value());
+            CHECK(result->get<std::string>() == oracle);
+        }
+    }
+
+    SECTION("Analyze") {
+        for (const auto& file : {event, actor, bad}) {
+            const auto path = file.string();
+            const auto text = readBytes(file);
+            const auto oracle = fo4ide::papyrus::AnalysisService::analyzeJson(text, &path);
+            auto result = target.invoke("Analyze", nlohmann::json::array({text, path}));
+            REQUIRE(result.has_value());
+            CHECK(result->get<std::string>() == oracle);
+        }
+    }
+
+    SECTION("SymbolAt") {
+        const auto path = event.string();
+        const auto text = readBytes(event);
+        const auto offset = static_cast<int>(text.find("RaiseIt"));
+        const auto oracle =
+            fo4ide::papyrus::AnalysisService::symbolAtJson(text, &path, offset, nullptr, imports);
+        auto result = target.invoke("SymbolAt", nlohmann::json::array({text, path, offset, ""}));
+        REQUIRE(result.has_value());
+        CHECK(result->get<std::string>() == oracle);
+    }
+
+    SECTION("Compile") {
+        const auto path = event.string();
+        const auto out = (root / "compiled").string();
+        const auto pex = std::filesystem::path(out) / "FixtureEventSource.pex";
+        const auto oracle =
+            fo4ide::papyrus::AnalysisService::compile(path, &out, nullptr, false, true, nullptr, imports);
+        REQUIRE(oracle.find("RESULT: 1 succeeded") != std::string::npos);
+        const auto oracleBytes = readBytes(pex);
+        REQUIRE(!oracleBytes.empty());
+        std::filesystem::remove(pex);
+
+        auto result = target.invoke(
+            "Compile", nlohmann::json::array({path, out, "", "", false, false, false, "", "builtin"}));
+        REQUIRE(result.has_value());
+        CHECK(result->get<std::string>() == oracle);
+        CHECK(readBytes(pex) == oracleBytes);
+    }
 }

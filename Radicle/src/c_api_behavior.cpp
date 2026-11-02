@@ -4,8 +4,10 @@
 #include "fo4/environment/package_procedure.hpp"
 #include "fo4/text/encoding.hpp"
 
+#include <cstring>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -159,10 +161,15 @@ radicle_status radicle_package_procedure_decode(const radicle_env* env, const ra
     const auto t = fo4::env::decode_package_procedure(*to_ref(record)->record);
     auto h = std::make_unique<ProcedureTreeHolder>(); auto& v = h->view;
     v.decoded = t.decoded; v.region_begin = t.region_begin; v.region_end = t.region_end;
-    if (t.marker) { v.has_marker = 1; v.marker = *t.marker; }
+    if (t.next_input_id) { v.has_next_input_id = 1; v.next_input_id = *t.next_input_id; }
     for (const auto& input : t.inputs) {
       h->names.push_back(input.type_name);
-      h->inputs.push_back({h->names.back().c_str(), input.subrecord_begin, input.subrecord_end, input.index});
+      const char* type_name = h->names.back().c_str();
+      h->names.push_back(input.value_tag.to_string());
+      h->inputs.push_back({type_name, input.subrecord_begin, input.subrecord_end, input.index,
+          h->names.back().c_str(), input.value_index,
+          static_cast<radicle_package_input_value_kind>(input.kind), input.boolean ? 1 : 0, input.integer,
+          input.integer_raw, input.real});
     }
     for (const auto& node : t.nodes) {
       h->names.push_back(node.name);
@@ -180,6 +187,163 @@ radicle_status radicle_package_procedure_decode(const radicle_env* env, const ra
 
 void radicle_package_procedure_free(const radicle_package_procedure_tree* tree) {
   if (tree) delete static_cast<ProcedureTreeHolder*>(tree->internal);
+}
+
+extern "C++" {
+namespace {
+
+std::optional<fo4::env::PackageInputValue> to_input_value(const radicle_package_input_value& value) {
+  using Kind = fo4::env::PackageInputValueKind;
+  const auto kind = static_cast<int>(value.kind);
+  if (kind < RADICLE_PACKAGE_INPUT_NONE || kind > RADICLE_PACKAGE_INPUT_TOPIC) return std::nullopt;
+  fo4::env::PackageInputValue out;
+  out.kind = static_cast<Kind>(value.kind);
+  out.boolean = value.boolean != 0;
+  out.integer = value.integer;
+  out.real = value.real;
+  if (value.payload != nullptr && value.payload_size > 0) {
+    out.payload.resize(value.payload_size);
+    std::memcpy(out.payload.data(), value.payload, value.payload_size);
+  }
+  return out;
+}
+
+radicle_status package_input_failure(fo4::env::PackageInputMutationStatus status) {
+  using Status = fo4::env::PackageInputMutationStatus;
+  switch (status) {
+    case Status::updated:
+    case Status::unchanged:
+      return RADICLE_STATUS_OK;
+    case Status::record_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+    case Status::input_id_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, "package has no data input with that id");
+    case Status::not_a_package:
+      return fail(RADICLE_STATUS_PARSE_ERROR, "expected a PACK record");
+    case Status::undecodable:
+      return fail(RADICLE_STATUS_PARSE_ERROR, "package data inputs do not reconcile");
+    case Status::unknown_input_type:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "type name is not a registered data input type");
+    case Status::duplicate_input_id:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "package stores duplicate data input ids");
+    case Status::kind_mismatch:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "value kind does not match the data input type");
+    case Status::payload_size_invalid:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "payload size is not a stored layout size for this type");
+    case Status::payload_layout_undetermined:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "payload layout is not writable for this type");
+    case Status::payload_tag_mismatch:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "payload subrecord does not match the stored value subrecord");
+    case Status::procedure_tree_present:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "package has an unlinked procedure tree, so removal is refused");
+    case Status::no_free_input_id:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "no free data input id remains");
+  }
+  return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown package input mutation status");
+}
+
+}
+}
+
+radicle_status radicle_package_input_add(radicle_plugin* plugin, radicle_form_key key, const char* type_name,
+                                         const radicle_package_input_value* value) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || type_name == nullptr || value == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, a type name and a value are required");
+  }
+  const auto converted = to_input_value(*value);
+  if (!converted) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown data input value kind");
+  return guarded("unknown exception while adding a PACK data input", [&] {
+    return package_input_failure(fo4::env::add_package_data_input(plugin->value, *form_key, type_name, *converted));
+  });
+}
+
+radicle_status radicle_package_input_set(radicle_plugin* plugin, radicle_form_key key, uint8_t id,
+                                         const radicle_package_input_value* value) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || value == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key and a value are required");
+  }
+  const auto converted = to_input_value(*value);
+  if (!converted) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown data input value kind");
+  return guarded("unknown exception while setting a PACK data input", [&] {
+    return package_input_failure(fo4::env::set_package_data_input(plugin->value, *form_key, id, *converted));
+  });
+}
+
+radicle_status radicle_package_input_remove(radicle_plugin* plugin, radicle_form_key key, uint8_t id) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while removing a PACK data input", [&] {
+    return package_input_failure(fo4::env::remove_package_data_input(plugin->value, *form_key, id));
+  });
+}
+
+namespace {
+
+radicle_status package_tree_failure(fo4::env::PackageTreeMutationStatus status) {
+  using Status = fo4::env::PackageTreeMutationStatus;
+  const auto message = fo4::env::package_tree_mutation_status_message(status);
+  switch (status) {
+    case Status::updated:
+    case Status::unchanged:
+      return RADICLE_STATUS_OK;
+    case Status::record_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, message);
+    case Status::not_a_package:
+    case Status::undecodable:
+      return fail(RADICLE_STATUS_PARSE_ERROR, message);
+    case Status::index_out_of_range:
+    case Status::not_a_container:
+    case Status::not_a_leaf:
+    case Status::root_node:
+    case Status::unknown_procedure:
+    case Status::leaf_payload_undetermined:
+    case Status::input_id_conflict:
+    case Status::reference_orphaned:
+    case Status::templated_package:
+    case Status::input_creation_failed:
+    case Status::tree_full:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, message);
+  }
+  return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown package tree status");
+}
+
+}
+
+radicle_status radicle_package_procedure_add(radicle_plugin* plugin, radicle_form_key key,
+                                             size_t parent_index, const char* procedure,
+                                             size_t* out_node_index) {
+  if (out_node_index != nullptr) *out_node_index = 0;
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || procedure == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, record key and procedure are required");
+  }
+  return guarded("unknown exception while adding a PACK procedure", [&] {
+    std::size_t added = 0;
+    const auto status = fo4::env::add_package_procedure_node(plugin->value, *form_key, parent_index, procedure, &added);
+    const auto mapped = package_tree_failure(status);
+    if (mapped == RADICLE_STATUS_OK && out_node_index != nullptr) *out_node_index = added;
+    return mapped;
+  });
+}
+
+radicle_status radicle_package_procedure_remove(radicle_plugin* plugin, radicle_form_key key,
+                                                size_t node_index) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while removing a PACK procedure", [&] {
+    return package_tree_failure(fo4::env::remove_package_procedure_node(plugin->value, *form_key, node_index));
+  });
 }
 
 const char* radicle_package_location_type_name(int32_t type) {

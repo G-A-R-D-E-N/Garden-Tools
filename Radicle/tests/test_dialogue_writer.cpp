@@ -27,6 +27,10 @@ std::map<fo4::FormKey, Bytes> others(const fo4::Plugin& plugin, std::uint32_t ed
   return out;
 }
 
+fo4::schema::SubrecordGroupDescriptor response_group() {
+  return fo4::schema::subrecord_group_descriptor(sig("INFO"), "INFO\\Response").value();
+}
+
 }
 
 TEST(DialogueWriter, TopicFieldsAndLinksWriteInPlaceAndKeepOtherRecords) {
@@ -237,4 +241,93 @@ TEST(DialogueWriter, PreflightUsesThePluginLocalizedFlagInsteadOfGuessingFromFou
   EXPECT_TRUE(fo4::schema::preflight_plugin(plugin).empty());
   EXPECT_TRUE(authoring_clean(plugin, k_topic));
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(k_topic), sig("DATA")), fo4::SubrecordAddStatus::added);
+}
+
+TEST(DialogueWriter, ResponseGroupPairsEachTradaWithItsStringsAndNamesNoCount) {
+  const auto group = response_group();
+  EXPECT_EQ(group.record, sig("INFO"));
+  EXPECT_EQ(group.count_subrecord, fo4::Signature{});
+  ASSERT_EQ(group.members.size(), 11u);
+  EXPECT_EQ(group.members[0].subrecord, sig("TRDA"));
+  EXPECT_EQ(group.members[0].payload_size, 20u);
+  EXPECT_EQ(group.members[1].subrecord, sig("NAM1"));
+  EXPECT_TRUE(group.members[1].required);
+  EXPECT_EQ(group.members[1].payload_size, 0u);
+  EXPECT_TRUE(group.members[1].localized);
+  EXPECT_EQ(group.members[4].subrecord, sig("NAM4"));
+  EXPECT_FALSE(group.members[4].localized);
+  EXPECT_EQ(group.members[8].subrecord, sig("NAM9"));
+  EXPECT_EQ(group.members[10].subrecord, sig("WZMD"));
+  EXPECT_EQ(fo4::schema::subrecord_group_for_member(sig("INFO"), sig("NAM1"))->path, "INFO\\Response");
+  EXPECT_EQ(count(read(build()), k_info, "INFO\\IdleInterruptPercentage"), 1u);
+  EXPECT_EQ(count(read(build()), k_info, "INFO\\CameraPath"), 0u);
+  EXPECT_EQ(count(read(build()), k_info, "INFO\\IdleSpeakerAnimation"), 0u);
+}
+
+TEST(DialogueWriter, AppendsAnEmptyResponseBeforeTheConditionsAndEditsIt) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, key(k_info), response_group(), 2),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(order(plugin, k_info),
+            (Order{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3", "NAM4", "NAM9", "TRDA", "NAM1", "NAM2",
+                   "NAM3", "NAM4", "TNAM", "TRDA", "NAM1", "NAM2", "NAM3", "NAM4", "CTDA", "RNAM", "ANAM",
+                   "TSCE", "ALFA", "ONAM", "GREE", "TIQS", "NAM0", "INCC", "MODQ", "INAM"}));
+  EXPECT_EQ(scalar(plugin, k_info, "INFO\\ResponseNumber", 2, "7"), Scalar::updated);
+
+  const auto after = reload(plugin);
+  const auto trada = payloads(after, k_info, "TRDA");
+  ASSERT_EQ(trada.size(), 3u);
+  Bytes appended(20, std::byte{0});
+  appended[4] = std::byte{7};
+  EXPECT_EQ(trada.at(2), appended);
+  EXPECT_EQ(payloads(after, k_info, "NAM1").at(2), zstr(""));
+  EXPECT_EQ(payloads(after, k_info, "NAM4").at(2), zstr(""));
+  const SavedEnvironment saved(after);
+  const auto info = fo4::env::decode_dialogue_info(saved.env(), saved.record(k_info));
+  ASSERT_EQ(info.responses.size(), 3u);
+  EXPECT_EQ(info.responses[2].number, 7);
+  EXPECT_TRUE(info.responses[2].text.text.empty());
+  EXPECT_EQ(info.responses[1].text.text, "Line two");
+}
+
+TEST(DialogueWriter, InsertsAResponseAtTheFrontAndRemovesItAgain) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, key(k_info), response_group(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  auto after = reload(plugin);
+  EXPECT_EQ(payloads(after, k_info, "NAM1"), (std::vector<Bytes>{zstr(""), zstr("Line one"), zstr("Line two")}));
+  EXPECT_EQ(payloads(after, k_info, "TRDA").at(0), Bytes(20, std::byte{0}));
+  EXPECT_EQ(fo4::remove_record_subrecord_group(after, key(k_info), response_group(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto restored = reload(after);
+  EXPECT_EQ(payloads(restored, k_info, "NAM1"), (std::vector<Bytes>{zstr("Line one"), zstr("Line two")}));
+  EXPECT_EQ(payloads(restored, k_info, "TRDA").at(0), response(k_kywd, 1, 0));
+  EXPECT_EQ(payloads(restored, k_info, "NAM9").size(), 1u);
+}
+
+TEST(DialogueWriter, RemovingAResponseTakesItsOptionalIdleMembersWithIt) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, key(k_info), response_group(), 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reload(plugin);
+  EXPECT_EQ(payloads(after, k_info, "NAM1"), (std::vector<Bytes>{zstr("Line one")}));
+  EXPECT_TRUE(payloads(after, k_info, "TNAM").empty());
+  EXPECT_EQ(payloads(after, k_info, "NAM9").size(), 1u);
+  EXPECT_EQ(payloads(after, k_info, "CTDA").size(), 1u);
+}
+
+TEST(DialogueWriter, ResponseInsertRefusesLocalizedPluginsAndOutOfRangeIndexes) {
+  auto localized = read(build(true));
+  const auto localized_before = fo4::write_plugin(localized);
+  EXPECT_THROW(fo4::insert_record_subrecord_group(localized, key(k_info), response_group(), 2),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_EQ(fo4::write_plugin(localized), localized_before);
+
+  auto plugin = read(build());
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, key(k_info), response_group(), 3),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, key(k_info), response_group(), 2),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }

@@ -79,6 +79,15 @@ Consumers that cannot link C++ directly can use `fo4/c_api.h`. It exposes opaque
 
 Call `radicle_abi_version()` before any other entry point and reject the library if it does not equal the `RADICLE_ABI_VERSION` the consumer was compiled against.
 
+Handles are owned by the caller and released with the matching `_destroy` call. A handle's read-only
+accessors are safe from several threads at once; `_destroy` must not race any other call on the same
+handle, and handles are independent of one another. `radicle_last_error` is thread-local and stays
+valid until the next Radicle C API call on the same thread. Arrays a call returns are owned by the
+caller and released with the matching `radicle_free_*` function: `radicle_free_bytes` for byte and
+string buffers, and `radicle_free_floats`, `radicle_free_triangles` or `radicle_free_node_refs` for
+the typed ones. `radicle_nif_*` and `radicle_dds_*` follow this contract; the NIF and texture detail
+is in `NIF.md` and `TEXTURES.md`.
+
 ## Verification
 
 Useful committed fixtures live under `Radicle/testdata/`. The GoogleTest suite covers parsing, compression/XXXX, FormKey resolution, runtime full/light load-order resolution, FormLinks, VMAD, writer behavior, C ABI behavior, master-kind stamping, and conflict/reference graph behavior.

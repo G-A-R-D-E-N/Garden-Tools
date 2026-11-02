@@ -121,12 +121,40 @@ typedef struct radicle_idle_info {
   void* internal;
 } radicle_idle_info;
 
+typedef enum radicle_package_input_value_kind {
+  RADICLE_PACKAGE_INPUT_NONE = 0,
+  RADICLE_PACKAGE_INPUT_BOOLEAN = 1,
+  RADICLE_PACKAGE_INPUT_INTEGER = 2,
+  RADICLE_PACKAGE_INPUT_REAL = 3,
+  RADICLE_PACKAGE_INPUT_REFERENCE = 4,
+  RADICLE_PACKAGE_INPUT_TARGET = 5,
+  RADICLE_PACKAGE_INPUT_LOCATION = 6,
+  RADICLE_PACKAGE_INPUT_OBJECT_LIST = 7,
+  RADICLE_PACKAGE_INPUT_TOPIC = 8
+} radicle_package_input_value_kind;
+
 typedef struct radicle_package_procedure_input {
   const char* type_name;
   size_t subrecord_begin;
   size_t subrecord_end;
   uint8_t index;
+  const char* value_tag;
+  size_t value_index;
+  radicle_package_input_value_kind kind;
+  int32_t boolean;
+  int32_t integer;
+  uint32_t integer_raw;
+  float real;
 } radicle_package_procedure_input;
+
+typedef struct radicle_package_input_value {
+  radicle_package_input_value_kind kind;
+  int32_t boolean;
+  int32_t integer;
+  float real;
+  const uint8_t* payload;
+  size_t payload_size;
+} radicle_package_input_value;
 
 typedef struct radicle_package_procedure_node {
   int32_t is_leaf;
@@ -145,8 +173,8 @@ typedef struct radicle_package_procedure_tree {
   int32_t decoded;
   size_t region_begin;
   size_t region_end;
-  int32_t has_marker;
-  uint8_t marker;
+  int32_t has_next_input_id;
+  uint8_t next_input_id;
   const radicle_package_procedure_input* inputs;
   size_t input_count;
   const radicle_package_procedure_node* nodes;
@@ -162,6 +190,17 @@ RADICLE_API void radicle_idle_free(const radicle_idle_info* idle);
 RADICLE_API radicle_status radicle_package_procedure_decode(const radicle_env* env, const radicle_record* record,
                                                             const radicle_package_procedure_tree** out_tree);
 RADICLE_API void radicle_package_procedure_free(const radicle_package_procedure_tree* tree);
+RADICLE_API radicle_status radicle_package_input_add(radicle_plugin* plugin, radicle_form_key key,
+                                                     const char* type_name,
+                                                     const radicle_package_input_value* value);
+RADICLE_API radicle_status radicle_package_input_set(radicle_plugin* plugin, radicle_form_key key, uint8_t id,
+                                                     const radicle_package_input_value* value);
+RADICLE_API radicle_status radicle_package_input_remove(radicle_plugin* plugin, radicle_form_key key, uint8_t id);
+RADICLE_API radicle_status radicle_package_procedure_add(radicle_plugin* plugin, radicle_form_key key,
+                                                          size_t parent_index, const char* procedure,
+                                                          size_t* out_node_index);
+RADICLE_API radicle_status radicle_package_procedure_remove(radicle_plugin* plugin, radicle_form_key key,
+                                                            size_t node_index);
 RADICLE_API const char* radicle_package_location_type_name(int32_t type);
 RADICLE_API const char* radicle_package_target_type_name(int32_t type);
 

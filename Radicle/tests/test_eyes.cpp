@@ -63,10 +63,22 @@ const fo4::Subrecord* find_sub(const fo4::Record& record, std::string_view name)
   return nullptr;
 }
 
+std::vector<std::byte> make_empty_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  return out.bytes;
+}
+
 }
 
 TEST(Eyes, DecodesFo4FieldsAndPreservesRecordFlags) {
-  const auto plugin = fo4::read_plugin(make_eyes_plugin(), "EyesPatch.esp");
+  auto plugin = fo4::read_plugin(make_eyes_plugin(), "EyesPatch.esp");
   const auto model = fo4::forms::decode_eyes(
       plugin, fo4::FormKey::parse("000800:EyesPatch.esp"));
 
@@ -205,4 +217,95 @@ TEST(Eyes, NoOpEditDoesNotDirtyParsedPlugin) {
       std::string_view{"Textures\\Actors\\Character\\Eyes\\Blue.dds"}));
   ASSERT_TRUE(fo4::forms::set_eyes_data_flags(plugin, key, 0x85));
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
+TEST(EyesCreation, CreatesRequiredStructureThroughRecordLifecycleAndRoundTrips) {
+  auto plugin = fo4::read_plugin(make_empty_plugin(), "EyesPatch.esp");
+  const fo4::RecordFlags flags{0x00000404u};
+
+  const auto key = fo4::forms::create_eyes(
+      plugin,
+      std::string_view{"CreatedEyes"},
+      "Created Eyes",
+      "Textures\\Eyes\\Created.dds",
+      0x85u,
+      flags);
+
+  EXPECT_EQ(key, fo4::FormKey::parse("000800:EyesPatch.esp"));
+  EXPECT_EQ(plugin.header.next_form_id, 0x801u);
+  ASSERT_EQ(plugin.groups.size(), 1u);
+  EXPECT_EQ(plugin.groups[0].header.group_type, 0);
+  EXPECT_EQ(plugin.groups[0].header.top_label().to_string(), "EYES");
+
+  const auto bytes = fo4::write_plugin(plugin);
+  const auto reread = fo4::read_plugin(bytes, "EyesPatch.esp");
+  EXPECT_EQ(reread.header.next_form_id, 0x801u);
+  EXPECT_EQ(reread.header.record_count, 2u);  // EYES GRUP + EYES major record.
+
+  const auto model = fo4::forms::decode_eyes(reread, key);
+  ASSERT_TRUE(model.editor_id.has_value());
+  EXPECT_EQ(*model.editor_id, "CreatedEyes");
+  ASSERT_TRUE(model.full_text.has_value());
+  EXPECT_EQ(*model.full_text, "Created Eyes");
+  EXPECT_EQ(model.icon, "Textures\\Eyes\\Created.dds");
+  EXPECT_EQ(model.data_flags, 0x85u);
+  EXPECT_EQ(model.record_flags, flags);
+
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  ASSERT_EQ(record->subrecords.size(), 4u);
+  EXPECT_EQ(record->subrecords[0].signature.to_string(), "EDID");
+  EXPECT_EQ(record->subrecords[1].signature.to_string(), "FULL");
+  EXPECT_EQ(record->subrecords[2].signature.to_string(), "ICON");
+  EXPECT_EQ(record->subrecords[3].signature.to_string(), "DATA");
+}
+
+TEST(EyesCreation, StoresEditorIdAsWindows1252) {
+  auto plugin = fo4::read_plugin(make_empty_plugin(), "EyesPatch.esp");
+
+  const auto key = fo4::forms::create_eyes(
+      plugin,
+      std::string_view{"Caf\xC3\xA9"},
+      "Created Eyes",
+      "Textures\\Eyes\\Created.dds",
+      0u);
+
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  ASSERT_FALSE(record->subrecords.empty());
+  ASSERT_EQ(record->subrecords[0].signature.to_string(), "EDID");
+  const std::vector<std::byte> expected{
+      std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}};
+  EXPECT_EQ(record->subrecords[0].data, expected);
+}
+
+TEST(EyesCreation, EditorIdOutsideWindows1252IsRefusedBeforeAnyMutation) {
+  auto plugin = fo4::read_plugin(make_empty_plugin(), "EyesPatch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::create_eyes(
+          plugin,
+          std::string_view{"Snow\xE2\x98\x83"},
+          "Created Eyes",
+          "Textures\\Eyes\\Created.dds",
+          0u)),
+      fo4::FormIdError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+  EXPECT_EQ(plugin.header.next_form_id, 0x800u);
+  EXPECT_TRUE(plugin.groups.empty());
+}
+
+TEST(EyesCreation, InvalidInputDoesNotConsumeAFormId) {
+  auto plugin = fo4::read_plugin(make_empty_plugin(), "EyesPatch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+
+  const std::string_view bad_full{"Bad\0Name", 8};
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::create_eyes(
+          plugin, std::nullopt, bad_full, "Textures\\Eyes\\Created.dds", 0u)),
+      fo4::forms::EyesError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+  EXPECT_EQ(plugin.header.next_form_id, 0x800u);
+  EXPECT_TRUE(plugin.groups.empty());
 }

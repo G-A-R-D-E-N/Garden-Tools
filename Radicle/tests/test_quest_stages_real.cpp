@@ -54,7 +54,7 @@ TEST(QuestStagesRealData, DecodesEveryShippedQuest) {
     if (!std::filesystem::exists(path)) continue;
     ++files;
 
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     const fo4::RecordIndex index{plugin};
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != k_qust) continue;
@@ -102,35 +102,6 @@ TEST(QuestStagesRealData, DecodesEveryShippedQuest) {
   EXPECT_GT(multi_entry, 200u);
 }
 
-TEST(QuestStagesRealData, MQ101ConditionsRoundTripPaddingBytes) {
-  const char* dir = std::getenv("FO4_DATA_DIR");
-  if (dir == nullptr) {
-    GTEST_SKIP() << "set FO4_DATA_DIR to run this";
-  }
-  record_game_build(detect_game_build(dir));
-  const auto path = std::filesystem::path{dir} / "Fallout4.esm";
-  ASSERT_TRUE(std::filesystem::exists(path));
-  const auto plugin = fo4::read_plugin_file(path);
-  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("01ED86:Fallout4.esm"));
-  ASSERT_NE(record, nullptr);
-  std::size_t conditions = 0;
-  std::size_t padding = 0;
-  for (const auto& member : record->subrecords) {
-    if (member.signature != fo4::sig_ctda) continue;
-    SCOPED_TRACE("MQ101 CTDA ordinal " + std::to_string(conditions));
-    ++conditions;
-    const auto condition = fo4::parse_ctda_condition(member.data);
-    EXPECT_EQ(fo4::serialize_ctda_condition(condition), member.data);
-    ASSERT_GE(member.data.size(), 4u);
-    if (member.data[1] != std::byte{0} || member.data[2] != std::byte{0} ||
-        member.data[3] != std::byte{0}) ++padding;
-  }
-  EXPECT_GT(conditions, 0u);
-  EXPECT_GT(padding, 0u);
-  RecordProperty("ConditionCount", conditions);
-  RecordProperty("PaddingCount", padding);
-}
-
 namespace {
 
 class QuestConditionCorpus : public testing::TestWithParam<const char*> {};
@@ -143,7 +114,7 @@ TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
   record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const auto cis1 = fo4::Signature::from_string("CIS1");
   const auto cis2 = fo4::Signature::from_string("CIS2");
   const auto condition_member = [&](const auto& member) {
@@ -183,6 +154,21 @@ TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
       conditions += raw_count;
       ++runs;
     }
+  }
+  if (std::string{GetParam()} == "Fallout4.esm") {
+    const auto* mq101 = fo4::find_record(plugin, fo4::FormKey::parse("01ED86:Fallout4.esm"));
+    ASSERT_NE(mq101, nullptr);
+    std::size_t mq101_conditions = 0;
+    std::size_t mq101_padding = 0;
+    for (const auto& member : mq101->subrecords) {
+      if (member.signature != fo4::sig_ctda) continue;
+      ++mq101_conditions;
+      ASSERT_GE(member.data.size(), 4u);
+      if (member.data[1] != std::byte{0} || member.data[2] != std::byte{0} ||
+          member.data[3] != std::byte{0}) ++mq101_padding;
+    }
+    EXPECT_GT(mq101_conditions, 0u);
+    EXPECT_GT(mq101_padding, 0u);
   }
   EXPECT_GT(quests, 0u);
   RecordProperty("QuestCount", quests);

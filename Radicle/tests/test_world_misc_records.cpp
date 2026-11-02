@@ -159,8 +159,24 @@ TEST(WorldMiscRecordsSynthetic, ReferenceGroupAndMessageRowsWriteTheirPayloads) 
 }
 
 TEST(WorldMiscRecordsSynthetic, ArrayPayloadRecordsExposeNoRows) {
-  for (const auto* record : {"OVIS", "NOCM", "DEBR"}) {
+  for (const auto* record : {"OVIS", "DEBR"}) {
     EXPECT_TRUE(fo4::schema::scalar_fields(fo4::Signature::from_string(record)).empty()) << record;
     EXPECT_TRUE(fo4::schema::formlink_fields(fo4::Signature::from_string(record)).empty()) << record;
   }
+}
+
+TEST(WorldMiscRecordsSynthetic, NavmeshObstacleIndexAndModelRowsWriteTheirPayloads) {
+  auto plugin = load();
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3012), scalar("NOCM\\Index"), 0, "7"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, key(3012), "NOCM\\Model", 0, "edited.nif"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3012), scalar("NOCM\\Index"), 1, "0"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payload(reread, 3012, "INDX"), u32(7));
+  EXPECT_EQ(payload(reread, 3012, "NAM1"), zstr("edited.nif"));
+  EXPECT_EQ(payload(reread, 3012, "DATA"), zeros(8));
+  EXPECT_EQ(payload(reread, 3012, "INTV"), u32(0));
 }

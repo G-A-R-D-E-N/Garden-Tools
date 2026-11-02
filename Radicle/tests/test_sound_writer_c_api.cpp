@@ -50,7 +50,7 @@ TEST_F(SoundWriterCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) 
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, weapon, "SNDR\\FrequencyShift", 0, "1"), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, nokind, "SNDR\\StaticAttenuation", 0, "250"), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, marker, "SNDR\\Priority", 0, "1"), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, standard, "SNDR\\DescriptorType", 0, "1"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, standard, "SNDR\\DescriptorType", 0, "519001098"), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, rkey(0x999), "SNDR\\Priority", 0, "1"), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, weapon, "SNDR\\RateOfFireRpm", 1, "1000"), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, weapon, "SNDR\\RateOfFireRpm", 2, "1000"), RADICLE_STATUS_NOT_FOUND);
@@ -92,9 +92,11 @@ TEST_F(SoundWriterCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) 
   EXPECT_EQ(radicle_plugin_remove_subrecord(plugin, standard, "ANAM", 1), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_remove_subrecord(plugin, standard, "ANAM", 4), RADICLE_STATUS_NOT_FOUND);
 
-  radicle_form_key created{}, refused_key{};
-  EXPECT_EQ(radicle_plugin_create_record(plugin, "SOUN", "CMarker", &refused_key), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_plugin_create_record(plugin, "FSTS", "CSet", &refused_key), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_form_key created{}, marker_key{}, set_key{};
+  ASSERT_EQ(radicle_plugin_create_record(plugin, "SOUN", "CMarker", &marker_key), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_plugin_create_record(plugin, "FSTS", "CSet", &set_key), RADICLE_STATUS_OK);
+  const auto marker_id = marker_key.local_id;
+  const auto set_id = set_key.local_id;
   ASSERT_EQ(radicle_plugin_create_record(plugin, "MUSC", "CMusic", &created), RADICLE_STATUS_OK);
   const auto created_id = created.local_id;
   ASSERT_EQ(radicle_plugin_add_subrecord(plugin, created, "TNAM"), RADICLE_STATUS_OK);
@@ -109,6 +111,8 @@ TEST_F(SoundWriterCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) 
   ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
   const radicle_record* handle = nullptr;
   const radicle_sound_descriptor* descriptor = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, radicle_form_key{k_plugin, marker_id}, &handle), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_winner(env, radicle_form_key{k_plugin, set_id}, &handle), RADICLE_STATUS_OK);
   ASSERT_EQ(radicle_env_winner(env, standard, &handle), RADICLE_STATUS_OK);
   ASSERT_EQ(radicle_sound_descriptor_decode(env, handle, &descriptor), RADICLE_STATUS_OK);
   EXPECT_EQ(descriptor->has_kind, 1);

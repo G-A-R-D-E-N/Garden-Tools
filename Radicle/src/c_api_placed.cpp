@@ -70,6 +70,27 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
   }
   v.layer = key(d.layer);
   v.encounter_zone = key(d.encounter_zone);
+  v.has_emittance = d.emittance ? 1 : 0;
+  v.emittance = key(d.emittance);
+  if (d.radius) {
+    v.has_radius = 1;
+    v.radius = *d.radius;
+  }
+  if (d.light_data) {
+    v.has_light_data = 1;
+    v.light_fov = d.light_data->fov;
+    v.light_fade = d.light_data->fade;
+    v.light_end_distance_cap = d.light_data->end_distance_cap;
+    v.light_shadow_depth_bias = d.light_data->shadow_depth_bias;
+    if (d.light_data->near_clip) {
+      v.has_light_near_clip = 1;
+      v.light_near_clip = *d.light_data->near_clip;
+    }
+    if (d.light_data->volumetric_intensity) {
+      v.has_light_volumetric_intensity = 1;
+      v.light_volumetric_intensity = *d.light_data->volumetric_intensity;
+    }
+  }
   v.location_reference = key(d.location_reference);
   v.attach_ref = key(d.attach_ref);
 

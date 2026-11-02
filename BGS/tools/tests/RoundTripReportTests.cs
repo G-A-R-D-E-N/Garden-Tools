@@ -8,13 +8,10 @@ namespace BehaviourStudio.Tests;
 
 public sealed class RoundTripReportTests
 {
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla", relative.Replace('/', Path.DirectorySeparatorChar));
-
     [Fact]
     public void CleanVanillaBehaviourHasNoRoundTripLosses()
     {
-        var report = RoundTripReport.ForFile(Fixture("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"));
+        var report = RoundTripReport.ForFile(TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"));
 
         Assert.False(report.HasLosses);
         Assert.Equal("round-trip safe", report.ToString());
@@ -24,7 +21,7 @@ public sealed class RoundTripReportTests
     public void RefusedVanillaClothFixtureNamesUnsupportedClasses()
     {
         var report = RoundTripReport.ForFile(
-            Fixture("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx"));
+            TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx"));
 
         Assert.True(report.HasLosses);
         Assert.True(report.UnsupportedClasses > 0);

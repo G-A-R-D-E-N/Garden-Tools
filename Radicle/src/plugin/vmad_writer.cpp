@@ -3,13 +3,34 @@
 #include "record_edit.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <limits>
+#include <optional>
+#include <span>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace fo4 {
 namespace {
+
+constexpr auto k_vmad = Signature::from_string("VMAD");
+constexpr std::uint8_t k_type_object = 1;
+constexpr std::uint8_t k_type_string = 2;
+constexpr std::uint8_t k_type_int = 3;
+constexpr std::uint8_t k_type_float = 4;
+constexpr std::uint8_t k_type_bool = 5;
+constexpr std::uint8_t k_type_struct = 7;
+constexpr std::uint8_t k_type_object_array = 11;
+constexpr std::uint8_t k_type_string_array = 12;
+constexpr std::uint8_t k_type_int_array = 13;
+constexpr std::uint8_t k_type_float_array = 14;
+constexpr std::uint8_t k_type_bool_array = 15;
+constexpr std::uint8_t k_type_variable_array = 16;
+constexpr std::uint8_t k_type_struct_array = 17;
 
 void put(std::vector<std::byte>& data, std::size_t at, std::uint32_t value, std::size_t width) {
   for (std::size_t i = 0; i < width; ++i) {
@@ -68,32 +89,608 @@ std::vector<std::byte> encode_value(const Plugin& plugin, const VmadValue& value
   return bytes;
 }
 
+void append_u8(std::vector<std::byte>& out, std::uint8_t value) {
+  out.push_back(std::byte{value});
 }
 
-ScalarMutationStatus set_vmad_property(Plugin& plugin, const FormKey& record_key,
-                                        std::size_t script_index, std::size_t property_index,
-                                        const VmadValue& value, std::size_t element_index) {
+void append_u16(std::vector<std::byte>& out, std::uint16_t value) {
+  append_u8(out, static_cast<std::uint8_t>(value));
+  append_u8(out, static_cast<std::uint8_t>(value >> 8));
+}
+
+void append_u32(std::vector<std::byte>& out, std::uint32_t value) {
+  append_u16(out, static_cast<std::uint16_t>(value));
+  append_u16(out, static_cast<std::uint16_t>(value >> 16));
+}
+
+void append_name(std::vector<std::byte>& out, std::string_view text) {
+  if (text.size() > std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("VMAD name exceeds its 16-bit length");
+  }
+  append_u16(out, static_cast<std::uint16_t>(text.size()));
+  for (const char ch : text) {
+    append_u8(out, static_cast<std::uint8_t>(ch));
+  }
+}
+
+void append_object(std::vector<std::byte>& out, RawFormId object, std::int16_t alias,
+                   std::int16_t format) {
+  if (format == 2) {
+    append_u16(out, 0);
+    append_u16(out, static_cast<std::uint16_t>(alias));
+    append_u32(out, object.value());
+    return;
+  }
+  if (format == 1) {
+    append_u32(out, object.value());
+    append_u16(out, static_cast<std::uint16_t>(alias));
+    append_u16(out, 0);
+    return;
+  }
+  throw schema::ScalarError("unsupported VMAD version or object format");
+}
+
+void append_bool(std::vector<std::byte>& out, bool value) {
+  append_u8(out, static_cast<std::uint8_t>(value ? 1 : 0));
+}
+
+void append_float(std::vector<std::byte>& out, float value) {
+  if (!std::isfinite(value)) throw schema::ScalarError("VMAD float must be finite");
+  std::uint32_t bits = 0;
+  std::memcpy(&bits, &value, 4);
+  append_u32(out, bits);
+}
+
+std::pair<RawFormId, std::int16_t> object_value(const VmadProperty& property) {
+  if (!property.object.has_value()) throw schema::ScalarError("VMAD object value is missing");
+  return {*property.object, property.alias.value_or(-1)};
+}
+
+std::pair<RawFormId, std::int16_t> object_value(const VmadStructMember& member) {
+  if (!member.object.has_value()) throw schema::ScalarError("VMAD object value is missing");
+  return {member.object->object, member.object->alias};
+}
+
+template <class Value>
+void append_typed_value(std::vector<std::byte>& out, const Value& value, std::int16_t format) {
+  switch (value.type) {
+    case 0:
+      return;
+    case k_type_object: {
+      const auto [object, alias] = object_value(value);
+      append_object(out, object, alias, format);
+      return;
+    }
+    case k_type_string:
+      if (!value.text.has_value()) throw schema::ScalarError("VMAD string value is missing");
+      append_name(out, *value.text);
+      return;
+    case k_type_int:
+      if (!value.integer.has_value()) throw schema::ScalarError("VMAD integer value is missing");
+      append_u32(out, static_cast<std::uint32_t>(*value.integer));
+      return;
+    case k_type_float:
+      if (!value.real.has_value()) throw schema::ScalarError("VMAD float value is missing");
+      append_float(out, *value.real);
+      return;
+    case k_type_bool:
+      if (!value.boolean.has_value()) throw schema::ScalarError("VMAD boolean value is missing");
+      append_bool(out, *value.boolean);
+      return;
+    default:
+      throw schema::ScalarError("VMAD struct member type is not authorable");
+  }
+}
+
+void append_struct(std::vector<std::byte>& out, const VmadStruct& value, std::int16_t format) {
+  append_u32(out, static_cast<std::uint32_t>(value.members.size()));
+  for (const auto& member : value.members) {
+    append_name(out, member.name);
+    append_u8(out, member.type);
+    append_u8(out, member.flags);
+    append_typed_value(out, member, format);
+  }
+}
+
+const std::vector<VmadStruct>& structs_of(const VmadProperty& property) {
+  if (!property.struct_elements.has_value()) {
+    throw schema::ScalarError("VMAD struct value is not authorable");
+  }
+  return *property.struct_elements;
+}
+
+std::vector<std::byte> encode_property(const VmadProperty& property, std::int16_t format) {
+  std::vector<std::byte> out;
+  append_name(out, property.name);
+  append_u8(out, property.type);
+  append_u8(out, property.flags);
+  switch (property.type) {
+    case 0:
+      return out;
+    case k_type_object:
+    case k_type_string:
+    case k_type_int:
+    case k_type_float:
+    case k_type_bool:
+      append_typed_value(out, property, format);
+      return out;
+    case k_type_struct: {
+      const auto& structs = structs_of(property);
+      if (structs.size() != 1) throw schema::ScalarError("a VMAD struct property holds one struct");
+      append_struct(out, structs.front(), format);
+      return out;
+    }
+    case k_type_object_array: {
+      if (!property.object_elements.has_value()) {
+        throw schema::ScalarError("VMAD object array value is missing");
+      }
+      append_u32(out, static_cast<std::uint32_t>(property.object_elements->size()));
+      for (const auto& element : *property.object_elements) {
+        append_object(out, element.object, element.alias, format);
+      }
+      return out;
+    }
+    case k_type_string_array: {
+      if (!property.text_elements.has_value()) {
+        throw schema::ScalarError("VMAD string array value is missing");
+      }
+      append_u32(out, static_cast<std::uint32_t>(property.text_elements->size()));
+      for (const auto& element : *property.text_elements) {
+        append_name(out, element);
+      }
+      return out;
+    }
+    case k_type_int_array: {
+      if (!property.integer_elements.has_value()) {
+        throw schema::ScalarError("VMAD integer array value is missing");
+      }
+      append_u32(out, static_cast<std::uint32_t>(property.integer_elements->size()));
+      for (const auto element : *property.integer_elements) {
+        append_u32(out, static_cast<std::uint32_t>(element));
+      }
+      return out;
+    }
+    case k_type_float_array: {
+      if (!property.real_elements.has_value()) {
+        throw schema::ScalarError("VMAD float array value is missing");
+      }
+      append_u32(out, static_cast<std::uint32_t>(property.real_elements->size()));
+      for (const auto element : *property.real_elements) {
+        append_float(out, element);
+      }
+      return out;
+    }
+    case k_type_bool_array: {
+      if (!property.boolean_elements.has_value()) {
+        throw schema::ScalarError("VMAD boolean array value is missing");
+      }
+      append_u32(out, static_cast<std::uint32_t>(property.boolean_elements->size()));
+      for (const auto element : *property.boolean_elements) {
+        append_bool(out, element);
+      }
+      return out;
+    }
+    case k_type_variable_array:
+      if (property.element_count.value_or(0) != 0) {
+        throw schema::ScalarError("a nonempty VMAD variable array is not authorable");
+      }
+      append_u32(out, 0);
+      return out;
+    case k_type_struct_array: {
+      const auto& structs = structs_of(property);
+      append_u32(out, static_cast<std::uint32_t>(structs.size()));
+      for (const auto& element : structs) {
+        append_struct(out, element, format);
+      }
+      return out;
+    }
+    default:
+      throw schema::ScalarError("VMAD property type is not authorable");
+  }
+}
+
+void splice(std::vector<std::byte>& data, std::size_t at, std::size_t count,
+            std::span<const std::byte> inserted) {
+  data.erase(data.begin() + static_cast<std::ptrdiff_t>(at),
+             data.begin() + static_cast<std::ptrdiff_t>(at + count));
+  data.insert(data.begin() + static_cast<std::ptrdiff_t>(at), inserted.begin(), inserted.end());
+}
+
+struct VmadEdit {
+  Record* record{nullptr};
+  Subrecord* vmad{nullptr};
+  VmadScripts scripts;
+  std::size_t leading_end{0};
+};
+
+enum class VmadLookup { ok, record_missing, subrecord_missing };
+
+VmadLookup load_vmad(Plugin& plugin, const FormKey& record_key, VmadEdit& edit) {
+  edit.record = detail::find_mutable_record(plugin, record_key);
+  if (edit.record == nullptr) {
+    assign_record_form_keys(plugin);
+    edit.record = detail::find_mutable_record(plugin, record_key);
+  }
+  if (edit.record == nullptr) return VmadLookup::record_missing;
+  for (auto& sub : edit.record->subrecords) {
+    if (sub.signature != k_vmad) continue;
+    if (edit.vmad != nullptr) throw schema::ScalarError("duplicate VMAD subrecords");
+    edit.vmad = &sub;
+  }
+  if (edit.vmad == nullptr) return VmadLookup::subrecord_missing;
+  if (!vmad_coverage(edit.vmad->data, edit.record->header.signature).complete()) {
+    throw schema::ScalarError("VMAD layout is unsupported, malformed or has unknown trailing bytes");
+  }
+  edit.scripts = read_vmad_scripts(edit.vmad->data);
+  if (edit.scripts.unsupported) {
+    throw schema::ScalarError("VMAD has properties that cannot be re-encoded");
+  }
+  if ((edit.scripts.version != 5 && edit.scripts.version != 6) ||
+      (edit.scripts.object_format != 1 && edit.scripts.object_format != 2)) {
+    throw schema::ScalarError("unsupported VMAD version or object format");
+  }
+  edit.leading_end = edit.vmad->data.size() - edit.scripts.trailing_bytes;
+  return VmadLookup::ok;
+}
+
+VmadStructureMutationStatus absent_status(VmadLookup lookup) {
+  return lookup == VmadLookup::record_missing ? VmadStructureMutationStatus::record_missing
+                                              : VmadStructureMutationStatus::subrecord_missing;
+}
+
+std::size_t tail_start(const VmadEdit& edit, std::size_t script_index) {
+  return script_index + 1 < edit.scripts.scripts.size()
+             ? edit.scripts.scripts[script_index + 1].offset
+             : edit.leading_end;
+}
+
+bool vmad_authorable(Signature signature) {
+  constexpr std::string_view records[] = {
+      "ACHR", "ACTI", "ALCH", "AMMO", "ARMO", "BOOK", "CONT", "DOOR", "FLOR", "FURN",
+      "INFO", "INGR", "KEYM", "LIGH", "MGEF", "MISC", "MSTT", "NOTE", "NPC_", "PACK",
+      "PARW", "PBAR", "PBEA", "PCON", "PERK", "PFLA", "PGRE", "PHZD", "PMIS", "QUST",
+      "RACE", "REFR", "SCEN", "STAT", "TACT", "TERM", "TREE", "WEAP"};
+  const auto text = signature.to_string();
+  return std::find(std::begin(records), std::end(records), text) != std::end(records);
+}
+
+// Constraint: Papyrus script identifiers compare case-insensitively, so a second entry for one script is refused.
+bool same_name(std::string_view left, std::string_view right) {
+  return left.size() == right.size() &&
+         std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) {
+           return std::tolower(static_cast<unsigned char>(a)) ==
+                  std::tolower(static_cast<unsigned char>(b));
+         });
+}
+
+void append_quest_fragment(std::vector<std::byte>& out, const QuestVmadFragment& fragment) {
+  append_u16(out, fragment.stage);
+  append_u16(out, fragment.unknown);
+  append_u32(out, static_cast<std::uint32_t>(fragment.stage_index));
+  append_u8(out, fragment.unknown_byte);
+  append_name(out, fragment.script);
+  append_name(out, fragment.function);
+}
+
+struct QuestFragmentEdit {
+  Record* record{nullptr};
+  Subrecord* vmad{nullptr};
+  std::size_t tail_start{0};
+  QuestVmadExtras extras;
+};
+
+std::optional<VmadStructureMutationStatus> load_quest_fragments(Plugin& plugin,
+                                                               const FormKey& record_key,
+                                                               QuestFragmentEdit& edit) {
+  VmadEdit vmad;
+  const auto lookup = load_vmad(plugin, record_key, vmad);
+  if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (vmad.record->header.signature != sig_qust) {
+    return VmadStructureMutationStatus::not_authorable;
+  }
+  edit.record = vmad.record;
+  edit.vmad = vmad.vmad;
+  edit.tail_start = vmad.leading_end;
+  if (vmad.scripts.trailing_bytes == 0) return VmadStructureMutationStatus::binding_missing;
+  edit.extras = read_quest_vmad_extras(
+      std::span<const std::byte>(edit.vmad->data).subspan(edit.tail_start),
+      vmad.scripts.object_format);
+  if (edit.extras.unsupported) {
+    throw schema::ScalarError(edit.extras.unsupported_reason.empty()
+                                  ? "VMAD quest extras are unsupported"
+                                  : edit.extras.unsupported_reason);
+  }
+  if (!edit.extras.fully_consumed) {
+    throw schema::ScalarError("VMAD quest extras were not fully consumed");
+  }
+  return std::nullopt;
+}
+
+const QuestVmadFragment* find_quest_fragment(const std::vector<QuestVmadFragment>& fragments,
+                                             std::uint16_t stage,
+                                             std::optional<std::int32_t> stage_index) {
+  const QuestVmadFragment* found = nullptr;
+  for (const auto& fragment : fragments) {
+    if (fragment.stage != stage) continue;
+    if (stage_index.has_value() && fragment.stage_index != *stage_index) continue;
+    if (found != nullptr) {
+      throw schema::ScalarError(
+          stage_index.has_value()
+              ? "the quest VMAD binds one stage index twice"
+              : "the quest VMAD binds one stage twice; address the fragment by its stage "
+                "index");
+    }
+    found = &fragment;
+  }
+  return found;
+}
+
+VmadStructureMutationStatus set_quest_fragment(Plugin& plugin, const FormKey& record_key,
+                                               std::uint16_t stage,
+                                               std::optional<std::int32_t> stage_index,
+                                               std::string_view script,
+                                               std::string_view function) {
+  QuestFragmentEdit edit;
+  if (const auto refusal = load_quest_fragments(plugin, record_key, edit)) return *refusal;
+  if (script.empty() || function.empty()) {
+    throw schema::ScalarError("VMAD fragment script and function names are required");
+  }
+  const auto* found = find_quest_fragment(edit.extras.fragments, stage, stage_index);
+  if (found == nullptr) return VmadStructureMutationStatus::binding_missing;
+  auto updated = *found;
+  updated.script = std::string(script);
+  updated.function = std::string(function);
+  std::vector<std::byte> entry;
+  append_quest_fragment(entry, updated);
+  const auto begin = edit.tail_start + found->offset;
+  const auto end = edit.tail_start + found->end;
+  if (entry.size() == end - begin &&
+      std::equal(entry.begin(), entry.end(),
+                 edit.vmad->data.begin() + static_cast<std::ptrdiff_t>(begin))) {
+    return VmadStructureMutationStatus::unchanged;
+  }
+  splice(edit.vmad->data, begin, end - begin, entry);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus remove_quest_fragment(Plugin& plugin, const FormKey& record_key,
+                                                  std::uint16_t stage,
+                                                  std::optional<std::int32_t> stage_index) {
+  QuestFragmentEdit edit;
+  if (const auto refusal = load_quest_fragments(plugin, record_key, edit)) return *refusal;
+  const auto* found = find_quest_fragment(edit.extras.fragments, stage, stage_index);
+  if (found == nullptr) return VmadStructureMutationStatus::binding_missing;
+  const auto begin = edit.tail_start + found->offset;
+  const auto end = edit.tail_start + found->end;
+  splice(edit.vmad->data, begin, end - begin, {});
+  put(edit.vmad->data, edit.tail_start + edit.extras.count_offset,
+      static_cast<std::uint32_t>(edit.extras.fragments.size() - 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+}
+
+VmadStructureMutationStatus add_vmad(Plugin& plugin, const FormKey& record_key) {
   auto* record = detail::find_mutable_record(plugin, record_key);
   if (record == nullptr) {
     assign_record_form_keys(plugin);
     record = detail::find_mutable_record(plugin, record_key);
   }
-  if (record == nullptr) return ScalarMutationStatus::record_missing;
-  Subrecord* vmad = nullptr;
-  for (auto& sub : record->subrecords) {
-    if (sub.signature != Signature::from_string("VMAD")) continue;
-    if (vmad != nullptr) throw schema::ScalarError("duplicate VMAD subrecords");
-    vmad = &sub;
+  if (record == nullptr) return VmadStructureMutationStatus::record_missing;
+  if (!vmad_authorable(record->header.signature)) {
+    return VmadStructureMutationStatus::not_authorable;
   }
-  if (vmad == nullptr) return ScalarMutationStatus::subrecord_missing;
-  if (!vmad_coverage(vmad->data, record->header.signature).complete()) {
-    throw schema::ScalarError("VMAD layout is unsupported, malformed or has unknown trailing bytes");
+  std::size_t position = 0;
+  for (std::size_t index = 0; index < record->subrecords.size(); ++index) {
+    if (record->subrecords[index].signature == k_vmad) {
+      return VmadStructureMutationStatus::already_present;
+    }
+    if (record->subrecords[index].signature == sig_edid) position = index + 1;
   }
-  const auto scripts = read_vmad_scripts(vmad->data);
-  if ((scripts.version != 5 && scripts.version != 6) ||
-      (scripts.object_format != 1 && scripts.object_format != 2)) {
-    throw schema::ScalarError("unsupported VMAD version or object format");
+  const std::vector<std::byte> empty{std::byte{6}, std::byte{0}, std::byte{2},
+                                     std::byte{0}, std::byte{0}, std::byte{0}};
+  record->subrecords.insert(record->subrecords.begin() + static_cast<std::ptrdiff_t>(position),
+                            Subrecord{k_vmad, empty, false});
+  detail::mark_record_modified(plugin, *record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus add_vmad_script(Plugin& plugin, const FormKey& record_key,
+                                            std::size_t index, std::string_view name,
+                                            std::uint8_t flags) {
+  VmadEdit edit;
+  const auto lookup = load_vmad(plugin, record_key, edit);
+  if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (name.empty()) throw schema::ScalarError("VMAD script name is required");
+  if (index > edit.scripts.scripts.size()) {
+    return VmadStructureMutationStatus::index_out_of_range;
   }
+  for (const auto& script : edit.scripts.scripts) {
+    if (same_name(script.name, name)) return VmadStructureMutationStatus::already_present;
+  }
+  if (edit.scripts.scripts.size() >= std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("the VMAD script list is full");
+  }
+  std::vector<std::byte> entry;
+  append_name(entry, name);
+  append_u8(entry, flags);
+  append_u16(entry, 0);
+  const auto at = index < edit.scripts.scripts.size() ? edit.scripts.scripts[index].offset
+                                                      : edit.leading_end;
+  splice(edit.vmad->data, at, 0, entry);
+  put(edit.vmad->data, 4, static_cast<std::uint32_t>(edit.scripts.scripts.size() + 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus remove_vmad_script(Plugin& plugin, const FormKey& record_key,
+                                               std::size_t index) {
+  VmadEdit edit;
+  const auto lookup = load_vmad(plugin, record_key, edit);
+  if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (index >= edit.scripts.scripts.size()) {
+    return VmadStructureMutationStatus::index_out_of_range;
+  }
+  const auto begin = edit.scripts.scripts[index].offset;
+  const auto end = tail_start(edit, index);
+  splice(edit.vmad->data, begin, end - begin, {});
+  put(edit.vmad->data, 4, static_cast<std::uint32_t>(edit.scripts.scripts.size() - 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus add_vmad_property(Plugin& plugin, const FormKey& record_key,
+                                              std::size_t script, std::size_t index,
+                                              const VmadProperty& property) {
+  VmadEdit edit;
+  const auto lookup = load_vmad(plugin, record_key, edit);
+  if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (script >= edit.scripts.scripts.size()) {
+    return VmadStructureMutationStatus::index_out_of_range;
+  }
+  const auto& target = edit.scripts.scripts[script];
+  if (index > target.properties.size()) return VmadStructureMutationStatus::index_out_of_range;
+  for (const auto& existing : target.properties) {
+    if (same_name(existing.name, property.name)) return VmadStructureMutationStatus::already_present;
+  }
+  if (target.properties.size() >= std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("the VMAD property list is full");
+  }
+  const auto encoded = encode_property(property, edit.scripts.object_format);
+  const auto at = index < target.properties.size() ? target.properties[index].offset
+                                                   : tail_start(edit, script);
+  splice(edit.vmad->data, at, 0, encoded);
+  put(edit.vmad->data, target.property_count_offset,
+      static_cast<std::uint32_t>(target.properties.size() + 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus remove_vmad_property(Plugin& plugin, const FormKey& record_key,
+                                                 std::size_t script, std::size_t index) {
+  VmadEdit edit;
+  const auto lookup = load_vmad(plugin, record_key, edit);
+  if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (script >= edit.scripts.scripts.size()) {
+    return VmadStructureMutationStatus::index_out_of_range;
+  }
+  const auto& target = edit.scripts.scripts[script];
+  if (index >= target.properties.size()) return VmadStructureMutationStatus::index_out_of_range;
+  const auto& property = target.properties[index];
+  const auto begin = property.offset;
+  const auto end = property.value_offset + property.value_size;
+  splice(edit.vmad->data, begin, end - begin, {});
+  put(edit.vmad->data, target.property_count_offset,
+      static_cast<std::uint32_t>(target.properties.size() - 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus replace_vmad_property(Plugin& plugin, const FormKey& record_key,
+                                                  std::size_t script, std::size_t index,
+                                                  const VmadProperty& property) {
+  VmadEdit edit;
+  const auto lookup = load_vmad(plugin, record_key, edit);
+  if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (script >= edit.scripts.scripts.size()) {
+    return VmadStructureMutationStatus::index_out_of_range;
+  }
+  const auto& target = edit.scripts.scripts[script];
+  if (index >= target.properties.size()) return VmadStructureMutationStatus::index_out_of_range;
+  const auto& current = target.properties[index];
+  const auto begin = current.offset;
+  const auto end = current.value_offset + current.value_size;
+  const auto encoded = encode_property(property, edit.scripts.object_format);
+  if (encoded.size() == end - begin &&
+      std::equal(encoded.begin(), encoded.end(),
+                 edit.vmad->data.begin() + static_cast<std::ptrdiff_t>(begin))) {
+    return VmadStructureMutationStatus::unchanged;
+  }
+  splice(edit.vmad->data, begin, end - begin, encoded);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus add_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                                    std::uint16_t stage, std::int32_t stage_index,
+                                                    std::string_view script,
+                                                    std::string_view function) {
+  QuestFragmentEdit edit;
+  if (const auto refusal = load_quest_fragments(plugin, record_key, edit)) return *refusal;
+  if (script.empty() || function.empty()) {
+    throw schema::ScalarError("VMAD fragment script and function names are required");
+  }
+  if (edit.extras.script_name.empty()) return VmadStructureMutationStatus::binding_missing;
+  const auto index = static_cast<std::uint32_t>(stage_index);
+  for (const auto& existing : edit.extras.fragments) {
+    if (existing.stage == stage && static_cast<std::uint32_t>(existing.stage_index) == index) {
+      return VmadStructureMutationStatus::already_present;
+    }
+  }
+  if (edit.extras.fragments.size() >= std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("the quest VMAD fragment list is full");
+  }
+  QuestVmadFragment added;
+  added.stage = stage;
+  added.stage_index = stage_index;
+  added.unknown_byte = 1;
+  added.script = std::string(script);
+  added.function = std::string(function);
+  std::vector<std::byte> entry;
+  append_quest_fragment(entry, added);
+  auto at = edit.tail_start + edit.extras.entries_begin;
+  for (const auto& existing : edit.extras.fragments) {
+    if (existing.stage > stage ||
+        (existing.stage == stage && static_cast<std::uint32_t>(existing.stage_index) > index)) {
+      at = edit.tail_start + existing.offset;
+      break;
+    }
+    at = edit.tail_start + existing.end;
+  }
+  splice(edit.vmad->data, at, 0, entry);
+  put(edit.vmad->data, edit.tail_start + edit.extras.count_offset,
+      static_cast<std::uint32_t>(edit.extras.fragments.size() + 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus set_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                                    std::uint16_t stage, std::string_view script,
+                                                    std::string_view function) {
+  return set_quest_fragment(plugin, record_key, stage, std::nullopt, script, function);
+}
+
+VmadStructureMutationStatus set_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                                    std::uint16_t stage, std::int32_t stage_index,
+                                                    std::string_view script,
+                                                    std::string_view function) {
+  return set_quest_fragment(plugin, record_key, stage, stage_index, script, function);
+}
+
+VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                                       std::uint16_t stage) {
+  return remove_quest_fragment(plugin, record_key, stage, std::nullopt);
+}
+
+VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                                       std::uint16_t stage,
+                                                       std::int32_t stage_index) {
+  return remove_quest_fragment(plugin, record_key, stage, stage_index);
+}
+
+ScalarMutationStatus set_vmad_property(Plugin& plugin, const FormKey& record_key,
+                                        std::size_t script_index, std::size_t property_index,
+                                        const VmadValue& value, std::size_t element_index) {
+  VmadEdit edit;
+  const auto lookup = load_vmad(plugin, record_key, edit);
+  if (lookup != VmadLookup::ok) {
+    return lookup == VmadLookup::record_missing ? ScalarMutationStatus::record_missing
+                                                : ScalarMutationStatus::subrecord_missing;
+  }
+  auto* vmad = edit.vmad;
+  const auto& scripts = edit.scripts;
   if (script_index >= scripts.scripts.size() ||
       property_index >= scripts.scripts[script_index].properties.size()) {
     return ScalarMutationStatus::subrecord_missing;
@@ -121,7 +718,7 @@ ScalarMutationStatus set_vmad_property(Plugin& plugin, const FormKey& record_key
   replacement.erase(replacement.begin() + at, replacement.begin() + at + width);
   replacement.insert(replacement.begin() + at, encoded.begin(), encoded.end());
   vmad->data = std::move(replacement);
-  detail::mark_record_modified(plugin, *record);
+  detail::mark_record_modified(plugin, *edit.record);
   return ScalarMutationStatus::updated;
 }
 

@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -31,6 +32,8 @@ struct FormLinkFieldDescriptor {
   std::size_t target_count{0};
   FieldAddress address{};
   std::array<std::size_t, 2> payload_sizes{};
+  std::uint16_t max_form_version{0};
+  std::uint16_t min_form_version{0};
 };
 
 class FormLinkFieldError : public std::runtime_error {
@@ -64,6 +67,16 @@ struct FormLinkListDescriptor {
   std::size_t first_anchor{0};
   std::size_t predecessor_count{0};
   std::size_t successor_count{0};
+  // Constraint: segment_count 0 means the counter is one whole u32; otherwise it is a shared fixed-size counter struct.
+  std::size_t segment_index{0};
+  std::size_t first_segment{0};
+  std::size_t segment_count{0};
+  std::size_t counter_payload_size{0};
+  // Constraint: a nonzero counter_offset is the u16 count at that offset inside the counter
+  // subrecord, which must already exist and is never erased.
+  std::size_t counter_offset{0};
+  // Invariant: element_tail subrecords directly follow an element and must move with it.
+  Signature element_tail{};
 };
 
 struct NestedFormLinkListDescriptor {
@@ -130,6 +143,8 @@ bool formlink_field_target_allowed(
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
     Signature record,
     std::string_view base_path) noexcept;
+std::optional<FormLinkListDescriptor> packed_formlink_list_path(
+    std::string_view path) noexcept;
 // Resolves a list by the Mutagen property name the AI list tools address it by
 // (record signature + field alias, e.g. FLST + "Items"), matched ASCII
 // case-insensitively to mirror C# BindingFlags.IgnoreCase. Empty alias never matches.

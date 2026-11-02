@@ -21,8 +21,7 @@ RADICLE_API radicle_status radicle_ccc_read(const char* path,
                                             char*** out_names,
                                             size_t* out_count);
 
-/* Rows are "name<TAB>checked(0|1)<TAB>master_flag(0|1)<TAB>light(0|1)" in load order; findings are "code<TAB>plugin<TAB>detail". */
-/* plugin_list_path and ccc_path may be NULL; *out_failed is 1 when the assembly aborted. Both arrays require radicle_free_string_array. */
+/* May pass NULL plugin_list_path or ccc_path. Requires radicle_free_string_array. */
 RADICLE_API radicle_status radicle_load_order_assemble(const char* data_dir,
                                                        const char* plugin_list_path,
                                                        const char* ccc_path,
@@ -32,6 +31,31 @@ RADICLE_API radicle_status radicle_load_order_assemble(const char* data_dir,
                                                        char*** out_findings,
                                                        size_t* out_finding_count,
                                                        int32_t* out_failed);
+
+/* Requires radicle_free_string_array. */
+RADICLE_API radicle_status radicle_mo2_instance_read(const char* instance_dir,
+                                                     char*** out_fields,
+                                                     size_t* out_count);
+
+/* NULL profile selects the instance profile; "" is invalid. Requires radicle_free_string_array. */
+RADICLE_API radicle_status radicle_mo2_profile_read(const char* instance_dir,
+                                                    const char* profile,
+                                                    char*** out_mod_rows,
+                                                    size_t* out_mod_count,
+                                                    char*** out_plugin_rows,
+                                                    size_t* out_plugin_count);
+
+/* Invariant: roots are LOW to HIGH; callers must reverse for open_roots (HIGH to LOW). Requires radicle_free_string_array. */
+RADICLE_API radicle_status radicle_mo2_asset_roots(const char* instance_dir,
+                                                   const char* profile,
+                                                   char*** out_roots,
+                                                   size_t* out_count);
+
+/* Requires radicle_free_string_array. */
+RADICLE_API radicle_status radicle_mo2_plugin_paths(const char* instance_dir,
+                                                    const char* profile,
+                                                    char*** out_rows,
+                                                    size_t* out_count);
 
 #ifdef __cplusplus
 }

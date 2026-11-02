@@ -124,6 +124,16 @@ struct Scripts {
   std::vector<Script> scripts;
 };
 
+// XLIG offset 16 holds the near clip and offset 20 the volumetric intensity.
+struct PlacedLightData {
+  float fov{0.0f};
+  float fade{0.0f};
+  float end_distance_cap{0.0f};
+  float shadow_depth_bias{0.0f};
+  std::optional<float> near_clip;
+  std::optional<float> volumetric_intensity;
+};
+
 struct PlacedReferenceData {
   Signature signature{};
   std::optional<FormKey> base;
@@ -132,6 +142,9 @@ struct PlacedReferenceData {
   std::optional<float> scale;
   std::optional<FormKey> layer;
   std::optional<FormKey> encounter_zone;
+  std::optional<FormKey> emittance;
+  std::optional<float> radius;
+  std::optional<PlacedLightData> light_data;
   std::optional<FormKey> location_reference;
   std::vector<FormKey> location_ref_types;
   std::optional<EnableParent> enable_parent;

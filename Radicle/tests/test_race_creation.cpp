@@ -68,8 +68,8 @@ TEST(RaceCreation, CreatesRequiredCurrentFormatSkeleton) {
   creation.size = 1;
   creation.injured_health_pct = 0.25f;
   creation.shield_biped_object = -1;
-  creation.beard_biped_object = 45;
-  creation.body_biped_object = 33;
+  creation.beard_biped_object = 18;
+  creation.body_biped_object = 3;
   creation.aim_angle_tolerance = 30.0f;
   creation.flight_radius = 128.0f;
   creation.angular_acceleration_rate = 4.0f;
@@ -129,8 +129,8 @@ TEST(RaceCreation, CreatesRequiredCurrentFormatSkeleton) {
   EXPECT_EQ(model.size, 1u);
   EXPECT_FLOAT_EQ(model.injured_health_pct, 0.25f);
   EXPECT_EQ(model.shield_biped_object, -1);
-  EXPECT_EQ(model.beard_biped_object, 45);
-  EXPECT_EQ(model.body_biped_object, 33);
+  EXPECT_EQ(model.beard_biped_object, 18);
+  EXPECT_EQ(model.body_biped_object, 3);
   EXPECT_FLOAT_EQ(model.aim_angle_tolerance, 30.0f);
   EXPECT_FLOAT_EQ(model.flight_radius, 128.0f);
   EXPECT_FLOAT_EQ(model.angular_acceleration_rate, 4.0f);

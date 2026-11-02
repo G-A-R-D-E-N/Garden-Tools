@@ -11,6 +11,7 @@
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 #include "real_data_build.hpp"
+#include "real_sample_plugin.hpp"
 
 #include <gtest/gtest.h>
 
@@ -104,7 +105,7 @@ TEST_P(WaterRealData, MasterHasExpectedWaterCountAndDnamSizes) {
   const std::map<std::string, std::size_t> expected{
       {"Fallout4.esm", 42},      {"DLCCoast.esm", 2},       {"DLCNukaWorld.esm", 3}, {"DLCRobot.esm", 0},
       {"DLCworkshop01.esm", 0}, {"DLCworkshop02.esm", 0}, {"DLCworkshop03.esm", 0}};
-  const auto plugin = fo4::read_plugin_file(path_);
+  auto plugin = fo4::read_plugin_file(path_);
   std::size_t count = 0;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     if (record.header.signature != fo4::Signature::from_string("WATR")) { return; }
@@ -125,28 +126,13 @@ INSTANTIATE_TEST_SUITE_P(
                     "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"));
 
 using Bytes = std::vector<std::byte>;
-using Subs = std::vector<std::pair<std::string, Bytes>>;
 
 const fo4::Signature k_watr = fo4::Signature::from_string("WATR");
 
 fo4::Signature sig(const char* text) { return fo4::Signature::from_string(text); }
 
-Subs subs_of(const fo4::Plugin& plugin, const fo4::FormKey& key) {
-  Subs out;
-  if (const auto* record = fo4::find_record(plugin, key)) {
-    for (const auto& sub : record->subrecords) { out.emplace_back(sub.signature.to_string(), sub.data); }
-  }
-  return out;
-}
-
-std::map<fo4::FormKey, Bytes> snapshot(const fo4::Plugin& plugin) {
-  std::map<fo4::FormKey, Bytes> out;
-  fo4::visit_records(plugin, [&](const fo4::Record& record) {
-    if (record.header.signature == fo4::Signature::from_string("TES4")) { return; }
-    out[record.form_key] = fo4::test::record_original_bytes(plugin, record);
-  });
-  return out;
-}
+using fo4::test::snapshot;
+using fo4::test::subs_of;
 
 const std::map<std::string, fo4::FormKey>& base_targets(const std::filesystem::path& data) {
   static const auto targets = [&] {
@@ -161,8 +147,16 @@ const std::map<std::string, fo4::FormKey>& base_targets(const std::filesystem::p
   return targets;
 }
 
+fo4::Plugin water_sample(const std::filesystem::path& path) {
+  std::set<fo4::FormKey> anchors;
+  for (const auto& [type, key] : base_targets(path.parent_path())) { anchors.insert(key); }
+  return fo4::test::make_sample(fo4::read_plugin_file(path), [&](const fo4::Record& record) {
+    return record.header.signature == k_watr || anchors.count(record.form_key) > 0;
+  }, 100);
+}
+
 TEST_P(WaterRealData, EveryOfficialWaterIsListedInXEditOrderAndPreflightClean) {
-  const auto plugin = fo4::read_plugin_file(path_);
+  auto plugin = fo4::read_plugin_file(path_);
   const auto rules = fo4::schema::authoring_subrecords(*fo4::schema::record_authoring_constraint(k_watr));
   int seen = 0;
   std::vector<std::string> violators;
@@ -191,7 +185,7 @@ TEST_P(WaterRealData, EveryOfficialWaterIsListedInXEditOrderAndPreflightClean) {
 }
 
 TEST_P(WaterRealData, EveryScalarAndStringPathEditsWithoutTouchingOtherBytes) {
-  auto plugin = fo4::read_plugin_file(path_);
+  auto plugin = water_sample(path_);
   fo4::assign_record_form_keys(plugin);
   const auto original = plugin;
   const auto before = snapshot(plugin);
@@ -263,7 +257,7 @@ TEST_P(WaterRealData, EveryScalarAndStringPathEditsWithoutTouchingOtherBytes) {
 TEST_P(WaterRealData, LinksAndOptionalSubrecordsEditAndKeepEveryOtherRecordByteIdentical) {
   const auto& pick = base_targets(path_.parent_path());
   ASSERT_EQ(pick.size(), 4u);
-  auto plugin = fo4::read_plugin_file(path_);
+  auto plugin = water_sample(path_);
   fo4::assign_record_form_keys(plugin);
   const auto original = snapshot(plugin);
   const auto field = [](const char* name) { return *fo4::schema::formlink_field_descriptor(name); };

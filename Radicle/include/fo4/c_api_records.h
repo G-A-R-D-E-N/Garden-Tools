@@ -35,6 +35,16 @@ typedef struct radicle_light_info {
   radicle_form_key god_rays;
 } radicle_light_info;
 
+typedef struct radicle_add_on_node_info {
+  int32_t has_node_index;
+  uint32_t node_index;
+  radicle_form_key light;
+  const char* model;
+  int32_t has_dnam;
+  uint16_t master_particle_cap;
+  uint16_t flags;
+} radicle_add_on_node_info;
+
 typedef struct radicle_bendable_spline_info {
   int32_t has_default_tiles;
   float default_tiles;
@@ -211,6 +221,9 @@ typedef struct radicle_lighting_template_info {
 RADICLE_API radicle_status radicle_light_get_info(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_light_info* out_info);
+RADICLE_API radicle_status radicle_add_on_node_get_info(const radicle_env* env,
+                                                        const radicle_record* record,
+                                                        radicle_add_on_node_info* out_info);
 RADICLE_API radicle_status radicle_bendable_spline_get_info(const radicle_env* env,
                                                             const radicle_record* record,
                                                             radicle_bendable_spline_info* out_info);
@@ -236,6 +249,22 @@ typedef struct radicle_climate_timing_edit {
 RADICLE_API radicle_status radicle_plugin_set_climate_timing(radicle_plugin* plugin,
                                                              radicle_form_key key,
                                                              const radicle_climate_timing_edit* timing);
+RADICLE_API radicle_status radicle_plugin_set_climate_weathers(radicle_plugin* plugin,
+                                                               radicle_form_key key,
+                                                               const radicle_climate_weather* weathers,
+                                                               size_t weather_count);
+RADICLE_API radicle_status radicle_plugin_set_weather_colors(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             uint8_t group,
+                                                             const radicle_byte_color* times,
+                                                             size_t time_count);
+RADICLE_API radicle_status radicle_plugin_set_weather_fog(radicle_plugin* plugin,
+                                                          radicle_form_key key,
+                                                          const float* distances,
+                                                          size_t distance_count);
+RADICLE_API radicle_status radicle_plugin_set_weather_transition(radicle_plugin* plugin,
+                                                                 radicle_form_key key,
+                                                                 uint8_t transition_delta);
 RADICLE_API radicle_status radicle_climate_moon_phase(uint8_t moons_phase_length,
                                                       uint32_t days_passed,
                                                       int32_t* out_has_phase,

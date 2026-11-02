@@ -200,8 +200,11 @@ public class ArchiveServiceTests
         json["error"].Should().NotBeNull();
     }
 
-    [Fact]
-    public void ExtractSelected_ExtractsOnlyChosenEntries()
+    [Theory]
+    [InlineData(@"Meshes\A.txt")]
+    [InlineData(@"\Meshes\A.txt")]
+    [InlineData("/Meshes/A.txt")]
+    public void ExtractSelected_ExtractsOnlyChosenEntries(string selectedPath)
     {
         var content = Encoding.ASCII.GetBytes("payload");
         var archive = BuildTestBa2(
@@ -211,7 +214,7 @@ public class ArchiveServiceTests
         var outDir = Path.Combine(Path.GetTempPath(), $"ArchiveExtractSelected_{Guid.NewGuid():N}");
         try
         {
-            var result = ArchiveService.ExtractSelected(archive, new List<string> { @"Meshes\A.txt" }, outDir);
+            var result = ArchiveService.ExtractSelected(archive, new List<string> { selectedPath }, outDir);
             result.Should().Contain("Extracted 1 of 1 selected");
 
             var extracted = Path.Combine(outDir, "Meshes", "A.txt");

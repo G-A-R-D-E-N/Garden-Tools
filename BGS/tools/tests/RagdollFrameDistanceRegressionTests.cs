@@ -14,40 +14,10 @@ public sealed class RagdollFrameDistanceRegressionTests
     private const string Skeleton =
         "Meshes/Actors/Character/CharacterAssets/skeleton.hkx";
 
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
-                     relative.Replace('/', Path.DirectorySeparatorChar));
-
-    [Fact]
-    public void BodyFrameDistanceTextUsesInvariantNumericFormatting()
-    {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
-        Assert.NotNull(model);
-
-        var view = new SkeletonView();
-        view.SetBodies(model);
-        view.ToggleBodyPinForTest(0);
-        view.ToggleBodyPinForTest(1);
-        float distance = Vector3.Distance(model!.Bodies[0].Position, model.Bodies[1].Position);
-        string expected = $"distance {model.Bodies[0].Name} to {model.Bodies[1].Name}  " +
-                          $"{distance.ToString("0.00", CultureInfo.InvariantCulture)} file units";
-
-        CultureInfo original = CultureInfo.CurrentCulture;
-        try
-        {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-            Assert.Equal(expected, view.FrameDistanceText);
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = original;
-        }
-    }
-
     [Fact]
     public void BodyFrameDistanceFollowsMappedPlaybackPose()
     {
-        string path = Fixture(Skeleton);
+        string path = TestFixtures.Path(Skeleton);
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(path));
         Assert.NotNull(model);
         var skeleton = new HkxBinaryReader().ReadSkeleton(path);
@@ -81,7 +51,7 @@ public sealed class RagdollFrameDistanceRegressionTests
     [Fact]
     public void BodyFrameDistanceFollowsDropPose()
     {
-        string path = Fixture(Skeleton);
+        string path = TestFixtures.Path(Skeleton);
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(path));
         Assert.NotNull(model);
         var skeleton = new HkxBinaryReader().ReadSkeleton(path);
@@ -107,7 +77,7 @@ public sealed class RagdollFrameDistanceRegressionTests
         try
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-            var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+            var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
             Assert.NotNull(model);
 
             var view = new SkeletonView { EngineeringFrames = true };
@@ -115,6 +85,7 @@ public sealed class RagdollFrameDistanceRegressionTests
             view.ToggleBodyPinForTest(0);
             Assert.Equal("", view.FrameDistanceText);
             view.ToggleBodyPinForTest(1);
+            Assert.Equal((0, 1), view.FrameDistanceBodies);
             var first = model!.Bodies.Single(body => body.Id == 0);
             var second = model.Bodies.Single(body => body.Id == 1);
             float distance = Vector3.Distance(first.Position, second.Position);

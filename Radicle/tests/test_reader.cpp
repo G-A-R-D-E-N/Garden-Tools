@@ -3,11 +3,13 @@
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
+#include <cstddef>
+#include <string_view>
 #include <variant>
 
 TEST(Reader, ReadsTes4AndTopLevelGroups) {
   const auto bytes = fo4::test::make_minimal_plugin();
-  const auto plugin = fo4::read_plugin(bytes, "minimal.esp");
+  auto plugin = fo4::read_plugin(bytes, "minimal.esp");
 
   EXPECT_EQ(plugin.tes4.header.signature, fo4::sig_tes4);
   EXPECT_EQ(plugin.tes4.header.form_version, 131);
@@ -40,7 +42,7 @@ TEST(Reader, PreservesUnknownSubrecords) {
   fo4::test::write_subrecord(out, "ZZZZ", std::string_view{"keepme"});
   fo4::test::end_record(out, tes4);
 
-  const auto plugin = fo4::read_plugin(out.bytes);
+  auto plugin = fo4::read_plugin(out.bytes);
   ASSERT_EQ(plugin.tes4.subrecords.size(), 2u);
   EXPECT_EQ(plugin.tes4.subrecords[1].signature.to_string(), "ZZZZ");
   EXPECT_EQ(plugin.tes4.subrecords[1].data.size(), 6u);
@@ -59,7 +61,7 @@ TEST(Reader, NestedGroupsAreEnumerated) {
   fo4::test::end_group(out, children);
   fo4::test::end_group(out, wrld);
 
-  const auto plugin = fo4::read_plugin(out.bytes);
+  auto plugin = fo4::read_plugin(out.bytes);
   const auto groups = fo4::collect_groups(plugin);
   EXPECT_EQ(groups.size(), 2u);
   const auto records = fo4::collect_records(plugin);
@@ -110,7 +112,7 @@ std::vector<std::byte> duplicate_form_id_plugin() {
 
 TEST(Reader, FindRecordReturnsTheFirstMatchInTraversalOrder) {
   const auto bytes = duplicate_form_id_plugin();
-  const auto plugin = fo4::read_plugin(bytes, "Dupes.esp");
+  auto plugin = fo4::read_plugin(bytes, "Dupes.esp");
   const auto* master_owned = std::get_if<fo4::Record>(&plugin.groups[0].children[0]);
   const auto* plugin_owned = std::get_if<fo4::Record>(&plugin.groups[0].children[1]);
   ASSERT_NE(master_owned, nullptr);
@@ -176,7 +178,7 @@ std::vector<std::byte> nested_duplicate_plugin() {
 
 TEST(Reader, FindRecordPrefersEarlierRecordsAcrossNestedGroups) {
   const auto bytes = nested_duplicate_plugin();
-  const auto plugin = fo4::read_plugin(bytes, "Nested.esp");
+  auto plugin = fo4::read_plugin(bytes, "Nested.esp");
   const auto& top = plugin.groups.at(0).children;
   ASSERT_EQ(top.size(), 3u);
   const auto* a = std::get_if<fo4::Record>(&top[0]);
@@ -200,4 +202,75 @@ TEST(Reader, FindRecordPrefersEarlierRecordsAcrossNestedGroups) {
   const fo4::RecordIndex index{plugin};
   EXPECT_EQ(index.find(key_900), a);
   EXPECT_EQ(index.find(key_901), d);
+}
+
+namespace {
+
+std::vector<std::byte> nested_groups_plugin(std::size_t levels) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::end_record(out, tes4);
+  std::vector<std::size_t> offsets;
+  for (std::size_t i = 0; i < levels; ++i) {
+    offsets.push_back(fo4::test::begin_group(out, "????", 1));
+  }
+  for (auto it = offsets.rbegin(); it != offsets.rend(); ++it) {
+    fo4::test::end_group(out, *it);
+  }
+  return out.bytes;
+}
+
+}  // namespace
+
+TEST(ReaderLimits, SixteenLevelsOfGroupNestingStillParse) {
+  auto plugin = fo4::read_plugin(nested_groups_plugin(16));
+  EXPECT_EQ(fo4::collect_groups(plugin).size(), 16u);
+}
+
+TEST(ReaderLimits, SeventeenLevelsOfGroupNestingAreRefused) {
+  EXPECT_THROW(fo4::read_plugin(nested_groups_plugin(17)), fo4::parse_error);
+}
+
+TEST(ReaderLimits, CompressedUncompressedSizeBeyondZlibBoundLoadsUndecodable) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::end_record(out, tes4);
+  const auto grup = fo4::test::begin_group(out, "MISC", 0);
+  const auto rec = fo4::test::begin_record(out, "MISC", fo4::RecordFlags::compressed, 0x01000801);
+  out.u32(0xFFFFFFFFu);
+  out.raw(std::string_view{"tiny"});
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+
+  auto plugin = fo4::read_plugin(out.bytes);
+  const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x01000801});
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->undecodable);
+}
+
+TEST(Xxxx, ReadsExtendedSizeSubrecordWithoutDiscardingPayload) {
+  std::vector<std::byte> payload(70000, std::byte{0xAB});
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto grup = fo4::test::begin_group(out, "STAT", 0);
+  const auto rec = fo4::test::begin_record(out, "STAT", 0, 0x01000800);
+  fo4::test::write_xxxx_subrecord(out, "DATA", payload);
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+
+  auto plugin = fo4::read_plugin(out.bytes);
+  const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x01000800});
+  ASSERT_NE(record, nullptr);
+  ASSERT_EQ(record->subrecords.size(), 2u);
+  EXPECT_EQ(record->subrecords[0].signature, fo4::sig_xxxx);
+  EXPECT_EQ(record->subrecords[1].signature.to_string(), "DATA");
+  EXPECT_TRUE(record->subrecords[1].extended_size);
+  EXPECT_EQ(record->subrecords[1].data, payload);
 }

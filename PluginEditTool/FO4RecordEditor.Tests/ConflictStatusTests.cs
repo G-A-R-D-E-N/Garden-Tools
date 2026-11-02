@@ -65,30 +65,17 @@ public class ConflictStatusTests
         severity.Should().Be("none");
     }
 
-    [Fact]
-    public void CanonValue_normalizes_numeric_forms()
+    [Theory]
+    [InlineData("1.0", "1")]
+    [InlineData("1.000000", "1")]
+    [InlineData("abc", "abc")]
+    [InlineData("1e5", "100000")]
+    [InlineData("10", "10")]
+    [InlineData("20", "20")]
+    [InlineData("001234:Base.esp", "001234:Base.esp")]
+    public void CanonValue_NormalizesNumbersAndKeepsOtherValuesVerbatim(string input, string expected)
     {
-        MutagenLoader.CanonValue("1.0").Should().Be(MutagenLoader.CanonValue("1.000000"));
-        MutagenLoader.CanonValue("abc").Should().Be("abc");
-    }
-
-    [Fact]
-    public void CanonValue_treats_scientific_notation_as_equal_to_plain()
-    {
-        MutagenLoader.CanonValue("1e5").Should().Be(MutagenLoader.CanonValue("100000"));
-    }
-
-    [Fact]
-    public void CanonValue_keeps_genuinely_different_numbers_distinct()
-    {
-        MutagenLoader.CanonValue("10").Should().NotBe(MutagenLoader.CanonValue("20"));
-    }
-
-    [Fact]
-    public void CanonValue_does_not_parse_formkey_as_number()
-    {
-
-        MutagenLoader.CanonValue("001234:Base.esp").Should().Be("001234:Base.esp");
+        MutagenLoader.CanonValue(input).Should().Be(expected);
     }
 
     [Fact]

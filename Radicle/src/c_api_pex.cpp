@@ -1,24 +1,23 @@
 #include "fo4/c_api_pex.h"
 
 #include "c_api_internal.hpp"
+#include "c_api_pex_internal.hpp"
 #include "fo4/pex/pex.hpp"
+#include "fo4/pex_analysis/opcodes.hpp"
+#include "fo4/pex_analysis/script_set.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
-#include <memory>
 #include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
-
-struct radicle_pex {
-  fo4::pex::PexFile value;
-  std::unordered_map<std::string, size_t> strings;
-};
 
 namespace {
 
@@ -36,6 +35,10 @@ radicle_status copy_bytes(const std::string& value, uint8_t** out_bytes, size_t*
   *out_bytes = buffer;
   *out_size = value.size();
   return RADICLE_STATUS_OK;
+}
+
+std::string bytes_text(const uint8_t* bytes, size_t size) {
+  return bytes ? std::string(reinterpret_cast<const char*>(bytes), size) : std::string();
 }
 
 radicle_status entry_at(const std::vector<std::string>& table,
@@ -224,12 +227,7 @@ radicle_status radicle_pex_parse(const uint8_t* bytes, size_t size, radicle_pex*
     if (size != 0) {
       input.assign(bytes, bytes + size);
     }
-    auto handle = std::make_unique<radicle_pex>();
-    handle->value = fo4::pex::PexFile::fromBytes(input);
-    for (size_t index = 0; index < handle->value.stringTable.size(); ++index) {
-      handle->strings.emplace(handle->value.stringTable[index], index);
-    }
-    *out_pex = handle.release();
+    *out_pex = make_pex_handle(fo4::pex::PexFile::fromBytes(input)).release();
     return RADICLE_STATUS_OK;
   } catch (const std::bad_alloc& error) {
     return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
@@ -444,6 +442,108 @@ void radicle_pex_free_object_code(radicle_pex_object_code* code) {
   std::free(code->structs);
   std::free(code->struct_members);
   *code = radicle_pex_object_code{};
+}
+
+radicle_status radicle_pex_opcode_name(uint8_t opcode, uint8_t** out_bytes, size_t* out_size) {
+  clear_error();
+  if (!out_bytes || !out_size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_bytes and out_size are required");
+  }
+  *out_bytes = nullptr;
+  *out_size = 0;
+  if (opcode > static_cast<uint8_t>(fo4::pex_analysis::PexOp::ArrayClear)) {
+    char message[64];
+    std::snprintf(message, sizeof(message), "opcode %u is outside the 0..46 name table",
+                  static_cast<unsigned>(opcode));
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, message);
+  }
+  try {
+    return copy_bytes(fo4::pex_analysis::pex_op_name(opcode), out_bytes, out_size);
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while reading an opcode name");
+  }
+}
+
+radicle_status radicle_script_normalize_name(const uint8_t* bytes,
+                                             size_t size,
+                                             uint8_t** out_bytes,
+                                             size_t* out_size) {
+  clear_error();
+  if (!out_bytes || !out_size || (!bytes && size != 0)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "bytes, out_bytes and out_size are required");
+  }
+  *out_bytes = nullptr;
+  *out_size = 0;
+  try {
+    return copy_bytes(fo4::pex_analysis::normalize_script_name(bytes_text(bytes, size)), out_bytes, out_size);
+  } catch (const fo4::archive::AssetPathError& error) {
+    return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while normalizing a script name");
+  }
+}
+
+radicle_status radicle_script_resolve(const radicle_script_candidate* candidates,
+                                      size_t count,
+                                      radicle_script_winner** out_winners,
+                                      size_t* out_count) {
+  clear_error();
+  if (!out_winners || !out_count || (!candidates && count != 0)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "candidates, out_winners and out_count are required");
+  }
+  *out_winners = nullptr;
+  *out_count = 0;
+  try {
+    std::vector<fo4::pex_analysis::ScriptCandidate> input;
+    input.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      const auto& item = candidates[i];
+      if (item.kind > RADICLE_PEX_SOURCE_LOOSE || (!item.name && item.name_size != 0) ||
+          (!item.container && item.container_size != 0)) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "script candidate needs a known kind and non-null strings");
+      }
+      // Invariant: a caller-built candidate has an empty path and location.
+      fo4::pex_analysis::ScriptCandidate candidate;
+      candidate.name = bytes_text(item.name, item.name_size);
+      candidate.kind = static_cast<fo4::pex_analysis::ScriptSourceKind>(item.kind);
+      candidate.container = bytes_text(item.container, item.container_size);
+      candidate.load_index = item.load_index;
+      candidate.size = item.size;
+      input.push_back(std::move(candidate));
+    }
+    const auto winners = fo4::pex_analysis::resolve_script_set(input);
+    if (winners.empty()) {
+      return RADICLE_STATUS_OK;
+    }
+    auto* buffer = static_cast<radicle_script_winner*>(std::malloc(winners.size() * sizeof(radicle_script_winner)));
+    if (!buffer) {
+      return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate script winners");
+    }
+    for (size_t i = 0; i < winners.size(); ++i) {
+      buffer[i] = radicle_script_winner{winners[i].index, winners[i].replaced};
+    }
+    *out_winners = buffer;
+    *out_count = winners.size();
+    return RADICLE_STATUS_OK;
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while resolving script winners");
+  }
+}
+
+void radicle_script_free_winners(radicle_script_winner* winners) {
+  std::free(winners);
 }
 
 }

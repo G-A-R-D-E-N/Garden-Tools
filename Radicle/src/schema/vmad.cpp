@@ -346,7 +346,7 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
     result.fully_consumed = slice.at_end();
     result.trailing_data = !slice.at_end();
   } catch (const UnsupportedVmadProperty&) {
-    result.offsets.clear();
+    // Requires: links parsed before the unsupported property stay valid.
     result.unsupported = true;
     result.failed = true;
     result.quest_fragment_count = 0;
@@ -510,6 +510,7 @@ std::optional<std::vector<VmadStruct>> decode_structs(Slice values, std::int16_t
 
 VmadProperty read_property(Slice& slice, std::int16_t object_format) {
   VmadProperty property;
+  property.offset = slice.position();
   property.name = slice.wstring();
   property.type = slice.u8();
   property.flags = slice.u8();
@@ -613,8 +614,10 @@ VmadScripts read_vmad_scripts(std::span<const std::byte> data) {
   const auto count = slice.u16();
   for (std::uint16_t i = 0; i < count; ++i) {
     VmadScript script;
+    script.offset = slice.position();
     script.name = slice.wstring();
     script.flags = slice.u8();
+    script.property_count_offset = slice.position();
     const auto properties = slice.u16();
     for (std::uint16_t p = 0; p < properties; ++p) {
       try {
@@ -636,6 +639,7 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
   try {
     Slice slice(data);
     slice.u8();
+    result.count_offset = slice.position();
     const auto fragment_count = slice.u16();
     result.script_name = slice.wstring();
     if (!result.script_name.empty()) {
@@ -646,15 +650,18 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
       }
     }
 
+    result.entries_begin = slice.position();
     result.fragments.reserve(fragment_count);
     for (std::uint16_t i = 0; i < fragment_count; ++i) {
       QuestVmadFragment fragment;
+      fragment.offset = slice.position();
       fragment.stage = slice.u16();
       fragment.unknown = slice.u16();
       fragment.stage_index = static_cast<std::int32_t>(slice.u32());
-      slice.u8();
+      fragment.unknown_byte = slice.u8();
       fragment.script = slice.wstring();
       fragment.function = slice.wstring();
+      fragment.end = slice.position();
       result.fragments.push_back(std::move(fragment));
     }
 
@@ -692,7 +699,46 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
   } catch (const UnsupportedVmadProperty&) {
     result.unsupported = true;
     result.unsupported_reason = "a VMAD property in the quest extras is unsupported";
-  } catch (const std::exception& error) {
+  } catch (const parse_error& error) {
+    result.unsupported = true;
+    result.unsupported_reason = error.what();
+  }
+  return result;
+}
+
+SceneVmadExtras read_scene_vmad_extras(std::span<const std::byte> data,
+                                       std::int16_t object_format) {
+  SceneVmadExtras result;
+  try {
+    Slice slice(data);
+    slice.u8();
+    result.flags = slice.u8();
+    const unsigned entries = (result.flags & 1u) + ((result.flags >> 1) & 1u);
+    std::vector<std::size_t> ignored;
+    walk_script_entry(slice, object_format, ignored);
+    for (unsigned i = 0; i < entries; ++i) {
+      slice.u8();
+      slice.skip_wstring();
+      slice.skip_wstring();
+    }
+    const auto phases = slice.u16();
+    result.phases.reserve(phases);
+    for (std::uint16_t i = 0; i < phases; ++i) {
+      SceneVmadPhaseFragment phase;
+      phase.offset = slice.position();
+      phase.flag = slice.u8();
+      phase.index = slice.u32();
+      phase.unknown = slice.u8();
+      phase.script = slice.wstring();
+      phase.function = slice.wstring();
+      phase.end = slice.position();
+      result.phases.push_back(std::move(phase));
+    }
+    result.fully_consumed = slice.at_end();
+  } catch (const UnsupportedVmadProperty&) {
+    result.unsupported = true;
+    result.unsupported_reason = "a VMAD property in the scene extras is unsupported";
+  } catch (const parse_error& error) {
     result.unsupported = true;
     result.unsupported_reason = error.what();
   }

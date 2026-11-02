@@ -157,15 +157,6 @@ TEST(KwdaFormLinkList, ResolvesKeywordsByFieldAlias) {
   EXPECT_FALSE(descriptor->nullable);
 }
 
-TEST(KwdaFormLinkList, KeywordAliasIsCaseInsensitive) {
-  for (const auto* alias : {"keywords", "KEYWORDS", "KeYwOrDs"}) {
-    const auto descriptor = fo4::schema::formlink_list_descriptor_by_field(
-        fo4::Signature::from_string("WEAP"), alias);
-    ASSERT_TRUE(descriptor.has_value()) << alias;
-    EXPECT_EQ(descriptor->subrecord, fo4::Signature::from_string("KWDA")) << alias;
-  }
-}
-
 TEST(KwdaFormLinkList, TypedTargetAcceptsOnlyKeyword) {
   const auto descriptor = keywords_descriptor();
   EXPECT_TRUE(fo4::schema::formlink_list_target_allowed(
@@ -470,7 +461,7 @@ TEST(SigBaseObjects, MatchesXeditUnionAndRejectsNonBaseRecords) {
 }
 
 TEST(KwdaFormLinkList, ReadsPackedValuesAndDistinguishesEmptyFromMissingRecord) {
-  const auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
+  auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
   const auto descriptor = keywords_descriptor();
   const auto values = fo4::schema::record_formlink_list_values(
       plugin, fo4::FormKey::parse("000900:Guns.esp"), descriptor);

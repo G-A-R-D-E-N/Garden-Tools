@@ -249,7 +249,7 @@ TEST(FormLink, PackedArrayCollectionPreservesDocumentOrder) {
   append_record(out, "NPC_", 0x03000799, "PNAM", words({0x02000041}));
   append_record(out, "OMOD", 0x03000800, "MNAM", words({0x02000042, 0x00000099}));
   append_record(out, "MUSC", 0x03000801, "TNAM", words({0x02000043}));
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto links = fo4::collect_form_links(plugin);
   ASSERT_EQ(links.size(), 4);
   EXPECT_EQ(links[0].record, fo4::FormKey::parse("000799:Patch.esp"));
@@ -336,13 +336,23 @@ TEST(FormLink, FactionXnamRelationFormIdRemapsAndKeepsModifierAndReaction) {
   EXPECT_EQ(links[0].offset, 0);
 }
 
-TEST(FormLink, FactionXnamWrongSizeFailsClosedUnderStrictRemap) {
-  auto out = plugin_header();
-  append_record(out, "FACT", 0x03000800, "XNAM", std::vector<std::byte>(13, std::byte{0x11}));
-  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
+TEST(FormLink, WrongSizedFixedLayoutPayloadsFailClosedUnderStrictRemap) {
+  const struct {
+    const char* record;
+    const char* subrecord;
+    std::size_t size;
+  } rows[] = {{"FACT", "XNAM", 13}, {"NPC_", "SNAM", 6}, {"NPC_", "PRKR", 4},
+              {"LVLN", "LLKC", 12}, {"WEAP", "DNAM", 131}};
+  for (const auto& row : rows) {
+    SCOPED_TRACE(std::string(row.record) + " " + row.subrecord);
+    auto out = plugin_header();
+    append_record(out, row.record, 0x03000800, row.subrecord,
+                  std::vector<std::byte>(row.size, std::byte{0x11}));
+    auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+    const auto before = fo4::write_plugin(plugin);
+    EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
+    EXPECT_EQ(fo4::write_plugin(plugin), before);
+  }
 }
 
 TEST(FormLink, DamaCurveTableElementsRemapAtFormVersion152) {
@@ -389,15 +399,6 @@ TEST(FormLink, NpcFactionSnamRemapsFormIdAndKeepsRank) {
   EXPECT_EQ(links[0].offset, 0);
 }
 
-TEST(FormLink, NpcFactionSnamWrongSizeFailsClosedUnderStrictRemap) {
-  auto out = plugin_header();
-  append_record(out, "NPC_", 0x03000800, "SNAM", std::vector<std::byte>(6, std::byte{0x11}));
-  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
-}
-
 TEST(FormLink, NpcPerkPrkrRemapsFormIdAndKeepsRank) {
   auto out = plugin_header(1);
   append_record(out, "NPC_", 0x03000800, "PRKR", u32_then_u8(0x02000044, 3));
@@ -413,15 +414,6 @@ TEST(FormLink, NpcPerkPrkrRemapsFormIdAndKeepsRank) {
   ASSERT_EQ(links.size(), 1);
   EXPECT_EQ(links[0].subrecord.to_string(), "PRKR");
   EXPECT_EQ(links[0].offset, 0);
-}
-
-TEST(FormLink, NpcPerkWrongSizeFailsClosedUnderStrictRemap) {
-  auto out = plugin_header();
-  append_record(out, "NPC_", 0x03000800, "PRKR", std::vector<std::byte>(4, std::byte{0x11}));
-  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(FormLink, LeveledListLlkcKeywordsRemapAndKeepChances) {
@@ -441,15 +433,6 @@ TEST(FormLink, LeveledListLlkcKeywordsRemapAndKeepChances) {
   EXPECT_EQ(links[0].subrecord.to_string(), "LLKC");
   EXPECT_EQ(links[0].offset, 0);
   EXPECT_EQ(links[1].offset, 8);
-}
-
-TEST(FormLink, LeveledListLlkcWrongSizeFailsClosedUnderStrictRemap) {
-  auto out = plugin_header();
-  append_record(out, "LVLN", 0x03000800, "LLKC", std::vector<std::byte>(12, std::byte{0x11}));
-  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(FormLink, WeaponDnamFormIdSlotsRemapAndKeepOtherBytes) {
@@ -476,15 +459,6 @@ TEST(FormLink, WeaponDnamFormIdSlotsRemapAndKeepOtherBytes) {
   for (std::size_t i = 0; i < links.size(); ++i) {
     EXPECT_EQ(links[i].offset, expected[i]) << i;
   }
-}
-
-TEST(FormLink, WeaponDnamWrongSizeFailsClosedUnderStrictRemap) {
-  auto out = plugin_header();
-  append_record(out, "WEAP", 0x03000800, "DNAM", std::vector<std::byte>(131, std::byte{0x11}));
-  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(FormLink, WeaponFnamOverrideProjectileRemapsAndKeepsOtherBytes) {

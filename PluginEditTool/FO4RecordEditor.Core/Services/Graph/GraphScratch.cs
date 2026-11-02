@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace FO4RecordEditor.Services.Graph;
 
@@ -39,13 +40,13 @@ internal static class GraphScratch
         }
     }
 
-    private static void SweepOld(string parent)
+    internal static void SweepOld(string parent)
     {
         try
         {
             if (!Directory.Exists(parent)) return;
             var cutoff = DateTime.UtcNow.AddHours(-24);
-            foreach (var directory in Directory.EnumerateDirectories(parent))
+            foreach (var directory in Directory.EnumerateDirectories(parent).Take(64))
             {
                 if (Directory.GetLastWriteTimeUtc(directory) < cutoff) TryDelete(directory);
             }

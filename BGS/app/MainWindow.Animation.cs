@@ -21,43 +21,12 @@ public partial class MainWindow : Window
 {
     private Control BuildAnimationTab()
     {
-        var earlier = Ux.Secondary("Earlier frames");
-        earlier.Click += (_, _) => PageFrames(-FramesPerPage);
-        var later = Ux.Secondary("Later frames");
-        later.Click += (_, _) => PageFrames(FramesPerPage);
-        var first = Ux.Secondary("First");
-        first.Click += (_, _) => PageFrames(int.MinValue);
-        var last = Ux.Secondary("Last");
-        last.Click += (_, _) => PageFrames(int.MaxValue);
-
         var panel = new DockPanel();
         AddTop(panel, Ux.Pill(_animationSummary));
-        var navigation = ToolbarGroup("Frame navigation", first, earlier, later, last, _framePage);
-
-        var aim = Ux.Secondary("Find frame");
-        aim.Click += (_, _) => AimAtFraction();
-        _fraction.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) AimAtFraction(); };
-        _boneFilter.PropertyChanged += (_, e) =>
-        {
-            if (e.Property == TextBox.TextProperty) ShowAnimationFrames();
-        };
-
-        var find = ToolbarGroup("Find a frame", _boneFilter, _fraction, aim);
-        AddTop(panel, _fractionAnswer);
-
-        var apply = Ux.Secondary("Set frame");
-        apply.Click += (_, _) => SetFrame();
-        var write = Ux.Primary("Save changes");
-        write.Click += (_, _) => SaveAnimation();
-
-        foreach (var box in new[] { _framePosition, _frameRotation, _frameScale })
-            box.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) SetFrame(); };
 
         _animation.SelectionChanged += ShowSelectedFrame;
 
-        RegisterToolbar("Animation", navigation, find,
-            ToolbarGroup("Edit selected frame", _framePosition, _frameRotation, _frameScale, apply, write));
-        AddTop(panel, _frameEditAnswer);
+        RegisterToolbar("Animation", AnimationToolRibbon());
 
         panel.Children.Add(_animation);
         return panel;
@@ -237,7 +206,7 @@ public partial class MainWindow : Window
         ShowAnimationFrames();
     }
 
-    private bool BuildAnimation(string path)
+    private bool BuildAnimation(string path, string? virtualPathHint = null, string? dataFolderHint = null)
     {
         _animation.Clear();
         _animationData = null;
@@ -247,6 +216,7 @@ public partial class MainWindow : Window
         _aimedFrame = -1;
         _editTrack = _editFrame = -1;
         _animationEdited = false;
+        ResetGeometry();
         _fractionAnswer.Text = "";
         _framePosition.Text = _frameRotation.Text = _frameScale.Text = "";
         _frameEditAnswer.Text = "";
@@ -257,8 +227,7 @@ public partial class MainWindow : Window
             if (!new HkxBinaryReader().TryReadAnimation(path, out anim))
             {
                 _animationSummary.Text =
-                    $"Unsupported: {anim.AnimationClass} (decode not implemented yet). " +
-                    $"Only {HkxAnimationData.SupportedAnimationClasses} are read, so there is no frame data to show.";
+                    "Unsupported: " + AnimationCompression.Describe(anim.AnimationClass);
                 _animationSummary.Foreground = Ux.BadBrush;
                 _animation.Add(null, anim.AnimationClass, "", "", "no frame data was read from this file", "")
                           .Colour(0, Ux.BadBrush).Colour(3, Ux.MutedBrush);
@@ -283,9 +252,11 @@ public partial class MainWindow : Window
         }
 
         _animationData = anim;
-        _animationSkeleton = SiblingSkeleton(path);
+        _animationSkeleton = ResolveAnimationSkeleton(path, virtualPathHint, dataFolderHint);
         _frameStart = 0;
+        ResetGeometry();
         ShowAnimationFrames();
+        RefreshSaveAnimationState();
         return true;
     }
 
@@ -363,6 +334,8 @@ public partial class MainWindow : Window
         }
 
         string folder = Path.GetDirectoryName(Path.GetFullPath(primaryPath)) ?? "";
+        if (!Directory.Exists(folder)) return null;
+
         foreach (string file in Directory.EnumerateFiles(folder, "*.hkx").OrderBy(f => f))
         {
             if (string.Equals(Path.GetFullPath(file), Path.GetFullPath(primaryPath),

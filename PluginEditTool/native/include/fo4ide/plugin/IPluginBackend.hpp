@@ -93,6 +93,13 @@ public:
         });
     }
 
+    virtual Result<nlohmann::json> injectFormsIntoMaster(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "InjectFormsIntoMasterUnavailable",
+            "Native inject-forms-into-master is unavailable for this backend"
+        });
+    }
+
     virtual Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json&) {
         return std::unexpected(Error{
             "DeepCopyUnavailable",
@@ -184,6 +191,18 @@ public:
     virtual Result<nlohmann::json> clearElement(const nlohmann::json&) {
         return std::unexpected(Error{"ElementBackendUnavailable", "Generic element clearing is unavailable"});
     }
+    virtual Result<nlohmann::json> copyElementToSelected(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "CopyElementToSelectedUnavailable",
+            "Bulk element copy is unavailable for this backend"
+        });
+    }
+    virtual Result<nlohmann::json> removeElementFromSelected(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "RemoveElementFromSelectedUnavailable",
+            "Bulk element removal is unavailable for this backend"
+        });
+    }
 
     virtual Result<nlohmann::json> getPlacedReferences(const nlohmann::json&) const {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference queries are unavailable"});
@@ -216,6 +235,49 @@ public:
     virtual Result<nlohmann::json> editNpcEntries(const nlohmann::json&) {
         return std::unexpected(Error{"NpcBackendUnavailable", "NPC writes are unavailable"});
     }
+    // Constraint: sound structure writes keep the in-memory plugin unchanged on refusal.
+    // Constraint: package tree writes keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> addPackageProcedure(const nlohmann::json&) {
+        return std::unexpected(Error{"PackageBackendUnavailable", "Package tree writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removePackageProcedure(const nlohmann::json&) {
+        return std::unexpected(Error{"PackageBackendUnavailable", "Package tree writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> addSoundFile(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound file writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeSoundFile(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound file writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setSoundBase(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound base-link writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> createSound(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound record creation is unavailable"});
+    }
+    // Constraint: memory trimming only pages the process out; it never drops plugin data.
+    virtual Result<nlohmann::json> releaseMemory(const nlohmann::json&) {
+        return std::unexpected(Error{"MemoryBackendUnavailable", "Memory trimming is unavailable"});
+    }
+
+    // Constraint: script value writes must keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> setScriptValue(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script value writes are unavailable"});
+    }
+
+    // Constraint: script structure writes keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> addScript(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeScript(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> addScriptProperty(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script property writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeScriptProperty(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script property writes are unavailable"});
+    }
     virtual Result<nlohmann::json> getFaction(const nlohmann::json&) const {
         return std::unexpected(Error{"FactionBackendUnavailable", "Faction queries are unavailable"});
     }
@@ -224,6 +286,18 @@ public:
     }
     virtual Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json&) const {
         return std::unexpected(Error{"WeaponBackendUnavailable", "Weapon queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> getMagicEffects(const nlohmann::json&) const {
+        return std::unexpected(Error{"MagicEffectBackendUnavailable", "Magic effect queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> addMagicEffect(const nlohmann::json&) {
+        return std::unexpected(Error{"MagicEffectBackendUnavailable", "Magic effect writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setMagicEffect(const nlohmann::json&) {
+        return std::unexpected(Error{"MagicEffectBackendUnavailable", "Magic effect writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeMagicEffect(const nlohmann::json&) {
+        return std::unexpected(Error{"MagicEffectBackendUnavailable", "Magic effect writes are unavailable"});
     }
 };
 

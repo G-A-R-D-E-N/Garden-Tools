@@ -227,6 +227,12 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     stringsDirectory.string()
             });
         }
+        if (hasStagedStringTables(loaded->name)) {
+            return std::unexpected(Error{
+                "LocalizedEditBlockedByPendingStrings",
+                "Save or discard the pending string edits before editing localized quest text"
+            });
+        }
         if (const auto error = loadLocalizedQuestTables(
                 arguments, loaded->path,
                 allowedDirectory.value_or(std::filesystem::path{}), *localizedTables)) {

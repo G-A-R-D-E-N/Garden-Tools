@@ -26,6 +26,8 @@ std::optional<FormLinkFieldDescriptor> formlink_field_at(
     std::size_t offset) {
   for (const auto& field : fields) {
     if (field.subrecord != subrecord) continue;
+    if (field.max_form_version != 0 && record.header.form_version >= field.max_form_version) continue;
+    if (record.header.form_version < field.min_form_version) continue;
     const auto& address = field.address;
     if (address.when.count == 0) {
       const bool strided = address.stride != 0;

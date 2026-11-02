@@ -9,7 +9,7 @@
 #include <sstream>
 #include <system_error>
 #include <utility>
-#include <fo4ide/papyrus/AnalysisService.hpp>
+#include <fo4/papyrus/analysis_service.hpp>
 #include <fo4ide/papyrus/Decompiler.hpp>
 
 #include "PapyrusStaging.hpp"
@@ -250,7 +250,8 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
             const bool semantic = !semanticValue || semanticValue->is_null() || boolArgument(args, 1);
             const auto imports = stripQuotes(stringArgument(args, 2));
             const std::string* importsPtr = imports.empty() ? nullptr : &imports;
-            return nlohmann::json(papyrus::AnalysisService::check(source, true, semantic, importsPtr));
+            return nlohmann::json(fo4::papyrus::AnalysisService::check(
+                source, true, semantic, importsPtr, locator_.papyrusBaseImports()));
         } catch (const std::exception& ex) {
             return nlohmann::json("Error: " + std::string(ex.what()));
         }
@@ -260,7 +261,7 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
             const auto text = stringArgument(args, 0);
             const auto path = stringArgument(args, 1);
             const std::string* pathPtr = isWhitespace(path) ? nullptr : &path;
-            return nlohmann::json(papyrus::AnalysisService::analyzeJson(text, pathPtr));
+            return nlohmann::json(fo4::papyrus::AnalysisService::analyzeJson(text, pathPtr));
         } catch (const std::exception& ex) {
             return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
         }
@@ -273,8 +274,8 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
             const auto imports = stringArgument(args, 3);
             const std::string* pathPtr = isWhitespace(path) ? nullptr : &path;
             const std::string* importsPtr = isWhitespace(imports) ? nullptr : &imports;
-            return nlohmann::json(papyrus::AnalysisService::symbolAtJson(
-                text, pathPtr, offset, importsPtr));
+            return nlohmann::json(fo4::papyrus::AnalysisService::symbolAtJson(
+                text, pathPtr, offset, importsPtr, locator_.papyrusBaseImports()));
         } catch (const std::exception& ex) {
             return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
         }
@@ -368,8 +369,9 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
         const std::string* outputPtr = output.empty() ? nullptr : &output;
         const std::string* importsPtr = imports.empty() ? nullptr : &imports;
         const std::string* flagsPtr = flags.empty() ? nullptr : &flags;
-        auto result = papyrus::AnalysisService::compile(source, outputPtr, importsPtr, release,
-                                                        debugInfo, flagsPtr);
+        auto result = fo4::papyrus::AnalysisService::compile(source, outputPtr, importsPtr, release,
+                                                             debugInfo, flagsPtr,
+                                                             locator_.papyrusBaseImports());
         if (engine == PapyrusEngine::Auto) {
             result += "\n\nNo PapyrusCompiler.exe was found, so the built-in compiler was used. "
                       "That is not a fallback to something lesser -- it is measured against the "

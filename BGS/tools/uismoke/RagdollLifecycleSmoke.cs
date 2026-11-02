@@ -73,9 +73,18 @@ public static class LifecycleSmoke
             MultiChatSmoke.Run();
             return Smoke.FailedCount == 0 ? 0 : 1;
         }
+        if (args.Length >= 2 && args[0] == "--toolbar-png") return Smoke.ToolbarPngForTest(args);
         int existing = Smoke.Main(args);
         if (args.Length >= 2 && args[0] == "--png") return existing;
+        int geometry = AnimationGeometrySmoke.Run();
+        int tools = ToolSelectorSmoke.Run();
         int workspace = WorkspaceSmoke.Run();
+        int animationIndex = AnimationIndexSmoke.Run();
+        int skeletonSibling = Smoke.SkeletonSiblingSmoke();
+        int meshViewport = MeshViewportSmoke.Run();
+        int skinning = Smoke.SkinningSmoke();
+        int rootMotion = Smoke.RootMotionSmoke();
+        int rootMotionLoop = Smoke.RootMotionLoopSmoke();
         string lifecycleSettings = Path.Combine(Path.GetTempPath(), $"bgs-lifecycle-{Guid.NewGuid():N}.cfg");
         Settings.SettingsPathForTest = lifecycleSettings;
         Settings.TrySet("tour_done", "1", out _);
@@ -86,7 +95,9 @@ public static class LifecycleSmoke
             File.Delete(lifecycleSettings);
             Settings.SettingsPathForTest = null;
         }
-        return existing == 0 && workspace == 0 && lifecycle == 0 ? 0 : 1;
+        return existing == 0 && workspace == 0 && lifecycle == 0 && geometry == 0 && tools == 0 &&
+               animationIndex == 0 && skeletonSibling == 0 && meshViewport == 0 && skinning == 0 &&
+               rootMotion == 0 && rootMotionLoop == 0 ? 0 : 1;
     }
 
     private static int RagdollLifecycle()
@@ -135,6 +146,11 @@ public static class LifecycleSmoke
             Check("clearing body-frame distance removes the production status",
                 window.FrameDistanceStatusForTest.Length == 0 && !window.FrameDistanceVisibleForTest, ref failed);
 
+            var diagnostics = Smoke.Find<Button>(window)
+                .FirstOrDefault(button => button.Content?.ToString() == "Copy diagnostics");
+            Check("Copy diagnostics is offered once a physics report exists",
+                diagnostics is { IsEnabled: true }, ref failed);
+
             Smoke.Click(play);
             Check("animation playback starts before Drop", window.IsPlaying, ref failed);
             Smoke.Click(drop);
@@ -182,6 +198,11 @@ public static class LifecycleSmoke
             Check("no-ragdoll load clears sibling source state",
                 !window.PlaybackSummary.Contains("loaded from the sibling skeleton", StringComparison.Ordinal),
                 ref failed);
+            Check("no-ragdoll load explains why physics is missing",
+                window.PlaybackSummary.Contains("no ragdoll", StringComparison.Ordinal) &&
+                window.PlaybackSummary.Contains("hknpRagdollData", StringComparison.Ordinal), ref failed);
+            Check("no-ragdoll load keeps Copy diagnostics available for the report",
+                diagnostics is { IsEnabled: true }, ref failed);
 
             TryDelete(refused);
             TryDelete(orphan);

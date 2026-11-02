@@ -132,4 +132,44 @@ public class LoadOrderTests
         Assert.Equal(Status.IoError, Assert.Throws<RadicleException>(() => LoadOrderFiles.Assemble(temp.Path, missing, null, OfficialTable.Ae)).Status);
         Assert.Equal(Status.IoError, Assert.Throws<RadicleException>(() => LoadOrderFiles.Assemble(temp.Path, null, missing, OfficialTable.OgNg)).Status);
     }
+
+    [Fact]
+    public void ReadsMo2InstanceAndProfileFromAPortableFixture()
+    {
+        using var temp = new TempDirectory();
+        temp.Write("ModOrganizer.ini", Encoding.UTF8.GetBytes("selected_profile=Test\r\nbase_directory=%BASE_DIR%\r\n"));
+        temp.Write("Stock Folder/Data/Fallout4.esm", System.Array.Empty<byte>());
+        temp.Write("profiles/Test/modlist.txt", Encoding.UTF8.GetBytes("+High\r\n-Off\r\n+Tools_separator\r\n"));
+        temp.Write("profiles/Test/plugins.txt", Encoding.ASCII.GetBytes("*Mod.esp\r\n"));
+
+        var instance = LoadOrderFiles.ReadMo2Instance(temp.Path);
+        var profile = LoadOrderFiles.ReadMo2Profile(temp.Path, null);
+
+        Assert.Equal("Test", instance.SelectedProfile);
+        Assert.Equal(Path.Combine(temp.Path, "Stock Folder", "Data"), instance.DataDir);
+        Assert.Equal(Path.Combine(temp.Path, "mods"), instance.ModsDir);
+        Assert.Equal(new[] { new Mo2Mod("High", true, false), new Mo2Mod("Off", false, false), new Mo2Mod("Tools_separator", true, true) },
+                     profile.ModsHighToLow);
+        Assert.Equal(new[] { new PluginListEntry("Mod.esp", true, 1) }, profile.Plugins);
+    }
+
+    [Fact]
+    public void ResolvesAssetRootsAndPluginPathsWithTheHigherModWinning()
+    {
+        using var temp = new TempDirectory();
+        temp.Write("ModOrganizer.ini", Encoding.UTF8.GetBytes("base_directory=%BASE_DIR%\r\n"));
+        temp.Write("profiles/Test/modlist.txt", Encoding.UTF8.GetBytes("+High\r\n+Low\r\n-Ghost\r\n"));
+        temp.Write("profiles/Test/plugins.txt", Encoding.ASCII.GetBytes("*Shared.esp\r\n"));
+        temp.Write("mods/Low/Shared.esp", System.Array.Empty<byte>());
+        temp.Write("mods/High/Shared.esp", System.Array.Empty<byte>());
+        temp.Write("mods/Ghost/Ghost.esp", System.Array.Empty<byte>());
+
+        var roots = LoadOrderFiles.ReadMo2AssetRoots(temp.Path, "Test");
+        var paths = LoadOrderFiles.ReadMo2PluginPaths(temp.Path, "Test");
+
+        Assert.Equal(new[] { Path.Combine(temp.Path, "mods", "Low"), Path.Combine(temp.Path, "mods", "High"), Path.Combine(temp.Path, "overwrite") },
+                     roots);
+        Assert.Equal(new[] { "shared.esp" }, paths.Keys.ToArray());
+        Assert.Equal(Path.Combine(temp.Path, "mods", "High", "Shared.esp"), paths["shared.esp"]);
+    }
 }

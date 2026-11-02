@@ -35,6 +35,20 @@ public class Ba2NextGenDecompressionTests
     public Ba2NextGenDecompressionTests(ITestOutputHelper o) => _out = o;
 
 
+    private static readonly string[] V7Candidates =
+    {
+        @"E:\Modlists\Fallen World Alpha 2\Stock Folder\Data\DLCRobot - Voices_en.ba2",
+        @"E:\SteamLibrary\steamapps\common\Fallout 4\Data\DLCRobot - Voices_en.ba2",
+    };
+    private static string? V7Archive => V7Candidates.FirstOrDefault(File.Exists);
+
+    private static readonly string[] V7TexCandidates =
+    {
+        @"E:\Modlists\Fallen World Alpha 2\Stock Folder\Data\Fallout4 - Textures1.ba2",
+        @"E:\SteamLibrary\steamapps\common\Fallout 4\Data\Fallout4 - Textures1.ba2",
+    };
+    private static string? V7TexArchive => V7TexCandidates.FirstOrDefault(File.Exists);
+
     private bool TryFixture(string fileName, out string path)
     {
         var found = TestDataRoots.Archive(fileName);
@@ -113,5 +127,54 @@ public class Ba2NextGenDecompressionTests
         files.Should().NotBeEmpty();
         files.Should().OnlyContain(f => f.Path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase),
             "a mis-strided DX10 entry table produces garbage paths and 'Unsupported DDS header format'");
+    }
+
+    [Fact]
+    public void ExtractFile_FromARealVersion7Archive_ProducesARealFuz_NotDriftedGarbage()
+    {
+        var archive = V7Archive;
+        if (archive == null) { _out.WriteLine("Skipped -- v7 fixture archive not present in any known location."); return; }
+
+        var outPath = Path.Combine(Path.GetTempPath(),
+            "FO4RE_Ba2V7_" + Guid.NewGuid().ToString("N")[..8] + ".fuz");
+        try
+        {
+            var result = ArchiveService.ExtractFile(
+                archive, @"Sound\Voice\DLCRobot.esm\DLC01MechanistEyebot\00007072_1.fuz", outPath);
+            _out.WriteLine(result);
+            File.Exists(outPath).Should().BeTrue();
+
+            var bytes = File.ReadAllBytes(outPath);
+            var magic = System.Text.Encoding.ASCII.GetString(bytes, 0, 4);
+            magic.Should().Be("FUZE",
+                "a correctly-strided v7 entry table resolves the name to real FUZ data; a drifted " +
+                "table would hand back an unrelated blob");
+        }
+        finally { try { File.Delete(outPath); } catch { } }
+    }
+
+    [Fact]
+    public void ExtractFile_FromARealVersion7Dx10TextureArchive_ProducesAValidDds()
+    {
+        var archive = V7TexArchive;
+        if (archive == null) { _out.WriteLine("Skipped -- v7 DX10 texture fixture not present in any known location."); return; }
+
+        var outPath = Path.Combine(Path.GetTempPath(),
+            "FO4RE_Ba2V7Tex_" + Guid.NewGuid().ToString("N")[..8] + ".dds");
+        try
+        {
+            var result = ArchiveService.ExtractFile(archive, @"Textures\Props\Cigar\AshTray_d.DDS", outPath);
+            _out.WriteLine(result);
+            File.Exists(outPath).Should().BeTrue();
+
+            var bytes = File.ReadAllBytes(outPath);
+            var magic = System.Text.Encoding.ASCII.GetString(bytes, 0, 4);
+            magic.Should().Be("DDS ",
+                "the DX10 entry+chunk layout must be read at the right stride to reconstruct a valid " +
+                "DDS header; a mis-strided entry threw 'Unsupported DDS header format' or overflowed");
+
+            bytes.Length.Should().BeGreaterThan(128);
+        }
+        finally { try { File.Delete(outPath); } catch { } }
     }
 }

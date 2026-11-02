@@ -361,7 +361,7 @@ TEST(CtdaModel, WriteRefusesRecordWithSeveralConditionLists) {
 }
 
 TEST(CtdaModel, ReadRefusesSeveralConditionListsButAllowsBoundedRuns) {
-  const auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "CTDA"});
+  auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "CTDA"});
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Cond.esp"));
   ASSERT_NE(record, nullptr);
   EXPECT_THROW(fo4::read_ctda_conditions(*record), std::runtime_error);
@@ -376,7 +376,7 @@ TEST(CtdaModel, ReadRefusesSeveralConditionListsButAllowsBoundedRuns) {
 }
 
 TEST(CtdaModel, ReadDoesNotAttachCisAfterTheRunEnds) {
-  const auto plugin = make_plugin_with_layout({"CTDA", "NAM0", "CIS1", "CIS2"});
+  auto plugin = make_plugin_with_layout({"CTDA", "NAM0", "CIS1", "CIS2"});
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Cond.esp"));
   ASSERT_NE(record, nullptr);
   const auto conditions = fo4::read_ctda_conditions(*record);

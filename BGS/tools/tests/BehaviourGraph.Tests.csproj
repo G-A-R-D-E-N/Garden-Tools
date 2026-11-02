@@ -26,11 +26,13 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../export/export.csproj" />
     <ProjectReference Include="../symrm/symrm.csproj" />
     <ProjectReference Include="../mcp/BehaviourGraph.Mcp.csproj" />
     <ProjectReference Include="../../app/BehaviourStudio.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../symrm/samples/Meshes/Actors/Turret/CharacterAssets/TurretMounted.nif" Link="samples/TurretMounted.nif" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

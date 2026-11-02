@@ -23,11 +23,24 @@ public sealed record CombatStyle(float[]? General, float[] Melee, float[] LongRa
 public sealed record IdleData(byte LoopMin, byte LoopMax, byte Flags, byte GroupSection, ushort ReplayDelay);
 public sealed record Idle(IdleData? Data, FormKey? Parent, FormKey? Previous, string? BehaviorGraph,
     string? AnimationEvent, string? AnimationFile, IReadOnlyList<BehaviorCondition> Conditions);
-public sealed record PackageProcedureInput(string TypeName, nuint SubrecordBegin, nuint SubrecordEnd, byte Index);
+public sealed record PackageProcedureInput(string TypeName, nuint SubrecordBegin, nuint SubrecordEnd, byte Index,
+    string ValueTag, nuint ValueIndex, PackageInputValueKind Kind, bool Boolean, int Integer, uint IntegerRaw, float Real);
 public sealed record PackageProcedureNode(bool IsLeaf, string Name, uint ConditionCount, uint ChildCount, uint? Flags,
     nuint OpaqueBegin, nuint OpaqueEnd, IReadOnlyList<nuint> Children);
-public sealed record PackageProcedureTree(bool Decoded, nuint RegionBegin, nuint RegionEnd, byte? Marker,
+public sealed record PackageProcedureTree(bool Decoded, nuint RegionBegin, nuint RegionEnd, byte? NextInputId,
     IReadOnlyList<PackageProcedureInput> Inputs, IReadOnlyList<PackageProcedureNode> Nodes);
+public sealed record PackageInputEdit(PackageInputValueKind Kind, bool Bool = false, int Integer = 0,
+    float Real = 0f, byte[]? Payload = null)
+{
+    internal Native.PackageInputValue ToNative(IntPtr payload, int size)
+    {
+        return new Native.PackageInputValue
+        {
+            Kind = Kind, Boolean = Bool ? 1 : 0, Integer = Integer, Real = Real,
+            Payload = payload, PayloadSize = (nuint)size,
+        };
+    }
+}
 
 public sealed unsafe partial class RadicleEnvironment
 {
@@ -97,9 +110,11 @@ public sealed unsafe partial class RadicleEnvironment
         Call.Check(RadicleNative.PackageProcedureDecode(use.Pointer, record.Handle, &t));
         try
         {
-            return new(t->Decoded != 0, t->RegionBegin, t->RegionEnd, t->HasMarker == 0 ? null : t->Marker,
+            return new(t->Decoded != 0, t->RegionBegin, t->RegionEnd, t->HasNextInputId == 0 ? null : t->NextInputId,
                 Call.Copy<Native.PackageProcedureInput>(t->Inputs, t->InputCount).Select(i => new PackageProcedureInput(
-                    Utf8.Read(i.TypeName) ?? string.Empty, i.SubrecordBegin, i.SubrecordEnd, i.Index)).ToArray(),
+                    Utf8.Read(i.TypeName) ?? string.Empty, i.SubrecordBegin, i.SubrecordEnd, i.Index,
+                    Utf8.Read(i.ValueTag) ?? string.Empty, i.ValueIndex, i.Kind, i.Boolean != 0, i.Integer, i.IntegerRaw,
+                    i.Real)).ToArray(),
                 Call.Copy<Native.PackageProcedureNode>(t->Nodes, t->NodeCount).Select(n => new PackageProcedureNode(
                     n.IsLeaf != 0, Utf8.Read(n.Name) ?? string.Empty, n.ConditionCount, n.ChildCount, n.HasFlags == 0 ? null : n.Flags,
                     n.OpaqueBegin, n.OpaqueEnd, Call.Copy<nuint>(n.Children, n.ChildrenCount))).ToArray());

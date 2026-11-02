@@ -6,11 +6,13 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/localized_fields.hpp"
 #include "fo4/schema/preflight.hpp"
+#include "fo4/schema/scalar.hpp"
 
 #include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -31,7 +33,23 @@ Rules generated_rules(Signature record) {
   return constraint.has_value() ? schema::authoring_subrecords(*constraint) : Rules{};
 }
 
-std::vector<std::byte> default_payload(const schema::SubrecordAuthoringConstraint& rule) {
+// Constraint: a guard-matched localized string row holds inline text outside a localized plugin.
+bool inline_string_default(const Plugin& plugin, const Record& record, Signature subrecord) {
+  if (plugin.header.tes4_flags.is_localized()) return false;
+  for (const auto& field : schema::scalar_fields(record.header.signature)) {
+    if (field.scalar.subrecord != subrecord || !field.scalar.localized) continue;
+    if (field.scalar.address.when.count != 0 &&
+        schema::record_discriminator_matches(record, field.scalar.address.when)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::vector<std::byte> default_payload(const Plugin& plugin,
+                                       const Record& record,
+                                       const schema::SubrecordAuthoringConstraint& rule) {
+  if (inline_string_default(plugin, record, rule.signature)) return {std::byte{0}};
   const auto bytes = std::as_bytes(rule.default_bytes());
   return {bytes.begin(), bytes.end()};
 }
@@ -44,29 +62,53 @@ bool default_usable(const Plugin& plugin,
            schema::is_localized_field(record, rule.signature));
 }
 
-bool local_layout_valid(Rules rules, const Record& record) {
+std::vector<std::size_t> subrecord_counts(Rules rules, const Record& record) {
   std::vector<std::size_t> counts(rules.size(), 0);
-  std::optional<std::size_t> last;
   for (const auto& subrecord : record.subrecords) {
+    const auto index = rule_index(rules, subrecord.signature);
+    if (index.has_value()) ++counts[*index];
+  }
+  return counts;
+}
+
+bool local_layout_valid(Rules rules, const Record& before, const Record& after) {
+  std::optional<std::size_t> last;
+  for (const auto& subrecord : after.subrecords) {
     const auto index = rule_index(rules, subrecord.signature);
     if (!index.has_value()) continue;
     if (last.has_value() && *index < *last) return false;
     last = index;
-    ++counts[*index];
   }
+  const auto counts = subrecord_counts(rules, after);
   for (std::size_t index = 0; index < rules.size(); ++index) {
     if (counts[index] < rules[index].minimum || counts[index] > rules[index].maximum) {
       return false;
     }
   }
-  return true;
+  const auto before_counts = subrecord_counts(rules, before);
+  return !schema::worsened_subrecord_pair(after.header.signature, rules, before_counts, counts)
+              .has_value();
 }
 
-bool layout_valid(Rules rules, bool generated, const Record& record, bool localized) {
-  if (!local_layout_valid(rules, record)) return false;
+bool same_check(const schema::PreflightIssue& a, const schema::PreflightIssue& b) {
+  return a.path == b.path && a.code == b.code;
+}
+
+bool layout_valid(Rules rules,
+                  bool generated,
+                  const Record& before,
+                  const Record& after,
+                  bool localized) {
+  if (!local_layout_valid(rules, before, after)) return false;
   if (!generated) return true;
-  for (const auto& issue : schema::preflight_record(record, localized)) {
-    if (issue.severity == schema::PreflightSeverity::error) return false;
+  // Requires: only errors absent from preflight_record(before) refuse the edit, unless pre-existing and a record-list invariant.
+  const auto before_issues = schema::preflight_record(before, localized);
+  for (const auto& issue : schema::preflight_record(after, localized)) {
+    if (issue.severity != schema::PreflightSeverity::error) continue;
+    const bool pre_existing = std::any_of(
+        before_issues.begin(), before_issues.end(),
+        [&](const schema::PreflightIssue& old) { return same_check(old, issue); });
+    if (!pre_existing || !schema::is_record_list_invariant(issue.code)) return false;
   }
   return true;
 }
@@ -114,8 +156,11 @@ SubrecordAddStatus add_with_rules(Plugin& plugin,
 
   Record candidate = *record;
   candidate.subrecords.insert(candidate.subrecords.begin() + static_cast<std::ptrdiff_t>(position),
-                              Subrecord{subrecord, default_payload(rules[*target]), false});
-  if (!layout_valid(rules, !explicit_given, candidate, plugin.header.tes4_flags.is_localized())) {
+                              Subrecord{subrecord,
+                                        default_payload(plugin, *record, rules[*target]),
+                                        false});
+  if (!layout_valid(rules, !explicit_given, *record, candidate,
+                    plugin.header.tes4_flags.is_localized())) {
     return SubrecordAddStatus::unknown_order;
   }
 
@@ -154,6 +199,14 @@ SubrecordRemoveStatus remove_with_rules(Plugin& plugin,
     }
   }
 
+  const auto before_counts = subrecord_counts(rules, *record);
+  auto after_counts = before_counts;
+  after_counts[*target] -= 1;
+  if (schema::worsened_subrecord_pair(record->header.signature, rules, before_counts, after_counts)
+          .has_value()) {
+    return SubrecordRemoveStatus::unknown_order;
+  }
+
   record->subrecords.erase(record->subrecords.begin() +
                            static_cast<std::ptrdiff_t>(positions[occurrence]));
   detail::mark_record_modified(plugin, *record);
@@ -179,7 +232,11 @@ RecordCreateResult create_with_rules(Plugin& plugin,
   }
   for (const auto& rule : rules) {
     if (rule.signature == sig_edid || rule.minimum == 0) continue;
-    if (!editable(rule)) return {RecordCreateStatus::not_authorable, {}};
+    const bool creatable =
+        rule.coupled
+            ? (!explicit_given && rule.maximum == 1 && default_usable(plugin, signature, rule))
+            : editable(rule);
+    if (!creatable) return {RecordCreateStatus::not_authorable, {}};
     if (!default_usable(plugin, signature, rule)) return {RecordCreateStatus::no_default, {}};
   }
 
@@ -195,11 +252,14 @@ RecordCreateResult create_with_rules(Plugin& plugin,
       continue;
     }
     for (std::uint16_t count = 0; count < rule.minimum; ++count) {
-      built.subrecords.push_back(Subrecord{rule.signature, default_payload(rule), false});
+      built.subrecords.push_back(
+          Subrecord{rule.signature, default_payload(plugin, built, rule), false});
     }
   }
 
-  if (!layout_valid(rules, !explicit_given, built, plugin.header.tes4_flags.is_localized())) {
+  Record empty;
+  if (!layout_valid(rules, !explicit_given, empty, built,
+                    plugin.header.tes4_flags.is_localized())) {
     return {RecordCreateStatus::preflight_failed, {}};
   }
   const auto key = create_local_record(plugin, signature, std::move(built.subrecords));

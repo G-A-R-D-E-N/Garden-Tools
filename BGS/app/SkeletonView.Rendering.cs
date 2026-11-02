@@ -16,27 +16,17 @@ public partial class SkeletonView
 {
     private Point Project(Vector3 world)
     {
-        var p = world - _centre;
-
-        double cy = Math.Cos(_yaw), sy = Math.Sin(_yaw);
-        double x = p.X * cy - p.Y * sy;
-        double depth = p.X * sy + p.Y * cy;
-
-        double cp = Math.Cos(_pitch), sp = Math.Sin(_pitch);
-        double up = p.Z * cp - depth * sp;
-
-        double scale = Math.Min(Bounds.Width, Bounds.Height) / (_fit * 2.6) * _zoom;
-        return new Point(Bounds.Width / 2 + x * scale + _pan.X,
-                         Bounds.Height / 2 - up * scale + _pan.Y);
+        var (x, y) = CameraState.Project(world, Bounds.Width, Bounds.Height);
+        return new Point(x, y);
     }
 
     public override void Render(DrawingContext ctx)
     {
-        ctx.FillRectangle(Ux.CardBrush, new Rect(Bounds.Size));
+        if (DrawBackdrop) ctx.FillRectangle(Ux.CardBrush, new Rect(Bounds.Size));
 
         if (EngineeringFrames && _bodies is { Bodies.Count: > 0 })
         {
-            DrawGround(ctx);
+            if (DrawGroundPlane) DrawGround(ctx);
             DrawFrames(ctx, _bodies);
             DrawFrameTable(ctx, _bodies);
             DrawFrameDistance(ctx, _bodies);
@@ -62,7 +52,9 @@ public partial class SkeletonView
             _fit = _bodyFit;
         }
 
-        DrawGround(ctx);
+        if (DrawGroundPlane) DrawGround(ctx);
+
+        DrawRootMotion(ctx);
 
         if (ShowReference && _reference != null)
         {
@@ -72,12 +64,13 @@ public partial class SkeletonView
                                     Project(_reference.Bones[to].Position));
         }
 
-        if (_mesh is { Length: > 0 })
+        if (_mesh is not null && _meshCount > 0 && MeshWireframe)
         {
             var skin = new StreamGeometry();
             using (var draw = skin.Open())
-                foreach (var (a, b) in _mesh)
+                for (int i = 0; i < _meshCount && i < _mesh.Length; i++)
                 {
+                    var (a, b) = _mesh[i];
                     draw.BeginFigure(Project(a), false);
                     draw.LineTo(Project(b));
                     draw.EndFigure(false);
@@ -535,12 +528,14 @@ public partial class SkeletonView
         {
             _yaw += delta.X * 0.01;
             _pitch = Math.Clamp(_pitch + delta.Y * 0.01, -1.5, 1.5);
+            NotifyCameraChanged();
             InvalidateVisual();
             return;
         }
         if (_panning)
         {
             _pan = new Point(_pan.X + delta.X, _pan.Y + delta.Y);
+            NotifyCameraChanged();
             InvalidateVisual();
             return;
         }
@@ -658,6 +653,7 @@ public partial class SkeletonView
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         _zoom = Math.Clamp(_zoom * (e.Delta.Y > 0 ? 1.12 : 1 / 1.12), 0.05, 40);
+        NotifyCameraChanged();
         InvalidateVisual();
         e.Handled = true;
     }

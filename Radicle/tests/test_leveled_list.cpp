@@ -176,7 +176,7 @@ fo4::FormKey item_key() { return fo4::FormKey::parse("000800:Patch.esp"); }
 }  // namespace
 
 TEST(LeveledList, DecodesItemHeaderEntriesAndExtraData) {
-  const auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
   const auto list = fo4::forms::decode_leveled_list(plugin, item_key());
 
   EXPECT_EQ(list.chance_none, 25u);
@@ -208,7 +208,7 @@ TEST(LeveledList, DecodesItemHeaderEntriesAndExtraData) {
 }
 
 TEST(LeveledList, DecodesLeveledNpcAndEmptyList) {
-  const auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
   const auto npc = fo4::forms::decode_leveled_list(plugin, fo4::FormKey::parse("000801:Patch.esp"));
   EXPECT_EQ(npc.chance_none, 10u);
   EXPECT_EQ(npc.flags, 4u);
@@ -378,13 +378,13 @@ TEST(LeveledList, MalformedRecordsFailClosed) {
 
   for (const auto& test_case : cases) {
     SCOPED_TRACE(test_case.name);
-    const auto plugin = fo4::read_plugin(item_plugin(test_case.subs), "Patch.esp");
+    auto plugin = fo4::read_plugin(item_plugin(test_case.subs), "Patch.esp");
     EXPECT_THROW(fo4::forms::decode_leveled_list(plugin, item_key()), fo4::forms::LeveledListError);
   }
 }
 
 TEST(LeveledList, RejectsNonLeveledAndMissingRecords) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_plugin({{"MISC", k_plain_record, {{"EDID", text("Plain")}}}}), "Patch.esp");
   EXPECT_THROW(fo4::forms::decode_leveled_list(plugin, fo4::FormKey::parse("000803:Patch.esp")),
                fo4::forms::LeveledListError);
@@ -483,7 +483,7 @@ TEST(LeveledList, EqualSortKeysKeepTheirOrderAndSetResortsTheEdit) {
 }
 
 TEST(LeveledList, LegacyFormVersionReportsZeroChanceNoneForLvliAndLvln) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_plugin({{"LVLI", k_item_list, legacy_list_subs(), 68},
                    {"LVLN", k_npc_list, legacy_list_subs(), 68},
                    {"LVLI", k_modern_item_list, legacy_list_subs(), 69},

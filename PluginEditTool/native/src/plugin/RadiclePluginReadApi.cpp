@@ -31,11 +31,6 @@ using support::editorId;
 
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 std::size_t sizeArgument(const nlohmann::json& args,
                          std::size_t index,
                          std::size_t fallback,
@@ -129,7 +124,7 @@ std::size_t changedSubrecordCount(const fo4::Record* previous, const fo4::Record
 }
 
 Result<fo4::FormKey> formKeyArgument(const nlohmann::json& arguments) {
-    const auto text = stringArgument(arguments, 0);
+    const auto text = support::stringArgument(arguments, 0);
     if (text.empty()) {
         return std::unexpected(Error{"FormKeyMissing", "FormKey is empty"});
     }
@@ -185,7 +180,7 @@ nlohmann::json gridColumns(std::string_view signature, std::size_t maxEntries = 
 
 Result<nlohmann::json> RadiclePluginBackend::getPluginRecordTypes(
     const nlohmann::json& arguments) const {
-    const auto pluginName = stringArgument(arguments, 0);
+    const auto pluginName = support::stringArgument(arguments, 0);
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }
@@ -212,8 +207,8 @@ Result<nlohmann::json> RadiclePluginBackend::getPluginRecordTypes(
 
 Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
     const nlohmann::json& arguments) const {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto signature = stringArgument(arguments, 1);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto signature = support::stringArgument(arguments, 1);
     const auto limit = sizeArgument(arguments, 2, 200, 1000);
     const auto offset = sizeArgument(arguments, 3, 0, 1000000);
 
@@ -374,8 +369,8 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
 
 Result<nlohmann::json> RadiclePluginBackend::getRecordsOfType(
     const nlohmann::json& arguments) const {
-    const auto signature = stringArgument(arguments, 0);
-    const auto filter = stringArgument(arguments, 1);
+    const auto signature = support::stringArgument(arguments, 0);
+    const auto filter = support::stringArgument(arguments, 1);
     const auto limit = sizeArgument(arguments, 2, 200, 5000);
     const auto offset = sizeArgument(arguments, 3, 0, 1000000);
     if (signature.empty()) return nlohmann::json("[]");
@@ -426,7 +421,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordDetails(
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* winner = graph_.winner(key);
+    const auto* winner = (*graph_).winner(key);
     if (winner == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",
@@ -448,7 +443,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordDetails(
         });
     }
 
-    const auto& versions = graph_.versions(key);
+    const auto& versions = (*graph_).versions(key);
 
     // Resolve the base form for override records: the earliest definition in
     // load order. All overrides share the FormKey, so the UI can navigate to
@@ -493,7 +488,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordPluginMatrix(
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto& versions = graph_.versions(key);
+    const auto& versions = (*graph_).versions(key);
     nlohmann::json rows = nlohmann::json::array();
     const fo4::Record* previous = nullptr;
 
@@ -524,7 +519,7 @@ Result<nlohmann::json> RadiclePluginBackend::getContainmentPath(
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* winner = graph_.winner(key);
+    const auto* winner = (*graph_).winner(key);
     if (winner == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",

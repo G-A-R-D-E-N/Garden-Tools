@@ -181,7 +181,7 @@ TEST(QuestAliasExtraDecode, BindsCoedToPrecedingCntoInMixedList) {
   fo4::test::end_record(out, quest);
   fo4::test::end_group(out, group);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto decoded = fo4::forms::decode_quest_aliases(plugin, k_quest);
   ASSERT_EQ(decoded.aliases.size(), 1u);
   ASSERT_EQ(decoded.aliases[0].items.size(), 2u);
@@ -644,7 +644,7 @@ TEST(QuestAliasExtraDecode, DanglingKeywordDegradesThatEntry) {
   fo4::test::end_record(out, quest);
   fo4::test::end_group(out, group);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto decoded = fo4::forms::decode_quest_aliases(plugin, k_quest);
   ASSERT_EQ(decoded.aliases.size(), 1u);
   const auto& alias = decoded.aliases[0];
@@ -683,7 +683,7 @@ TEST(QuestAliasExtraDecode, RejectsMismatchedKeywordCount) {
   fo4::test::end_record(out, quest);
   fo4::test::end_group(out, group);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   EXPECT_THROW(
       (void)fo4::forms::decode_quest_aliases(plugin, k_quest),
       fo4::forms::QuestError);

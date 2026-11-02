@@ -12,6 +12,7 @@ public static class SkinnedMesh
     {
 
         public int[] ToSkeleton = Array.Empty<int>();
+        public NodeTree.Link?[] Resolved = Array.Empty<NodeTree.Link?>();
 
         public readonly List<string> Unmatched = new();
 
@@ -27,6 +28,12 @@ public static class SkinnedMesh
               (Unmatched.Count > 6 ? $", and {Unmatched.Count - 6} more" : "");
     }
 
+    public sealed class SkinScratch
+    {
+        public Matrix4x4[] BoneMatrices = Array.Empty<Matrix4x4>();
+        public bool[] BoneUsable = Array.Empty<bool>();
+    }
+
     public static Binding Bind(NifShape shape, HkxSkeleton skeleton)
     {
         var byName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -39,6 +46,18 @@ public static class SkinnedMesh
             if (binding.ToSkeleton[i] < 0) binding.Unmatched.Add(shape.BoneNames[i]);
         }
         return binding;
+    }
+
+    public static void Resolve(Binding binding, NifShape shape, NodeTree tree)
+    {
+        binding.Resolved = new NodeTree.Link?[binding.Total];
+        binding.Unmatched.Clear();
+        for (int b = 0; b < binding.Total; b++)
+        {
+            if (binding.ToSkeleton[b] >= 0) continue;
+            binding.Resolved[b] = tree.Resolve(shape.BoneNames[b]);
+            if (binding.Resolved[b] == null) binding.Unmatched.Add(shape.BoneNames[b]);
+        }
     }
 
     private static Matrix4x4 Bind(Matrix4x4 stored)
@@ -61,7 +80,14 @@ public static class SkinnedMesh
             return null;
 
         int at = binding.ToSkeleton[bone];
-        if (at < 0 || at >= pose.Bones.Count) return null;
+        if (at < 0)
+        {
+            if (bone >= binding.Resolved.Length || binding.Resolved[bone] is not { } resolved) return null;
+            return resolved.SkeletonBone < pose.Bones.Count
+                ? Bind(shape.SkinToBone[bone]) * NodeTree.World(pose, resolved)
+                : null;
+        }
+        if (at >= pose.Bones.Count) return null;
 
         var posed = pose.Bones[at];
         var world = Matrix4x4.CreateFromQuaternion(posed.Rotation);
@@ -73,57 +99,79 @@ public static class SkinnedMesh
     }
 
     public static Vector3[] Pose(NifShape shape, Binding binding, AnimationPose.Pose pose,
-                                 HkxSkeleton skeleton)
+                                 HkxSkeleton skeleton) =>
+        Pose(shape, binding, pose, skeleton, Array.Empty<Vector3>(), new SkinScratch());
+
+    public static Vector3[] Pose(NifShape shape, Binding binding, AnimationPose.Pose pose,
+                                 HkxSkeleton skeleton, Vector3[] moved, SkinScratch scratch)
     {
-        var moved = new Vector3[shape.Vertices.Count];
+        int vertexCount = shape.Vertices.Count;
+        if (moved.Length != vertexCount) moved = new Vector3[vertexCount];
+
         if (!shape.IsSkinned || shape.SkinToBone.Count != shape.BoneNames.Count)
         {
-            shape.Vertices.CopyTo(moved);
+            shape.Vertices.CopyTo(moved, 0);
             return moved;
         }
 
-        var boneMatrix = new Matrix4x4[shape.BoneNames.Count];
-        var usable = new bool[shape.BoneNames.Count];
-        for (int b = 0; b < shape.BoneNames.Count; b++)
+        int boneCount = shape.BoneNames.Count;
+        if (scratch.BoneMatrices.Length != boneCount)
         {
-            int at = binding.ToSkeleton[b];
-            if (at < 0 || at >= pose.Bones.Count) continue;
+            scratch.BoneMatrices = new Matrix4x4[boneCount];
+            scratch.BoneUsable = new bool[boneCount];
+        }
 
-            var bone = pose.Bones[at];
-            var world = Matrix4x4.CreateFromQuaternion(bone.Rotation);
-            world.M41 = bone.Position.X;
-            world.M42 = bone.Position.Y;
-            world.M43 = bone.Position.Z;
-
-            boneMatrix[b] = Bind(shape.SkinToBone[b]) * world;
+        var boneMatrix = scratch.BoneMatrices;
+        var usable = scratch.BoneUsable;
+        Array.Clear(usable);
+        for (int b = 0; b < boneCount; b++)
+        {
+            if (BoneMatrix(shape, binding, pose, b) is not { } matrix) continue;
+            boneMatrix[b] = matrix;
             usable[b] = true;
         }
 
-        var placement = Placement(shape, binding, AnimationPose.ReferencePose(skeleton))
-                        ?? Matrix4x4.Identity;
+        var frame = Placement(shape, binding, pose) ?? Matrix4x4.Identity;
 
         for (int v = 0; v < moved.Length; v++)
         {
-            var rest = shape.Vertices[v];
+            var source = shape.Vertices[v];
+            var resting = Vector3.Transform(source, frame);
             var sum = Vector3.Zero;
             float total = 0;
 
             for (int s = 0; s < 4; s++)
             {
                 float weight = shape.BoneWeights[v * 4 + s];
-                if (weight <= 0) continue;
+                if (!float.IsFinite(weight) || weight <= 0) continue;
+
+                total += weight;
 
                 int b = shape.BoneIndices[v * 4 + s];
-                if (b < 0 || b >= boneMatrix.Length || !usable[b]) continue;
+                if (b < 0 || b >= boneMatrix.Length || !usable[b])
+                {
+                    sum += resting * weight;
+                    continue;
+                }
 
-                sum += Vector3.Transform(rest, boneMatrix[b]) * weight;
-                total += weight;
+                sum += Vector3.Transform(source, boneMatrix[b]) * weight;
             }
 
-            moved[v] = total > 0.0001f ? sum / total : Vector3.Transform(rest, placement);
+            moved[v] = total > 0.0001f ? sum / total : resting;
         }
 
         return moved;
+    }
+
+    public static string ResolveSkinBoneName(string skinBoneName, Func<string, bool> hasBone)
+    {
+        if (hasBone(skinBoneName)) return skinBoneName;
+
+        int skin = skinBoneName.LastIndexOf("_skin", StringComparison.OrdinalIgnoreCase);
+        if (skin <= 0 || skin != skinBoneName.Length - 5) return skinBoneName;
+
+        string parent = skinBoneName[..skin];
+        return hasBone(parent) ? parent : skinBoneName;
     }
 
     public static Matrix4x4? Placement(NifShape shape, Binding binding, AnimationPose.Pose pose)

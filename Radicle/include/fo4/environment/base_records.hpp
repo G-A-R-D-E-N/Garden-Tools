@@ -42,6 +42,14 @@ struct LightRecordData {
   std::optional<FormKey> god_rays;
 };
 
+struct AddOnNodeData {
+  std::optional<std::uint32_t> node_index;
+  std::optional<FormKey> light;
+  std::optional<std::string_view> model;
+  std::optional<std::uint16_t> master_particle_cap;
+  std::optional<std::uint16_t> flags;
+};
+
 struct BendableSplineData {
   std::optional<float> default_tiles;
   std::optional<std::uint16_t> default_slices;
@@ -208,11 +216,16 @@ struct WaterData {
 };
 
 LightRecordData decode_light(const Environment& env, const RecordRef& ref);
+AddOnNodeData decode_add_on_node(const Environment& env, const RecordRef& ref);
 BendableSplineData decode_bendable_spline(const Environment& env, const RecordRef& ref);
 std::optional<FormKey> decode_layer_parent(const Environment& env, const RecordRef& ref);
 ClimateData decode_climate(const Environment& env, const RecordRef& ref);
 bool set_climate_timing(Plugin& plugin, const FormKey& key, const ClimateTiming& timing);
+bool set_climate_weathers(Plugin& plugin, const FormKey& key, std::span<const ClimateWeather> weathers);
 WeatherData decode_weather(const Environment& env, const RecordRef& ref);
+bool set_weather_colors(Plugin& plugin, const FormKey& key, WeatherColorGroup group, std::span<const ByteColor> times);
+bool set_weather_fog(Plugin& plugin, const FormKey& key, std::span<const float> distances);
+bool set_weather_transition(Plugin& plugin, const FormKey& key, std::uint8_t transition_delta);
 std::vector<StaticCollectionPart> decode_static_collection(const Environment& env, const RecordRef& ref);
 StaticDistantLod decode_static_distant_lod(const Environment& env, const RecordRef& ref);
 std::optional<FormKey> decode_activator_water_type(const Environment& env, const RecordRef& ref);

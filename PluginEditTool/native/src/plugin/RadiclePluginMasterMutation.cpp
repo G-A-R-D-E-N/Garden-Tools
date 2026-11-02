@@ -1,8 +1,10 @@
+#include "RadiclePluginSupport.hpp"
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <exception>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -13,11 +15,6 @@
 
 namespace fo4ide::plugin {
 namespace {
-
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
 
 std::string trim(std::string value) {
     while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
@@ -46,8 +43,8 @@ std::vector<std::string> splitCsv(std::string_view csv) {
 }
 
 Result<nlohmann::json> RadiclePluginBackend::addMasters(const nlohmann::json& arguments) {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto csv = stringArgument(arguments, 1);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto csv = support::stringArgument(arguments, 1);
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }
@@ -90,6 +87,14 @@ Result<nlohmann::json> RadiclePluginBackend::addMasters(const nlohmann::json& ar
         seen.insert(master.key);
     }
 
+    // Constraint: plugins_ order is load order; declared masters must follow it.
+    const auto loadIndex = [this](const fo4::PluginKey& key) -> std::optional<std::size_t> {
+        for (std::size_t index = 0; index < plugins_.size(); ++index) {
+            if (plugins_[index].plugin.key == key) return index;
+        }
+        return std::nullopt;
+    };
+
     std::size_t added = 0;
     for (const auto& name : requestedNames) {
         auto key = fo4::PluginKey::from_filename(name);
@@ -114,6 +119,28 @@ Result<nlohmann::json> RadiclePluginBackend::addMasters(const nlohmann::json& ar
         const auto kind = loadedMaster != nullptr
             ? fo4::classify_plugin_kind(loadedMaster->plugin.header.tes4_flags, loadedMaster->plugin.key)
             : fo4::PluginKind::light;
+
+        if (const auto requestedIndex = loadIndex(key); requestedIndex.has_value()) {
+            for (const auto& declared : masters) {
+                const auto declaredIndex = loadIndex(declared.key);
+                if (!declaredIndex.has_value() || *declaredIndex <= *requestedIndex) continue;
+                return std::unexpected(Error{
+                    "MasterOrder",
+                    "Master " + std::string(key.filename()) + " loads before " +
+                        std::string(declared.key.filename()) + ", which " + pluginName +
+                        " already declares; masters must be declared in load order"
+                });
+            }
+            if (const auto targetIndex = loadIndex(target->plugin.key); targetIndex.has_value() &&
+                *targetIndex <= *requestedIndex) {
+                return std::unexpected(Error{
+                    "MasterOrder",
+                    "Master " + std::string(key.filename()) + " does not load before " + pluginName +
+                        "; a master must precede the plugin that declares it"
+                });
+            }
+        }
+
         masters.push_back({std::move(key), kind});
         ++added;
     }

@@ -20,6 +20,8 @@ add_library(
     plugin/RadiclePluginScalar.cpp
     plugin/RadiclePluginFields.cpp
     plugin/RadiclePluginArmor.cpp
+    plugin/RadiclePluginGraphCache.cpp
+    plugin/RadiclePluginEffects.cpp
     plugin/RadiclePluginFormLinkList.cpp
     plugin/RadiclePluginComponents.cpp
     plugin/RadiclePluginQuest.cpp
@@ -32,10 +34,12 @@ add_library(
     plugin/RadiclePluginQuestExistingExtras.cpp
     plugin/RadiclePluginQuestLocalized.cpp
     plugin/RadiclePluginStrings.cpp
+    plugin/RadiclePluginStringsEdit.cpp
     plugin/RadiclePluginElement.cpp
     plugin/RadiclePluginMaintenance.cpp
     plugin/RadiclePluginCompact.cpp
     plugin/RadiclePluginRenumber.cpp
+    plugin/RadiclePluginInject.cpp
     plugin/RadiclePluginDeepCopy.cpp
     plugin/RadiclePluginReferenceRemap.cpp
     plugin/RadiclePluginOverridePatch.cpp
@@ -46,11 +50,16 @@ add_library(
     plugin/RadiclePluginCopyAsWrapper.cpp
     plugin/RadiclePluginCheck.cpp
     plugin/RadiclePluginBatchMutation.cpp
+    plugin/RadiclePluginBulkElements.cpp
     plugin/RadiclePluginMasterMutation.cpp
     plugin/RadiclePluginReadApi.cpp
     plugin/RadiclePluginEsl.cpp
     plugin/RadiclePluginCell.cpp
     plugin/RadiclePluginTypedRecords.cpp
+    plugin/RadiclePluginSound.cpp
+    plugin/RadiclePluginPackage.cpp
+    plugin/RadiclePluginScripts.cpp
+    plugin/RadiclePluginMemory.cpp
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )
@@ -133,8 +142,8 @@ target_link_libraries(fo4ide_mcp PUBLIC fo4ide_core fo4ide_rpc nlohmann_json::nl
 fo4ide_enable_warnings(fo4ide_mcp)
 fo4ide_enable_sanitizers(fo4ide_mcp)
 
-add_library(fo4ide_nif assets/NifService.cpp)
-target_link_libraries(fo4ide_nif PUBLIC fo4ide_core fo4ide_process nlohmann_json::nlohmann_json)
+add_library(fo4ide_nif assets/NifService.cpp assets/NifRender.cpp)
+target_link_libraries(fo4ide_nif PUBLIC fo4ide_core fo4ide_process fo4 nlohmann_json::nlohmann_json)
 fo4ide_enable_warnings(fo4ide_nif)
 fo4ide_enable_sanitizers(fo4ide_nif)
 
@@ -188,6 +197,7 @@ add_library(
     papyrus/Symbols.cpp
     papyrus/CreationKitFidelity.cpp
     papyrus/AnalysisService.cpp
+    papyrus/CompileScript.cpp
 )
 target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4)
 fo4ide_enable_warnings(fo4ide_papyrus)

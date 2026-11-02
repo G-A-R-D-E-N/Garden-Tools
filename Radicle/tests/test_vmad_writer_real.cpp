@@ -1,3 +1,5 @@
+#include "fo4/c_api_env.h"
+#include "fo4/c_api_vmad.h"
 #include "fo4/plugin/vmad_writer.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/vmad.hpp"
@@ -5,11 +7,16 @@
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <map>
+#include <memory>
 #include <set>
+#include <string>
 
 namespace {
 
@@ -20,6 +27,10 @@ std::vector<const fo4::Record*> records(const fo4::Plugin& plugin) {
   });
   return result;
 }
+
+struct RecordArrayDeleter {
+  void operator()(const radicle_record** records) const { radicle_free_record_array(records); }
+};
 
 class VmadWriterOfficial : public ::testing::TestWithParam<const char*> {};
 
@@ -111,8 +122,230 @@ TEST_P(VmadWriterOfficial, PropertyOrderAndCappedMutationPreserveOtherRecords) {
   RecordProperty("records_mutated", changed.size());
 }
 
+TEST(VmadWriterOfficial, AddsAScriptToAVanillaActiAndQuestOverrideAndRereads) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR for read-only official coverage";
+  record_game_build(detect_game_build(dir));
+  const auto path = std::filesystem::path(dir) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::exists(path));
+  auto plugin = fo4::read_plugin_file(path);
+  const auto has_vmad = [](const fo4::Record& record) {
+    return std::any_of(record.subrecords.begin(), record.subrecords.end(),
+                       [](const fo4::Subrecord& sub) { return sub.signature.to_string() == "VMAD"; });
+  };
+  const auto complete_vmad = [](const fo4::Record& record, fo4::Signature signature) {
+    for (const auto& sub : record.subrecords) {
+      if (sub.signature.to_string() == "VMAD") {
+        return fo4::vmad_coverage(sub.data, signature).complete();
+      }
+    }
+    return false;
+  };
+  const auto acti_signature = fo4::Signature::from_string("ACTI");
+  const fo4::Record* acti = nullptr;
+  const fo4::Record* quest = nullptr;
+  fo4::visit_records(plugin, [&](fo4::Record& record) {
+    if (acti == nullptr && record.header.signature == acti_signature && !has_vmad(record)) {
+      acti = &record;
+    }
+    if (quest == nullptr && record.header.signature == fo4::sig_qust &&
+        complete_vmad(record, fo4::sig_qust)) {
+      quest = &record;
+    }
+  });
+  ASSERT_NE(acti, nullptr);
+  ASSERT_NE(quest, nullptr);
+  struct Target {
+    const fo4::Record* record;
+    std::vector<fo4::Subrecord> before;
+    const char* script;
+    bool needs_vmad;
+  };
+  const Target targets[] = {{acti, acti->subrecords, "RadicleCAbiActi", true},
+                            {quest, quest->subrecords, "RadicleCAbiQuest", false}};
+  for (const auto& target : targets) {
+    const auto key = target.record->form_key;
+    std::size_t index = 0;
+    if (target.needs_vmad) {
+      ASSERT_EQ(fo4::add_vmad(plugin, key), fo4::VmadStructureMutationStatus::updated);
+    } else {
+      for (const auto& sub : target.record->subrecords) {
+        if (sub.signature.to_string() != "VMAD") continue;
+        index = fo4::read_vmad_scripts(sub.data).scripts.size();
+      }
+    }
+    ASSERT_EQ(fo4::add_vmad_script(plugin, key, index, target.script, 1),
+              fo4::VmadStructureMutationStatus::updated);
+  }
+  const auto saved = fo4::write_plugin(plugin);
+  auto reparsed = fo4::read_plugin(saved, "Fallout4.esm");
+  for (const auto& target : targets) {
+    const auto* after = fo4::find_record(reparsed, target.record->form_key);
+    ASSERT_NE(after, nullptr);
+    const fo4::Subrecord* vmad = nullptr;
+    for (const auto& sub : after->subrecords) {
+      if (sub.signature.to_string() == "VMAD") vmad = &sub;
+    }
+    ASSERT_NE(vmad, nullptr);
+    const auto scripts = fo4::read_vmad_scripts(vmad->data);
+    EXPECT_TRUE(std::any_of(scripts.scripts.begin(), scripts.scripts.end(),
+                            [&](const fo4::VmadScript& script) { return script.name == target.script; }));
+    EXPECT_EQ(after->subrecords.size(), target.before.size() + (target.needs_vmad ? 1 : 0));
+    std::vector<const fo4::Subrecord*> kept;
+    for (const auto& sub : target.before) {
+      if (sub.signature.to_string() != "VMAD") kept.push_back(&sub);
+    }
+    std::size_t after_kept = 0;
+    for (const auto& sub : after->subrecords) {
+      if (sub.signature.to_string() != "VMAD") ++after_kept;
+    }
+    EXPECT_EQ(after_kept, kept.size());
+    std::size_t other = 0;
+    for (const auto& sub : after->subrecords) {
+      if (sub.signature.to_string() == "VMAD") continue;
+      ASSERT_LT(other, kept.size());
+      EXPECT_EQ(sub.signature, kept[other]->signature);
+      EXPECT_EQ(sub.data, kept[other]->data);
+      ++other;
+    }
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(Official, VmadWriterOfficial, ::testing::Values(
   "Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
   "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"));
+
+TEST(VmadReadReal, Fallout4EsmCountsAndStructArraysMatchTheCppReader) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR for read-only official coverage";
+  record_game_build(detect_game_build(dir));
+  const auto path = std::filesystem::path(dir) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::exists(path));
+
+  std::size_t vmads = 0;
+  std::size_t reader_scripts = 0;
+  std::size_t reader_properties = 0;
+  std::size_t reader_arrays = 0;
+  std::size_t reader_structs = 0;
+  std::size_t reader_struct_arrays = 0;
+  {
+    const auto plugin = fo4::read_plugin_file(path);
+    for (const auto* record : records(plugin)) {
+      for (const auto& sub : record->subrecords) {
+        if (sub.signature.to_string() != "VMAD") continue;
+        ++vmads;
+        const auto scripts = fo4::read_vmad_scripts(sub.data);
+        reader_scripts += scripts.scripts.size();
+        for (const auto& script : scripts.scripts) {
+          for (const auto& property : script.properties) {
+            ++reader_properties;
+            const bool array = (property.type >= 11 && property.type <= 15) || property.type == 17;
+            if (array) ++reader_arrays;
+            if (property.type == 7) ++reader_structs;
+            if (property.type == 17) ++reader_struct_arrays;
+          }
+        }
+      }
+    }
+  }
+
+  const std::string text = path.string();
+  const char* paths[] = {text.c_str()};
+  radicle_env* raw_env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_env), RADICLE_STATUS_OK) << radicle_last_error();
+  const std::unique_ptr<radicle_env, void (*)(radicle_env*)> env(raw_env, radicle_env_destroy);
+
+  const radicle_record** borrowed_records = nullptr;
+  std::size_t env_record_count = 0;
+  ASSERT_EQ(radicle_env_plugin_records(env.get(), 0, &borrowed_records, &env_record_count), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const std::unique_ptr<const radicle_record*, RecordArrayDeleter> env_records(borrowed_records);
+
+  std::size_t api_vmads = 0;
+  std::size_t api_scripts = 0;
+  std::size_t api_properties = 0;
+  std::size_t api_arrays = 0;
+  std::size_t api_structs = 0;
+  std::size_t api_struct_arrays = 0;
+  std::size_t api_unsupported = 0;
+  std::size_t api_refused = 0;
+  for (std::size_t i = 0; i < env_record_count; ++i) {
+    radicle_vmad_scripts* raw_scripts = nullptr;
+    const auto status = radicle_record_vmad_scripts(env.get(), env_records.get()[i], &raw_scripts);
+    if (status == RADICLE_STATUS_NOT_FOUND) continue;
+    if (status != RADICLE_STATUS_OK) {
+      ++api_refused;
+      continue;
+    }
+    const std::unique_ptr<radicle_vmad_scripts, void (*)(radicle_vmad_scripts*)> scripts(
+        raw_scripts, radicle_vmad_scripts_destroy);
+    ++api_vmads;
+    const auto script_count = radicle_vmad_script_count(scripts.get());
+    api_scripts += script_count;
+    for (std::size_t s = 0; s < script_count; ++s) {
+      radicle_vmad_script script{};
+      ASSERT_EQ(radicle_vmad_scripts_script(scripts.get(), s, &script), RADICLE_STATUS_OK)
+          << radicle_last_error();
+      if (script.unsupported != 0) ++api_unsupported;
+      for (std::size_t p = 0; p < script.property_count; ++p) {
+        radicle_vmad_property property{};
+        ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), s, p, &property), RADICLE_STATUS_OK)
+            << radicle_last_error();
+        ++api_properties;
+        const bool array = (property.type >= 11 && property.type <= 15) || property.type == 17;
+        if (array) ++api_arrays;
+        if (property.type == 7) ++api_structs;
+        if (property.type == 17) ++api_struct_arrays;
+      }
+    }
+  }
+
+  std::cout << "VmadRead vmads=" << api_vmads << " scripts=" << api_scripts
+            << " properties=" << api_properties << " arrays=" << api_arrays
+            << " structs=" << api_structs << " struct-arrays=" << api_struct_arrays
+            << " unsupported scripts=" << api_unsupported << " refused records=" << api_refused
+            << "\n";
+  EXPECT_EQ(api_vmads, vmads);
+  EXPECT_EQ(api_scripts, reader_scripts);
+  EXPECT_EQ(api_properties, reader_properties);
+  EXPECT_EQ(api_arrays, reader_arrays);
+  EXPECT_EQ(api_structs, reader_structs);
+  EXPECT_EQ(api_struct_arrays, reader_struct_arrays);
+  EXPECT_EQ(api_vmads, 13697u);
+  EXPECT_EQ(api_scripts, 12272u);
+  EXPECT_EQ(api_properties, 25231u);
+  EXPECT_EQ(api_arrays, 1535u);
+  EXPECT_EQ(api_structs, 10u);
+  EXPECT_EQ(api_struct_arrays, 319u);
+  EXPECT_EQ(api_unsupported, 0u);
+  EXPECT_EQ(api_refused, 0u);
+
+  const char* plugin_name = "Fallout4.esm";
+  const radicle_record* sample = nullptr;
+  ASSERT_EQ(radicle_env_winner(env.get(), {plugin_name, 0x000920F1}, &sample), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  radicle_vmad_scripts* raw_sample = nullptr;
+  ASSERT_EQ(radicle_record_vmad_scripts(env.get(), sample, &raw_sample), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const std::unique_ptr<radicle_vmad_scripts, void (*)(radicle_vmad_scripts*)> sample_scripts(
+      raw_sample, radicle_vmad_scripts_destroy);
+  bool found_samples = false;
+  const auto sample_count = radicle_vmad_script_count(sample_scripts.get());
+  for (std::size_t s = 0; s < sample_count && !found_samples; ++s) {
+    radicle_vmad_script script{};
+    ASSERT_EQ(radicle_vmad_scripts_script(sample_scripts.get(), s, &script), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    for (std::size_t p = 0; p < script.property_count; ++p) {
+      radicle_vmad_property property{};
+      ASSERT_EQ(radicle_vmad_scripts_property(sample_scripts.get(), s, p, &property), RADICLE_STATUS_OK)
+          << radicle_last_error();
+      if (property.type != 17 || std::string(property.name) != "Samples") continue;
+      EXPECT_EQ(property.declared_element_count, 6u);
+      EXPECT_EQ(radicle_vmad_element_count(sample_scripts.get(), s, p), 12u);
+      found_samples = true;
+    }
+  }
+  EXPECT_TRUE(found_samples);
+}
 
 }

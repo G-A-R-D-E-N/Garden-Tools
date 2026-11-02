@@ -360,7 +360,7 @@ TEST(ProjExplHazdCreation, DecodesTruncatedExplosionDataAsAPrefix) {
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Legacy.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Legacy.esp");
   const auto decoded =
       fo4::forms::decode_explosion(plugin, fo4::FormKey::parse("000800:Legacy.esp"));
   EXPECT_EQ(decoded.force, 500.0F);
@@ -370,4 +370,71 @@ TEST(ProjExplHazdCreation, DecodesTruncatedExplosionDataAsAPrefix) {
   // Absent tail stays at its default rather than reading past the payload.
   EXPECT_EQ(decoded.projectile_count, 0u);
   EXPECT_EQ(decoded.stagger_magnitude, 0u);
+}
+
+TEST(ProjExplHazdCreation, EmptyEditorIdIsRefusedBeforeAnyMutation) {
+  auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  const auto refusal = [](auto&& create) -> std::string {
+    try {
+      create();
+    } catch (const fo4::forms::ProjExplHazdError& error) {
+      return error.what();
+    }
+    return {};
+  };
+
+  fo4::forms::ProjectileCreation projectile;
+  projectile.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
+  EXPECT_NE(refusal([&] { static_cast<void>(fo4::forms::create_projectile(plugin, projectile)); })
+                .find("editor ID is empty"),
+            std::string::npos);
+
+  fo4::forms::ExplosionCreation explosion;
+  EXPECT_NE(refusal([&] { static_cast<void>(fo4::forms::create_explosion(plugin, explosion)); })
+                .find("editor ID is empty"),
+            std::string::npos);
+
+  fo4::forms::HazardCreation hazard;
+  hazard.model = "Effects\\FXFireMedSmokey01.nif";
+  EXPECT_NE(refusal([&] { static_cast<void>(fo4::forms::create_hazard(plugin, hazard)); })
+                .find("editor ID is empty"),
+            std::string::npos);
+
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(ProjExplHazdCreation, EmptyNameWritesNoFullSubrecordButNamedRecordKeepsIt) {
+  auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
+
+  fo4::forms::ProjectileCreation projectile;
+  projectile.editor_id = "NoNameProjectile";
+  projectile.name = std::string{};
+  projectile.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
+  const auto projectile_key = fo4::forms::create_projectile(plugin, projectile);
+
+  fo4::forms::ExplosionCreation explosion;
+  explosion.editor_id = "NoNameExplosion";
+  explosion.name = std::string{};
+  const auto explosion_key = fo4::forms::create_explosion(plugin, explosion);
+
+  explosion.editor_id = "NamedExplosion";
+  explosion.name = std::string{"Named Explosion"};
+  const auto named_key = fo4::forms::create_explosion(plugin, explosion);
+
+  fo4::forms::HazardCreation hazard;
+  hazard.editor_id = "NoNameHazard";
+  hazard.name = std::string{};
+  hazard.model = "Effects\\FXFireMedSmokey01.nif";
+  const auto hazard_key = fo4::forms::create_hazard(plugin, hazard);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  for (const auto& key : {projectile_key, explosion_key, hazard_key}) {
+    const auto* record = fo4::find_record(reread, key);
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(find_subrecord(*record, "FULL"), nullptr);
+  }
+  const auto* named = fo4::find_record(reread, named_key);
+  ASSERT_NE(named, nullptr);
+  EXPECT_NE(find_subrecord(*named, "FULL"), nullptr);
 }

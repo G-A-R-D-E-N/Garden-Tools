@@ -150,11 +150,24 @@ Fixture minimalFixture() {
   return fixture;
 }
 
-void expectParseError(const std::vector<std::uint8_t>& bytes) {
+void expectParseError(const std::vector<std::uint8_t>& bytes, const std::string& expected) {
   try {
     static_cast<void>(PexFile::fromBytes(bytes));
     FAIL() << "expected a parse error";
+  } catch (const std::runtime_error& e) {
+    EXPECT_NE(std::string(e.what()).find(expected), std::string::npos) << e.what();
+  } catch (...) {
+    FAIL() << "expected std::runtime_error";
+  }
+}
+
+void expectAnyParseError(const std::vector<std::uint8_t>& bytes) {
+  try {
+    static_cast<void>(PexFile::fromBytes(bytes));
+    FAIL() << bytes.size() << "-byte prefix parsed";
   } catch (const std::runtime_error&) {
+  } catch (...) {
+    FAIL() << bytes.size() << "-byte prefix threw a non-runtime_error exception";
   }
 }
 
@@ -169,46 +182,54 @@ TEST(PexHardening, TheHandBuiltFixtureIsValid) {
   EXPECT_EQ(decoded.toBytes(), fixture.bytes);
 }
 
+TEST(PexHardening, EveryProperPrefixOfTheMinimalFileFailsClosed) {
+  const Fixture fixture = minimalFixture();
+  for (std::size_t length = 0; length < fixture.bytes.size(); ++length) {
+    expectAnyParseError(
+        std::vector<std::uint8_t>(fixture.bytes.begin(), fixture.bytes.begin() + length));
+  }
+}
+
 TEST(PexHardening, UnsupportedMajorVersionFailsClosed) {
   Fixture fixture = minimalFixture();
   patchU8(fixture.bytes, fixture.majorVersion, 4);
-  expectParseError(fixture.bytes);
+  expectParseError(fixture.bytes, "Unsupported .pex format major version");
 }
 
 TEST(PexHardening, StringIndexOutOfRangeFailsClosed) {
   Fixture fixture = minimalFixture();
   patchU16(fixture.bytes, fixture.objectNameIndex, 0xFFFF);
-  expectParseError(fixture.bytes);
+  expectParseError(fixture.bytes, "String table index");
 }
 
 TEST(PexHardening, ObjectSizeLargerThanTheBodyFailsClosed) {
   Fixture fixture = minimalFixture();
   patchU32(fixture.bytes, fixture.declaredSize,
            readU32(fixture.bytes, fixture.declaredSize) + 4u);
-  expectParseError(fixture.bytes);
+  expectParseError(fixture.bytes, "but its body is");
 }
 
 TEST(PexHardening, ObjectSizeSmallerThanTheBodyFailsClosed) {
   Fixture fixture = minimalFixture();
   patchU32(fixture.bytes, fixture.declaredSize,
            readU32(fixture.bytes, fixture.declaredSize) - 8u);
-  expectParseError(fixture.bytes);
+  expectParseError(fixture.bytes, "but its body is");
 }
 
 TEST(PexHardening, VariableArgumentCountBeyondTheFileFailsClosed) {
   Fixture fixture = minimalFixture();
   patchU32(fixture.bytes, fixture.countTag + 1, 0x00FFFFFFu);
-  expectParseError(fixture.bytes);
+  expectParseError(fixture.bytes, "bytes left in the file");
 }
 
 TEST(PexHardening, NonIntegerVariableArgumentCountFailsClosed) {
   Fixture fixture = minimalFixture();
   patchU8(fixture.bytes, fixture.countTag, 5);
-  expectParseError(fixture.bytes);
+  expectParseError(fixture.bytes, "must be a non-negative integer");
 }
 
 TEST(PexHardening, NegativeVariableArgumentCountFailsClosed) {
   Fixture fixture = minimalFixture();
   patchU32(fixture.bytes, fixture.countTag + 1, 0xFFFFFFFFu);
-  expectParseError(fixture.bytes);
+  expectParseError(fixture.bytes, "must be a non-negative integer");
 }

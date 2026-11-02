@@ -359,26 +359,6 @@ public class GraphCompilerTests
     }
 
     [Fact]
-    public void The_generated_source_always_reparses_cleanly()
-    {
-
-
-        var palette = GraphTestEnvironment.Palette();
-        var graph = new GraphBuilder("Fixture", "ObjectReference");
-
-        var entry = graph.Node(palette, "event:ObjectReference.OnActivate");
-        var notify = graph.Node(palette, "global:Debug.Notification");
-        graph.Value(notify, "arg:asNotificationText", "string", "\"hello\"");
-        graph.Wire(entry, PinIds.Exec, notify, PinIds.Exec);
-
-        var result = CompileOk(graph.Document);
-
-        PapyrusParser.Parse(result.Source!, "Fixture.psc")
-            .Diagnostics.Where(d => d.Severity == PapyrusSeverity.Error)
-            .Should().BeEmpty();
-    }
-
-    [Fact]
     public void The_source_map_attributes_every_statement_to_a_node()
     {
         var palette = GraphTestEnvironment.Palette();

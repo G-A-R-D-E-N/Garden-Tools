@@ -16,6 +16,13 @@ namespace {
 
 #include "fo4/schema/generated_scalar_fields.inc"
 
+int hex_digit(char ch) {
+  if (ch >= '0' && ch <= '9') return ch - '0';
+  if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+  if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+  return -1;
+}
+
 void append_u16(std::vector<std::byte>& out, std::uint16_t value) {
   out.push_back(std::byte{static_cast<std::uint8_t>(value)});
   out.push_back(std::byte{static_cast<std::uint8_t>(value >> 8)});
@@ -81,6 +88,113 @@ std::string format_float(float value) {
   return std::string(buffer, ptr);
 }
 
+std::span<const std::byte> fixed_string_bytes(std::span<const std::byte> payload,
+                                              const ScalarDescriptor& descriptor) {
+  if (payload.size() != descriptor.payload_size) {
+    throw ScalarError(std::string(descriptor.field_name) + " has unexpected binary width");
+  }
+  return payload;
+}
+
+std::span<const std::byte> slot_string_bytes(std::span<const std::byte> payload,
+                                             std::size_t offset,
+                                             const ScalarDescriptor& descriptor) {
+  const auto tail = payload.subspan(offset);
+  const auto limit = descriptor.minimum_payload_size > offset
+                         ? descriptor.minimum_payload_size - offset
+                         : tail.size();
+  const auto slot = tail.first(std::min(limit, tail.size()));
+  const auto terminator = std::find(slot.begin(), slot.end(), std::byte{0});
+  if (terminator == slot.end()) {
+    throw ScalarError(std::string(descriptor.field_name) + " has no NUL terminator in its slot");
+  }
+  return slot.first(static_cast<std::size_t>(terminator - slot.begin()) + 1);
+}
+
+struct SegmentLayout {
+  std::size_t count_word{0};
+  std::size_t stride{0};
+  bool operator==(const SegmentLayout&) const = default;
+};
+
+using SegmentLayouts = std::array<SegmentLayout, k_max_header_counters>;
+
+bool record_segment_layouts(Signature record, Signature subrecord, std::size_t segment_count,
+                            SegmentLayouts& layouts) {
+  if (segment_count == 0 || segment_count > k_max_header_counters) return false;
+  std::size_t found = 0;
+  for (const auto& array : k_counted_arrays) {
+    if (array.record != record || array.subrecord != subrecord || array.segment_count == 0) continue;
+    if (array.segment_index >= segment_count || array.stride == 0 ||
+        layouts[array.segment_index].stride != 0) {
+      return false;
+    }
+    layouts[array.segment_index] = SegmentLayout{array.count_word, array.stride};
+    ++found;
+  }
+  return found == segment_count;
+}
+
+// Constraint: one payload subrecord carries one segment layout in every record that declares it.
+bool shared_segment_layouts(Signature subrecord, std::size_t segment_count,
+                            SegmentLayouts& layouts) {
+  bool found = false;
+  Signature source{};
+  for (const auto& array : k_counted_arrays) {
+    if (array.subrecord != subrecord || array.segment_count != segment_count) continue;
+    if (found && array.record == source) continue;
+    SegmentLayouts candidate{};
+    if (!record_segment_layouts(array.record, subrecord, segment_count, candidate)) return false;
+    if (!found) {
+      layouts = candidate;
+      source = array.record;
+      found = true;
+    } else if (candidate != layouts) {
+      return false;
+    }
+  }
+  return found;
+}
+
+std::optional<SegmentSpan> segment_span(std::span<const std::byte> payload,
+                                        const SegmentLayouts& layouts,
+                                        const FieldAddress& address) {
+  const auto& segment = address.segment;
+  if (segment.count == 0 || segment.count > k_max_header_counters || address.stride == 0 ||
+      segment.index >= segment.count || payload.size() < 4 ||
+      layouts[segment.index].stride != address.stride ||
+      layouts[segment.index].count_word != segment.count_word) {
+    return std::nullopt;
+  }
+  const auto header_words = read_u32(payload);
+  if (header_words == 0 || header_words > k_max_header_counters) return std::nullopt;
+  const std::size_t header_size = 4 * (1 + header_words);
+  if (payload.size() < header_size) return std::nullopt;
+
+  std::size_t base = header_size;
+  std::optional<SegmentSpan> ours;
+  for (std::size_t index = 0; index < segment.count; ++index) {
+    const auto count_word = layouts[index].count_word;
+    if (count_word >= header_words) continue;
+    const auto count = static_cast<std::size_t>(read_u32(payload.subspan(4 * (count_word + 1))));
+    if (count > (payload.size() - base) / layouts[index].stride) return std::nullopt;
+    if (index == segment.index) ours = SegmentSpan{base, count};
+    base += count * layouts[index].stride;
+  }
+  if (!ours || base != payload.size()) return std::nullopt;
+  return ours;
+}
+
+std::optional<SegmentSpan> descriptor_segment(std::span<const std::byte> payload,
+                                              const ScalarDescriptor& descriptor) {
+  if (descriptor.address.segment.count == 0) return std::nullopt;
+  SegmentLayouts layouts{};
+  if (!shared_segment_layouts(descriptor.subrecord, descriptor.address.segment.count, layouts)) {
+    return std::nullopt;
+  }
+  return segment_span(payload, layouts, descriptor.address);
+}
+
 }  // namespace
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
@@ -91,7 +205,9 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
     only = &field.scalar;
   }
   if (!only || only->embedded || only->address.repeated ||
-      only->storage == ScalarStorage::zstring) {
+      only->storage == ScalarStorage::zstring ||
+      only->storage == ScalarStorage::fixed_string ||
+      only->storage == ScalarStorage::bytes) {
     return std::nullopt;
   }
   return *only;
@@ -99,7 +215,16 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
                                               const ScalarDescriptor& descriptor) {
-  if (descriptor.storage == ScalarStorage::zstring) return payload;
+  if (descriptor.storage == ScalarStorage::bytes) return payload;
+  if (descriptor.storage == ScalarStorage::fixed_string) {
+    return fixed_string_bytes(payload, descriptor);
+  }
+  if (descriptor.storage == ScalarStorage::zstring) {
+    if (!descriptor.embedded) return payload;
+    if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
+    if (payload.size() < descriptor.minimum_payload_size) return {};
+    return slot_string_bytes(payload, descriptor.offset, descriptor);
+  }
   const auto width = scalar_storage_size(descriptor.storage);
   if (!descriptor.embedded) {
     if (payload.size() != width) {
@@ -109,8 +234,14 @@ std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload
   }
   if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
   if (payload.size() < descriptor.minimum_payload_size) return {};
-  if (payload.size() < descriptor.offset + width) return {};
-  return payload.subspan(descriptor.offset, width);
+  std::size_t offset = descriptor.offset;
+  if (descriptor.address.segment.count != 0) {
+    const auto segment = descriptor_segment(payload, descriptor);
+    if (!segment || segment->count == 0) return {};
+    offset += segment->base;
+  }
+  if (payload.size() < offset + width) return {};
+  return payload.subspan(offset, width);
 }
 
 FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
@@ -119,27 +250,51 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
   shape.payload_size = descriptor.payload_size;
   shape.minimum_payload_size = descriptor.minimum_payload_size;
   shape.min_form_version = descriptor.min_form_version;
+  shape.max_form_version = descriptor.max_form_version;
   shape.whole_payload = !descriptor.embedded;
   shape.offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
-  shape.width = scalar_storage_size(descriptor.storage);
+  shape.width = descriptor.storage == ScalarStorage::fixed_string
+                    ? descriptor.payload_size
+                    : scalar_storage_size(descriptor.storage);
   return shape;
 }
 
 std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
                                              const FieldSlot& slot,
                                              const ScalarDescriptor& descriptor) {
-  if (descriptor.storage == ScalarStorage::zstring) return payload;
+  if (descriptor.storage == ScalarStorage::bytes) {
+    return payload.subspan(slot.offset);
+  }
+  if (descriptor.storage == ScalarStorage::fixed_string) {
+    return fixed_string_bytes(payload, descriptor);
+  }
+  if (descriptor.storage == ScalarStorage::zstring) {
+    if (!descriptor.embedded) return payload;
+    return slot_string_bytes(payload, slot.offset, descriptor);
+  }
   return payload.subspan(slot.offset, scalar_storage_size(descriptor.storage));
 }
 
 void patch_scalar_field(std::span<std::byte> payload,
                         const ScalarDescriptor& descriptor,
                         std::span<const std::byte> encoded) {
+  if (descriptor.storage == ScalarStorage::bytes) {
+    throw ScalarError(std::string(descriptor.field_name) +
+                      " is a variable-length payload and cannot be patched in place");
+  }
   const auto width = scalar_storage_size(descriptor.storage);
   if (encoded.size() != width) {
     throw ScalarError(std::string(descriptor.field_name) + " encoded to the wrong width");
   }
-  const auto offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
+  std::size_t offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
+  if (descriptor.address.segment.count != 0) {
+    const auto segment = descriptor_segment(payload, descriptor);
+    if (!segment || segment->count == 0) {
+      throw ScalarError(std::string(descriptor.field_name) +
+                        " does not fit in the subrecord payload");
+    }
+    offset += segment->base;
+  }
   if (payload.size() < descriptor.minimum_payload_size || payload.size() < offset + width) {
     throw ScalarError(std::string(descriptor.field_name) +
                       " does not fit in the subrecord payload");
@@ -185,9 +340,22 @@ std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
   return std::nullopt;
 }
 
+std::optional<SegmentSpan> header_segment(std::span<const std::byte> payload,
+                                          Signature record,
+                                          Signature subrecord,
+                                          const FieldAddress& address) {
+  SegmentLayouts layouts{};
+  if (!record_segment_layouts(record, subrecord, address.segment.count, layouts)) {
+    return std::nullopt;
+  }
+  return segment_span(payload, layouts, address);
+}
+
 bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept {
   for (const auto& array : k_counted_arrays) {
-    if (array.record == record && array.count_subrecord == subrecord) return true;
+    if (array.record == record && array.count_subrecord != Signature{} && array.count_subrecord == subrecord) {
+      return true;
+    }
   }
   return false;
 }
@@ -207,15 +375,31 @@ std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature rec
     for (const auto& member : group.members) {
       if (member.subrecord == subrecord) return group;
     }
+    for (const auto& member : group.run.members) {
+      if (member.subrecord == subrecord) return group;
+    }
   }
   return std::nullopt;
 }
 
 bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept {
   for (const auto& group : k_subrecord_groups) {
-    if (group.record == record && group.count_subrecord == subrecord) return true;
+    if (group.record != record) continue;
+    if (group.count_subrecord != Signature{} && group.count_subrecord == subrecord) return true;
+    if (group.run.count_member != Signature{} && group.run.count_member == subrecord) return true;
   }
   return false;
+}
+
+bool is_derived_scalar_row(Signature record, Signature subrecord) noexcept {
+  if (is_counted_array_count_subrecord(record, subrecord)) return true;
+  if (is_subrecord_group_count_subrecord(record, subrecord)) return true;
+  if (record == Signature::from_string("FSTS") && subrecord == Signature::from_string("XCNT")) {
+    return true;
+  }
+  return record == Signature::from_string("INNR") &&
+         (subrecord == Signature::from_string("VNAM") ||
+          subrecord == Signature::from_string("KSIZ"));
 }
 
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
@@ -231,6 +415,8 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
     case ScalarStorage::f32:
       return 4;
     case ScalarStorage::zstring:
+    case ScalarStorage::fixed_string:
+    case ScalarStorage::bytes:
       return 0;
   }
   return 0;
@@ -254,6 +440,22 @@ std::optional<std::int64_t> scalar_name_value(const ScalarDescriptor& descriptor
 
 std::string decode_scalar(std::span<const std::byte> data,
                           const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::bytes) {
+    static constexpr char k_hex[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(data.size() * 2);
+    for (const auto byte : data) {
+      const auto value = std::to_integer<unsigned int>(byte);
+      out.push_back(k_hex[value >> 4]);
+      out.push_back(k_hex[value & 0x0FU]);
+    }
+    return out;
+  }
+  if (descriptor.storage == ScalarStorage::fixed_string) {
+    const auto slot = fixed_string_bytes(data, descriptor);
+    const auto* begin = reinterpret_cast<const char*>(slot.data());
+    return std::string(begin, begin + slot.size());
+  }
   if (descriptor.storage == ScalarStorage::zstring) {
     const auto terminated = !data.empty() && data.back() == std::byte{0} &&
                             std::find(data.begin(), data.end() - 1, std::byte{0}) == data.end() - 1;
@@ -276,6 +478,8 @@ std::string decode_scalar(std::span<const std::byte> data,
     case ScalarStorage::i16:
       return std::to_string(static_cast<std::int16_t>(read_u16(data)));
     case ScalarStorage::zstring:
+    case ScalarStorage::fixed_string:
+    case ScalarStorage::bytes:
       break;
     case ScalarStorage::u16:
       return std::to_string(read_u16(data));
@@ -336,6 +540,28 @@ std::vector<std::byte> encode_scalar(std::string_view text,
       }
       for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
       out.push_back(std::byte{0});
+      break;
+    }
+    case ScalarStorage::fixed_string: {
+      if (text.size() != descriptor.payload_size) {
+        throw ScalarError(std::string(descriptor.field_name) + " must be exactly " +
+                          std::to_string(descriptor.payload_size) + " characters");
+      }
+      for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+      break;
+    }
+    case ScalarStorage::bytes: {
+      if (text.size() % 2 != 0) {
+        throw ScalarError(std::string(descriptor.field_name) + " is not an even-length hex string");
+      }
+      for (std::size_t index = 0; index < text.size(); index += 2) {
+        const auto high = hex_digit(text[index]);
+        const auto low = hex_digit(text[index + 1]);
+        if (high < 0 || low < 0) {
+          throw ScalarError(std::string(descriptor.field_name) + " is not hexadecimal");
+        }
+        out.push_back(std::byte{static_cast<std::uint8_t>((high << 4) | low)});
+      }
       break;
     }
     case ScalarStorage::u16: {

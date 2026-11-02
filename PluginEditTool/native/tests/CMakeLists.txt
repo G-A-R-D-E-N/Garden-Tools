@@ -18,46 +18,7 @@ function(fo4ide_add_test name source library)
     catch_discover_tests(${name} PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 endfunction()
 
-fo4ide_add_test(fo4ide_test_events unit/EventBusTests.cpp fo4ide_events)
-fo4ide_add_test(fo4ide_test_rpc unit/RpcDispatcherTests.cpp fo4ide_rpc)
-fo4ide_add_test(fo4ide_test_mcp unit/McpServerTests.cpp fo4ide_mcp)
-fo4ide_add_test(fo4ide_test_settings unit/SettingsTests.cpp fo4ide_settings)
 fo4ide_add_test(fo4ide_test_wiki unit/WikiServiceTests.cpp fo4ide_app)
-fo4ide_add_test(fo4ide_test_graph_document unit/GraphDocumentTests.cpp fo4ide_graph)
-fo4ide_add_test(fo4ide_test_graph_palette unit/NodePaletteTests.cpp fo4ide_graph)
-fo4ide_add_test(fo4ide_test_graph_validator unit/GraphValidatorTests.cpp fo4ide_graph)
-fo4ide_add_test(fo4ide_test_graph_flow unit/GraphFlowTests.cpp fo4ide_graph)
-fo4ide_add_test(fo4ide_test_graph_compiler unit/GraphCompilerTests.cpp fo4ide_graph)
-fo4ide_add_test(fo4ide_test_graph_lift unit/GraphLiftTests.cpp fo4ide_graph)
-fo4ide_add_test(fo4ide_test_graph_loader unit/GraphScriptLoaderTests.cpp fo4ide_graph)
-fo4ide_add_test(fo4ide_test_graph_tool unit/GraphToolServiceTests.cpp fo4ide_graph)
-# The F4SE corpus sweep scans real F4SE trees when FO4RE_F4SE_SRC is set.
-add_executable(
-    fo4ide_test_f4se
-    unit/F4SETypeMapTests.cpp
-    unit/F4SECrossCheckTests.cpp
-    unit/F4SERegionMergeTests.cpp
-    unit/F4SEEmitterTests.cpp
-    unit/F4SEExtractorTests.cpp
-    unit/F4SECorpusTests.cpp
-)
-target_link_libraries(fo4ide_test_f4se PRIVATE fo4ide_f4se fo4ide_papyrus Catch2::Catch2WithMain)
-fo4ide_enable_warnings(fo4ide_test_f4se)
-fo4ide_enable_sanitizers(fo4ide_test_f4se)
-catch_discover_tests(fo4ide_test_f4se PROPERTIES TIMEOUT 120)
-# The corpus sweep parses thousands of real base scripts; give it headroom.
-add_executable(fo4ide_test_papyrus_corpus unit/PapyrusCorpusTests.cpp)
-target_link_libraries(fo4ide_test_papyrus_corpus PRIVATE fo4ide_papyrus Catch2::Catch2WithMain)
-fo4ide_enable_warnings(fo4ide_test_papyrus_corpus)
-fo4ide_enable_sanitizers(fo4ide_test_papyrus_corpus)
-catch_discover_tests(fo4ide_test_papyrus_corpus PROPERTIES TIMEOUT 300)
-# The differential compiles every vanilla pair with a fresh index each; give it 3x the corpus headroom.
-add_executable(fo4ide_test_papyrus_differential unit/PapyrusDifferentialTests.cpp)
-target_link_libraries(fo4ide_test_papyrus_differential PRIVATE fo4ide_papyrus Catch2::Catch2WithMain)
-fo4ide_enable_warnings(fo4ide_test_papyrus_differential)
-fo4ide_enable_sanitizers(fo4ide_test_papyrus_differential)
-catch_discover_tests(fo4ide_test_papyrus_differential PROPERTIES TIMEOUT 900)
-fo4ide_add_test(fo4ide_test_logging unit/LoggerTests.cpp fo4ide_logging)
 fo4ide_add_test(fo4ide_test_nif unit/NifServiceTests.cpp fo4ide_nif)
 fo4ide_add_test(fo4ide_test_material unit/MaterialServiceTests.cpp fo4ide_material)
 
@@ -74,17 +35,101 @@ fo4ide_enable_warnings(fo4ide_test_texture_resolver)
 fo4ide_enable_sanitizers(fo4ide_test_texture_resolver)
 catch_discover_tests(fo4ide_test_texture_resolver PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 fo4ide_add_test(fo4ide_test_textures unit/TextureCodecTests.cpp fo4ide_textures)
-fo4ide_add_test(fo4ide_test_papyrus_lexer unit/PapyrusLexerTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_parser unit/PapyrusParserTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_resolver unit/PapyrusResolverTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_type_checker unit/PapyrusTypeCheckerTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_pex unit/PapyrusPexTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_codegen unit/PapyrusCodeGenTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_user_flags unit/PapyrusUserFlagTableTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_decompiler unit/PapyrusDecompilerTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_security unit/PapyrusSecurityTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_symbols unit/PapyrusSymbolsTests.cpp fo4ide_papyrus)
-fo4ide_add_test(fo4ide_test_papyrus_analysis unit/PapyrusAnalysisServiceTests.cpp fo4ide_papyrus)
+
+add_executable(fo4ide_fake_process helpers/fake_process.cpp)
+fo4ide_enable_warnings(fo4ide_fake_process)
+fo4ide_enable_sanitizers(fo4ide_fake_process)
+
+add_executable(
+    fo4ide_test_core
+    unit/EventBusTests.cpp
+    unit/RpcDispatcherTests.cpp
+    unit/McpServerTests.cpp
+    unit/SettingsTests.cpp
+    unit/LoggerTests.cpp
+    unit/ToolLocatorTests.cpp
+    unit/ProcessRunnerTests.cpp
+)
+target_link_libraries(
+    fo4ide_test_core
+    PRIVATE
+        fo4ide_events
+        fo4ide_rpc
+        fo4ide_mcp
+        fo4ide_settings
+        fo4ide_logging
+        fo4ide_tools
+        fo4ide_process
+        Catch2::Catch2WithMain
+)
+target_compile_definitions(
+    fo4ide_test_core
+    PRIVATE FO4IDE_FAKE_PROCESS_PATH="$<TARGET_FILE:fo4ide_fake_process>"
+)
+add_dependencies(fo4ide_test_core fo4ide_fake_process)
+fo4ide_enable_warnings(fo4ide_test_core)
+fo4ide_enable_sanitizers(fo4ide_test_core)
+catch_discover_tests(fo4ide_test_core PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+
+add_executable(
+    fo4ide_test_graph
+    unit/GraphDocumentTests.cpp
+    unit/NodePaletteTests.cpp
+    unit/GraphValidatorTests.cpp
+    unit/GraphFlowTests.cpp
+    unit/GraphCompilerTests.cpp
+    unit/GraphLiftTests.cpp
+    unit/GraphScriptLoaderTests.cpp
+    unit/GraphToolServiceTests.cpp
+)
+target_link_libraries(fo4ide_test_graph PRIVATE fo4ide_graph Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_graph)
+fo4ide_enable_sanitizers(fo4ide_test_graph)
+catch_discover_tests(fo4ide_test_graph TEST_SPEC "~GraphCompiler*" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+# Invariant: Oracle1/Oracle2 compile, decompile and recompile all 28 fixtures, so they keep the 60 s timeout, not the 10 s Release default.
+catch_discover_tests(fo4ide_test_graph TEST_SPEC "GraphCompiler*" PROPERTIES TIMEOUT 60)
+
+add_executable(
+    fo4ide_test_papyrus
+    unit/PapyrusLexerTests.cpp
+    unit/PapyrusParserTests.cpp
+    unit/PapyrusResolverTests.cpp
+    unit/PapyrusTypeCheckerTests.cpp
+    unit/PapyrusPexTests.cpp
+    unit/PapyrusCodeGenTests.cpp
+    unit/PapyrusUserFlagTableTests.cpp
+    unit/PapyrusDecompilerTests.cpp
+    unit/PapyrusSecurityTests.cpp
+    unit/PapyrusSymbolsTests.cpp
+    unit/PapyrusAnalysisServiceTests.cpp
+    unit/F4SETypeMapTests.cpp
+    unit/F4SECrossCheckTests.cpp
+    unit/F4SERegionMergeTests.cpp
+    unit/F4SEEmitterTests.cpp
+    unit/F4SEExtractorTests.cpp
+)
+target_link_libraries(fo4ide_test_papyrus PRIVATE fo4ide_papyrus fo4ide_f4se Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_papyrus)
+fo4ide_enable_sanitizers(fo4ide_test_papyrus)
+catch_discover_tests(fo4ide_test_papyrus TEST_SPEC "~F4SE*" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+catch_discover_tests(fo4ide_test_papyrus TEST_SPEC "F4SE*" PROPERTIES TIMEOUT 120)
+
+add_executable(
+    fo4ide_test_corpus
+    unit/PapyrusCorpusTests.cpp
+    unit/PapyrusDifferentialTests.cpp
+    unit/F4SECorpusTests.cpp
+)
+target_link_libraries(fo4ide_test_corpus PRIVATE fo4ide_papyrus fo4ide_f4se Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_corpus)
+fo4ide_enable_sanitizers(fo4ide_test_corpus)
+# The F4SE corpus sweep scans real F4SE trees when FO4RE_F4SE_SRC is set.
+catch_discover_tests(fo4ide_test_corpus TEST_SPEC "F4SE*" PROPERTIES TIMEOUT 120)
+# The corpus sweep parses thousands of real base scripts; give it headroom.
+catch_discover_tests(fo4ide_test_corpus TEST_SPEC "The*" PROPERTIES TIMEOUT 300)
+# The differential compiles every vanilla pair with a fresh index each; give it 3x the corpus headroom.
+catch_discover_tests(fo4ide_test_corpus TEST_SPEC "Compiled*" PROPERTIES TIMEOUT 900)
+
 fo4ide_add_test(fo4ide_test_service_targets unit/ServiceTargetsTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_audio_service unit/AudioServiceTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_material_target unit/MaterialTargetTests.cpp fo4ide_app)
@@ -95,15 +140,12 @@ fo4ide_add_test(fo4ide_test_plugin_element_routing unit/PluginBackendElementRout
 fo4ide_add_test(fo4ide_test_mo2 unit/Mo2ProfileTests.cpp fo4ide_mo2)
 fo4ide_add_test(fo4ide_test_app_interop unit/AppInteropTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_app_interop_rollback unit/AppInteropRollbackTests.cpp fo4ide_app)
-fo4ide_add_test(fo4ide_test_tools unit/ToolLocatorTests.cpp fo4ide_tools)
 
 # Fixture trees are found through an absolute path rather than __FILE__:
 # ccache's base_dir rewrites __FILE__ to a build-relative path, which no
 # longer resolves from the directory ctest runs the tests in.
 foreach(fixture_test
-        fo4ide_test_graph_palette fo4ide_test_graph_validator fo4ide_test_graph_flow
-        fo4ide_test_graph_compiler fo4ide_test_graph_lift fo4ide_test_graph_loader
-        fo4ide_test_graph_tool fo4ide_test_service_targets fo4ide_test_f4se)
+        fo4ide_test_graph fo4ide_test_papyrus fo4ide_test_corpus fo4ide_test_service_targets fo4ide_test_papyrus_target)
     target_compile_definitions(
         ${fixture_test}
         PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
@@ -133,6 +175,8 @@ add_executable(
     unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp
+    unit/RadiclePluginRichCreationTests.cpp
+    unit/RadiclePluginMemoryTests.cpp
     unit/RadiclePluginFormLinkListTests.cpp
     unit/RadiclePluginListItemTests.cpp
     unit/RadiclePluginComponentsTests.cpp
@@ -150,6 +194,9 @@ add_executable(
     unit/RadiclePluginCellTests.cpp
     unit/RadiclePluginTypedRecordsTests.cpp
     unit/RadiclePluginTypedEntryEditTests.cpp
+    unit/RadiclePluginSoundTests.cpp
+    unit/RadiclePluginPackageTests.cpp
+    unit/RadiclePluginScriptTests.cpp
     unit/RadiclePluginEyesTests.cpp
     unit/RadiclePluginEyesGridTests.cpp
     unit/RadiclePluginLvspTests.cpp
@@ -175,6 +222,17 @@ add_executable(
     unit/QuestOpaqueConditionTests.cpp
     unit/ConditionPreservationBackendTests.cpp
     unit/RadiclePluginConcurrencyTests.cpp
+    unit/RadiclePluginProjExplHazdTests.cpp
+    unit/RadiclePluginProjExplHazdFormLinkTests.cpp
+    unit/RadiclePluginProjFlagsTests.cpp
+    unit/RadiclePluginProjExplHazdLimitsTests.cpp
+    unit/RadiclePluginQuestAuthoringTests.cpp
+    unit/RadiclePluginQuestEventDataTests.cpp
+    unit/RadiclePluginQuestPartialFormTests.cpp
+    unit/RadiclePluginQuestCreateLevelTests.cpp
+    unit/RadiclePluginQuestConditionDefaultsTests.cpp
+    unit/RadiclePluginDeferredLocalizationTests.cpp
+    unit/RadiclePluginPendingLifecycleTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
@@ -198,51 +256,7 @@ add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRe
 target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_sound_semantic_real)
 fo4ide_enable_sanitizers(fo4ide_test_sound_semantic_real)
-catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 600)
-
-add_executable(
-    fo4ide_test_proj_expl_hazd
-    unit/RadiclePluginProjExplHazdTests.cpp
-    unit/RadiclePluginProjExplHazdFormLinkTests.cpp
-    unit/RadiclePluginProjFlagsTests.cpp
-    unit/RadiclePluginProjExplHazdLimitsTests.cpp
-    "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
-)
-target_include_directories(
-    fo4ide_test_proj_expl_hazd
-    PRIVATE "${PROJECT_SOURCE_DIR}/../../Radicle/tests"
-)
-target_link_libraries(
-    fo4ide_test_proj_expl_hazd
-    PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
-)
-fo4ide_enable_warnings(fo4ide_test_proj_expl_hazd)
-fo4ide_enable_sanitizers(fo4ide_test_proj_expl_hazd)
-catch_discover_tests(fo4ide_test_proj_expl_hazd PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
-
-add_executable(
-    fo4ide_test_quest_authoring
-    unit/RadiclePluginQuestAuthoringTests.cpp
-    unit/RadiclePluginQuestEventDataTests.cpp
-    unit/RadiclePluginQuestPartialFormTests.cpp
-    unit/RadiclePluginQuestCreateLevelTests.cpp
-    unit/RadiclePluginQuestConditionDefaultsTests.cpp
-    unit/RadiclePluginDeferredLocalizationTests.cpp
-    unit/RadiclePluginPendingLifecycleTests.cpp
-    "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
-)
-target_include_directories(
-    fo4ide_test_quest_authoring
-    PRIVATE "${PROJECT_SOURCE_DIR}/../../Radicle/tests"
-)
-target_link_libraries(
-    fo4ide_test_quest_authoring
-    PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
-)
-target_compile_definitions(fo4ide_test_quest_authoring PRIVATE FO4IDE_TEST_HOOKS)
-fo4ide_enable_warnings(fo4ide_test_quest_authoring)
-fo4ide_enable_sanitizers(fo4ide_test_quest_authoring)
-catch_discover_tests(fo4ide_test_quest_authoring PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 1800)
 
 add_executable(
     fo4ide_test_archive_backend
@@ -255,21 +269,6 @@ target_link_libraries(
 fo4ide_enable_warnings(fo4ide_test_archive_backend)
 fo4ide_enable_sanitizers(fo4ide_test_archive_backend)
 catch_discover_tests(fo4ide_test_archive_backend PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
-
-add_executable(fo4ide_fake_process helpers/fake_process.cpp)
-fo4ide_enable_warnings(fo4ide_fake_process)
-fo4ide_enable_sanitizers(fo4ide_fake_process)
-
-add_executable(fo4ide_test_process unit/ProcessRunnerTests.cpp)
-target_link_libraries(fo4ide_test_process PRIVATE fo4ide_process Catch2::Catch2WithMain)
-target_compile_definitions(
-    fo4ide_test_process
-    PRIVATE FO4IDE_FAKE_PROCESS_PATH="$<TARGET_FILE:fo4ide_fake_process>"
-)
-add_dependencies(fo4ide_test_process fo4ide_fake_process)
-fo4ide_enable_warnings(fo4ide_test_process)
-fo4ide_enable_sanitizers(fo4ide_test_process)
-catch_discover_tests(fo4ide_test_process PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 
 fo4ide_use_utf8_code_page()
 

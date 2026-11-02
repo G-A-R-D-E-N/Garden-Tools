@@ -153,6 +153,11 @@ std::vector<std::byte> lgtm_data() {
   out.u32(0x000C0B0A);
   for (float v : {0.9f, 100.0f, 200.0f}) out.f32(v);
   out.u32(0xFFFFFFFF);
+  for (float v : {300.0f, 400.0f}) out.f32(v);
+  out.u32(0x00332211);
+  out.u32(0x00664455);
+  for (float v : {2.0f, 3.0f, 4.0f, 5.0f, 6.0f}) out.f32(v);
+  for (float v : {500.0f, 600.0f}) out.f32(v);
   return out.bytes;
 }
 
@@ -213,7 +218,22 @@ std::vector<std::byte> make_base() {
                                                         {"ONAM", words({0})},
                                                         {"ONAM", words({0x871})},
                                                         {"DATA", placement(20)}}),
-                                   rec("SCOL", 0x861, {{"DATA", placement(0)}})})});
+                                   rec("SCOL", 0x861, {{"DATA", placement(0)}})}),
+                      top("ADDN", {rec("ADDN", 0x880, {{"DATA", words({283})},
+                                                       {"LNAM", words({0x800})},
+                                                       {"MODL", text("Lights\\FireAddOn.nif")},
+                                                       {"DNAM", words({0x0002011B})}}),
+                                   rec("ADDN", 0x881, {{"DATA", words({282})},
+                                                       {"MODL", text("Lights\\Klaxon.nif")},
+                                                       {"DNAM", words({0x00030000})}}),
+                                   rec("ADDN", 0x882, {{"DATA", words({281})},
+                                                       {"LNAM", words({0x801})},
+                                                       {"DNAM", words({0x00040001})}}),
+                                   rec("ADDN", 0x883, {{"DATA", words({280})},
+                                                       {"LNAM", words({0x800})},
+                                                       {"MODL", text("Lights\\LunchBox.nif")}}),
+                                   rec("ADDN", 0x884, {{"DNAM", words({1, 2})}}),
+                                   rec("ADDN", 0x885, {{"DATA", {std::byte{1}, std::byte{2}}}})})});
 }
 
 class BaseRecordsTest : public ::testing::Test {
@@ -278,6 +298,34 @@ TEST_F(BaseRecordsTest, DecodesLightsSplinesAndLayers) {
   EXPECT_EQ(fo4::env::decode_layer_parent(env, *env.winner(key(0x821))), key(0x820));
 }
 
+// Regression: ADDN decode must keep a missing LNAM or MODL absent instead of inventing a key or an empty path.
+TEST_F(BaseRecordsTest, DecodesAddOnNodesAndDistinguishesMissingLinksFromMissingModels) {
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+
+  const auto full = fo4::env::decode_add_on_node(env, *env.winner(key(0x880)));
+  EXPECT_EQ(full.node_index, std::optional<std::uint32_t>{283});
+  EXPECT_EQ(full.light, key(0x800));
+  EXPECT_EQ(full.model, std::optional<std::string_view>{"Lights\\FireAddOn.nif"});
+  EXPECT_EQ(full.master_particle_cap, std::optional<std::uint16_t>{283});
+  EXPECT_EQ(full.flags, std::optional<std::uint16_t>{2});
+
+  const auto without_light = fo4::env::decode_add_on_node(env, *env.winner(key(0x881)));
+  EXPECT_FALSE(without_light.light.has_value());
+  EXPECT_EQ(without_light.model, std::optional<std::string_view>{"Lights\\Klaxon.nif"});
+
+  const auto without_model = fo4::env::decode_add_on_node(env, *env.winner(key(0x882)));
+  EXPECT_EQ(without_model.light, key(0x801));
+  EXPECT_FALSE(without_model.model.has_value());
+
+  const auto without_dnam = fo4::env::decode_add_on_node(env, *env.winner(key(0x883)));
+  EXPECT_FALSE(without_dnam.master_particle_cap.has_value());
+  EXPECT_FALSE(without_dnam.flags.has_value());
+
+  EXPECT_THROW(fo4::env::decode_add_on_node(env, *env.winner(key(0x884))), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::decode_add_on_node(env, *env.winner(key(0x885))), fo4::env::WorldDecodeError);
+}
+
 TEST_F(BaseRecordsTest, DecodesSkyRecords) {
   const std::vector<std::filesystem::path> paths{path_};
   const auto env = fo4::env::Environment::load(paths);
@@ -288,6 +336,13 @@ TEST_F(BaseRecordsTest, DecodesSkyRecords) {
   EXPECT_EQ(lgtm.lighting->fog_far_color->red, 0x0A);
   EXPECT_EQ(lgtm.lighting->light_fade_end, std::optional<float>{200.0f});
   EXPECT_FALSE(lgtm.lighting->inherits.has_value());
+  EXPECT_EQ(lgtm.lighting->near_height_mid, std::optional<float>{300.0f});
+  EXPECT_EQ(lgtm.lighting->near_height_range, std::optional<float>{400.0f});
+  ASSERT_TRUE(lgtm.lighting->fog_color_high_far.has_value());
+  EXPECT_EQ(lgtm.lighting->fog_color_high_far->blue, 0x66);
+  EXPECT_EQ(lgtm.lighting->high_density_scale, std::optional<float>{2.0f});
+  EXPECT_EQ(lgtm.lighting->fog_high_far_scale, std::optional<float>{6.0f});
+  EXPECT_EQ(lgtm.lighting->far_height_range, std::optional<float>{600.0f});
   EXPECT_EQ(lgtm.god_rays, key(0x852));
 
   const auto climate = fo4::env::decode_climate(env, *env.winner(key(0x840)));
@@ -359,9 +414,9 @@ TEST_F(BaseRecordsTest, DecodesStaticCollectionsAndListsPluginRecords) {
   EXPECT_THROW(fo4::env::decode_static_collection(env, *env.winner(key(0x861))), fo4::env::WorldDecodeError);
 
   const auto records = env.plugin_records(0);
-  ASSERT_EQ(records.size(), 18u);
+  ASSERT_EQ(records.size(), 24u);
   EXPECT_EQ(records.front()->record->form_key, key(0x800));
-  EXPECT_EQ(records.back()->record->form_key, key(0x861));
+  EXPECT_EQ(records.back()->record->form_key, key(0x885));
   EXPECT_TRUE(env.plugin_records(1).empty());
 }
 
@@ -379,7 +434,7 @@ TEST_F(BaseRecordsTest, CApiDecodesBaseRecords) {
   const radicle_record** records = nullptr;
   size_t count = 0;
   ASSERT_EQ(radicle_env_plugin_records(env, 0, &records, &count), RADICLE_STATUS_OK);
-  EXPECT_EQ(count, 18u);
+  EXPECT_EQ(count, 24u);
   radicle_free_record_array(records);
   EXPECT_EQ(radicle_env_plugin_records(env, 1, &records, &count), RADICLE_STATUS_INVALID_ARGUMENT);
 
@@ -389,6 +444,49 @@ TEST_F(BaseRecordsTest, CApiDecodesBaseRecords) {
   EXPECT_EQ(light.has_weight, 1);
   EXPECT_STREQ(light.gobo, "Gobo.dds");
   EXPECT_EQ(radicle_light_get_info(env, record(0x802), &light), RADICLE_STATUS_PARSE_ERROR);
+
+  radicle_add_on_node_info addon{};
+  ASSERT_EQ(radicle_add_on_node_get_info(env, record(0x880), &addon), RADICLE_STATUS_OK);
+  EXPECT_EQ(addon.has_node_index, 1);
+  EXPECT_EQ(addon.node_index, 283u);
+  EXPECT_STREQ(addon.light.plugin, "Base.esm");
+  EXPECT_EQ(addon.light.local_id, 0x800u);
+  EXPECT_STREQ(addon.model, "Lights\\FireAddOn.nif");
+  EXPECT_EQ(addon.has_dnam, 1);
+  EXPECT_EQ(addon.master_particle_cap, 283);
+  EXPECT_EQ(addon.flags, 2);
+  ASSERT_EQ(radicle_add_on_node_get_info(env, record(0x881), &addon), RADICLE_STATUS_OK);
+  EXPECT_EQ(addon.light.plugin, nullptr);
+  EXPECT_STREQ(addon.model, "Lights\\Klaxon.nif");
+  EXPECT_EQ(addon.flags, 3);
+  ASSERT_EQ(radicle_add_on_node_get_info(env, record(0x882), &addon), RADICLE_STATUS_OK);
+  EXPECT_EQ(addon.light.local_id, 0x801u);
+  EXPECT_EQ(addon.model, nullptr);
+  ASSERT_EQ(radicle_add_on_node_get_info(env, record(0x883), &addon), RADICLE_STATUS_OK);
+  EXPECT_EQ(addon.has_dnam, 0);
+  EXPECT_EQ(radicle_add_on_node_get_info(env, record(0x884), &addon), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(radicle_add_on_node_get_info(env, record(0x885), &addon), RADICLE_STATUS_PARSE_ERROR);
+
+  // Invariant: a non-ADDN record must fail as a parse error and leave the out struct untouched.
+  const char kUntouchedModel[] = "Untouched.nif";
+  radicle_add_on_node_info wrong{};
+  wrong.has_node_index = 7;
+  wrong.node_index = 0x1234u;
+  wrong.light.plugin = "Untouched.esp";
+  wrong.light.local_id = 0x55u;
+  wrong.model = kUntouchedModel;
+  wrong.has_dnam = 1;
+  wrong.master_particle_cap = 11;
+  wrong.flags = 12;
+  EXPECT_EQ(radicle_add_on_node_get_info(env, record(0x800), &wrong), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(wrong.has_node_index, 7);
+  EXPECT_EQ(wrong.node_index, 0x1234u);
+  EXPECT_STREQ(wrong.light.plugin, "Untouched.esp");
+  EXPECT_EQ(wrong.light.local_id, 0x55u);
+  EXPECT_TRUE(wrong.model == kUntouchedModel);
+  EXPECT_EQ(wrong.has_dnam, 1);
+  EXPECT_EQ(wrong.master_particle_cap, 11);
+  EXPECT_EQ(wrong.flags, 12);
 
   radicle_bendable_spline_info spline{};
   ASSERT_EQ(radicle_bendable_spline_get_info(env, record(0x810), &spline), RADICLE_STATUS_OK);

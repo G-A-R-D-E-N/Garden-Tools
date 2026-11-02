@@ -96,7 +96,7 @@ TEST(ExteriorCellGridRealData, ReproducesShippedWorldspaceLabels) {
     const auto path = std::filesystem::path{dir} / name;
     if (!std::filesystem::exists(path)) continue;
 
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     for (const auto& group : plugin.groups) {
       if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top) ||
           group.header.top_label() != k_wrld) {

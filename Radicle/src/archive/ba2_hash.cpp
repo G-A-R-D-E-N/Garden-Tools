@@ -7,8 +7,6 @@
 namespace fo4::archive {
 namespace {
 
-constexpr std::size_t k_max_path_length = 260;
-
 std::array<std::uint32_t, 256> build_table() {
   std::array<std::uint32_t, 256> table{};
   for (std::uint32_t i = 0; i < 256; ++i) {
@@ -55,7 +53,7 @@ std::string normalize_ba2_name(std::string_view path) {
 }
 
 std::string normalize_ba2_path(std::string_view path) {
-  if (path.empty() || path.size() >= k_max_path_length) {
+  if (path.empty() || path.size() >= k_max_ba2_path_length) {
     return ".";
   }
   return normalize_ba2_name(path);
@@ -71,8 +69,6 @@ Ba2Hashes compute_ba2_hashes(std::string_view path) {
   const auto parent = sep == std::string::npos ? "" : normalized.substr(0, sep);
   const auto begin = sep == std::string::npos ? std::size_t{0} : sep + 1;
   const auto dot = normalized.rfind('.');
-  // A dot inside the directory part does not start an extension; treat it as
-  // absent rather than computing a negative-length stem.
   const auto end = (dot != std::string::npos && dot > begin) ? dot : std::string::npos;
   const auto stem = end == std::string::npos ? normalized.substr(begin)
                                              : normalized.substr(begin, end - begin);

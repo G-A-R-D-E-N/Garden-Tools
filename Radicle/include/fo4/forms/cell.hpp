@@ -82,4 +82,6 @@ const Record* find_exterior_cell(const Plugin& plugin,
                                  std::int32_t x,
                                  std::int32_t y);
 
+const Record* find_persistent_exterior_cell(const Plugin& plugin, const FormKey& worldspace);
+
 }  // namespace fo4::forms

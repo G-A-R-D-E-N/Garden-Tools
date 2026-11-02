@@ -318,6 +318,16 @@ const Record* find_exterior_cell(const Plugin& plugin,
   return found;
 }
 
+const Record* find_persistent_exterior_cell(const Plugin& plugin, const FormKey& worldspace) {
+  const auto* world_children = worldspace_children(plugin, worldspace);
+  if (world_children == nullptr) return nullptr;
+  for (const auto& child : world_children->children) {
+    const auto* record = std::get_if<Record>(&child);
+    if (record != nullptr && record->header.signature == k_cell) return record;
+  }
+  return nullptr;
+}
+
 FormKey create_exterior_cell(Plugin& plugin, const ExteriorCellCreation& creation) {
   const auto layout = exterior_cell_grid_layout(creation.x, creation.y);
   if (creation.editor_id.has_value() &&

@@ -23,6 +23,10 @@ enum class ScalarStorage {
   i8,
   i16,
   zstring,
+  // Constraint: fixed_string is whole-payload only and its width is the descriptor's payload_size.
+  fixed_string,
+  // Constraint: bytes is whole-payload only, has no storage width, and carries its value as lowercase hex; an empty value is a zero-byte payload.
+  bytes,
 };
 
 enum class ScalarPresentation {
@@ -60,6 +64,8 @@ struct ScalarDescriptor {
   std::size_t minimum_payload_size{0};
   std::span<const ScalarName> names{};
   std::uint16_t min_form_version{0};
+  bool localized{false};
+  std::uint16_t max_form_version{0};
 };
 
 struct ScalarFieldDescriptor {
@@ -74,6 +80,10 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+// Constraint: xEdit wbModelInfoDecider (Core/wbDefinitionsCommon.pas:5646) allows at
+// most eight counter words, and a larger first word must be a different format.
+inline constexpr std::size_t k_max_header_counters = 8;
+
 struct CountedArrayDescriptor {
   Signature record{};
   std::string_view path;
@@ -81,6 +91,11 @@ struct CountedArrayDescriptor {
   Signature subrecord{};
   Signature count_subrecord{};
   std::size_t stride{0};
+  // Constraint: segment_count 0 means a plain payload; otherwise the array is one of
+  // segment_count header-counted segments that must share one payload.
+  std::size_t count_word{0};
+  std::size_t segment_index{0};
+  std::size_t segment_count{0};
 };
 
 class CountedArrayError : public std::runtime_error {
@@ -92,8 +107,20 @@ struct SubrecordGroupMemberDescriptor {
   Signature subrecord{};
   bool required{false};
   bool repeatable{false};
+  // Constraint: payload_size 0 means a variable-length member and skips the size check.
   std::size_t payload_size{0};
   std::span<const std::uint8_t> default_payload{};
+  bool localized{false};
+  // Constraint: a skippable member may appear before the first leader, where it belongs to no run.
+  bool skippable{false};
+  // Invariant: a leading member is optional, precedes the leader in declaration and data order, and belongs to the run of the leader that follows it.
+  bool leading{false};
+};
+
+// Invariant: count_member names one of the group's own members whose whole four-byte payload counts the nested runs that follow it inside the enclosing run; an empty count_member means each run of that shape stands on its own, uncounted.
+struct SubrecordGroupRunDescriptor {
+  Signature count_member{};
+  std::span<const SubrecordGroupMemberDescriptor> members{};
 };
 
 struct SubrecordGroupDescriptor {
@@ -103,6 +130,8 @@ struct SubrecordGroupDescriptor {
   Signature count_subrecord{};
   std::span<const SubrecordGroupMemberDescriptor> members{};
   std::span<const Signature> successors{};
+  SubrecordGroupRunDescriptor run{};
+  bool requires_existing_count{false};
 };
 
 class SubrecordGroupError : public std::runtime_error {
@@ -121,11 +150,18 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept;
 std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
                                                                std::string_view path) noexcept;
 bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept;
+
+// Constraint: nullopt when the payload is not the modelled arm, never a partial read.
+std::optional<SegmentSpan> header_segment(std::span<const std::byte> payload,
+                                          Signature record,
+                                          Signature subrecord,
+                                          const FieldAddress& address);
 std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature record,
                                                                    std::string_view path) noexcept;
 std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
                                                                    Signature subrecord) noexcept;
 bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept;
+bool is_derived_scalar_row(Signature record, Signature subrecord) noexcept;
 
 // The bytes of one field within a subrecord payload. Empty when an embedded
 // field lies past the end of a legitimately shorter payload -- absent, not

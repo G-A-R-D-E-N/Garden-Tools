@@ -49,6 +49,13 @@ typedef struct radicle_record_info {
   int16_t bounds_max[3];
 } radicle_record_info;
 
+typedef struct radicle_reference_hit {
+  radicle_form_key record;
+  size_t plugin_index;
+  char subrecord[5];
+  size_t offset;
+} radicle_reference_hit;
+
 /* Paths lowest priority first; any unreadable, duplicate or self-conflicting plugin fails the load. */
 RADICLE_API radicle_status radicle_env_load(const char* const* paths,
                                             size_t count,
@@ -90,6 +97,18 @@ RADICLE_API radicle_status radicle_env_winners_of(const radicle_env* env,
                                                   const radicle_record*** out_records,
                                                   size_t* out_count);
 RADICLE_API void radicle_free_record_array(const radicle_record** records);
+
+/* Referencing records in load order, `plugin_index` the version holding the link; an unknown key is OK with NULL/0. Free with radicle_free_reference_hits. */
+RADICLE_API radicle_status radicle_env_referenced_by(const radicle_env* env,
+                                                     radicle_form_key key,
+                                                     radicle_reference_hit** out_hits,
+                                                     size_t* out_count);
+/* Targets of the key's form links, one hit per link; `record` is the target. Empty results as radicle_env_referenced_by. */
+RADICLE_API radicle_status radicle_env_references_from(const radicle_env* env,
+                                                       radicle_form_key key,
+                                                       radicle_reference_hit** out_hits,
+                                                       size_t* out_count);
+RADICLE_API void radicle_free_reference_hits(radicle_reference_hit* hits);
 
 /* Requires radicle_free_string_array; one tab-separated finding per string: code, severity, plugin, record, subrecord, offset, target, message. NULL plugin checks every plugin, limit 0 is unlimited. */
 RADICLE_API radicle_status radicle_env_check_errors(const radicle_env* env,
@@ -154,69 +173,17 @@ typedef struct radicle_cell_lighting {
   uint32_t inherits;
 } radicle_cell_lighting;
 
-typedef struct radicle_cell_info {
-  int32_t has_flags;
-  uint16_t flags;
-  int32_t has_grid;
-  int32_t grid_x;
-  int32_t grid_y;
-  int32_t has_land_flags;
-  uint8_t land_flags;
-  int32_t has_lighting;
-  radicle_cell_lighting lighting;
-  radicle_form_key lighting_template;
-  int32_t has_water_height;
-  float water_height;
-  radicle_form_key image_space;
-  radicle_form_key encounter_zone;
-  radicle_form_key location;
-  radicle_form_key worldspace;
-  radicle_form_key water;
-} radicle_cell_info;
-
-typedef struct radicle_cell_child {
-  const radicle_record* record;
-  int32_t persistent;
-} radicle_cell_child;
-
+/* XCLL members past Inherits; each group requires a longer XCLL payload, else its has_* stays 0. */
 /* RADICLE_STATUS_PARSE_ERROR for a wrong signature or a malformed present subrecord. */
 RADICLE_API radicle_status radicle_worldspace_get_info(const radicle_env* env,
                                                        const radicle_record* record,
                                                        radicle_worldspace_info* out_info);
-RADICLE_API radicle_status radicle_cell_get_info(const radicle_env* env,
-                                                 const radicle_record* record,
-                                                 radicle_cell_info* out_info);
-
 /* Immediate group type (fo4 GroupType values) and the enclosing WRLD/CELL; absent keys have plugin == NULL. */
 RADICLE_API radicle_status radicle_record_get_container(const radicle_env* env,
                                                         const radicle_record* record,
                                                         int32_t* out_group_type,
                                                         radicle_form_key* out_worldspace,
                                                         radicle_form_key* out_cell);
-
-/* Persistent top CELL from the highest-priority plugin; RADICLE_STATUS_NOT_FOUND when absent. */
-RADICLE_API radicle_status radicle_env_worldspace_top_cell(const radicle_env* env,
-                                                           radicle_form_key worldspace,
-                                                           const radicle_record** out_record);
-/* Block/sub-block CELLs, each from the highest plugin listing it; ascending plugin, then on-disk. */
-RADICLE_API radicle_status radicle_env_worldspace_cells(const radicle_env* env,
-                                                        radicle_form_key worldspace,
-                                                        const radicle_record*** out_records,
-                                                        size_t* out_count);
-/* Winning CELLs whose winning version sits in an interior sub-block. */
-RADICLE_API radicle_status radicle_env_interior_cells(const radicle_env* env,
-                                                      const radicle_record*** out_records,
-                                                      size_t* out_count);
-/* Children merged low to high priority; free with radicle_free_cell_children. */
-RADICLE_API radicle_status radicle_env_cell_children(const radicle_env* env,
-                                                     radicle_form_key cell,
-                                                     radicle_cell_child** out_children,
-                                                     size_t* out_count);
-RADICLE_API void radicle_free_cell_children(radicle_cell_child* children);
-/* LAND child of the highest-priority CELL version holding one; RADICLE_STATUS_NOT_FOUND otherwise. */
-RADICLE_API radicle_status radicle_env_cell_landscape(const radicle_env* env,
-                                                      radicle_form_key cell,
-                                                      const radicle_record** out_record);
 
 typedef struct radicle_linked_ref {
   radicle_form_key keyword;
@@ -386,6 +353,19 @@ typedef struct radicle_placed_ref {
   const radicle_script* scripts;
   size_t script_count;
   void* internal;
+  int32_t has_emittance;
+  radicle_form_key emittance;
+  int32_t has_radius;
+  float radius;
+  int32_t has_light_data;
+  float light_fov;
+  float light_fade;
+  float light_end_distance_cap;
+  float light_shadow_depth_bias;
+  int32_t has_light_near_clip;
+  float light_near_clip;
+  int32_t has_light_volumetric_intensity;
+  float light_volumetric_intensity;
 } radicle_placed_ref;
 
 /* RADICLE_STATUS_PARSE_ERROR for a non-placed record or a malformed present subrecord. */
@@ -507,6 +487,12 @@ typedef struct radicle_ba2_entry_info {
   uint8_t tile_mode;
 } radicle_ba2_entry_info;
 
+typedef struct radicle_ba2_file {
+  const char* path;
+  const uint8_t* data;
+  size_t size;
+} radicle_ba2_file;
+
 typedef enum radicle_asset_origin {
   RADICLE_ASSET_LOOSE = 0,
   RADICLE_ASSET_ARCHIVE = 1
@@ -517,6 +503,16 @@ typedef struct radicle_asset_location {
   size_t archive_index;
   size_t entry_index;
 } radicle_asset_location;
+
+/* Entry paths must stay valid until radicle_asset_list_destroy. */
+typedef struct radicle_asset_list radicle_asset_list;
+
+typedef struct radicle_asset_list_entry {
+  const char* path;
+  radicle_asset_location location;
+  uint64_t size;
+  int32_t shadowed;
+} radicle_asset_list_entry;
 
 RADICLE_API radicle_status radicle_ba2_open(const char* path, radicle_ba2** out_ba2);
 RADICLE_API void radicle_ba2_close(radicle_ba2* ba2);
@@ -530,6 +526,13 @@ RADICLE_API radicle_status radicle_ba2_extract(const radicle_ba2* ba2,
                                                uint8_t** out_bytes,
                                                size_t* out_size);
 
+RADICLE_API radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
+                                                     size_t file_count,
+                                                     uint32_t version,
+                                                     int32_t compress,
+                                                     uint8_t** out_bytes,
+                                                     size_t* out_size);
+
 RADICLE_API radicle_status radicle_archive_load_order(const char* data_dir,
                                                       const char* const* ini_archives,
                                                       size_t ini_count,
@@ -541,14 +544,33 @@ RADICLE_API radicle_status radicle_assets_open(const char* data_dir,
                                                const char* const* archive_paths,
                                                size_t archive_count,
                                                radicle_assets** out_assets);
+/* roots must be ordered high to low priority; empty root entries are skipped. */
+RADICLE_API radicle_status radicle_assets_open_roots(const char* const* root_paths,
+                                                     size_t root_count,
+                                                     const char* const* archive_paths,
+                                                     size_t archive_count,
+                                                     radicle_assets** out_assets);
 RADICLE_API void radicle_assets_destroy(radicle_assets* assets);
 RADICLE_API size_t radicle_assets_archive_count(const radicle_assets* assets);
+/* Invariant: empty and duplicate entries are dropped, so this can be fewer than the count radicle_assets_open_roots was given. */
+RADICLE_API size_t radicle_assets_root_count(const radicle_assets* assets);
 RADICLE_API radicle_status radicle_assets_get_archive(const radicle_assets* assets,
                                                       size_t index,
                                                       const radicle_ba2** out_ba2);
 RADICLE_API radicle_status radicle_assets_locate(const radicle_assets* assets,
                                                  const char* path,
                                                  radicle_asset_location* out_location);
+/* Sorted by path; a winner must precede its shadowed copies; NULL or empty prefix and extension mean no filter; a prefix that normalizes to nothing is INVALID_ARGUMENT. */
+RADICLE_API radicle_status radicle_assets_list(const radicle_assets* assets,
+                                               const char* prefix,
+                                               const char* extension,
+                                               int32_t include_shadowed,
+                                               radicle_asset_list** out_list);
+RADICLE_API size_t radicle_asset_list_count(const radicle_asset_list* list);
+RADICLE_API radicle_status radicle_asset_list_get(const radicle_asset_list* list,
+                                                  size_t index,
+                                                  radicle_asset_list_entry* out_entry);
+RADICLE_API void radicle_asset_list_destroy(radicle_asset_list* list);
 RADICLE_API radicle_status radicle_assets_read(const radicle_assets* assets,
                                                const char* path,
                                                uint8_t** out_bytes,
@@ -567,6 +589,17 @@ typedef enum radicle_placed_copy_status {
   RADICLE_PLACED_COPY_ALREADY_EXISTS = 2
 } radicle_placed_copy_status;
 
+typedef enum radicle_placed_move_status {
+  RADICLE_PLACED_MOVE_MOVED = 0,
+  RADICLE_PLACED_MOVE_RELOCATED = 1
+} radicle_placed_move_status;
+
+typedef enum radicle_record_copy_status {
+  RADICLE_RECORD_COPY_INSERTED = 0,
+  RADICLE_RECORD_COPY_REPLACED = 1,
+  RADICLE_RECORD_COPY_ALREADY_EXISTS = 2
+} radicle_record_copy_status;
+
 RADICLE_API radicle_status radicle_plugin_create(const char* filename, radicle_plugin** out_plugin);
 RADICLE_API radicle_status radicle_plugin_copy_placed_ref_override(radicle_plugin* plugin,
                                                                    const radicle_env* env,
@@ -577,10 +610,30 @@ RADICLE_API radicle_status radicle_plugin_copy_placed_ref_new(radicle_plugin* pl
                                                               const radicle_env* env,
                                                               const radicle_record* record,
                                                               radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_plugin_copy_record_as_new(radicle_plugin* destination,
+                                                             const radicle_plugin* source,
+                                                             radicle_form_key record,
+                                                             const char* editor_id,
+                                                             const char* remove_prefix,
+                                                             const char* remove_suffix,
+                                                             const char* prefix,
+                                                             const char* suffix,
+                                                             radicle_form_key* out_key);
+/* The key must be owned by source; overwrite replaces an existing copy in destination. */
+RADICLE_API radicle_status radicle_plugin_copy_record_override(radicle_plugin* destination,
+                                                               const radicle_plugin* source,
+                                                               radicle_form_key record,
+                                                               int32_t overwrite,
+                                                               radicle_record_copy_status* out_status);
 RADICLE_API radicle_status radicle_plugin_set_placed_transform(radicle_plugin* plugin,
                                                                radicle_form_key reference,
                                                                const float position[3],
                                                                const float rotation[3]);
+RADICLE_API radicle_status radicle_plugin_move_placed_ref(radicle_plugin* plugin,
+                                                          radicle_form_key reference,
+                                                          const float position[3],
+                                                          const float rotation[3],
+                                                          radicle_placed_move_status* out_status);
 RADICLE_API radicle_status radicle_plugin_set_placed_scale(radicle_plugin* plugin,
                                                            radicle_form_key reference,
                                                            int32_t has_scale,
@@ -676,12 +729,22 @@ RADICLE_API radicle_status radicle_plugin_formlink_list_clear(radicle_plugin* pl
                                                               radicle_form_key key,
                                                               const char* path);
 
+/* Constraint: sets (present != 0) or clears one optional group member; group_path is
+   "<signature>\\<path>" and member must be the four-byte subrecord signature. */
+RADICLE_API radicle_status radicle_plugin_subrecord_group_member_set(radicle_plugin* plugin,
+                                                                    radicle_form_key key,
+                                                                    const char* group_path,
+                                                                    size_t index,
+                                                                    const char* member,
+                                                                    int32_t present);
+
 RADICLE_API radicle_status radicle_env_plugin_records(const radicle_env* env,
                                                       size_t plugin_index,
                                                       const radicle_record*** out_records,
                                                       size_t* out_count);
 
 #include "fo4/c_api_records.h"
+#include "fo4/c_api_cell.h"
 
 #ifdef __cplusplus
 }

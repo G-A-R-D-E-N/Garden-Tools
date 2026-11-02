@@ -1,12 +1,15 @@
 #include "quest_structure_fixture.hpp"
 #include "fo4/c_api_quest.h"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/quest/structure.hpp"
+#include "fo4/schema/scalar.hpp"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -51,7 +54,7 @@ private:
 }
 
 TEST(QuestStructure, StoredValuesAndScopedConditionsSurvivePluginRelease) {
-  const auto plugin = quest_structure_plugin();
+  auto plugin = quest_structure_plugin();
   const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
   ASSERT_TRUE(native.stages_supported);
   ASSERT_TRUE(native.objectives_supported);
@@ -577,8 +580,50 @@ TEST(QuestStructure, RemovingObjectiveWithUnresolvedTargetKeywordSucceeds) {
   EXPECT_TRUE(fo4::forms::decode_quest_objectives(plugin, structure_quest_key()).objectives.empty());
 }
 
+TEST(QuestStructure, NextAliasIdRowReadsAndWritesTheStoredCounter) {
+  auto plugin = quest_structure_plugin();
+  const auto field = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("QUST"),
+                                                          "QUST\\NextAliasID");
+  ASSERT_TRUE(field.has_value());
+  EXPECT_EQ(field->scalar.subrecord, fo4::Signature::from_string("ANAM"));
+  EXPECT_EQ(field->scalar.storage, fo4::schema::ScalarStorage::u32);
+  EXPECT_EQ(fo4::record_field_count(plugin, structure_quest_key(), *field), 1u);
+
+  const auto expect_stored = [&](const fo4::Plugin& current, std::uint8_t expected) {
+    const auto reread = fo4::read_plugin(fo4::write_plugin(current), "Quests.esp");
+    const auto* record = fo4::find_record(reread, structure_quest_key());
+    ASSERT_NE(record, nullptr);
+    const auto& quest = *record;
+    const auto bytes = std::find_if(quest.subrecords.begin(), quest.subrecords.end(),
+                                    [](const auto& member) {
+                                      return member.signature == fo4::Signature::from_string("ANAM");
+                                    });
+    ASSERT_NE(bytes, quest.subrecords.end());
+    EXPECT_EQ(fo4::schema::scalar_field_bytes(bytes->data, field->scalar).size(), 4u);
+    EXPECT_EQ(std::to_integer<std::uint8_t>(bytes->data[0]), expected);
+    EXPECT_EQ(std::to_integer<std::uint8_t>(bytes->data[1]), 0);
+    EXPECT_TRUE(fo4::quest::read_quest_structure(reread, structure_quest_key()).aliases_supported);
+  };
+
+  expect_stored(plugin, 5);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "1"),
+            fo4::ScalarMutationStatus::next_alias_id_too_low);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "2"),
+            fo4::ScalarMutationStatus::next_alias_id_too_low);
+  expect_stored(plugin, 5);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "3"),
+            fo4::ScalarMutationStatus::updated);
+  expect_stored(plugin, 3);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "9"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "9"),
+            fo4::ScalarMutationStatus::unchanged);
+  expect_stored(plugin, 9);
+}
+
 TEST(QuestStructure, MissingQuestReturnsNotFound) {
-  const auto plugin = quest_structure_plugin();
+  auto plugin = quest_structure_plugin();
   const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
   const auto dir = std::filesystem::temp_directory_path() / ("quest_structure_missing_" + std::to_string(id));
   std::filesystem::create_directories(dir);

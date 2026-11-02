@@ -91,7 +91,7 @@ std::vector<std::byte> plugin_with_vmad_record(std::string_view signature,
 }
 
 void expect_master_remap_refused(const std::vector<std::byte>& bytes) {
-  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(bytes, "Patch.esp");
   const auto before = fo4::write_plugin(plugin);
   EXPECT_THROW(
       fo4::remap_plugin_masters(
@@ -447,7 +447,7 @@ TEST(Vmad, TrailingBytesFailClosedForMasterRemap) {
   expect_master_remap_refused(plugin_with_vmad_record("ACTI", 0x03000800, vmad));
 }
 
-TEST(Vmad, PartialParseFailureAfterDiscoveredFormIdRefusesWholeRemap) {
+TEST(Vmad, PartialParseFailureKeepsDiscoveredLinksButRefusesRemap) {
   fo4::test::ByteWriter vmad;
   vmad.u16(5);
   vmad.u16(2);
@@ -469,9 +469,11 @@ TEST(Vmad, PartialParseFailureAfterDiscoveredFormIdRefusesWholeRemap) {
   vmad.raw(std::string_view{"x"});
 
   const auto bytes = plugin_with_vmad_record("ACTI", 0x03000800, vmad);
-  EXPECT_TRUE(vmad_hits(fo4::read_plugin(bytes, "Patch.esp"),
-                        fo4::FormKey::parse("000800:Patch.esp"))
-                  .empty());
+  const auto plugin =
+      fo4::read_plugin(bytes, "Patch.esp");
+  const auto hits = vmad_hits(plugin, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_EQ(hits.size(), 1u);
+  EXPECT_EQ(hits[0].key, fo4::FormKey::parse("00009A:RadiationOverhaul.esp"));
   expect_master_remap_refused(bytes);
 }
 
@@ -480,7 +482,7 @@ TEST(Vmad, TermFragmentsRemapAndConsumeTheWholePayload) {
   const auto bytes = plugin_with_vmad_record("TERM", 0x03000820, vmad);
   const auto key = fo4::FormKey::parse("000820:Patch.esp");
 
-  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(bytes, "Patch.esp");
   const auto hits = vmad_hits(plugin, key);
   ASSERT_EQ(hits.size(), 1u);
   EXPECT_EQ(hits[0].key, fo4::FormKey::parse("00009A:RadiationOverhaul.esp"));
@@ -508,7 +510,7 @@ TEST(Vmad, TruncatedPayloadIsCaveatedInDetailedCollection) {
   vmad.u16(20);
   vmad.raw(std::string_view{"x"});
 
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
   EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
@@ -530,7 +532,7 @@ TEST(Vmad, TrailingDataKeepsPartialLinksButIsCaveated) {
   vmad.u32(0x0200009B);
   vmad.u32(0x0200009C);
 
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
@@ -553,7 +555,7 @@ TEST(Vmad, CompletePayloadIsNotCaveated) {
   vmad.u8(1);
   object_v2(vmad, 0x0200009A);
 
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
   EXPECT_EQ(collection.records_with_incomplete_vmad, 0u);
@@ -581,9 +583,38 @@ TEST(Vmad, NestedStructPropertyFailsClosedInTheWalker) {
   vmad.u8(1);
   object_v2(vmad, 0x0200009A);
 
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
   EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
   EXPECT_TRUE(vmad_hits(plugin, fo4::FormKey::parse("000800:Patch.esp")).empty());
+}
+
+TEST(Vmad, SupportedLinksBeforeAnUnsupportedPropertyAreKept) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "DemoScript");
+  vmad.u8(0);
+  vmad.u16(2);
+  wstring(vmad, "Target");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+  wstring(vmad, "Anything");
+  vmad.u8(6);
+  vmad.u8(1);
+  vmad.u32(1);
+
+  const auto plugin = fo4::read_plugin(
+      plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000800:Patch.esp");
+  const auto collection = fo4::collect_form_links_detailed(plugin);
+  EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
+  ASSERT_EQ(collection.unsupported_vmad_records.size(), 1u);
+  EXPECT_EQ(collection.unsupported_vmad_records[0], key);
+  const auto hits = vmad_hits(plugin, key);
+  ASSERT_EQ(hits.size(), 1u);
+  EXPECT_EQ(hits[0].key, fo4::FormKey::parse("00009A:RadiationOverhaul.esp"));
 }

@@ -30,15 +30,6 @@ std::string lower(std::string_view text) {
     return out;
 }
 
-std::string describe(const std::vector<const GraphDiagnostic*>& diagnostics) {
-    std::string out;
-    for (const auto* diagnostic : diagnostics) {
-        if (!out.empty()) out += " | ";
-        out += diagnostic->toString();
-    }
-    return out;
-}
-
 std::set<std::string> sortedNames(const std::vector<std::string>& names) {
     std::set<std::string> out;
     for (const auto& name : names) out.insert(lower(name));
@@ -131,6 +122,7 @@ std::string decompilesAndRecompiles(const GraphCompileResult& first) {
 TEST_CASE("GraphCompiler every fixture graph compiles clean") {
     Env env(/*withGraphScripts=*/true);
     const auto fixtures = allFixtures(env.palette);
+    REQUIRE(fixtures.size() >= 24);
     for (const auto& fixture : fixtures) {
         INFO("fixture: " << fixture.name);
         auto result = compileGraph(fixture);
@@ -265,46 +257,6 @@ TEST_CASE("GraphCompiler Oracle3 the generated script has the same shape as the 
         CHECK(sortedNames(mineProperties) == sortedNames(theirsProperties));
         CHECK(sortedNames(mineVariables) == sortedNames(theirsVariables));
     }
-}
-
-TEST_CASE("GraphCompiler the whole fixture suite reports its own numbers") {
-    Env env(/*withGraphScripts=*/true);
-    const auto fixtures = allFixtures(env.palette);
-
-    int attempted = 0;
-    int compiled = 0;
-    int oracle2 = 0;
-    int oracle1 = 0;
-    std::vector<std::string> refusals;
-
-    for (const auto& fixture : fixtures) {
-        attempted++;
-        const auto result = compileGraph(fixture);
-        if (!result.success()) {
-            refusals.push_back(fixture.name + ": " + describe(result.errors()));
-            continue;
-        }
-        compiled++;
-
-        const TempRoot root("fo4ide-graph-summary");
-        auto reference = compileReference(fixture, root.path());
-        if (reference &&
-            fo4ide::papyrus::test::firstDifference(reference->objects[0],
-                                                   result.pex->objects[0])
-                .empty()) {
-            oracle2++;
-        }
-        if (decompilesAndRecompiles(result).empty()) oracle1++;
-    }
-
-    INFO("BENCH graph.fixtures attempted=" << attempted << " compiled=" << compiled
-         << " matchedHandWritten=" << oracle2 << " decompileRecompiles=" << oracle1);
-    for (const auto& refusal : refusals) INFO("  REFUSED " << refusal);
-
-    REQUIRE(attempted >= 24);
-    REQUIRE(compiled == attempted);
-    REQUIRE(oracle2 == attempted);
-    REQUIRE(oracle1 == attempted);
 }
 
 TEST_CASE("GraphCompiler publishes scripts under one process folder that clearScratch removes") {

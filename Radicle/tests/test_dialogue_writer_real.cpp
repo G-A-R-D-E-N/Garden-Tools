@@ -197,6 +197,10 @@ TEST_P(DialogueWriterReal, CappedFieldSceneAndSubrecordEditsKeepEveryOtherRecord
           }
           ASSERT_EQ(fo4::set_record_string(plugin, key, field, index, "radicle edit"), fo4::ScalarMutationStatus::updated);
           want[slot.subrecord] = fo4::schema::encode_scalar("radicle edit", field.scalar);
+        } else if (field.scalar.storage == fo4::schema::ScalarStorage::bytes) {
+          const std::string value = fo4::schema::decode_scalar(want[slot.subrecord], field.scalar) == "00" ? "00ff" : "00";
+          ASSERT_EQ(fo4::set_record_scalar(plugin, key, field, index, value), fo4::ScalarMutationStatus::updated);
+          want[slot.subrecord] = fo4::schema::encode_scalar(value, field.scalar);
         } else {
           const auto existing = fo4::schema::scalar_slot_bytes(want[slot.subrecord], slot, field.scalar);
           const std::string value = fo4::schema::encode_scalar("1", field.scalar) == Bytes(existing.begin(), existing.end()) ? "0" : "1";

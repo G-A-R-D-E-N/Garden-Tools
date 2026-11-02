@@ -1,7 +1,6 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
-#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -10,8 +9,9 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
+
+#include "RadiclePluginSupport.hpp"
 
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/subrecord_authoring.hpp>
@@ -32,38 +32,16 @@ bool elementDeltaArgument(const nlohmann::json& args, std::size_t index, std::in
     return true;
 }
 
-bool parseIndex(std::string_view text, std::size_t& value) {
-    if (text.empty()) return false;
-    const auto* begin = text.data();
-    const auto* end = begin + text.size();
-    const auto [ptr, error] = std::from_chars(begin, end, value, 10);
-    return error == std::errc{} && ptr == end;
-}
-
-struct AuthoringPath {
-    fo4::Signature signature{};
-    std::optional<std::size_t> occurrence;
-};
-
-std::optional<AuthoringPath> authoringPath(const fo4::Record& record, std::string_view path) {
-    constexpr std::string_view prefix = "Authoring\\";
-    if (!path.starts_with(prefix)) return std::nullopt;
-    path.remove_prefix(prefix.size());
-    if (path.size() < 4) return std::nullopt;
-    AuthoringPath result{fo4::Signature::from_string(path.substr(0, 4)), std::nullopt};
-    if (path.size() > 4) {
-        if (path[4] != '[' || path.back() != ']') return std::nullopt;
-        std::size_t index = 0;
-        if (!parseIndex(path.substr(5, path.size() - 6), index)) return std::nullopt;
-        result.occurrence = index;
-    }
+std::optional<support::AuthoringPath> authoringPath(const fo4::Record& record, std::string_view path) {
+    const auto parsed = support::parseAuthoringPath(path);
+    if (!parsed) return std::nullopt;
     const auto constraint = fo4::schema::record_authoring_constraint(record.header.signature);
     if (!constraint) return std::nullopt;
     const auto rules = fo4::schema::authoring_subrecords(*constraint);
     if (std::none_of(rules.begin(), rules.end(), [&](const auto& rule) {
-            return rule.signature == result.signature;
+            return rule.signature == parsed->signature;
         })) return std::nullopt;
-    return result;
+    return parsed;
 }
 
 std::optional<Error> authoringStatusError(fo4::SubrecordAddStatus status) {
@@ -133,7 +111,7 @@ std::optional<RawSubrecordPath> rawSubrecordPath(std::string_view path) {
     const auto signatureText = path.substr(prefix.size(), open - prefix.size());
     if (signatureText.size() != 4) return std::nullopt;
     std::size_t ordinal = 0;
-    if (!parseIndex(path.substr(open + 1, path.size() - open - 2), ordinal)) {
+    if (!support::parseIndex(path.substr(open + 1, path.size() - open - 2), ordinal)) {
         return std::nullopt;
     }
     try {
@@ -470,6 +448,16 @@ Result<nlohmann::json> RadiclePluginBackend::addElement(
             if (status == fo4::SubrecordAddStatus::already_present) return nlohmann::json("Subrecord is already present.");
             stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json("Added " + path->signature.to_string() + " in " + pluginName + ".");
+        }
+        const auto templateText = elementStringArgument(arguments, 3);
+        if (templateText.size() == 4) {
+            const auto signature = fo4::Signature::from_string(templateText);
+            auto mutated = loaded->plugin;
+            const auto status = fo4::add_record_subrecord(mutated, *keyResult, signature);
+            if (const auto error = authoringStatusError(status)) return std::unexpected(*error);
+            if (status == fo4::SubrecordAddStatus::already_present) return nlohmann::json("Subrecord is already present.");
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+            return nlohmann::json("Added " + signature.to_string() + " in " + pluginName + ".");
         }
         std::string error;
         const auto resolved = resolveElementPath(*record, requestedPath, error);

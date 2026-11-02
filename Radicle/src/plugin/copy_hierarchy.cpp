@@ -1,6 +1,8 @@
 #include "copy_hierarchy.hpp"
 
 #include "child_groups.hpp"
+#include "fo4/plugin/mutation.hpp"
+#include "fo4/plugin/writer.hpp"
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/reader.hpp"
@@ -11,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -21,6 +24,21 @@ namespace {
 // Nesting and kind lists are concept-level, TODO-verify against a Fallout4.esm sample; see docs/code-notes/radicle-copy-cell-children.md.
 constexpr auto k_cell = Signature::from_string("CELL");
 constexpr auto k_wrld = Signature::from_string("WRLD");
+
+PluginKind owner_kind(const Plugin& source, const PluginKey& owner) {
+  if (owner == source.key) return classify_plugin_kind(source.header.tes4_flags, source.key);
+  for (const auto& master : source.header.masters) {
+    if (master.key == owner) return master.kind;
+  }
+  return owner.looks_light() ? PluginKind::light : PluginKind::full;
+}
+
+bool has_master(const Plugin& plugin, const PluginKey& owner) {
+  for (const auto& master : plugin.header.masters) {
+    if (master.key == owner) return true;
+  }
+  return false;
+}
 
 constexpr auto k_reference_kinds = std::array{
     Signature::from_string("REFR"), Signature::from_string("ACHR"),
@@ -85,10 +103,7 @@ GroupHeader destination_header(const Group& source_group,
   auto header = source_group.header;
   if (!group_label_is_form_id(header.group_type)) return header;
   const auto key = resolve_plugin_form_id(RawFormId{header.label_as_u32()}, source_context);
-  const auto value = encode_plugin_form_id(key, destination_context).value();
-  for (std::size_t index = 0; index < header.label.size(); ++index) {
-    header.label[index] = std::byte{static_cast<std::uint8_t>(value >> (8 * index))};
-  }
+  header.set_label_as_u32(encode_plugin_form_id(key, destination_context).value());
   return header;
 }
 
@@ -270,6 +285,173 @@ bool insert_nested_copy(Plugin& destination,
       *cell_children, destination_header(*path.back(), source_context, destination_context));
   leaf.children.emplace_back(std::move(copied));
   return true;
+}
+
+namespace {
+
+void collect_child_record_keys(const Group& group, std::vector<FormKey>& out) {
+  for (const auto& child : group.children) {
+    if (const auto* nested = std::get_if<Group>(&child)) {
+      collect_child_record_keys(*nested, out);
+      continue;
+    }
+    out.push_back(std::get<Record>(child).form_key);
+  }
+}
+
+void add_required_masters(Plugin& plugin, const Plugin& source, const std::vector<FormKey>& keys) {
+  const auto links = collect_form_links(source);
+  std::set<PluginKey> owners;
+  for (const auto& key : keys) {
+    if (!key.owner().empty()) owners.insert(key.owner());
+  }
+  for (const auto& link : links) {
+    if (link.key.owner().empty()) continue;
+    if (std::find(keys.begin(), keys.end(), link.record) == keys.end()) continue;
+    owners.insert(link.key.owner());
+  }
+
+  std::vector<MasterDescriptor> masters;
+  masters.reserve(plugin.header.masters.size() + owners.size());
+  for (const auto& master : plugin.header.masters) {
+    masters.push_back({master.key, master.kind});
+  }
+
+  bool added = false;
+  for (const auto& owner : owners) {
+    if (owner == plugin.key || has_master(plugin, owner)) continue;
+    masters.push_back({owner, owner_kind(source, owner)});
+    added = true;
+  }
+  if (added) plugin = remap_plugin_masters(std::move(plugin), std::move(masters));
+}
+
+const Group* top_group_of(const Plugin& source, const FormKey& key) {
+  for (const auto& group : source.groups) {
+    if (group.header.group_type != 0) continue;
+    for (const auto& child : group.children) {
+      const auto* record = std::get_if<Record>(&child);
+      if (record != nullptr && record->form_key == key) return &group;
+    }
+  }
+  return nullptr;
+}
+
+const Group* owned_child_group_for(const Group& top, const FormKey& key) {
+  for (std::size_t index = 0; index < top.children.size(); ++index) {
+    const auto* record = std::get_if<Record>(&top.children[index]);
+    if (record == nullptr || record->form_key != key) continue;
+    return owned_child_group(top, index);
+  }
+  return nullptr;
+}
+
+bool merge_child_group(Group& destination,
+                       const Group& source,
+                       const PluginFormIdContext& source_context,
+                       const PluginFormIdContext& destination_context,
+                       bool overwrite,
+                       std::vector<FormKey>& copied) {
+  for (const auto& child : source.children) {
+    if (const auto* nested = std::get_if<Group>(&child)) {
+      auto& target = find_or_add_child_group(
+          destination, destination_header(*nested, source_context, destination_context));
+      if (!merge_child_group(target, *nested, source_context, destination_context, overwrite,
+                             copied)) {
+        return false;
+      }
+      continue;
+    }
+    const auto& record = std::get<Record>(child);
+    require_decodable(record);
+    const auto key = record.form_key;
+    const auto existing = record_index(destination, key);
+    if (existing.has_value()) {
+      if (!overwrite) return false;
+      destination.children[*existing] =
+          clone_record(record, key, source_context, destination_context);
+    } else {
+      destination.children.emplace_back(
+          clone_record(record, key, source_context, destination_context));
+    }
+    copied.push_back(key);
+  }
+  return true;
+}
+
+}  // namespace
+
+RecordDeepCopyResult copy_record_deep(Plugin& destination,
+                                      const Plugin& source,
+                                      const FormKey& record,
+                                      bool overwrite) {
+  RecordDeepCopyResult result;
+  result.key = record;
+
+  if (find_record(source, record) == nullptr) return result;
+
+  const auto* top = top_group_of(source, record);
+  if (top == nullptr) {
+    result.status = RecordCopyStatus::source_containment_unsupported;
+    return result;
+  }
+
+  const auto source_context = plugin_form_id_context(source);
+  auto* child_group = owned_child_group_for(*top, record);
+  if (child_group != nullptr) {
+    const auto label = resolve_group_label(*child_group, source_context);
+    if (!label.has_value() || *label != record) child_group = nullptr;
+  }
+
+  if (child_group == nullptr) {
+    auto next = destination;
+    add_required_masters(next, source, std::vector<FormKey>{record});
+    const auto status = copy_record_as_override(next, source, record, overwrite);
+    if (status == RecordCopyStatus::inserted || status == RecordCopyStatus::replaced) {
+      next.original_range.clear();
+      destination = std::move(next);
+    }
+    result.status = status;
+    return result;
+  }
+
+  std::vector<FormKey> keys{record};
+  collect_child_record_keys(*child_group, keys);
+  auto next = destination;
+  add_required_masters(next, source, keys);
+
+  const auto parent_status = copy_record_as_override(next, source, record, overwrite);
+  if (parent_status != RecordCopyStatus::inserted && parent_status != RecordCopyStatus::replaced) {
+    result.status = parent_status;
+    return result;
+  }
+
+  const auto* parent = find_record(next, record);
+  auto* destination_top =
+      parent == nullptr ? nullptr : find_top_group(next, parent->header.signature);
+  std::optional<std::size_t> position;
+  if (destination_top != nullptr) position = record_index(*destination_top, record);
+
+  const auto destination_context = plugin_form_id_context(next);
+  auto* destination_child_group =
+      position.has_value()
+          ? adjacent_child_group(*destination_top, *position,
+                                 destination_header(*child_group, source_context,
+                                                    destination_context))
+          : nullptr;
+
+  if (destination_child_group == nullptr ||
+      !merge_child_group(*destination_child_group, *child_group, source_context,
+                         destination_context, overwrite, result.children)) {
+    result.children.clear();
+    result.status = RecordCopyStatus::source_containment_unsupported;
+    return result;
+  }
+
+  next.original_range.clear();
+  destination = std::move(next);
+  result.status = parent_status;
+  return result;
 }
 
 }  // namespace fo4

@@ -1,5 +1,6 @@
 #include "fo4/forms/cell.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
 
@@ -348,4 +349,40 @@ TEST(ExteriorCellCreation, EditorIdOutsideWindows1252IsRefusedBeforeAnyMutation)
                fo4::FormIdError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
   EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+}
+
+TEST(ExteriorCellCreation, CreatesAnExteriorCellInAWorldspaceMadeByCreateRecord) {
+  auto plugin = fo4::read_plugin(fo4::test::make_tes4_plugin(0, 1.0f, {}), "Patch.esp");
+  ASSERT_EQ(plugin.header.next_form_id, 0x800u);
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::create_exterior_cell(
+          plugin, cell_creation(fo4::FormKey::parse("000800:Patch.esp"), 5, -7))),
+      fo4::forms::CellError);
+  EXPECT_EQ(plugin.header.next_form_id, 0x800u);
+
+  const auto created = fo4::create_record(
+      plugin, fo4::Signature::from_string("WRLD"), std::string_view{"FreshWorld"});
+  ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(created.key, fo4::FormKey::parse("000800:Patch.esp"));
+  EXPECT_EQ(plugin.header.next_form_id, 0x801u);
+
+  const auto cell =
+      fo4::forms::create_exterior_cell(plugin, cell_creation(created.key, 5, -7));
+  EXPECT_EQ(cell, fo4::FormKey::parse("000801:Patch.esp"));
+  EXPECT_EQ(plugin.header.next_form_id, 0x802u);
+
+  const auto* top = top_wrld(plugin);
+  ASSERT_NE(top, nullptr);
+  ASSERT_NE(child_group(top->children, fo4::GroupType::world_children, 0x00000800u),
+            nullptr);
+  const auto* placed = fo4::forms::find_exterior_cell(plugin, created.key, 5, -7);
+  ASSERT_NE(placed, nullptr);
+  EXPECT_EQ(placed->form_key, cell);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  ASSERT_NE(fo4::find_record(reread, created.key), nullptr);
+  const auto* round_trip = fo4::forms::find_exterior_cell(reread, created.key, 5, -7);
+  ASSERT_NE(round_trip, nullptr);
+  EXPECT_EQ(round_trip->form_key, cell);
 }

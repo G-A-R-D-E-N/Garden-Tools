@@ -117,14 +117,38 @@ Windows release packages use this layout:
 
 ```text
 FO4RecordEditor.exe     native C++ editor + MCP server
+radicle.dll             Radicle backend (C++ API + C ABI); must stay beside the exe
 web\dist\               React UI loaded by WebView2
 tools\                  optional external helper programs
+sdk\                    Radicle C ABI headers and the import library
 mcp.sample.json         sample MCP client configuration
 docs\MCP_SETUP.md       MCP setup and tool-surface documentation
 ```
 
 The executable looks for `web\dist\` beside itself first, which keeps packaged builds independent
-of the source checkout.
+of the source checkout. Radicle is linked as `radicle.dll`, so the editor starts only when that DLL
+is in the same folder.
+
+## Deploying a build
+
+The deployed copy comes from CI, not from a local build. `native-ci.yml` job
+**FO4IDE package (Windows, MSVC, shared Radicle)** builds the shared configuration on the Windows
+runner, checks that the executable imports `radicle.dll`, checks that `radicle_abi_version()` matches
+`RADICLE_ABI_VERSION`, runs the native MCP smoke, and uploads the release package as the
+`fo4ide-package` artifact.
+
+To deploy:
+
+1. Download the `fo4ide-package` artifact of the `nomad/dev` run.
+2. Back up the current install:
+   `Copy-Item -Recurse E:\Tools\FO4IDE\FO4IDE E:\Tools\FO4IDE\backup-<timestamp>`.
+3. Replace the folder with the package contents (the `FO4RecordEditor-<date>` folder's contents,
+   including `radicle.dll` and `web\dist`).
+4. Verify the backend and the tool surface:
+   `python -c "import ctypes; l=ctypes.CDLL(r'E:\Tools\FO4IDE\FO4IDE\radicle.dll'); l.radicle_abi_version.restype=ctypes.c_uint32; print(l.radicle_abi_version())"`
+   must print the `RADICLE_ABI_VERSION` of that commit, and the MCP tool list must contain the
+   tools the build claims (ask the client for `tools/list`, or run
+   `PluginEditTool\native\tests\native_mcp_smoke.py` against the deployed executable).
 
 ## Building from source
 
@@ -143,11 +167,13 @@ Both scripts build C++ with CMake and do not invoke `dotnet`.
 
 `publish.bat [deploy-folder]` also copies the build into that folder (for example an MO2 tools
 folder); the folder can come from `FO4IDE_DEPLOY_DIR` instead, and with neither it only builds.
-`package.ps1` bundles optional helper programs from locations you pass as parameters or environment
-variables: `-NiftoolPath` (`NIFTOOL_PATH`), `-TexconvPath` (`TEXCONV_PATH`), `-CkWikiPath`
-(`CK_WIKI_PATH`), `-AudioToolsDir` (`FO4IDE_AUDIO_TOOLS_DIR`) and, with `-IncludeBaseScripts`,
-`-BaseScriptsPath` (`FO4IDE_BASE_SCRIPTS_DIR`). Any that is unset is skipped with a warning, and the
-package still works without it.
+`package.ps1` bundles helper programs. texconv and ffmpeg are always included: when `-TexconvPath`
+(`TEXCONV_PATH`) is unset, or `-AudioToolsDir` (`FO4IDE_AUDIO_TOOLS_DIR`) has no `ffmpeg.exe`, the
+build downloads the pinned version listed in `tools/bundled-tools.json` and checks its SHA256. An
+override that is not a file stops the build. The other helpers come from `-NiftoolPath`
+(`NIFTOOL_PATH`), `-CkWikiPath` (`CK_WIKI_PATH`), the rest of `-AudioToolsDir`, and, with
+`-IncludeBaseScripts`, `-BaseScriptsPath` (`FO4IDE_BASE_SCRIPTS_DIR`). Any of those that is unset is
+skipped with a warning, and the package still works without it.
 
 A direct native build is also available:
 

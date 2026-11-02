@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -134,6 +135,8 @@ internal sealed class NativeStrings : IDisposable
         _owned.Add(pointer);
         return pointer;
     }
+
+    public IntPtr[] AddAll(IEnumerable<string>? texts) => (texts ?? Array.Empty<string>()).Select(Add).ToArray();
 
     public Native.FormKey Key(FormKey? key) =>
         key is { } value ? new Native.FormKey { Plugin = Add(value.Plugin), LocalId = value.LocalId } : default;
@@ -283,6 +286,31 @@ internal static unsafe class Call
         return result;
     }
 
+    public static string TakeText(byte* text, nuint size) => Encoding.UTF8.GetString(TakeBytes(text, size));
+
+    public static float[] TakeFloats(float* values, nuint count)
+    {
+        var result = new float[checked((int)count)];
+        if (count != 0) new ReadOnlySpan<float>(values, result.Length).CopyTo(result);
+        if (values != null) RadicleNative.FreeFloats(values);
+        return result;
+    }
+
+    public static ushort[] TakeTriangles(ushort* values, nuint count)
+    {
+        var result = new ushort[checked((int)count)];
+        if (count != 0) new ReadOnlySpan<ushort>(values, result.Length).CopyTo(result);
+        if (values != null) RadicleNative.FreeTriangles(values);
+        return result;
+    }
+
+    public static uint[] TakeNodeRefs(uint* values, nuint count)
+    {
+        var result = new uint[checked((int)count)];
+        if (count != 0) new ReadOnlySpan<uint>(values, result.Length).CopyTo(result);
+        if (values != null) RadicleNative.FreeNodeRefs(values);
+        return result;
+    }
     public static T[] Copy<T>(IntPtr items, nuint count) where T : unmanaged
     {
         var result = new T[checked((int)count)];

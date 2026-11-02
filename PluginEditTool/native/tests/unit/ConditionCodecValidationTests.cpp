@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -35,14 +36,25 @@ std::string failureOf(const nlohmann::json& element) {
 
 }  // namespace
 
-TEST_CASE("condition codec: unknown operator fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"operator", "~="}, {"value", 1}};
-    CHECK(failureOf(element) == "unknown comparison operator");
-}
-
-TEST_CASE("condition codec: non-string operator fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"operator", 2}};
-    CHECK(failureOf(element) == "operator must be a string");
+TEST_CASE("condition codec: each rejected entry fails with its own reason") {
+    const std::vector<std::pair<nlohmann::json, std::string>> rejected = {
+        {nlohmann::json{{"function", "GetAngle"}, {"operator", "~="}, {"value", 1}}, "unknown comparison operator"},
+        {nlohmann::json{{"function", "GetAngle"}, {"operator", 2}}, "operator must be a string"},
+        {nlohmann::json{{"function", "GetAngle"}, {"compareGlobal", "MissingGlobal"}}, "unresolved comparison global"},
+        {nlohmann::json{{"function", "GetAngle"}, {"reference", "MissingRef"}}, "unresolved condition reference"},
+        {nlohmann::json{{"function", "GetAngle"}, {"value", "5"}}, "comparison value must be a finite number"},
+        {nlohmann::json{{"function", "GetAngle"}, {"value", 1e39}}, "comparison value must be a finite number"},
+        {nlohmann::json{{"function", "GetAngle"}, {"runOn", "Nowhere"}}, "unknown runOn value"},
+        {nlohmann::json{{"function", "GetAngle"}, {"flags", "OR, Bogus"}}, "unknown flags or UseGlobal outside compareGlobal"},
+        {nlohmann::json{{"function", "GetAngle"}, {"flags", 3}}, "flags must be a string"},
+        {nlohmann::json{{"function", "GetAngle"}, {"flags", "4"}}, "unknown flags or UseGlobal outside compareGlobal"},
+        {nlohmann::json{{"function", "GetAngle"}, {"flags", "32"}}, "unknown flags or UseGlobal outside compareGlobal"},
+        {nlohmann::json{{"function", "GetAngle"}, {"param1", 1.5}}, "param1 must be an integer or string"},
+    };
+    for (const auto& [element, reason] : rejected) {
+        INFO("expected failure: " << reason);
+        CHECK(failureOf(element) == reason);
+    }
 }
 
 TEST_CASE("condition codec: every accepted operator spelling keeps its compare bits") {
@@ -69,57 +81,12 @@ TEST_CASE("condition codec: every accepted operator spelling keeps its compare b
     CHECK(defaulted->compare_operator() == 0);
 }
 
-TEST_CASE("condition codec: unresolved compareGlobal fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"compareGlobal", "MissingGlobal"}};
-    CHECK(failureOf(element) == "unresolved comparison global");
-}
-
-TEST_CASE("condition codec: unresolved reference fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"reference", "MissingRef"}};
-    CHECK(failureOf(element) == "unresolved condition reference");
-}
-
-TEST_CASE("condition codec: string value fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"value", "5"}};
-    CHECK(failureOf(element) == "comparison value must be a finite number");
-}
-
-TEST_CASE("condition codec: value outside the float range fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"value", 1e39}};
-    CHECK(failureOf(element) == "comparison value must be a finite number");
-}
-
-TEST_CASE("condition codec: unknown runOn fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"runOn", "Nowhere"}};
-    CHECK(failureOf(element) == "unknown runOn value");
-}
-
 TEST_CASE("condition codec: numeric runOn keeps the raw value that GetConditions emits") {
     const nlohmann::json element = {{"function", "GetAngle"}, {"runOn", "8"}};
     std::string failure;
     const auto condition = buildFrom(element, failure);
     REQUIRE(condition.has_value());
     CHECK(condition->run_on == 8u);
-}
-
-TEST_CASE("condition codec: unknown flag name fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"flags", "OR, Bogus"}};
-    CHECK(failureOf(element) == "unknown flags or UseGlobal outside compareGlobal");
-}
-
-TEST_CASE("condition codec: non-string flags fail the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"flags", 3}};
-    CHECK(failureOf(element) == "flags must be a string");
-}
-
-TEST_CASE("condition codec: numeric flag carrying the Use Global bit fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"flags", "4"}};
-    CHECK(failureOf(element) == "unknown flags or UseGlobal outside compareGlobal");
-}
-
-TEST_CASE("condition codec: numeric flag carrying an operator bit fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"flags", "32"}};
-    CHECK(failureOf(element) == "unknown flags or UseGlobal outside compareGlobal");
 }
 
 TEST_CASE("condition codec: numeric flag equal to a named flag is accepted without touching the operator") {
@@ -131,11 +98,6 @@ TEST_CASE("condition codec: numeric flag equal to a named flag is accepted witho
     CHECK(condition->flags() == 0x08);
     CHECK(condition->compare_operator() == 3);
     CHECK_FALSE(condition->use_global());
-}
-
-TEST_CASE("condition codec: non-integer param fails the entry") {
-    const nlohmann::json element = {{"function", "GetAngle"}, {"param1", 1.5}};
-    CHECK(failureOf(element) == "param1 must be an integer or string");
 }
 
 TEST_CASE("condition codec: compareGlobal resolves to a use-global entry and value defaults to 0") {

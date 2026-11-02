@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iterator>
@@ -38,7 +39,7 @@ TEST_P(StoryManagerRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEve
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::size_t batch_records = 0;
   std::array<std::size_t, std::size(k_batch)> sampled{};
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
@@ -76,6 +77,32 @@ TEST_P(StoryManagerRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEve
     if (sampled[index]++ < k_link_sample) {
       for (const auto& field : fo4::schema::formlink_fields(signature)) {
         EXPECT_TRUE(fo4::record_field_count(plugin, record.form_key, field).has_value()) << field.path;
+      }
+    }
+    if (signature == fo4::Signature::from_string("SMQN")) {
+      // Regression: the list length must equal the derived QNAM counter, or a list that skips an entry desyncs the node's quest count.
+      const auto quests = fo4::schema::formlink_list_descriptor(signature, "SMQN\\Quests");
+      ASSERT_TRUE(quests.has_value());
+      std::uint32_t declared = 0;
+      std::size_t counters = 0;
+      for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != fo4::Signature::from_string("QNAM")) continue;
+        ++counters;
+        if (subrecord.data.size() != 4) continue;
+        for (std::size_t byte = 0; byte < 4; ++byte) {
+          declared |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(subrecord.data[byte])) << (8 * byte);
+        }
+      }
+      EXPECT_EQ(counters, 1u) << record.form_key.to_string();
+      try {
+        const auto values = fo4::schema::record_formlink_list_values(plugin, record.form_key, *quests);
+        ASSERT_TRUE(values.has_value());
+        EXPECT_EQ(values->size(), declared) << record.form_key.to_string();
+      } catch (const fo4::FormIdError& error) {
+        if (record.form_key != fo4::FormKey::parse("00089E:Fallout4.esm") ||
+            std::string_view{error.what()}.find("master index 1") == std::string_view::npos) {
+          FAIL() << record.form_key.to_string() << ": " << error.what();
+        }
       }
     }
   });

@@ -1,15 +1,19 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <stop_token>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -41,6 +45,10 @@ Result<void> requirePluginUnchangedSince(const std::filesystem::path& path,
 
 class RadiclePluginBackend final : public IPluginBackend {
 public:
+    RadiclePluginBackend();
+    ~RadiclePluginBackend() override;
+    RadiclePluginBackend(const RadiclePluginBackend&) = delete;
+    RadiclePluginBackend& operator=(const RadiclePluginBackend&) = delete;
     Capabilities capabilities() const noexcept override;
     Result<nlohmann::json> invoke(std::string_view operation,
                                   const nlohmann::json& arguments) override;
@@ -59,6 +67,7 @@ public:
     Result<nlohmann::json> copyAsWrapper(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> injectFormsIntoMaster(const nlohmann::json& arguments) override;
     Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;
     Result<nlohmann::json> changeReferencingRecords(const nlohmann::json& arguments) override;
     Result<nlohmann::json> revertOverrides(const nlohmann::json& arguments) override;
@@ -79,14 +88,34 @@ public:
     Result<nlohmann::json> editLeveledListEntry(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getNpc(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> editNpcEntries(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setScriptValue(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> releaseMemory(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addPackageProcedure(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removePackageProcedure(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeSoundFile(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setSoundBase(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> createSound(const nlohmann::json& arguments) override;
     Result<nlohmann::json> editFactionEntries(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getMagicEffects(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> addMagicEffect(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setMagicEffect(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeMagicEffect(const nlohmann::json& arguments) override;
     Result<nlohmann::json> conditionFunctionParams() const override {
         return nlohmann::json(ConditionFunctions::asJson());
     }
 
     void setDataDirectory(std::filesystem::path dataDirectory);
+
+#ifdef FO4IDE_TEST_HOOKS
+    std::weak_ptr<const fo4::ConflictGraph> cachedGraphForTest() const;
+#endif
 
 private:
     struct StagedLocalization {
@@ -106,7 +135,6 @@ private:
         std::filesystem::file_time_type loadedTime{};
         bool trusted{false};
         fo4::Plugin plugin;
-        std::optional<fo4::Plugin> originalPlugin;
         bool dirty{false};
         std::optional<StagedLocalization> stagedLocalization;
         std::unique_ptr<std::mutex> writeMutex = std::make_unique<std::mutex>();
@@ -201,6 +229,8 @@ private:
     Result<nlohmann::json> removeElement(const nlohmann::json& arguments) override;
     Result<nlohmann::json> moveElement(const nlohmann::json& arguments) override;
     Result<nlohmann::json> clearElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> copyElementToSelected(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeElementFromSelected(const nlohmann::json& arguments) override;
 
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideLocked(const nlohmann::json& arguments, bool initiallyDisabled);
@@ -239,12 +269,39 @@ private:
     Result<nlohmann::json> getConditionFunctions() const;
     Result<nlohmann::json> getConditionRunOnTypes() const;
 
+    struct SkippedStringArchive {
+        std::string path;
+        std::string reason;
+    };
     Result<nlohmann::json> listStringTables(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getStrings(const nlohmann::json& arguments) const;
     Result<nlohmann::json> lookupString(const nlohmann::json& arguments) const;
-    Result<std::vector<fo4::env::PluginStringTable>> readStringTables(const LoadedPlugin& loaded,
-                                                                     std::string_view language) const;
-    std::shared_ptr<const fo4::archive::AssetResolver> stringAssets(const LoadedPlugin& loaded) const;
+    Result<nlohmann::json> setString(const nlohmann::json& arguments);
+    Result<nlohmann::json> addString(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeString(const nlohmann::json& arguments);
+    Result<nlohmann::json> importStrings(const nlohmann::json& arguments);
+    Result<nlohmann::json> exportStrings(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> saveStringTables(const nlohmann::json& arguments);
+    Result<nlohmann::json> discardStringEdits(const nlohmann::json& arguments);
+    Result<std::vector<fo4::env::PluginStringTable>> readStringTables(
+        const LoadedPlugin& loaded,
+        std::string_view language,
+        std::vector<SkippedStringArchive>* skipped = nullptr) const;
+    std::shared_ptr<const fo4::archive::AssetResolver> stringAssets(
+        const LoadedPlugin& loaded,
+        std::vector<SkippedStringArchive>* skipped) const;
+    void overlayStagedStringTables(const LoadedPlugin& loaded,
+                                   std::string_view language,
+                                   std::vector<fo4::env::PluginStringTable>& tables) const;
+    void stageStringTable(std::string_view plugin,
+                          std::string_view language,
+                          fo4::env::StringSource source,
+                          fo4::localization::LocalizedStringTable table);
+    void discardStagedStringTables(std::string_view plugin);
+    bool hasStagedStringTables(std::string_view plugin) const;
+    bool stringTablePending(std::string_view plugin,
+                            std::string_view language,
+                            fo4::env::StringSource source) const;
 
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
@@ -263,22 +320,51 @@ private:
         const std::filesystem::path& path) const;
     std::optional<std::filesystem::path> allowedLocalizationDirectory(
         const std::filesystem::path& path) const;
-    void rebuildGraphLocked();
+    std::shared_ptr<const fo4::ConflictGraph> conflictGraph() const;
+    void markGraphDirtyLocked() const;
+    void reapIdleConflictGraph(std::stop_token stop_token);
+    void dropConflictGraphLocked() const;
     std::string dirtyPluginListLocked() const;
+
+    // Constraint: references from this proxy must not be held across a stage, because the next access may rebuild the graph.
+    class ConflictGraphProxy {
+    public:
+        explicit ConflictGraphProxy(RadiclePluginBackend* owner) : owner_(owner) {}
+        const fo4::ConflictGraph* operator->() const {
+            return owner_->conflictGraph().get();
+        }
+        const fo4::ConflictGraph& operator*() const {
+            return *owner_->conflictGraph();
+        }
+        operator const fo4::ConflictGraph&() const { return **this; }
+    private:
+        RadiclePluginBackend* owner_{nullptr};
+    };
+
 
     mutable std::shared_mutex lifecycleMutex_;
     mutable std::shared_mutex stateMutex_;
     std::mutex saveIoMutex_;
     std::vector<LoadedPlugin> plugins_;
     std::uint64_t mutationEpoch_{0};
-    fo4::ConflictGraph graph_;
+    ConflictGraphProxy graph_{this};
+    mutable std::mutex graphMutex_;
+    mutable std::shared_ptr<const fo4::ConflictGraph> graphStorage_;
+    mutable bool graphDirty_{true};
+    mutable std::chrono::steady_clock::time_point graphLastUse_{};
+    mutable std::chrono::seconds graphIdleLimit_{60};
     std::filesystem::path dataDirectory_;
     using StringArchiveStamp = std::tuple<std::filesystem::path, std::uintmax_t, std::filesystem::file_time_type>;
     mutable std::mutex stringAssetsMutex_;
     mutable std::vector<StringArchiveStamp> stringArchives_;
     mutable std::shared_ptr<const fo4::archive::AssetResolver> stringAssets_;
+    mutable std::vector<SkippedStringArchive> stringSkipped_;
+    using StagedStringKey = std::tuple<std::string, std::string, fo4::env::StringSource>;
+    mutable std::mutex stagedStringsMutex_;
+    std::map<StagedStringKey, fo4::localization::LocalizedStringTable> stagedStrings_;
     std::filesystem::path trustedNewPluginRoot_;
     std::vector<std::filesystem::path> trustedSaveRoots_;
+    std::jthread graphReaper_;
 };
 
 }

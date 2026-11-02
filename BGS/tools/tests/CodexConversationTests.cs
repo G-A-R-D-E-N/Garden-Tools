@@ -107,7 +107,7 @@ public sealed class CodexConversationTests
     [Fact]
     public async Task KnownToolIsDispatchedThroughAssistantTools()
     {
-        string path = Fixture("Meshes", "Actors", "Character", "Behaviors", "SingleAnimFurniture.hkx");
+        string path = TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx");
         AssistantTools tools = BuildRealTools(path);
         using var fixture = new CodexSessionFixture(tools.Functions);
         fixture.Server.AutoCompleteTurns = false;
@@ -131,7 +131,7 @@ public sealed class CodexConversationTests
     [Fact]
     public async Task UnknownToolAndInvalidArgumentsAreRefused()
     {
-        string path = Fixture("Meshes", "Actors", "Character", "Behaviors", "SingleAnimFurniture.hkx");
+        string path = TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx");
         AssistantTools tools = BuildRealTools(path);
         using var fixture = new CodexSessionFixture(tools.Functions);
         fixture.Server.AutoCompleteTurns = false;
@@ -155,7 +155,7 @@ public sealed class CodexConversationTests
     [Fact]
     public async Task MutationPreviewCannotAutoApproveItself()
     {
-        string path = Fixture("Meshes", "Actors", "Character", "Behaviors", "SingleAnimFurniture.hkx");
+        string path = TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx");
         string xml = HkxTextEdit.TextOf(path);
         var document = new RecordingDocument(xml, path);
         var tools = new AssistantTools(new AssistantInspection(), new AssistantClipMutation(document),
@@ -412,9 +412,6 @@ public sealed class CodexConversationTests
             message = "";
             return string.Equals(requested, expected, StringComparison.Ordinal);
         };
-
-    private static string Fixture(params string[] parts) =>
-        Path.Combine(new[] { AppContext.BaseDirectory, "fixtures", "vanilla" }.Concat(parts).ToArray());
 
     private sealed class RecordingDocument : IAssistantEditorDocument
     {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ConflictEntry } from '../backend';
+import type { ConflictEntry, ConflictMatrix } from '../backend';
 import { errorText } from '../errors';
 import { useDialogs } from '../useDialogs';
 import { pruneSelection, selectRow, type ConflictSelection, type SelectMode } from './conflictSelection';
@@ -126,7 +126,7 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
   };
 }
 
-export function useCompareSelected() {
+export function useOpenSelectedInTabs() {
   const [comparing, setComparing] = useState(false);
   const compare = async (picked: { formKey: string; plugin: string }[], open: (formKey: string, plugin: string) => Promise<void>) => {
     setComparing(true);
@@ -135,4 +135,46 @@ export function useCompareSelected() {
     } finally { setComparing(false); }
   };
   return { comparing, compare };
+}
+
+export interface CompareColumn { formKey: string; plugin: string }
+export interface CompareCell { value: string; differs: boolean }
+export interface CompareRow { field: string; label: string; cells: CompareCell[]; differs: boolean }
+export interface CompareView { columns: CompareColumn[]; rows: CompareRow[] }
+
+function buildCompareView(picked: { formKey: string; plugin: string; matrix: ConflictMatrix }[]): CompareView {
+  const shown = picked.filter(p => p.matrix.Plugins.includes(p.plugin));
+  const labels = new Map<string, string>();
+  const valuesByColumn = shown.map(p => {
+    const col = p.matrix.Plugins.indexOf(p.plugin);
+    const values = new Map<string, string>();
+    for (const row of p.matrix.Rows) {
+      if (!labels.has(row.Field)) labels.set(row.Field, row.DisplayLabel || row.Field);
+      values.set(row.Field, row.Values[col] ?? '');
+    }
+    return values;
+  });
+  const rows = [...labels.keys()].map(field => {
+    const values = valuesByColumn.map(v => v.get(field) ?? '');
+    const differs = values.some(v => v !== values[0]);
+    return { field, label: labels.get(field) ?? field, cells: values.map(value => ({ value, differs })), differs };
+  });
+  return { columns: shown.map(p => ({ formKey: p.formKey, plugin: p.plugin })), rows };
+}
+
+export function useCompareSelected() {
+  const [comparing, setComparing] = useState(false);
+  const [view, setView] = useState<CompareView | null>(null);
+  const compare = async (picked: { formKey: string; plugin: string }[]) => {
+    const b = window.chrome?.webview?.hostObjects?.backend;
+    if (!b) return;
+    setComparing(true);
+    try {
+      const loaded: { formKey: string; plugin: string; matrix: ConflictMatrix }[] = await Promise.all(
+        picked.map(async p => ({ ...p, matrix: JSON.parse(await b.GetConflictMatrix(p.formKey)) })),
+      );
+      setView(buildCompareView(loaded));
+    } finally { setComparing(false); }
+  };
+  return { comparing, view, compare, closeView: () => setView(null) };
 }

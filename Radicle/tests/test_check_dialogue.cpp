@@ -103,15 +103,8 @@ std::vector<fo4::CheckFinding> of_code(const std::vector<fo4::CheckFinding>& fin
 
 }  // namespace
 
-TEST(CheckDialogue, CodeNamesAreStable) {
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::branch_starting_topic_not_dial),
-            "branch_starting_topic_not_dial");
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::topic_children_not_dial),
-            "topic_children_not_dial");
-}
-
 TEST(CheckDialogue, TopicChildrenLabelThatIsNotADialIsReported) {
-  const auto plugin = make_orphan_topic_plugin();
+  auto plugin = make_orphan_topic_plugin();
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = of_code(fo4::check_load_order(load_order),
                                 fo4::CheckCode::topic_children_not_dial);
@@ -122,14 +115,14 @@ TEST(CheckDialogue, TopicChildrenLabelThatIsNotADialIsReported) {
 }
 
 TEST(CheckDialogue, TopicChildrenLabelOfADialIsValid) {
-  const auto plugin = make_topic_plugin(0x805);
+  auto plugin = make_topic_plugin(0x805);
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   EXPECT_TRUE(of_code(fo4::check_load_order(load_order),
                       fo4::CheckCode::topic_children_not_dial).empty());
 }
 
 TEST(CheckDialogue, BranchStartingTopicThatIsNotADialIsReported) {
-  const auto plugin = make_branch_plugin(0x821);
+  auto plugin = make_branch_plugin(0x821);
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = of_code(fo4::check_load_order(load_order),
                                 fo4::CheckCode::branch_starting_topic_not_dial);
@@ -140,14 +133,14 @@ TEST(CheckDialogue, BranchStartingTopicThatIsNotADialIsReported) {
 }
 
 TEST(CheckDialogue, BranchStartingTopicThatIsADialIsValid) {
-  const auto plugin = make_branch_plugin(0x800);
+  auto plugin = make_branch_plugin(0x800);
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   EXPECT_TRUE(of_code(fo4::check_load_order(load_order),
                       fo4::CheckCode::branch_starting_topic_not_dial).empty());
 }
 
 TEST(CheckDialogue, BranchStartingTopicThatIsDeletedIsWarned) {
-  const auto plugin = make_branch_plugin(0x800, 0x20);
+  auto plugin = make_branch_plugin(0x800, 0x20);
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = fo4::check_load_order(load_order);
   EXPECT_TRUE(of_code(findings, fo4::CheckCode::branch_starting_topic_not_dial).empty());
@@ -159,10 +152,14 @@ TEST(CheckDialogue, BranchStartingTopicThatIsDeletedIsWarned) {
   EXPECT_EQ(deleted[0].severity, fo4::CheckSeverity::warning);
 }
 
-TEST(CheckDialogue, MasterIndexPastTheMasterTableIsSkipped) {
-  const auto plugin = make_bad_master_index_plugin();
+TEST(CheckDialogue, MasterIndexPastTheMasterTableIsReported) {
+  auto plugin = make_bad_master_index_plugin();
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = fo4::check_load_order(load_order);
   EXPECT_TRUE(of_code(findings, fo4::CheckCode::branch_starting_topic_not_dial).empty());
-  EXPECT_TRUE(of_code(findings, fo4::CheckCode::topic_children_not_dial).empty());
+  const auto children = of_code(findings, fo4::CheckCode::topic_children_not_dial);
+  ASSERT_EQ(children.size(), 1u);
+  const auto bad_index = of_code(findings, fo4::CheckCode::invalid_master_index);
+  ASSERT_EQ(bad_index.size(), 1u);
+  EXPECT_EQ(bad_index[0].subrecord.to_string(), "SNAM");
 }

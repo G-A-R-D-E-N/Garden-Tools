@@ -1,12 +1,14 @@
 using System;
 using System.IO;
 using System.Text;
+using BehaviourStudio.App;
 using OpenCommonwealth.Services.Archive;
 using Radicle.Interop;
 using Xunit;
 
 namespace BehaviourStudio.Tests;
 
+[Collection("ScanCli")]
 public sealed class Ba2RadicleTests
 {
     [Fact]
@@ -27,6 +29,17 @@ public sealed class Ba2RadicleTests
     }
 
     [Fact]
+    public void PlaybackSkeletonLookupReportsNativeLoadFailureButSkipsCorruptArchives()
+    {
+        var native = new InvalidDataException("the Radicle native library could not be loaded",
+            new DllNotFoundException("radicle_c"));
+        Assert.Same(native, Assert.Throws<InvalidDataException>(
+            () => MainWindow.SkeletonBytesOrNull(() => throw native)));
+        Assert.Null(MainWindow.SkeletonBytesOrNull(() => throw new InvalidDataException("corrupt archive")));
+        Assert.Null(MainWindow.SkeletonBytesOrNull(() => throw new IOException("truncated archive")));
+    }
+
+    [Fact]
     public void Ba2WrapperReadsGeneralArchivesThroughRadicleAndRefusesTextureArchives()
     {
         string root = Path.Combine(Path.GetTempPath(), "bgs-ba2-radicle-" + Guid.NewGuid().ToString("N"));
@@ -35,7 +48,7 @@ public sealed class Ba2RadicleTests
         {
             byte[] payload = Encoding.ASCII.GetBytes("tiny hkx");
             string archive = Path.Combine(root, "tiny.ba2");
-            WriteGeneralBa2(archive, "meshes\\actors/tiny.hkx", payload);
+            TestArchives.WriteGeneralBa2(archive, ("meshes\\actors/tiny.hkx", payload));
 
             using (var ba2 = Ba2.Open(archive))
             {
@@ -64,33 +77,5 @@ public sealed class Ba2RadicleTests
                          error.Message);
         }
         finally { Directory.Delete(root, recursive: true); }
-    }
-
-    private static void WriteGeneralBa2(string path, string entryName, byte[] payload)
-    {
-        byte[] name = Encoding.UTF8.GetBytes(entryName);
-        const int headerBytes = 24;
-        const int recordBytes = 36;
-        ulong nameTable = headerBytes + recordBytes;
-        ulong dataOffset = nameTable + 2u + (uint)name.Length;
-
-        using var stream = File.Create(path);
-        using var writer = new BinaryWriter(stream);
-        writer.Write(Encoding.ASCII.GetBytes("BTDX"));
-        writer.Write((uint)1);
-        writer.Write(Encoding.ASCII.GetBytes("GNRL"));
-        writer.Write((uint)1);
-        writer.Write(nameTable);
-        writer.Write((uint)0);
-        writer.Write((uint)0);
-        writer.Write((uint)0);
-        writer.Write((uint)0x00100100);
-        writer.Write(dataOffset);
-        writer.Write((uint)0);
-        writer.Write((uint)payload.Length);
-        writer.Write(0xBAADF00Du);
-        writer.Write((ushort)name.Length);
-        writer.Write(name);
-        writer.Write(payload);
     }
 }

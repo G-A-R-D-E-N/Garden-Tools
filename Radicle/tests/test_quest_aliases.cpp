@@ -90,7 +90,7 @@ std::uint32_t raw_u32(const fo4::Subrecord& subrecord) {
 }
 
 TEST(QuestAliases, PreservesMixedAliasVariantsAndRepeatedBoundaries) {
-  const auto plugin = fo4::read_plugin(quest_plugin(), "Quest.esp");
+  auto plugin = fo4::read_plugin(quest_plugin(), "Quest.esp");
   const auto quest = fo4::FormKey::parse("000800:Quest.esp");
   const auto aliases = fo4::forms::decode_quest_aliases(plugin, quest);
 
@@ -142,7 +142,7 @@ TEST(QuestAliases, PreservesMixedAliasVariantsAndRepeatedBoundaries) {
 }
 
 TEST(QuestAliases, MissingEndMarkerFailsClosedBeforeNextAlias) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       quest_plugin(true, false, false), "Quest.esp");
   EXPECT_THROW(
       static_cast<void>(fo4::forms::decode_quest_aliases(
@@ -151,7 +151,7 @@ TEST(QuestAliases, MissingEndMarkerFailsClosedBeforeNextAlias) {
 }
 
 TEST(QuestAliases, OrphanEndMarkerFailsClosed) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       quest_plugin(false, true, false), "Quest.esp");
   EXPECT_THROW(
       static_cast<void>(fo4::forms::decode_quest_aliases(
@@ -160,7 +160,7 @@ TEST(QuestAliases, OrphanEndMarkerFailsClosed) {
 }
 
 TEST(QuestAliases, MalformedCollectionALMIFailsClosed) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       quest_plugin(false, false, true), "Quest.esp");
   EXPECT_THROW(
       static_cast<void>(fo4::forms::decode_quest_aliases(
@@ -241,7 +241,7 @@ TEST(QuestAliases, DanglingFormLinkDegradesTheFieldNotTheQuest) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Dangling.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Dangling.esp");
   const auto key = fo4::FormKey::parse("000800:Dangling.esp");
 
   const auto decoded = fo4::forms::decode_quest_aliases(plugin, key);

@@ -1,5 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include "RadiclePluginSupport.hpp"
+
 #include <algorithm>
 #include <exception>
 #include <format>
@@ -17,17 +19,6 @@
 
 namespace fo4ide::plugin {
 namespace {
-
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
-bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
-    value = args[index].get<bool>();
-    return true;
-}
 
 std::unexpected<Error> readOnlyError(std::string_view name) {
     return std::unexpected(Error{
@@ -63,8 +54,8 @@ std::string incompleteUsageReason(const fo4::Plugin& plugin, const fo4::MasterUs
 }
 
 Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json& arguments) {
-    const auto name = stringArgument(arguments, 0);
-    const auto orderText = stringArgument(arguments, 1);
+    const auto name = support::stringArgument(arguments, 0);
+    const auto orderText = support::stringArgument(arguments, 1);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     if (orderText.empty()) return std::unexpected(Error{"MasterOrderMissing", "Master order is empty"});
 
@@ -133,10 +124,10 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
 }
 
 Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::json& arguments) {
-    const auto name = stringArgument(arguments, 0);
+    const auto name = support::stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     bool apply = true;
-    if (arguments.is_array() && arguments.size() > 1 && !boolArgument(arguments, 1, apply)) {
+    if (arguments.is_array() && arguments.size() > 1 && !support::tryBoolArgument(arguments, 1, apply)) {
         return std::unexpected(Error{"InvalidApplyFlag", "Apply flag must be boolean"});
     }
 
@@ -184,7 +175,7 @@ Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::
 }
 
 Result<nlohmann::json> RadiclePluginBackend::updateOnam(const nlohmann::json& arguments) {
-    const auto name = stringArgument(arguments, 0);
+    const auto name = support::stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
     OpLock lock(*this, OpLock::Mode::Write, {name});
@@ -213,10 +204,10 @@ Result<nlohmann::json> RadiclePluginBackend::updateOnam(const nlohmann::json& ar
 }
 
 Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& arguments) {
-    const auto name = stringArgument(arguments, 0);
+    const auto name = support::stringArgument(arguments, 0);
     bool light = false;
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
-    if (!boolArgument(arguments, 1, light)) {
+    if (!support::tryBoolArgument(arguments, 1, light)) {
         return std::unexpected(Error{"InvalidLightFlag", "Light flag must be boolean"});
     }
 
@@ -230,7 +221,6 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
     try {
         const auto lowered = light ? fo4::lowered_light_next_form_id(loaded->plugin) : std::nullopt;
         auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
-        if (!loaded->dirty) loaded->originalPlugin = loaded->plugin;
         loaded->plugin = std::move(mutated);
         loaded->dirty = true;
         ++mutationEpoch_;
@@ -244,7 +234,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
             });
         }
         for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, known);
-        rebuildGraphLocked();
+        markGraphDirtyLocked();
 
         const auto loweredNote = lowered
             ? "; lowered HEDR nextFormID to " + std::format("0x{:03X}", *lowered)
@@ -258,7 +248,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
 }
 
 Result<nlohmann::json> RadiclePluginBackend::saveMastersPlugin(const nlohmann::json& arguments) {
-    const auto name = stringArgument(arguments, 0);
+    const auto name = support::stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
     OpLock lock(*this, OpLock::Mode::Write, {name});

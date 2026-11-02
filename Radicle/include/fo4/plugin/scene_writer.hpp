@@ -3,6 +3,7 @@
 #include "fo4/plugin/mutation.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
@@ -25,6 +26,60 @@ FormLinkFieldMutationStatus set_scene_formlink(Plugin& plugin,
                                                std::string_view path,
                                                const FormKey& target);
 
+FormLinkFieldMutationStatus set_scene_action_formlink(Plugin& plugin,
+                                                      const FormKey& scene,
+                                                      std::size_t index,
+                                                      std::string_view path,
+                                                      const FormKey& target);
+
 std::optional<std::size_t> scene_group_count(const Plugin& plugin, const FormKey& scene, ScenePart part);
+
+SubrecordGroupMutationStatus insert_scene_phase(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index,
+                                                std::string_view name);
+
+SubrecordGroupMutationStatus remove_scene_phase(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index);
+
+// Constraint: moves the phase to the given index and rewrites every phase reference that must follow it.
+SubrecordGroupMutationStatus move_scene_phase(Plugin& plugin,
+                                              const FormKey& scene,
+                                              std::size_t from,
+                                              std::size_t to);
+
+ScalarMutationStatus set_scene_phase_name(Plugin& plugin,
+                                          const FormKey& scene,
+                                          std::size_t index,
+                                          std::string_view name);
+
+SubrecordGroupMutationStatus insert_scene_actor(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index);
+
+SubrecordGroupMutationStatus remove_scene_actor(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index);
+
+SubrecordGroupMutationStatus insert_scene_action(Plugin& plugin,
+                                                 const FormKey& scene,
+                                                 std::size_t index,
+                                                 std::uint16_t type);
+
+SubrecordGroupMutationStatus remove_scene_action(Plugin& plugin,
+                                                 const FormKey& scene,
+                                                 std::size_t index);
+
+// Constraint: moves the action to the given index and renumbers every action index that must follow it.
+SubrecordGroupMutationStatus move_scene_action(Plugin& plugin,
+                                               const FormKey& scene,
+                                               std::size_t from,
+                                               std::size_t to);
+
+ScalarMutationStatus set_scene_action_name(Plugin& plugin,
+                                           const FormKey& scene,
+                                           std::size_t index,
+                                           std::string_view name);
 
 }

@@ -1,6 +1,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/behavior_layout.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -51,7 +52,7 @@ TEST_P(MaterialImpactRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesE
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::size_t batch_records = 0;
   std::size_t sampled[std::size(k_batch)] = {};
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
@@ -77,8 +78,12 @@ TEST_P(MaterialImpactRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesE
           << record.form_key.to_string() << ' ' << rule.signature.to_string();
     }
     for (const auto& field : fo4::schema::scalar_fields(signature)) {
-      for (const auto& subrecord : record.subrecords) {
+      const auto scoped =
+          fo4::behavior_field_candidates(record, field.scalar.subrecord, field.scalar.address.repeated);
+      for (std::size_t position = 0; position < record.subrecords.size(); ++position) {
+        const auto& subrecord = record.subrecords[position];
         if (subrecord.signature != field.scalar.subrecord) continue;
+        if (scoped && std::find(scoped->begin(), scoped->end(), position) == scoped->end()) continue;
         const auto& scalar = field.scalar;
         if (scalar.payload_size != 0 &&
             (scalar.minimum_payload_size != 0 ? subrecord.data.size() < scalar.minimum_payload_size

@@ -41,4 +41,35 @@ struct EslEligibility {
 
 EslEligibility esl_eligibility(const Plugin& plugin);
 
+struct EslSlotRange {
+  std::uint32_t first{0};
+  std::uint32_t last{0};
+  std::size_t capacity{0};
+};
+
+EslSlotRange esl_slot_range(const Plugin& plugin);
+
+struct EslCompactionBlocker {
+  FormKey key;
+  Signature signature{};
+  bool nested{false};
+};
+
+enum class EslCompactionStatus {
+  compacted,
+  already_compatible,
+  capacity_exceeded,
+  blocked_nested_records,
+  rekey_failed,
+};
+
+struct EslCompactionResult {
+  EslCompactionStatus status{EslCompactionStatus::already_compatible};
+  std::size_t remapped{0};
+  std::uint32_t next_form_id{0};
+  std::vector<EslCompactionBlocker> blockers;
+};
+
+EslCompactionResult compact_to_esl(Plugin& plugin);
+
 }  // namespace fo4

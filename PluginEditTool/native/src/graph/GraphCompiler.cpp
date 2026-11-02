@@ -75,9 +75,12 @@ private:
     static void sweepOld(const std::filesystem::path& parent) {
         std::error_code error;
         const auto cutoff = std::filesystem::file_time_type::clock::now() - std::chrono::hours(24);
-        for (std::filesystem::directory_iterator it(parent, error), end; !error && it != end;
-             it.increment(error)) {
+        std::size_t examined = 0;
+        for (std::filesystem::directory_iterator it(parent, error), end;
+             !error && it != end && examined < 64; it.increment(error)) {
             std::error_code entryError;
+            if (!it->is_directory(entryError)) continue;
+            ++examined;
             if (std::filesystem::last_write_time(it->path(), entryError) < cutoff && !entryError) {
                 std::filesystem::remove_all(it->path(), entryError);
             }

@@ -32,7 +32,7 @@ TEST_P(BehaviorWriterReal, EveryOfficialRecordHasOrderedKnownSectionsAndValidWri
   record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "missing official master";
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::map<std::string, int> totals;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     if (!behavior(record.header.signature)) return;
@@ -55,7 +55,7 @@ TEST_P(BehaviorWriterReal, EveryOfficialRecordHasOrderedKnownSectionsAndValidWri
       }
     }
     if (record.header.signature == sig("PACK")) {
-      const auto idle_slots = fo4::behavior_field_candidates(record, sig("INAM"));
+      const auto idle_slots = fo4::behavior_field_candidates(record, sig("INAM"), false);
       ASSERT_TRUE(idle_slots); EXPECT_EQ(idle_slots->size(), 3u);
       const std::vector<std::string> prefix{"EDID","VMAD","PKDT","PSDT","IDLF","IDLC","IDLT","IDLA","IDLB","CNAM","QNAM","PKCU"};
       std::size_t last = 0;

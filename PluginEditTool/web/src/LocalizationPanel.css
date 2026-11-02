@@ -24,6 +24,25 @@
   min-width: 0;
 }
 
+.localization-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-color, #2b2b2b);
+  font-size: 12px;
+}
+
+.localization-actions input[type='text'] {
+  flex: 1;
+  min-width: 160px;
+}
+
+.localization-pending {
+  color: #e5c07b;
+}
+
 .localization-body {
   padding: 12px 14px;
   overflow-y: auto;
@@ -56,6 +75,21 @@
 .localization-table td:first-child {
   white-space: nowrap;
   width: 1%;
+}
+
+.localization-table textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.localization-actions-cell {
+  white-space: nowrap;
+  width: 1%;
+}
+
+.localization-actions-cell button {
+  margin-right: 4px;
 }
 
 .localization-text {

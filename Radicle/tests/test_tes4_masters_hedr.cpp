@@ -54,7 +54,7 @@ TEST(Tes4Masters, UnpairedMasterIsKeptWhenAnotherMasterFollows) {
     fo4::test::write_subrecord(out, "MAST", std::string_view{"Beta.esm\0", 9});
     write_data(out);
   });
-  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(bytes, "Patch.esp");
   ASSERT_EQ(plugin.header.masters.size(), 2u);
   EXPECT_EQ(plugin.header.masters[0].key, fo4::PluginKey::from_filename("Alpha.esm"));
   EXPECT_EQ(plugin.header.masters[1].key, fo4::PluginKey::from_filename("Beta.esm"));
@@ -65,7 +65,7 @@ TEST(Tes4Masters, TrailingUnpairedMasterDecodesWindows1252) {
     write_hedr(out, 1, false);
     fo4::test::write_subrecord(out, "MAST", std::string_view{"Caf\xE9.esm\0", 9});
   });
-  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(bytes, "Patch.esp");
   ASSERT_EQ(plugin.header.masters.size(), 1u);
   EXPECT_EQ(std::string(plugin.header.masters.back().key.filename()), std::string("Caf\xC3\xA9.esm"));
 }

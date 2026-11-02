@@ -206,7 +206,7 @@ TEST(FormLink, PerkEffectDataRemapsOnlyQuestAndAbilityFormIds) {
 }
 
 TEST(FormLink, PerkEntryPointCollectionReportsOnlyFormIdEpfdVariants) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "PerkPatch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "PerkPatch.esp");
   const auto links = fo4::collect_form_links(plugin);
 
   std::vector<std::uint32_t> epfd;
@@ -222,7 +222,7 @@ TEST(FormLink, PerkEntryPointCollectionReportsOnlyFormIdEpfdVariants) {
 }
 
 TEST(FormLink, PerkEffectDataCollectionReportsOnlyQuestAndAbilityFormIds) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "PerkPatch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "PerkPatch.esp");
   const auto links = fo4::collect_form_links(plugin);
 
   std::vector<std::uint32_t> data;

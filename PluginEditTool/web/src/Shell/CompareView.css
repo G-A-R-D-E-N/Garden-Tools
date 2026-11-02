@@ -1,0 +1,51 @@
+.compare-view {
+  margin: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow: hidden;
+}
+
+.compare-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  padding-bottom: 6px;
+}
+
+.compare-view-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.compare-view-scroll {
+  overflow: auto;
+}
+
+.compare-view table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.compare-view th,
+.compare-view td {
+  border: 1px solid var(--border-color);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.compare-view-formkey {
+  color: #888;
+  font-size: 11px;
+}
+
+.compare-view td.differs,
+.compare-view tr.differs th {
+  background: rgba(255, 193, 7, 0.18);
+}

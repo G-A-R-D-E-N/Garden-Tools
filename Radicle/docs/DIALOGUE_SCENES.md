@@ -101,14 +101,32 @@ fields remain editable. Preflight takes the owning plugin's localized flag expli
 | SCEN PNAM, TNAM links | `ParentQuest` | typed `SCEN\ParentQuest` (QUST), `SCEN\TemplateScene` (SCEN) | refused | refused | refused | yes |
 | SCEN VNAM, CNAM, ACTV, NNAM, XNAM | raw | `SCEN\DeathBehavior`, `CombatBehavior`, `PlayerDialogueBehavior`, `ObserveCombatBehavior`, `CameraDistanceOverride`, `DialogueDistanceOverride`, `Notes`, `Index` | refused in practice (`unknown_order`: every official scene has groups) | yes | refused | none |
 | SCEN KSIZ/KWDA keywords | raw | FormLink list ops | refused (coupled) | refused (coupled) | refused | yes |
-| SCEN phases | `Phases` | typed `SCEN\Phase\EditorWidth`, `Flags`, `QuestStageOnStart`/`OnCompletion` by phase index; NAM0 OPAQUE | refused | refused | refused | none |
-| SCEN actors | `Actors` | typed `SCEN\Actor\Alias`, `Flags`, `BehaviorFlags` by actor index | refused | refused | refused | none |
-| SCEN action headers | `Actions` | typed `SCEN\Action\ActorAlias`, `Index`, `Flags`, `StartPhase`, `EndPhase` (u32) by action index; ANAM type and NAM0 OPAQUE | refused | refused | refused | none |
+| SCEN phases | `Phases` | typed `SCEN\Phase\EditorWidth`, `Flags`, `QuestStageOnStart`/`OnCompletion` and the NAM0 name (`set_scene_phase_name`) by phase index | `insert_scene_phase`: two HNAM markers around NAM0, two NEXT, WNAM 350. No FNAM or SCQS (xEdit gives neither a native default); every action Start/End Phase at or after the index shifts by one and VMAD phase fragments remap with it | `move_scene_phase` reorders the phase and remaps the same references; `remove_scene_phase` erases the phase's own `[open, close]` span and refuses while an action starts or ends at it or a VMAD phase fragment binds it | refused | none |
+| SCEN actors | `Actors` | typed `SCEN\Actor\Alias`, `Flags`, `BehaviorFlags` by actor index | `insert_scene_actor`: ALID -1, LNAM 0, DNAM 26 (the xEdit defaults) | yes (`remove_scene_actor`, the ALID/LNAM/DNAM triplet) | refused | none |
+| SCEN action headers | `Actions` | typed `SCEN\Action\ActorAlias`, `Index`, `Flags`, `StartPhase`, `EndPhase` (u32) and the NAM0 name (`set_scene_action_name`) by action index | `insert_scene_action`: ANAM type, ALID -1, INAM index and the empty ANAM close, with no payload (xEdit drops the type-specific payload when the type changes); the stored action index convention is read from the record and every Index plus the record's Last Action Index renumber to it | `move_scene_action` reorders the action and renumbers the same fields; `remove_scene_action` erases the action's own `[open, close]` span including its payload and renumbers the rest | refused | none |
+| SCEN action payload members | opaque payload views | typed `SCEN\Action\LoopingMax`/`LoopingMin`/`CameraFovOnPlayerCamera`/`CameraRateOfChange`/`EmotionType`/`EmotionValue`/`TimerMax`/`TimerMin`/`DialogueTargetActor` and the link members `Topic`, `DialogueSubtype`, `AnimArchType`, `AudioOutputOverride`, `PlayerPositive`/`PlayerNegative`/`PlayerNeutral`/`PlayerQuestionResponse`, `PlayerPositive`/`PlayerNegative`/`PlayerNeutral`/`PlayerQuestionDialogueSubtype`, `NpcPositive`/`NpcNegative`/`NpcNeutral`/`NpcQuestionResponse`, `NpcPositive`/`NpcNegative`/`NpcNeutral`/`NpcQuestionDialogueSubtype`, `StartSceneTopic`, `PlaySound`, by action index and only for the stored ANAM type | refused: the members xEdit stores as lists (package `PNAM`, `HTID`/`DTID` headtracking, `LCEP` start scenes) and timer `SCQS`, whose stored width is unresolved | refused (edit only) | `set_scene_action_formlink`, the index-free `set_scene_formlink` throws for these paths | the action's opened payload, per action type |
 | SCEN action payloads, conditions | opaque payload views, condition code | OPAQUE | refused | refused | refused | existing |
 | SCEN records | n/a | n/a | n/a | n/a | refused: official scenes live only under quest children groups | n/a |
 
 All official DIAL, INFO and SCEN follow the authoring order and placement (0 violators). Field list, defaults
 provenance and refusal reasons are in `docs/code-notes/radicle-dialogue-writer.md`.
+
+Phase and action edits keep the record's own references consistent instead of leaving the caller to patch stored
+indices afterwards. A phase insert or move rewrites every action `SNAM`/`ENAM` that must follow it and the VMAD
+scene phase fragment indices that address the same phases; a phase removal is refused while an action starts or ends
+at it or a VMAD phase fragment binds it, and the later references decrement. An action insert, removal or move reads
+the scene's stored index convention (0- or 1-based) from the existing `INAM` values and the record's Last Action
+Index, then renumbers every action `Index` and that tail word; a scene whose stored indices do not follow one
+convention is refused before any byte changes. Actor list edits keep their previous behaviour: the action `ALID`
+values and the opaque headtracking arrays are not renumbered by an actor insert or removal (design decision in
+`Radicle/docs/code-notes/Radicle.md:scene_index`), and `move_scene_phase`/`move_scene_action` are C++ only, so the C
+ABI and `RADICLE_ABI_VERSION` are unchanged.
+
+Action payload members are addressed by action index and only for the type stored in the action's opening ANAM,
+so the same signature can belong to different members in different action types: `SCEN\Action\TimerMax` is the
+timer action's payload SNAM, while `SCEN\Action\StartPhase` is the header SNAM of any action. A member the
+stored type does not carry reports `subrecord_missing`, and a member that another action type also uses under
+another name (`SCEN\Action\AnimArchType` against a package action's `PNAM`) is refused the same way.
 
 ## GardenEngine consumer probe
 

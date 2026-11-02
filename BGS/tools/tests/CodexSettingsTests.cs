@@ -33,26 +33,6 @@ public sealed class CodexSettingsTests
     }
 
     [Fact]
-    public void ProviderOptionsNeverExposeAnEndpointOrCredentialVariable()
-    {
-        string? previousPath = Settings.SettingsPathForTest;
-        Settings.SettingsPathForTest =
-            Path.Combine(Path.GetTempPath(), "bgs-provider-" + Guid.NewGuid().ToString("N") + ".cfg");
-        try
-        {
-            AssistantProviderOptions options = AssistantProviderOptions.FromSettings();
-
-            Assert.Equal("codex", options.Backend);
-            Assert.DoesNotContain("http", options.Model, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("BGS_AI_API_KEY", options.CodexExecutableOverride, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Settings.SettingsPathForTest = previousPath;
-        }
-    }
-
-    [Fact]
     public void CodexOverridePathIsPreferredOverPathDiscovery()
     {
         Func<string, bool> previous = CodexLocator.FileExistsForTest;

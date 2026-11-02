@@ -3,6 +3,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/subrecord_authoring.hpp"
+#include "fo4/plugin/sound_writer.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
@@ -15,6 +16,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <map>
 #include <set>
@@ -101,7 +103,7 @@ TEST_P(SoundWriterReal, EveryOfficialRecordIsListedOrderedAndPreflightClean) {
   const auto path = official(GetParam(), skip);
   if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   record_game_build(detect_game_build(path.parent_path()));
-  const auto plugin = sound_sample(fo4::read_plugin_file(path), path);
+  auto plugin = sound_sample(fo4::read_plugin_file(path), path);
   std::map<std::string, int> totals;
   std::vector<std::string> violators;
   int rate_group_records = 0;
@@ -143,13 +145,17 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
   std::map<fo4::FormKey, fo4::FormKey> self_targets;
   std::map<fo4::FormKey, std::vector<Bytes>> expected;
   std::map<std::string, int> edits;
+  int derived_rows = 0;
   fo4::visit_records(original, [&](const fo4::Record& record) {
     if (!is_sound(record.header.signature)) { return; }
     auto& want = expected[record.form_key];
     for (const auto& sub : record.subrecords) { want.push_back(sub.data); }
     for (const auto& field : fo4::schema::scalar_fields(record.header.signature)) {
       SCOPED_TRACE(record.form_key.to_string() + ' ' + std::string(field.path));
-      const auto slots = fo4::schema::resolve_field_slots(record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+      if (fo4::schema::is_derived_scalar_row(field.record, field.scalar.subrecord)) { ++derived_rows; continue; }
+      const auto* live = fo4::find_record(sample, record.form_key);
+      ASSERT_NE(live, nullptr);
+      const auto slots = fo4::schema::resolve_field_slots(*live, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
       std::set<std::size_t> picks;
       if (!slots.slots.empty()) { picks = {0, slots.slots.size() - 1}; }
       for (const auto index : picks) {
@@ -165,7 +171,7 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
           payload.push_back(std::byte{0});
           want[slot.subrecord] = payload;
         } else {
-          const auto existing = fo4::schema::scalar_slot_bytes(record.subrecords[slot.subrecord].data, slot, field.scalar);
+          const auto existing = fo4::schema::scalar_slot_bytes(live->subrecords[slot.subrecord].data, slot, field.scalar);
           const std::string value = fo4::schema::encode_scalar("1", field.scalar) == Bytes(existing.begin(), existing.end()) ? "0" : "1";
           ASSERT_EQ(fo4::set_record_scalar(sample, record.form_key, field, index, value), fo4::ScalarMutationStatus::updated);
           const auto bytes = fo4::schema::encode_scalar(value, field.scalar);
@@ -177,7 +183,9 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
     for (const auto& field : fo4::schema::formlink_fields(record.header.signature)) {
       SCOPED_TRACE(record.form_key.to_string() + ' ' + std::string(field.path));
       const fo4::schema::FieldShape shape{field.subrecord, field.offset, 4, 0, false};
-      const auto slots = fo4::schema::resolve_field_slots(record, shape, field.address);
+      const auto* live = fo4::find_record(sample, record.form_key);
+      ASSERT_NE(live, nullptr);
+      const auto slots = fo4::schema::resolve_field_slots(*live, shape, field.address);
       if (slots.slots.empty()) { continue; }
       const auto index = slots.slots.size() - 1;
       const auto& slot = slots.slots[index];
@@ -218,6 +226,7 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
   RecordProperty("records", checked);
   RecordProperty("paths", static_cast<int>(edits.size()));
   RecordProperty("edits", total);
+  RecordProperty("derived_rows", derived_rows);
 }
 
 TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEveryOtherRecordByteIdentical) {
@@ -247,6 +256,9 @@ TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEver
   }
   const auto changed = [](fo4::FormLinkFieldMutationStatus status) {
     return status == fo4::FormLinkFieldMutationStatus::updated || status == fo4::FormLinkFieldMutationStatus::unchanged;
+  };
+  const auto list_changed = [](fo4::schema::FormLinkListMutationStatus status) {
+    return status == fo4::schema::FormLinkListMutationStatus::updated || status == fo4::schema::FormLinkListMutationStatus::unchanged;
   };
   int edits = 0, added = 0, removed = 0;
   std::set<fo4::FormKey> touched;
@@ -290,7 +302,7 @@ TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEver
       ++edits;
     } else if (type == "MUSC") {
       if (has("TNAM")) {
-        EXPECT_TRUE(changed(fo4::set_record_formlink_field(plugin, record, field("MUSC\\Tracks"), 0, fo4::FormKey{})));
+        EXPECT_TRUE(list_changed(fo4::schema::set_record_formlink_list_element(plugin, record, *fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("MUSC"), "MUSC\\Tracks"), 0, fo4::FormKey{})));
         ++edits;
       } else {
         ASSERT_EQ(fo4::add_record_subrecord(plugin, record, sig("TNAM")), fo4::SubrecordAddStatus::added);
@@ -344,6 +356,108 @@ TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEver
   RecordProperty("subrecords_added", added);
   RecordProperty("subrecords_removed", removed);
   RecordProperty("records_edited", static_cast<int>(targets.size()));
+}
+
+TEST_P(SoundWriterReal, AddsAndRemovesFilesAndBaseLinksOnOfficialDescriptors) {
+  bool skip = false;
+  const auto path = official(GetParam(), skip);
+  if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(path.parent_path()));
+  auto sample = sound_sample(fo4::read_plugin_file(path), path);
+  auto original = sample;
+  int file_edits = 0;
+  int base_edits = 0;
+  bool base_proven = false;
+  std::vector<fo4::FormKey> touched;
+  fo4::FormKey first_descriptor{};
+  fo4::visit_records(original, [&](const fo4::Record& record) {
+    if (record.header.signature != sig("SNDR")) { return; }
+    if (first_descriptor.owner().empty()) first_descriptor = record.form_key;
+    const auto subs = subs_of(original, record.form_key);
+    bool has_rate_group = false;
+    bool auto_weapon = false;
+    for (const auto& [name, bytes] : subs) {
+      if (rate_group_member(sig(name.c_str()))) has_rate_group = true;
+      if (name == "CNAM" && bytes.size() == 4) {
+        std::uint32_t kind = 0;
+        std::memcpy(&kind, bytes.data(), 4);
+        auto_weapon = kind == 0xED157AE3u;
+      }
+    }
+    const auto* live = fo4::find_record(sample, record.form_key);
+    ASSERT_NE(live, nullptr);
+    if (!has_rate_group || file_edits != 0) {
+      if (auto_weapon && !base_proven) {
+        const auto snapshot = *live;
+        const auto removed = fo4::remove_sound_descriptor_base(sample, record.form_key);
+        if (removed == fo4::SoundDescriptorMutationStatus::updated) {
+          const auto added = fo4::add_sound_descriptor_base(sample, record.form_key, first_descriptor);
+          if (added == fo4::SoundDescriptorMutationStatus::updated) {
+            const auto restored = fo4::remove_sound_descriptor_base(sample, record.form_key);
+            if (restored == fo4::SoundDescriptorMutationStatus::updated) {
+              base_proven = true;
+              ++base_edits;
+              touched.push_back(record.form_key);
+            }
+          }
+        }
+        if (subs_of(sample, record.form_key) != subs_of(original, record.form_key)) {
+          fo4::Record* restore = nullptr;
+          fo4::visit_records(sample, [&](fo4::Record& candidate) {
+            if (restore == nullptr && candidate.form_key == record.form_key) restore = &candidate;
+          });
+          if (restore != nullptr) *restore = snapshot;
+        }
+      }
+      return;
+    }
+    if (fo4::add_sound_descriptor_file(sample, record.form_key, "radicle\\real.wav") !=
+        fo4::SoundDescriptorMutationStatus::updated) {
+      return;
+    }
+    const auto* record_now = fo4::find_record(sample, record.form_key);
+    ASSERT_NE(record_now, nullptr);
+    bool found_file = false;
+    for (const auto& sub : record_now->subrecords) {
+      if (sub.signature.to_string() != "ANAM") continue;
+      const std::string_view text(reinterpret_cast<const char*>(sub.data.data()), sub.data.size());
+      if (!text.empty() && text.back() == '\0' && text.substr(0, text.size() - 1) == "radicle\\real.wav") {
+        found_file = true;
+      }
+    }
+    EXPECT_TRUE(found_file);
+    std::size_t file_index = 0;
+    std::size_t seen = 0;
+    for (const auto& sub : record_now->subrecords) {
+      if (sub.signature.to_string() != "ANAM") continue;
+      const std::string_view text(reinterpret_cast<const char*>(sub.data.data()), sub.data.size());
+      if (!text.empty() && text.back() == '\0' && text.substr(0, text.size() - 1) == "radicle\\real.wav") {
+        file_index = seen;
+      }
+      ++seen;
+    }
+    EXPECT_EQ(fo4::remove_sound_descriptor_file(sample, record.form_key, file_index),
+              fo4::SoundDescriptorMutationStatus::updated);
+    const auto restored = subs_of(sample, record.form_key);
+    EXPECT_EQ(restored, subs);
+    ++file_edits;
+    touched.push_back(record.form_key);
+  });
+  for (const auto& key : touched) {
+    const auto* live = fo4::find_record(sample, key);
+    ASSERT_NE(live, nullptr);
+    const auto before = subs_of(original, key);
+    const auto after = subs_of(sample, key);
+    EXPECT_EQ(after, before) << key.to_string();
+  }
+  const auto reread = fo4::read_plugin(fo4::write_plugin(sample), path);
+  for (const auto& key : touched) {
+    const auto* live = fo4::find_record(reread, key);
+    ASSERT_NE(live, nullptr);
+    EXPECT_EQ(subs_of(reread, key), subs_of(original, key)) << key.to_string();
+  }
+  RecordProperty("file_edits", file_edits);
+  RecordProperty("base_edits", base_edits);
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, SoundWriterReal,

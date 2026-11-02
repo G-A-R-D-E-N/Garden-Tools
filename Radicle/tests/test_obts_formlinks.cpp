@@ -76,7 +76,7 @@ std::vector<std::uint32_t> obts_form_ids(const fo4::Plugin& plugin) {
 }  // namespace
 
 TEST(ObtsFormLinks, TemplateFormIdsAreCollected) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Mod.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Mod.esp");
   std::size_t keyword = 0;
   std::size_t includes = 0;
   for (const auto& hit : fo4::collect_form_links(plugin)) {

@@ -302,7 +302,7 @@ TEST_F(VegetationAuthoring, FloraCannotBeCreatedInALocalizedPlugin) {
 }
 
 TEST_F(VegetationAuthoring, LinkSurfacesAreVisibleToTheRemapAndCheckScan) {
-  const auto plugin = read(build(fixture(), true));
+  auto plugin = read(build(fixture(), true));
   std::vector<std::string> seen;
   for (const auto& hit : fo4::collect_form_links(plugin)) {
     const auto record = hit.record.local().value();
@@ -374,7 +374,7 @@ TEST_F(VegetationAuthoring, CAbiMapsLinkAuthoringAndCreateStatusesAndSurvivesRel
   EXPECT_EQ(radicle_plugin_create_record(plugin, "TREE", "CTree", &created_tree), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_create_record(plugin, "FLOR", "CFlora", &created_flor), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_create_record(plugin, "LTEX", "CLand", &created_ltex), RADICLE_STATUS_OK);
-  EXPECT_EQ(radicle_plugin_create_record(plugin, "MISC", "CMisc", &refused_key), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_record(plugin, "BPTD", "CBody", &refused_key), RADICLE_STATUS_INVALID_ARGUMENT);
   ASSERT_EQ(radicle_plugin_set_record_scalar(plugin, created_gras, "GRAS\\Density", "44"), RADICLE_STATUS_OK);
   ASSERT_EQ(radicle_plugin_set_record_formlink(plugin, created_flor, "FLOR\\HarvestSound", 0, &sound), RADICLE_STATUS_NOT_FOUND);
   ASSERT_EQ(radicle_plugin_add_subrecord(plugin, created_flor, "PFIG"), RADICLE_STATUS_OK);

@@ -8,9 +8,7 @@ namespace BehaviourStudio.Tests;
 
 public sealed class SkinSaveTests
 {
-    private static byte[] Source() => File.ReadAllBytes(System.IO.Path.GetFullPath(
-        System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "symrm", "samples",
-            "Meshes", "Actors", "Turret", "CharacterAssets", "TurretMounted.nif")));
+    private static byte[] Source() => File.ReadAllBytes(System.IO.Path.Combine(AppContext.BaseDirectory, "samples", "TurretMounted.nif"));
 
     [Fact]
     public void WeightEditPreservesEveryByteOutsideTheOwnedSkinSlots()

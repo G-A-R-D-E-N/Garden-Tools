@@ -413,7 +413,7 @@ TEST(ConditionScopesRecords, InfoRootInsertsBeforePrompt) {
 }
 
 TEST(ConditionScopesRecords, RecordWithoutNestedScopesKeepsWholeRecordRules) {
-  auto single = make_plugin("SCEN", {{"CTDA", ctda_bytes(1)}, {"ANAM", u32_bytes(0)}});
+  auto single = make_plugin("MISC", {{"CTDA", ctda_bytes(1)}, {"ANAM", u32_bytes(0)}});
   EXPECT_EQ(root_functions(*cond_record(single)), Functions{1});
   const std::vector<fo4::CtdaCondition> replacement{function_condition(5)};
   EXPECT_EQ(fo4::set_record_conditions(single, fo4::FormKey::parse("000800:Cond.esp"), replacement),
@@ -423,6 +423,7 @@ TEST(ConditionScopesRecords, RecordWithoutNestedScopesKeepsWholeRecordRules) {
   EXPECT_EQ(root_functions(*cond_record(reread)), Functions{5});
 
   auto several = make_plugin("SCEN", {
+      {"PNAM", zeros(4)},
       {"CTDA", ctda_bytes(1)},
       {"ANAM", u32_bytes(0)},
       {"CTDA", ctda_bytes(2)},
@@ -434,7 +435,7 @@ TEST(ConditionScopesRecords, RecordWithoutNestedScopesKeepsWholeRecordRules) {
             fo4::ConditionMutationStatus::multiple_lists);
   EXPECT_EQ(fo4::write_plugin(several), fo4::write_plugin(several_before));
 
-  auto none = make_plugin("SCEN", {{"ANAM", u32_bytes(0)}});
+  auto none = make_plugin("SPEL", {{"ANAM", u32_bytes(0)}});
   const auto none_before = none;
   EXPECT_EQ(fo4::set_record_conditions(none, fo4::FormKey::parse("000800:Cond.esp"), replacement),
             fo4::ConditionMutationStatus::no_condition_list);

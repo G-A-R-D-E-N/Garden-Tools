@@ -68,9 +68,12 @@ add_subdirectory("${RADICLE_DIR}" "${CMAKE_BINARY_DIR}/radicle")
 # cannot create symbolic links, so that step fails on every configure. Unset
 # the version properties here so only plain libradicle.so is produced; every
 # consumer in this tree links via -lradicle, so the unversioned name is all
-# that is needed.
-set_property(TARGET radicle_c PROPERTY VERSION)
-set_property(TARGET radicle_c PROPERTY SOVERSION)
+# that is needed. A shared Radicle build (RADICLE_SHARED) has no separate
+# radicle_c target: the C ABI is compiled into fo4 itself.
+if(TARGET radicle_c)
+  set_property(TARGET radicle_c PROPERTY VERSION)
+  set_property(TARGET radicle_c PROPERTY SOVERSION)
+endif()
 
 add_subdirectory(src)
 add_subdirectory(apps/fo4ide)

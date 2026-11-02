@@ -163,7 +163,7 @@ std::vector<fo4::CheckFinding> of_code(const std::vector<fo4::CheckFinding>& fin
 }  // namespace
 
 TEST(CheckErrors, ReportsEachLinkProblemOnce) {
-  const auto plugin = make_check_plugin();
+  auto plugin = make_check_plugin();
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = fo4::check_load_order(load_order);
 
@@ -175,21 +175,23 @@ TEST(CheckErrors, ReportsEachLinkProblemOnce) {
   EXPECT_EQ(wrong_type[0].offset, 4u);
 
   const auto unresolved = of_code(findings, fo4::CheckCode::unresolved_link);
-  ASSERT_EQ(unresolved.size(), 2u);
+  ASSERT_EQ(unresolved.size(), 1u);
   EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000803:Check.esp"));
-  EXPECT_EQ(unresolved[1].target, fo4::FormKey::parse("000900:Check.esp"));
-  EXPECT_EQ(unresolved[1].offset, 16u);
+  EXPECT_EQ(unresolved[0].offset, 8u);
 
   const auto deleted = of_code(findings, fo4::CheckCode::deleted_target);
   ASSERT_EQ(deleted.size(), 1u);
   EXPECT_EQ(deleted[0].target, fo4::FormKey::parse("000806:Check.esp"));
   EXPECT_EQ(deleted[0].severity, fo4::CheckSeverity::warning);
 
-  EXPECT_TRUE(of_code(findings, fo4::CheckCode::invalid_master_index).empty());
+  const auto bad_index = of_code(findings, fo4::CheckCode::invalid_master_index);
+  ASSERT_EQ(bad_index.size(), 1u);
+  EXPECT_EQ(bad_index[0].subrecord.to_string(), "KWDA");
+  EXPECT_EQ(bad_index[0].severity, fo4::CheckSeverity::warning);
 }
 
 TEST(CheckErrors, ReportsLeveledListCycleOnce) {
-  const auto plugin = make_check_plugin();
+  auto plugin = make_check_plugin();
   const std::vector<const fo4::Plugin*> load_order{&plugin};
 
   const auto cycles = fo4::find_leveled_list_cycles(load_order);
@@ -229,13 +231,24 @@ TEST(CheckErrors, FiltersByPluginAndHonoursLimit) {
 
   fo4::CheckOptions limited;
   limited.limit = 2;
-  EXPECT_EQ(fo4::check_load_order(load_order, limited).size(), 2u);
+  const auto capped = fo4::check_load_order(load_order, limited);
+  ASSERT_EQ(capped.size(), 3u);
+  EXPECT_EQ(capped.back().code, fo4::CheckCode::results_truncated);
+  EXPECT_EQ(capped.back().severity, fo4::CheckSeverity::warning);
 }
 
 TEST(CheckErrors, CodeNamesAreStable) {
   EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::wrong_target_type), "wrong_target_type");
   EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::circular_leveled_list), "circular_leveled_list");
   EXPECT_EQ(fo4::check_severity_name(fo4::CheckSeverity::warning), "warning");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::branch_starting_topic_not_dial),
+            "branch_starting_topic_not_dial");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::topic_children_not_dial),
+            "topic_children_not_dial");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::deleted_record_content), "deleted_record_content");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::partial_form_content), "partial_form_content");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::light_object_id_overflow), "light_object_id_overflow");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::internal_form_id_mismatch), "internal_form_id_mismatch");
 }
 
 TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
@@ -245,7 +258,7 @@ TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
   record_game_build(detect_game_build(dir));
   if (!std::filesystem::exists(dir / "Fallout4.esm")) GTEST_SKIP() << "Fallout4.esm not found";
 
-  const auto plugin = fo4::read_plugin_file(dir / "Fallout4.esm");
+  auto plugin = fo4::read_plugin_file(dir / "Fallout4.esm");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = fo4::check_load_order(load_order);
   const auto wrong_type = of_code(findings, fo4::CheckCode::wrong_target_type);
@@ -253,18 +266,26 @@ TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
     ADD_FAILURE() << wrong_type[i].record.to_string() << " " << wrong_type[i].message;
   }
   EXPECT_TRUE(wrong_type.empty()) << wrong_type.size() << " wrong_target_type findings";
-  EXPECT_TRUE(of_code(findings, fo4::CheckCode::invalid_master_index).empty());
+  // Fallout4.esm 1.11.240 really stores these: it has no masters, yet NPC_ 00080B holds 0x01000809 in TPTA.
+  const auto bad_master = of_code(findings, fo4::CheckCode::invalid_master_index);
+  EXPECT_EQ(bad_master.size(), 73u);
+  for (const auto& finding : bad_master) EXPECT_EQ(finding.severity, fo4::CheckSeverity::warning) << finding.message;
   for (const auto& finding : findings) EXPECT_NE(finding.severity, fo4::CheckSeverity::error) << finding.message;
 }
 
-TEST(CheckErrors, PastMasterTableLinkToOwnRecordIsValid) {
+TEST(CheckErrors, PastMasterTableIndexIsAnInvalidMasterIndex) {
   fo4::test::ByteWriter out;
   write_header(out, {});
   write_empty_record(out, "KYWD", 0x000800);
   write_misc_with_keywords(out, 0x000801, {0x05000800});
-  const auto plugin = fo4::read_plugin(out.bytes, "Owner.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Owner.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
-  EXPECT_TRUE(fo4::check_load_order(load_order).empty());
+  const auto findings = fo4::check_load_order(load_order);
+  const auto bad_index = of_code(findings, fo4::CheckCode::invalid_master_index);
+  ASSERT_EQ(bad_index.size(), 1u);
+  EXPECT_EQ(bad_index[0].severity, fo4::CheckSeverity::warning);
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::unresolved_link).empty());
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::wrong_target_type).empty());
 }
 
 TEST(CheckErrors, HardcodedEngineFormsAreNotUnresolved) {
@@ -275,7 +296,7 @@ TEST(CheckErrors, HardcodedEngineFormsAreNotUnresolved) {
   fo4::test::ByteWriter out;
   write_header(out, "Fallout4.esm");
   write_misc_with_keywords(out, 0x01000801, {0x00000014, 0x00000900});
-  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
   const std::vector<const fo4::Plugin*> load_order{&master, &plugin};
   const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
   ASSERT_EQ(unresolved.size(), 1u);
@@ -293,7 +314,7 @@ TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
   fo4::test::write_subrecord(out, "WNAM", wnam.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
-  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
   ASSERT_EQ(unresolved.size(), 2u);
@@ -314,7 +335,7 @@ TEST(CheckErrors, MissingBranchStartingTopicIsReportedOnce) {
   fo4::test::write_subrecord(out, "SNAM", snam.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
-  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = fo4::check_load_order(load_order);
   const auto snam_findings = std::count_if(findings.begin(), findings.end(),
@@ -341,21 +362,127 @@ fo4::Plugin rfgp_with_reference(const char* name, std::uint32_t rnam) {
   fo4::test::end_group(out, group);
   return fo4::read_plugin(out.bytes, name);
 }
+
+fo4::Plugin regn_with_worldspace(const char* name, std::uint32_t wnam) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "REGN", 0);
+  const auto record = fo4::test::begin_record(out, "REGN", 0, 0x000860);
+  fo4::test::ByteWriter value;
+  value.u32(wnam);
+  fo4::test::write_subrecord(out, "WNAM", value.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+
+fo4::Plugin plugin_with_link(const char* name, std::string_view signature,
+                             std::string_view subrecord, std::uint32_t target,
+                             std::string_view master = {},
+                             std::uint32_t record_id = 0x000840) {
+  fo4::test::ByteWriter out;
+  write_header(out, master);
+  const auto group = fo4::test::begin_group(out, signature, 0);
+  const auto record = fo4::test::begin_record(out, signature, 0, record_id);
+  fo4::test::ByteWriter value;
+  value.u32(target);
+  fo4::test::write_subrecord(out, subrecord, value.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
 }  // namespace
 
 TEST(CheckErrors, MissingGameMasterReferenceGroupTargetIsNotAnError) {
-  const auto plugin = rfgp_with_reference("Fallout4.esm", 0x000850);
+  auto plugin = rfgp_with_reference("Fallout4.esm", 0x000850);
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link).empty());
 }
 
 TEST(CheckErrors, MissingModReferenceGroupTargetIsStillUnresolved) {
-  const auto plugin = rfgp_with_reference("Mod.esp", 0x000850);
+  auto plugin = rfgp_with_reference("Mod.esp", 0x000850);
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
   ASSERT_EQ(unresolved.size(), 1u);
   EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000850:Mod.esp"));
   EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrors, MissingGameMasterRegionWorldspaceIsNotAnError) {
+  auto plugin = regn_with_worldspace("Fallout4.esm", 0x000850);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link).empty());
+}
+
+TEST(CheckErrors, MissingModRegionWorldspaceIsStillUnresolved) {
+  auto plugin = regn_with_worldspace("Mod.esp", 0x000850);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 1u);
+  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000850:Mod.esp"));
+  EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrors, DanglingGameMasterLinksAreExemptOnlyForKnownPairs) {
+  struct Exemption {
+    std::string_view record;
+    std::string_view subrecord;
+  };
+  constexpr std::array<Exemption, 5> exemptions{{
+      {"REFR", "XRFG"},
+      {"REFR", "XMSP"},
+      {"REFR", "XLKR"},
+      {"ACHR", "XLCN"},
+      {"SCCO", "SNAM"},
+  }};
+
+  for (const auto& exemption : exemptions) {
+    const auto master =
+        plugin_with_link("Fallout4.esm", exemption.record, exemption.subrecord, 0x000850);
+    const std::vector<const fo4::Plugin*> master_order{&master};
+    EXPECT_TRUE(
+        of_code(fo4::check_load_order(master_order), fo4::CheckCode::unresolved_link).empty())
+        << exemption.record << " " << exemption.subrecord;
+
+    const auto mod = plugin_with_link("Mod.esp", exemption.record, exemption.subrecord, 0x000850);
+    const std::vector<const fo4::Plugin*> mod_order{&mod};
+    const auto unresolved =
+        of_code(fo4::check_load_order(mod_order), fo4::CheckCode::unresolved_link);
+    ASSERT_EQ(unresolved.size(), 1u) << exemption.record << " " << exemption.subrecord;
+    EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000850:Mod.esp"));
+    EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
+  }
+
+  const auto other_slot = plugin_with_link("Fallout4.esm", "REFR", "XLCN", 0x000850);
+  const std::vector<const fo4::Plugin*> other_order{&other_slot};
+  const auto unresolved = of_code(fo4::check_load_order(other_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 1u);
+  EXPECT_EQ(unresolved[0].subrecord.to_string(), "XLCN");
+  EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
+
+  const auto other_record = plugin_with_link("Fallout4.esm", "ACHR", "XLKR", 0x000850);
+  const std::vector<const fo4::Plugin*> other_record_order{&other_record};
+  const auto other_record_unresolved =
+      of_code(fo4::check_load_order(other_record_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(other_record_unresolved.size(), 1u);
+  EXPECT_EQ(other_record_unresolved[0].subrecord.to_string(), "XLKR");
+  EXPECT_EQ(other_record_unresolved[0].severity, fo4::CheckSeverity::error);
+
+  const auto mod_new =
+      plugin_with_link("Mod.esp", "REFR", "XLKR", 0x000850, "Fallout4.esm", 0x01000840);
+  const std::vector<const fo4::Plugin*> mod_new_order{&mod_new};
+  const auto mod_new_unresolved =
+      of_code(fo4::check_load_order(mod_new_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(mod_new_unresolved.size(), 1u);
+  EXPECT_EQ(mod_new_unresolved[0].record, fo4::FormKey::parse("000840:Mod.esp"));
+  EXPECT_EQ(mod_new_unresolved[0].target, fo4::FormKey::parse("000850:Fallout4.esm"));
+  EXPECT_EQ(mod_new_unresolved[0].severity, fo4::CheckSeverity::error);
+
+  const auto mod_override =
+      plugin_with_link("Mod.esp", "REFR", "XLKR", 0x000850, "Fallout4.esm", 0x00000840);
+  const std::vector<const fo4::Plugin*> mod_override_order{&mod_override};
+  EXPECT_TRUE(of_code(fo4::check_load_order(mod_override_order), fo4::CheckCode::unresolved_link)
+                  .empty());
 }
 
 TEST(CheckErrors, NoneFormIdIsNotALink) {
@@ -369,7 +496,7 @@ TEST(CheckErrors, NoneFormIdIsNotALink) {
   fo4::test::write_subrecord(out, "ANAM", anam.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
-  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   for (const auto& finding : fo4::check_load_order(load_order)) {
     EXPECT_NE(finding.code, fo4::CheckCode::unresolved_link) << finding.message;
@@ -417,7 +544,7 @@ TEST(CheckErrors, RepeatedVariantSubrecordUsesItsOwnSelector) {
   fo4::test::write_subrecord(out, "PTDA", second.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
-  const auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
   const auto* pack = find_record(plugin, "PACK");
   ASSERT_NE(pack, nullptr);
 
@@ -451,14 +578,14 @@ TEST(CheckErrors, RepeatedVariantSubrecordTargetsAreCheckedPerInstance) {
   fo4::test::write_subrecord(out, "PTDA", second.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
-  const auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::wrong_target_type).empty());
 }
 
 TEST(CheckErrors, PreflightFindingCarriesIssueCodeAsDetail) {
   const auto bytes = duplicate_scalar_bytes();
-  const auto plugin = fo4::read_plugin(bytes, "Dup.esp");
+  auto plugin = fo4::read_plugin(bytes, "Dup.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::schema_preflight);
   ASSERT_EQ(findings.size(), 1u);
@@ -492,7 +619,7 @@ TEST(CheckErrors, CApiRowEndsWithIssueCode) {
   EXPECT_TRUE(rows[0].ends_with(" (duplicate_scalar_subrecord)")) << rows[0];
 }
 
-TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
+TEST(CheckErrors, LowIdsResolveAgainstTheGameMaster) {
   fo4::test::ByteWriter game;
   write_header(game, {});
   write_empty_record(game, "KYWD", 0x000800);
@@ -500,11 +627,10 @@ TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
   fo4::test::ByteWriter out;
   write_header(out, "CustomMaster.esm");
   write_misc_with_keywords(out, 0x01000801, {0x00000014});
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const std::vector<const fo4::Plugin*> load_order{&master, &plugin};
-  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
-  ASSERT_EQ(unresolved.size(), 1u);
-  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000014:CustomMaster.esm"));
+  // Requires: ObjectID < $800 resolves in the game master (xEdit IsHardcoded), which is not loaded here.
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link).empty());
 }
 
 TEST(CheckErrors, DeletedRecordContentIsFlaggedExceptReferenceBaseRecord) {
@@ -513,7 +639,7 @@ TEST(CheckErrors, DeletedRecordContentIsFlaggedExceptReferenceBaseRecord) {
   write_record_with_subrecords(out, "REFR", k_deleted_flag, 0x000800, {"NAME", "DATA"});
   write_record_with_subrecords(out, "REFR", k_deleted_flag, 0x000801, {"NAME"});
   write_record_with_subrecords(out, "KYWD", k_deleted_flag, 0x000802, {"DATA"});
-  const auto plugin = fo4::read_plugin(out.bytes, "Deleted.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Deleted.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::deleted_record_content);
   ASSERT_EQ(findings.size(), 2u);
@@ -528,7 +654,7 @@ TEST(CheckErrors, PartialFormContentOtherThanEditorIdIsFlagged) {
   write_header(out, {});
   write_record_with_subrecords(out, "QUST", k_partial_form_flag, 0x000800, {"EDID", "SCRI"});
   write_record_with_subrecords(out, "QUST", k_partial_form_flag, 0x000801, {"EDID"});
-  const auto plugin = fo4::read_plugin(out.bytes, "Partial.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Partial.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::partial_form_content);
   ASSERT_EQ(findings.size(), 1u);
@@ -542,7 +668,7 @@ TEST(CheckErrors, PartialDialogueInfoOrderIsNotContentButOtherSubrecordsAre) {
   write_header(out, {});
   write_record_with_subrecords(out, "DIAL", k_partial_form_flag, 0x000800, {"EDID", "INOM"});
   write_record_with_subrecords(out, "DIAL", k_partial_form_flag, 0x000801, {"EDID", "FULL"});
-  const auto plugin = fo4::read_plugin(out.bytes, "PartialDial.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "PartialDial.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::partial_form_content);
   ASSERT_EQ(findings.size(), 1u);
@@ -555,7 +681,7 @@ TEST(CheckErrors, LightPluginObjectIdAboveTwelveBitsIsInvalid) {
   write_header(out, "Base.esm", k_small_file_flag);
   write_empty_record(out, "KYWD", 0x01000FFF);
   write_empty_record(out, "KYWD", 0x01001000);
-  const auto plugin = fo4::read_plugin(out.bytes, "Light.esl");
+  auto plugin = fo4::read_plugin(out.bytes, "Light.esl");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::light_object_id_overflow);
   ASSERT_EQ(findings.size(), 1u);
@@ -569,7 +695,7 @@ TEST(CheckErrors, MasterIndexPastMasterTableIsInternalMismatch) {
   write_header(out, {});
   write_empty_record(out, "KYWD", 0x01000800);
   write_empty_record(out, "KYWD", 0x00000801);
-  const auto plugin = fo4::read_plugin(out.bytes, "Stray.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Stray.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::internal_form_id_mismatch);
   ASSERT_EQ(findings.size(), 1u);
@@ -577,9 +703,31 @@ TEST(CheckErrors, MasterIndexPastMasterTableIsInternalMismatch) {
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
 }
 
-TEST(CheckErrors, RecordLevelCodeNamesAreStable) {
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::deleted_record_content), "deleted_record_content");
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::partial_form_content), "partial_form_content");
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::light_object_id_overflow), "light_object_id_overflow");
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::internal_form_id_mismatch), "internal_form_id_mismatch");
+TEST(CheckErrors, RecordOwnedByAMasterThatLacksItIsInjected) {
+  fo4::test::ByteWriter game;
+  write_header(game, {});
+  write_empty_record(game, "KYWD", 0x000800);
+  write_empty_record(game, "MISC", 0x000801);
+  const auto master = fo4::read_plugin(game.bytes, "Fallout4.esm");
+
+  fo4::test::ByteWriter out;
+  write_header(out, "Fallout4.esm");
+  write_empty_record(out, "KYWD", 0x00000900);
+  write_empty_record(out, "MISC", 0x00000801);
+  write_empty_record(out, "KYWD", 0x01000802);
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+
+  const std::vector<const fo4::Plugin*> load_order{&master, &plugin};
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::injected_record), "injected_record");
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::injected_record);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000900:Fallout4.esm"));
+  EXPECT_EQ(findings[0].plugin, fo4::PluginKey::from_filename("Patch.esp"));
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
+  EXPECT_NE(findings[0].message.find("000900:Fallout4.esm"), std::string::npos);
+
+  const fo4::CheckOptions only_master{std::vector<fo4::PluginKey>{
+      fo4::PluginKey::from_filename("Fallout4.esm")}};
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order, only_master), fo4::CheckCode::injected_record)
+                  .empty());
 }

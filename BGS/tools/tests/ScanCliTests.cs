@@ -18,9 +18,6 @@ public sealed class ScanCliCollection { }
 [Collection("ScanCli")]
 public sealed class ScanCliTests
 {
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla", relative.Replace('/', Path.DirectorySeparatorChar));
-
     [Fact]
     public void ScanArchivesCleanDirEmitsSingleJsonToStdoutExit0()
     {
@@ -182,7 +179,7 @@ public sealed class ScanCliTests
         mo2.AddModFile("Meshes/Actors/Test/Behaviors/test.hkx", behaviour);
         mo2.AddModFile(
             "Meshes/Actors/Test/Animations/Unsafe.hkx",
-            File.ReadAllBytes(Fixture("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx")));
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx")));
 
         var (exit, stdout, _) = Capture(() =>
             ModlistScan.ScanClips(new[] { "--scan-clips", mo2.Instance, "--json" }));
@@ -219,29 +216,323 @@ public sealed class ScanCliTests
         }
     }
 
-    private static void WriteSingleEntryArchive(string path, string entryName, byte[] payload)
+    [Fact]
+    public void ScanSkeletonPhysicsBadDirEmitsJsonUsageExit2()
     {
-        using var stream = File.Create(path);
-        using var writer = new BinaryWriter(stream);
-        long headerEnd = 24 + 36;
-        long nameTableAt = headerEnd + payload.Length;
+        string bad = Path.Combine(Path.GetTempPath(), "bgs-no-such-" + Guid.NewGuid().ToString("N"));
+        var (exit, stdout, stderr) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", bad, "--json" }));
 
-        writer.Write(new[] { 'B', 'T', 'D', 'X' });
-        writer.Write(1u);
-        writer.Write(new[] { 'G', 'N', 'R', 'L' });
-        writer.Write(1u);
-        writer.Write((ulong)nameTableAt);
+        Assert.Equal(2, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(2, json.GetProperty("exitCode").GetInt32());
+        Assert.Equal("usage", json.GetProperty("findings")[0].GetProperty("kind").GetString());
+        Assert.Equal("", stderr.Trim());
+    }
 
-        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
-        writer.Write((ulong)headerEnd);
-        writer.Write(0u);
-        writer.Write((uint)payload.Length);
-        writer.Write(0xBAADF00Du);
+    [Fact]
+    public void ScanArchivesReportsSaveUnsafeFileSeparatelyFromCorruption()
+    {
+        string root = Directory.CreateTempSubdirectory("bgs-roundtrip-scan").FullName;
+        try
+        {
+            string destination = Path.Combine(root, "Meshes", "Actors", "Character", "CharacterAssets", "Hair", "FemaleHair04.hkx");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx"), destination);
 
-        writer.Write(payload);
-        var bytes = Encoding.UTF8.GetBytes(entryName.Replace('/', '\\'));
-        writer.Write((ushort)bytes.Length);
-        writer.Write(bytes);
+            var stdout = new StringWriter();
+            var stderr = new StringWriter();
+            TextWriter oldOut = Console.Out;
+            TextWriter oldError = Console.Error;
+            int exit;
+            try
+            {
+                Console.SetOut(stdout);
+                Console.SetError(stderr);
+                exit = ModlistScan.Run(new[] { "--scan-archives", root, "--json" });
+            }
+            finally
+            {
+                Console.SetOut(oldOut);
+                Console.SetError(oldError);
+            }
+
+            Assert.Equal(1, exit);
+            using var document = JsonDocument.Parse(stdout.ToString());
+            var json = document.RootElement;
+            Assert.Equal(0, json.GetProperty("summary").GetProperty("corrupt").GetInt32());
+            Assert.True(json.GetProperty("summary").GetProperty("roundTripLosses").GetInt32() > 0);
+
+            var findings = json.GetProperty("findings").EnumerateArray().ToList();
+            var roundTrip = Assert.Single(findings.Where(f => f.GetProperty("kind").GetString() == "roundtrip-loss"));
+            Assert.Equal("loose", roundTrip.GetProperty("source").GetString());
+            Assert.Contains("FemaleHair04.hkx", roundTrip.GetProperty("path").GetString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(roundTrip.GetProperty("details").EnumerateArray(), detail =>
+                detail.GetString()!.Contains("UnsupportedClass", StringComparison.Ordinal));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    [Fact]
+    public void ScanArchivesKeepsCleanFileAtZeroRoundTripLosses()
+    {
+        string root = Directory.CreateTempSubdirectory("bgs-roundtrip-clean").FullName;
+        try
+        {
+            string destination = Path.Combine(root, "Meshes", "Actors", "Character", "Behaviors", "SingleAnimFurniture.hkx");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"), destination);
+
+            var stdout = new StringWriter();
+            TextWriter oldOut = Console.Out;
+            TextWriter oldError = Console.Error;
+            int exit;
+            try
+            {
+                Console.SetOut(stdout);
+                Console.SetError(TextWriter.Null);
+                exit = ModlistScan.Run(new[] { "--scan-archives", root, "--json" });
+            }
+            finally
+            {
+                Console.SetOut(oldOut);
+                Console.SetError(oldError);
+            }
+
+            Assert.Equal(0, exit);
+            using var document = JsonDocument.Parse(stdout.ToString());
+            Assert.Equal(0, document.RootElement.GetProperty("summary").GetProperty("roundTripLosses").GetInt32());
+            Assert.DoesNotContain(document.RootElement.GetProperty("findings").EnumerateArray(),
+                finding => finding.GetProperty("kind").GetString() == "roundtrip-loss");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsReportsTheVanillaRagdollAsOk()
+    {
+        using var dir = new TempDir("bgs-skeleton-physics");
+        string path = Path.Combine(dir.Path, "Meshes", "Actors", "Character", "CharacterAssets", "skeleton.hkx");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        var (exit, stdout, stderr) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
+
+        Assert.Equal(0, exit);
+        Assert.StartsWith("{", stdout.TrimStart());
+        var json = ParseSingle(stdout);
+        Assert.Equal("scan-skeleton-physics", json.GetProperty("mode").GetString());
+        Assert.Equal(exit, json.GetProperty("exitCode").GetInt32());
+        Assert.Equal(ScanReport.CurrentSchemaVersion, json.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("scanned").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("ok").GetInt32());
+        Assert.Equal(0, json.GetProperty("summary").GetProperty("skeletonOnly").GetInt32());
+
+        var row = Assert.Single(json.GetProperty("findings").EnumerateArray());
+        Assert.Equal("ok", row.GetProperty("kind").GetString());
+        Assert.Equal("loose", row.GetProperty("source").GetString());
+        var details = row.GetProperty("details").EnumerateArray().Select(detail => detail.GetString()!).ToList();
+        Assert.Contains(details, detail => detail.Contains("hknpCapsuleShape x19"));
+        Assert.Contains(details, detail => detail.Contains("mapper: present (18 mappings)"));
+        Assert.Contains(details, detail => detail.Contains("hknpBSMaterial: absent"));
+
+        Assert.Contains("scanning", stderr);
+        Assert.DoesNotContain("OK  ", stdout);
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsReportsASkeletonWithNoPhysicsWithoutFailing()
+    {
+        using var dir = new TempDir("bgs-skeleton-nophysics");
+        File.WriteAllBytes(Path.Combine(dir.Path, "skeleton.hkx"),
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(0, json.GetProperty("exitCode").GetInt32());
+        Assert.Equal(0, json.GetProperty("summary").GetProperty("legacyPhysics").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("skeletonOnly").GetInt32());
+        Assert.Equal(0, json.GetProperty("summary").GetProperty("ok").GetInt32());
+
+        var row = Assert.Single(json.GetProperty("findings").EnumerateArray());
+        Assert.Equal("skeleton-only", row.GetProperty("kind").GetString());
+        Assert.Contains(row.GetProperty("details").EnumerateArray(),
+            detail => detail.GetString()!.Contains("has a skeleton but no ragdoll"));
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsSkeletonOnlyOnlyScanExitsZero()
+    {
+        using var dir = new TempDir("bgs-skeleton-only-only");
+        Directory.CreateDirectory(Path.Combine(dir.Path, "Meshes", "Actors", "Character", "CharacterAssets"));
+        File.WriteAllBytes(
+            Path.Combine(dir.Path, "Meshes", "Actors", "Character", "CharacterAssets", "skeleton.hkx"),
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path }));
+
+        Assert.Equal(0, exit);
+        Assert.Contains("SKELETON ONLY", stdout);
+        Assert.Contains("1 skeleton-only", stdout);
+        Assert.Contains("0 with no usable ragdoll", stdout);
+        Assert.Contains("1 skeleton file(s) scanned", stdout);
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsFindsACapitalisedSkeletonFileName()
+    {
+        using var dir = new TempDir("bgs-skeleton-case");
+        File.WriteAllBytes(Path.Combine(dir.Path, "Skeleton.hkx"),
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("scanned").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("ok").GetInt32());
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsNamesLegacyPhysicsFromTheClassCensus()
+    {
+        using var dir = new TempDir("bgs-skeleton-legacy");
+        byte[] bytes = File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx"));
+        Assert.True(ReplaceAscii(bytes, "hknpRagdollData", "hkpCapsuleShape"));
+        File.WriteAllBytes(Path.Combine(dir.Path, "skeleton.hkx"), bytes);
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
+
+        Assert.Equal(1, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("legacyPhysics").GetInt32());
+
+        var row = Assert.Single(json.GetProperty("findings").EnumerateArray());
+        Assert.Equal("legacy-physics", row.GetProperty("kind").GetString());
+        Assert.Contains(row.GetProperty("details").EnumerateArray(),
+            detail => detail.GetString()!.Contains("hkpCapsuleShape x1"));
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsReadsSkeletonFilesInsideArchives()
+    {
+        using var dir = new TempDir("bgs-skeleton-archive");
+        TestArchives.WriteBa2(Path.Combine(dir.Path, "Test - Main.ba2"),
+            "meshes/actors/character/characterassets/skeleton.hkx",
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("archives").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("ok").GetInt32());
+
+        var row = Assert.Single(json.GetProperty("findings").EnumerateArray());
+        Assert.Equal("ok", row.GetProperty("kind").GetString());
+        Assert.Equal("meshes/actors/character/characterassets/skeleton.hkx", row.GetProperty("path").GetString());
+        Assert.Equal("Test - Main.ba2", row.GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsReportsALooseSkeletonOverAnArchiveCopyOnce()
+    {
+        using var dir = new TempDir("bgs-skeleton-shadow");
+        TestArchives.WriteBa2(Path.Combine(dir.Path, "Test - Main.ba2"),
+            "meshes/actors/character/characterassets/skeleton.hkx",
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        string loose = Path.Combine(dir.Path, "meshes", "actors", "character", "characterassets", "skeleton.hkx");
+        Directory.CreateDirectory(Path.GetDirectoryName(loose)!);
+        File.WriteAllBytes(loose,
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("scanned").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("skeletonOnly").GetInt32());
+        Assert.Equal(0, json.GetProperty("summary").GetProperty("ok").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("archives").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("shadowed").GetInt32());
+
+        var row = Assert.Single(json.GetProperty("findings").EnumerateArray());
+        Assert.Equal("skeleton-only", row.GetProperty("kind").GetString());
+        Assert.Equal("loose", row.GetProperty("source").GetString());
+        Assert.Contains(row.GetProperty("details").EnumerateArray(), detail =>
+            detail.GetString()!.Contains("shadowed: meshes/actors/character/characterassets/skeleton.hkx [Test - Main.ba2]"));
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsReadsAnMo2InstanceThroughGameData()
+    {
+        using var mo2 = new Mo2Instance();
+        mo2.AddModArchive("meshes/actors/character/characterassets/skeleton.hkx",
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", mo2.Instance, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("scanned").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("ok").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("archives").GetInt32());
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsHumanOutputIsTextNotJson()
+    {
+        using var dir = new TempDir("bgs-skeleton-human");
+        File.WriteAllBytes(Path.Combine(dir.Path, "skeleton.hkx"),
+            File.ReadAllBytes(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        var (exit, stdout, stderr) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path }));
+
+        Assert.Equal(0, exit);
+        Assert.Contains("OK", stdout);
+        Assert.Contains("hknpCapsuleShape x19", stdout);
+        Assert.Contains("done", stdout);
+        Assert.DoesNotContain("\"mode\"", stdout);
+        Assert.Contains("checked", stderr);
+    }
+
+    private static bool ReplaceAscii(byte[] bytes, string from, string to)
+    {
+        Assert.Equal(from.Length, to.Length);
+        byte[] needle = Encoding.ASCII.GetBytes(from);
+        byte[] replacement = Encoding.ASCII.GetBytes(to);
+
+        bool replaced = false;
+        for (int at = 0; at + needle.Length <= bytes.Length; at++)
+        {
+            bool same = true;
+            for (int i = 0; i < needle.Length && same; i++) same = bytes[at + i] == needle[i];
+            if (!same) continue;
+
+            replacement.CopyTo(bytes, at);
+            replaced = true;
+        }
+        return replaced;
     }
 
     private static (int Exit, string Stdout, string Stderr) Capture(Func<int> action)
@@ -336,7 +627,7 @@ public sealed class ScanCliTests
         }
 
         public void AddModArchive(string entryName, byte[] payload) =>
-            WriteSingleEntryArchive(Path.Combine(Mod, "Test - Main.ba2"), entryName, payload);
+            TestArchives.WriteBa2(Path.Combine(Mod, "Test - Main.ba2"), entryName, payload);
 
         public void Dispose() => _root.Dispose();
     }

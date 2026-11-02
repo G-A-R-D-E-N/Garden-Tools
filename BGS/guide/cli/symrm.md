@@ -33,9 +33,11 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 | `scale` | Inspect decoded animation scale channels. |
 | `skeleton` | Print skeleton bones and reference transforms. |
 | `rig` | Audit rig/skeleton data across one file or a corpus. |
+| `mapper` | Read a file's skeleton mappers, rebuild them, and recompute simple rows. |
+| `ragdoll` | Read a file's ragdolls, edit masses, materials and joint limits, and rebuild. |
 | `extract` | Extract matching BA2 entries, optionally preserving their directory tree. |
 | `ba2` | Inspect a Bethesda BA2 archive and its entries. |
-| `motion` | Inspect decoded root-motion data. |
+| `motion` | Inspect decoded root-motion data, or dump the archive entries one substring matches. |
 | `pose` | Pose a decoded animation against a skeleton and print the result. |
 | `channels` | Compare animation channels with the rig they drive. |
 | `packfile` | Inspect packfile sections, fixups, and round-trip structure. |
@@ -90,14 +92,161 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 
 The catalog exposes the switches currently parsed by `symrm`:
 
-- `frames`: `--digest`
+- `frames`: `--digest`, `--strict`
+- `scale`: `--strict`
 - `extract`: `--tree`
 - `types`: `--members`
 - `defaults`: `--write`
+- `mapper`: `--recompute`, `--out <file>`, `--force`, `--data <Data folder or MO2 instance>`
 - `check` and `chain`: `--data`, `--plugins`
+- `motion`: `--data <Data folder or MO2 instance>`, plus an optional entry substring to dump matches
 - `crash` and `sweep`: `--data`, `--mods`, `--profile`
 - `diff`: `--data`, `--mods`, `--profile`
+
+`symrm scale` and `symrm frames` list and count every file they cannot decode. By default they exit
+`0` when the only problems were animation classes this reader does not decode or spline sub-formats
+(rotation quantization format N) it refuses, and exit `1` for a read failure or a run that decoded
+nothing. Both take `--strict` to exit `1` for the unsupported and refused files as well.
 
 Commands not listed in that section currently use positional arguments only. Use `<command> --help`
 rather than relying on this summary when scripting a command; the executable help is the canonical
 usage/flags/example source.
+
+## `mapper` write-back
+
+`symrm mapper <skeleton.hkx>` reads the file's `hkaSkeletonMapper` objects, prints them, and rebuilds the
+file through the writer without editing anything. The rebuild is a real one — the write path runs and the
+result is re-read and checked against the model — and it reproduces the input byte for byte.
+
+```bash
+symrm mapper skeleton.hkx                              # describe + verified rebuild, writes nothing
+symrm mapper skeleton.hkx --recompute --out fixed.hkx  # recompute simple rows and keep the result
+symrm mapper x --data "/path/to/Data"                  # sweep every mapper-bearing skeleton the game data resolves
+```
+
+- `--recompute` recomputes each simple row's translation and rotation from the two skeletons' reference
+  poses and reports the worst error against the stored values. Both numbers are printed; the translation
+  error is also given relative to the larger skeleton's extent, because a large rig measures the same
+  relative accuracy in larger units. It writes nothing on its own.
+- `--out <file>` writes the result. Without `--force`, `symrm` refuses an `--out` that is the file being
+  read or that already exists; with `--force` it overwrites. The write goes to a temporary file beside the
+  target and is then moved into place, so a failure leaves the existing file alone. Overwriting the file
+  that was read keeps the version that was read as `<name>.bak` beside it, and refuses a file that changed
+  on disk since it was read.
+- `--data <folder>` sweeps a game `Data` folder, or an MO2 instance: its `ModOrganizer.ini` game path,
+  profile and enabled mod roots resolve the Data folder and the mod archives, exactly as the app's scans
+  do. It builds one `GameData` for the folder and reads every mapper-bearing `CharacterAssets` skeleton
+  the game data resolves — a candidate that a higher-priority copy hides is not read twice — verifies an
+  unedited forced rebuild byte for byte, then exercises an add-then-remove of a simple row. A sweep writes
+  nothing anywhere, so `--out` is refused in that mode.
+- Unknown switches, or `--out`/`--data` without a value, print the usage above and exit 1.
+
+## `ragdoll` value write-back
+
+`symrm ragdoll <skeleton.hkx>` reads the file's `hknpRagdollData` ragdolls, prints their bodies, motions,
+materials, constraints and capsule shapes, and rebuilds the file through the value writer without editing
+anything. The rebuild is a real one — the write path runs, the result is re-read, and every field is
+checked against the model — and it reproduces the input byte for byte.
+
+```bash
+symrm ragdoll skeleton.hkx                                     # describe + verified rebuild, writes nothing
+symrm ragdoll skeleton.hkx --set mass:0=5 --out edited.hkx     # retune one body and keep the result
+symrm ragdoll skeleton.hkx --set limit:3=-0.5,0.5 --set friction:3=2
+symrm ragdoll multi.hkx --set ragdoll=1 --set material:0=0.4,0.3 --set restitution:0=0.2
+symrm ragdoll --data "/path/to/Data"                           # sweep every ragdoll the game data resolves
+```
+
+`--set <field>:<index>=<values>` may be repeated. Every number is decimal and comma-separated:
+
+| Field | Values | What it writes |
+| --- | --- | --- |
+| `mass:<body>=<mass>` | one number, > 0 | the body's `inverseMass` and its `inverseInertiaLocal` scaled by the mass ratio |
+| `com:<body>=<x>,<y>,<z>` | three numbers | the body's motion's `centerOfMassWorld` |
+| `capsule:<shape>=<ax>,<ay>,<az>,<bx>,<by>,<bz>` | six numbers | the shape's endpoints, its derived `7` vertices and `7` planes, and its derived mass properties; the direction must not change |
+| `radius:<shape>=<radius>` | one number, > 0 | `convexRadius`, the derived vertices and planes rescaled about the endpoint each vertex belongs to, and the derived mass properties |
+| `material:<material>=<dynamic>[,<static>]` | one or two numbers, >= 0 | `dynamicFriction` and, when given, `staticFriction` (half precision); one value sets both, and only the lane that changed is written |
+| `restitution:<material>=<value>` | one number, >= 0 | the material's `restitution` (half precision) |
+| `limit:<constraint>=<min>,<max>` | two numbers in `[-pi, pi]`, ordered | a ragdoll's twist limit only, or a limited hinge's angular limit; planes are not touched |
+| `cone:<constraint>=<max>` | one number in `[0, pi]` | a ragdoll's cone limit |
+| `plane:<constraint>=<min>,<max>` | two numbers in `[-pi, pi]`, ordered | a ragdoll's plane limit alone |
+| `friction:<constraint>=<value>` | one number, >= 0 | the constraint's `angFriction.maxFrictionTorque` |
+
+`body`, `material` and `constraint` index the selected ragdoll's rows; `shape` indexes the file's capsule
+shapes. `--set ragdoll=<i>` chooses that ragdoll for every edit that follows: it is optional when the file
+holds exactly one ragdoll, and a file with more than one refuses such an edit, naming how many it holds,
+until the selector is given. A material shared by more than one body is refused unless `--allow-shared-material`
+is passed, because changing it changes every body that names it. A capsule shape is refused unless
+`--allow-shared-shape` is passed when more than one body names it, or when it shares the same
+`hkRefCountedProperties` container or `hknpShapeMassProperties` object with another capsule shape, because
+resizing it would change the mass properties that shape reads.
+
+Every capsule in the shipped game carries `7` vertices, `7` planes, `5` faces and `23` indices derived from
+its endpoints and radius, and `882` of the `933` vanilla capsules also carry a stored volume, centre of mass
+and inertia. `capsule:` and `radius:` re-derive all of them in place as long as the capsule's direction does
+not change (within `1e-6` rad): each vertex moves to the matching endpoint plus `radius/99` times its own
+offset, each plane keeps its normal and takes the `d` its own vertices support, and the volume, centre of
+mass and inertia are re-encoded while the stored mass and the undecoded `majorAxisSpace` are kept. A change
+of direction, a capsule whose stored arrays do not match its endpoints and radius, and a capsule more than
+one body names, or whose mass properties another capsule shape shares, without `--allow-shared-shape` are
+refused. A cone is written only when its atom's
+`angle measurement mode` is the one the game uses (`0`; planes use `1`), and the constraint is refused
+otherwise.
+
+The writer patches only the bytes of the fields it owns and refuses any other byte change, so bodies,
+shapes and constraints are never added or removed, every other object in the file is left untouched, and
+the fixup tables are never reordered. `collisionFilterInfo`, `qualityId`, motion ids, body flags,
+positions, orientations, local frames, constraint frames and motors are never written.
+
+- `--out <file>` writes the result. Without `--force`, `symrm` refuses an `--out` that is the file being
+  read or that already exists. With `--force` on another file it overwrites it through a temporary file
+  beside the target, so a failure leaves the existing file alone. When `--out` is the file being read,
+  `--force` saves through the same checked replacement the rig window uses: the version that was read is
+  kept beside it as `<name>.bak` and a file that changed on disk since it was read is refused.
+- `--data <folder>` sweeps a game `Data` folder, or an MO2 instance, the same way the mapper sweep does.
+  It reads every `skeleton*.hkx` the game data resolves, requires an unedited forced rebuild to reproduce
+  the file byte for byte, then exercises a mass edit and a limit edit and re-reads each from the produced
+  bytes. A sweep writes nothing anywhere, so `--out` is refused in that mode.
+- Unknown switches, an unparsable `--set`, or `--out`/`--data` without a value, print the usage and exit 1.
+
+Re-run on the vanilla install (`7` archives): `41` files carry an `hknpRagdollData`, all `41` with at
+least one body, `154` more skeleton-named files carry none, `0` unreadable. `41 of 41` unedited forced
+rebuilds were byte-identical, `41 of 41` mass edits and `40 of 41` limit edits read back as edited (one
+rig has no limit-bearing constraint to edit at all), `0` failures, exit 0.
+
+## Root motion corpus
+
+`symrm motion <animation.hkx-or-dir>` reads one clip or recursively scans loose HKX files.
+`symrm motion --data "<Fallout 4 folder>\Data"` discovers game archives
+through GameData and reads HKX entries under `animations/` in every `*Animations*.ba2`
+through Ba2/Radicle, without extracting or writing game data. Counts are archive entries,
+including duplicate virtual paths across archives, not a load-order-resolved asset count.
+Texture and unrelated archives are not opened; plugins and user mod profiles do not affect the sweep.
+
+An optional entry substring narrows the sweep to the entries whose archive path contains it:
+
+```bash
+symrm motion --data "/path/to/Data"                  # count every animation entry in the archives
+symrm motion --data "/path/to/Data" TurnLeft90       # dump each matching entry
+symrm motion ./Animations/TurnLeft90.hkx             # dump one loose clip
+```
+
+With a substring each match is read and dumped rather than counted: the clip's decoded sample table
+(one line per 16-byte sample: `x`, `y`, `z` and the raw angle in radians, plus `up`, `forward` and the
+raw total distance), then the reference frame object, its `referenceFrameSamples` array header, the
+local fixup target that holds the samples inline, the 16-byte stride, and every sample's raw bytes at
+that target. An animation with no `extractedMotion`, a null one, a frame class without the field and an
+array header with no local fixup are each noted and skipped instead of failing the run. The sweep ends
+with the number of entries that matched and how many were dumped, and exits `1` when nothing matched or
+any entry could not be read.
+
+The report counts animations carrying supported samples (including stationary samples),
+clips without samples, unsupported class/frameType kinds, and read failures. Maximum distance
+is the sum of sample-to-sample translation lengths, not endpoint displacement. Final-angle
+range is the stored final angle in degrees, not reduced modulo 360, and a non-finite angle is
+left out of it. Unsupported kinds are counted separately by class and frameType. Empty sweeps
+and read failures return exit code 1. Only an `hkaDefaultAnimatedReferenceFrame` is decoded, and
+only for frameType `0` (what every one of the 15,193 shipped default frames uses) and frameType
+`1` (`DEFAULT`, the same payload under the other enum tag); frameType `2` (`PARAMETRIC`), any
+other value and every other reference-frame class are explicitly refused and are reported as
+`<class>, frameType <n>`. Positive angles turn left about up (right-handed, Y-forward, Z-up).
+Single-file output also shows duration, distance, turn, and representative samples.

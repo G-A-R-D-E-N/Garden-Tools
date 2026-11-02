@@ -245,7 +245,7 @@ fo4::Plugin read_npc(const std::vector<Entry>& entries) {
 }  // namespace
 
 TEST(NpcScalars, DecodesFixedLayoutFieldsFromTheSchema) {
-  const auto plugin = fo4::read_plugin(build(base()), "Patch.esp");
+  auto plugin = fo4::read_plugin(build(base()), "Patch.esp");
   const auto& record = npc(plugin);
 
   EXPECT_EQ(scalar_text(record, "NPC_\\ConfigurationFlags"), "1");
@@ -273,7 +273,7 @@ TEST(NpcScalars, DecodesFixedLayoutFieldsFromTheSchema) {
 TEST(NpcScalars, WrongSizedAcbsPayloadHidesEveryAcbsField) {
   auto entries = base();
   entries[2] = {"ACBS", Bytes(19, std::byte{0x07})};
-  const auto plugin = fo4::read_plugin(build(entries), "Patch.esp");
+  auto plugin = fo4::read_plugin(build(entries), "Patch.esp");
   const auto& record = npc(plugin);
 
   EXPECT_EQ(scalar_text(record, "NPC_\\ConfigurationFlags"), "absent");
@@ -284,7 +284,7 @@ TEST(NpcScalars, WrongSizedAcbsPayloadHidesEveryAcbsField) {
 }
 
 TEST(NpcLists, DecodesFactionsPerksAndInventoryInSubrecordOrder) {
-  const auto plugin = fo4::read_plugin(build(base()), "Patch.esp");
+  auto plugin = fo4::read_plugin(build(base()), "Patch.esp");
 
   const auto factions = fo4::forms::decode_npc_factions(plugin, key());
   ASSERT_EQ(factions.size(), 2u);

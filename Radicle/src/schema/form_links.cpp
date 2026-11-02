@@ -192,7 +192,7 @@ bool visit_structured_slots(Signature signature, std::size_t size, auto&& fn) {
 
 bool visit_coed_formids(const Subrecord& sub,
                         bool strict_remap,
-                        const Plugin* type_source,
+                        const FormLinkTypeLookup& type_lookup,
                         const PluginFormIdContext* context,
                         auto&& fn) {
   if (sub.data.size() != 12) {
@@ -205,7 +205,7 @@ bool visit_coed_formids(const Subrecord& sub,
   const auto union_raw = read_u32(sub.data, 4);
   bool remap_global = false;
   if (!owner_raw.is_null() && union_raw != 0) {
-    if (type_source == nullptr || context == nullptr) {
+    if (!type_lookup || context == nullptr) {
       if (strict_remap) {
         throw FormIdError("cannot safely remap COED union without owner type");
       }
@@ -220,14 +220,14 @@ bool visit_coed_formids(const Subrecord& sub,
         owner_key = FormKey{};
       }
       if (!owner_key.owner().empty() || owner_key.local().value() != 0) {
-        const auto* owner = find_record(*type_source, owner_key);
-        if (owner == nullptr) {
+        const auto owner_type = type_lookup(owner_key);
+        if (!owner_type.has_value()) {
           if (strict_remap) {
             throw FormIdError("cannot safely remap COED union: owner type unknown");
           }
-        } else if (owner->header.signature == k_npc_) {
+        } else if (*owner_type == k_npc_) {
           remap_global = true;
-        } else if (owner->header.signature != k_fact) {
+        } else if (*owner_type != k_fact) {
           if (strict_remap) {
             throw FormIdError("cannot safely remap COED union: owner is not NPC_ or FACT");
           }
@@ -244,7 +244,7 @@ bool visit_coed_formids(const Subrecord& sub,
 
 bool visit_link_offsets(const Record& record, const Subrecord& sub,
                         bool strict_remap,
-                        const Plugin* type_source,
+                        const FormLinkTypeLookup& type_lookup,
                         const PluginFormIdContext* context,
                         auto&& fn) {
   if (sub.signature == sig_xxxx) {
@@ -488,7 +488,7 @@ bool visit_link_offsets(const Record& record, const Subrecord& sub,
     return true;
   }
   if (sub.signature == sig_coed) {
-    visit_coed_formids(sub, strict_remap, type_source, context, fn);
+    visit_coed_formids(sub, strict_remap, type_lookup, context, fn);
     return true;
   }
   if (visit_structured_slots(sub.signature, sub.data.size(), fn)) {
@@ -520,14 +520,14 @@ bool visit_link_offsets(const Record& record, const Subrecord& sub,
 
 bool visit_formlink_offsets(const Record& record, const Subrecord& sub,
                             const schema::SubrecordFormLinkOffsets& schema_offsets,
-                            bool strict_remap, const Plugin* type_source,
+                            bool strict_remap, const FormLinkTypeLookup& type_lookup,
                             const PluginFormIdContext* context, auto&& fn) {
   const auto index = static_cast<std::size_t>(&sub - record.subrecords.data());
   if (schema_offsets.empty() || schema_offsets[index].empty()) {
-    return visit_link_offsets(record, sub, strict_remap, type_source, context, fn);
+    return visit_link_offsets(record, sub, strict_remap, type_lookup, context, fn);
   }
   std::vector<std::size_t> offsets;
-  visit_link_offsets(record, sub, strict_remap, type_source, context,
+  visit_link_offsets(record, sub, strict_remap, type_lookup, context,
                      [&](std::size_t offset) { offsets.push_back(offset); });
   const auto& extra = schema_offsets[index];
   offsets.insert(offsets.end(), extra.begin(), extra.end());
@@ -558,7 +558,7 @@ void remap_raw(std::span<std::byte> data, std::size_t offset,
 void remap_record_form_links(Record& record,
                              const PluginFormIdContext& old_context,
                              const PluginFormIdContext& new_context,
-                             const Plugin* type_source) {
+                             const FormLinkTypeLookup& type_lookup) {
   require_decodable(record);
   if (record.header.signature == k_info &&
       same_form_id_context(old_context, new_context)) {
@@ -567,18 +567,28 @@ void remap_record_form_links(Record& record,
   const auto schema_offsets = schema::schema_formlink_offsets(record);
   for (auto& sub : record.subrecords) {
     auto bytes = std::span<std::byte>(sub.data);
-    visit_formlink_offsets(record, sub, schema_offsets, true, type_source, &old_context,
+    visit_formlink_offsets(record, sub, schema_offsets, true, type_lookup, &old_context,
                            [&](std::size_t offset) {
       remap_raw(bytes, offset, old_context, new_context);
     });
   }
 }
 
+FormLinkTypeLookup plugin_type_lookup(const Plugin& plugin) {
+  return [&plugin](const FormKey& key) -> std::optional<Signature> {
+    const auto* record = find_record(plugin, key);
+    if (record == nullptr) return std::nullopt;
+    return record->header.signature;
+  };
+}
+
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
-                      const PluginFormIdContext& new_context) {
+                      const PluginFormIdContext& new_context,
+                      FormLinkTypeLookup type_lookup) {
+  if (!type_lookup) type_lookup = plugin_type_lookup(plugin);
   visit_records(plugin, [](const Record& record) { require_decodable(record); });
   visit_records(plugin, [&](Record& record) {
-    remap_record_form_links(record, old_context, new_context, &plugin);
+    remap_record_form_links(record, old_context, new_context, type_lookup);
   });
 }
 
@@ -587,6 +597,7 @@ void rekey_form_links(Plugin& plugin,
                       const FormKey& new_key) {
   auto next = plugin;
   const auto context = plugin_form_id_context(next);
+  const auto type_lookup = plugin_type_lookup(plugin);
   bool any_changed = false;
 
   visit_records(next, [&](Record& record) {
@@ -595,7 +606,7 @@ void rekey_form_links(Plugin& plugin,
     const auto schema_offsets = schema::schema_formlink_offsets(record);
     for (auto& sub : record.subrecords) {
       auto bytes = std::span<std::byte>(sub.data);
-      visit_formlink_offsets(record, sub, schema_offsets, true, &plugin, &context,
+      visit_formlink_offsets(record, sub, schema_offsets, true, type_lookup, &context,
                              [&](std::size_t offset) {
         if (offset + 4 > bytes.size()) return;
         const auto raw = RawFormId{read_u32(bytes, offset)};
@@ -630,19 +641,23 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
   FormLinkCollection result;
   auto& hits = result.links;
   bool current_record_incomplete = false;
+  bool current_record_unsupported = false;
   const auto context = plugin_form_id_context(plugin);
+  const auto type_lookup = plugin_type_lookup(plugin);
   visit_records(plugin, [&](const Record& record) {
     current_record_incomplete = false;
+    current_record_unsupported = false;
     std::map<std::uint32_t, std::size_t> ordinals;
     const auto schema_offsets = schema::schema_formlink_offsets(record);
     for (const auto& sub : record.subrecords) {
-      if (sub.signature == sig_vmad &&
-          !vmad_coverage(sub.data, record.header.signature).complete()) {
-        current_record_incomplete = true;
+      if (sub.signature == sig_vmad) {
+        const auto coverage = vmad_coverage(sub.data, record.header.signature);
+        if (!coverage.complete()) current_record_incomplete = true;
+        if (coverage.unsupported) current_record_unsupported = true;
       }
       const auto ordinal = ordinals[sub.signature.packed()]++;
       const bool claimed = visit_formlink_offsets(
-          record, sub, schema_offsets, false, &plugin, &context, [&](std::size_t offset) {
+          record, sub, schema_offsets, false, type_lookup, &context, [&](std::size_t offset) {
         if (offset + 4 > sub.data.size()) {
           return;
         }
@@ -668,6 +683,9 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
     }
     if (current_record_incomplete) {
       ++result.records_with_incomplete_vmad;
+    }
+    if (current_record_unsupported) {
+      result.unsupported_vmad_records.push_back(record.form_key);
     }
   });
   return result;

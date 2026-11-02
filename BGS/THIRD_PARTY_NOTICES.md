@@ -30,3 +30,10 @@ native metadata and is not a runtime, build, or packaging dependency on hkxpack.
 
 The window is built with Avalonia and a release embeds it along with the .NET runtime, which is
 MIT, Copyright (c) .NET Foundation and Contributors.
+
+## Silk.NET
+
+- Upstream: https://github.com/dotnet/Silk.NET
+- Licence: MIT, Copyright (c) .NET Foundation and Contributors.
+
+The Playback shaded mesh viewport binds OpenGL through the `Silk.NET.OpenGL` package.

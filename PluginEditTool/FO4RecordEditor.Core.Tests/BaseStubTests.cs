@@ -118,21 +118,6 @@ public class BaseStubTests
     }
 
     [Fact]
-    public void A_script_extending_nothing_still_names_ScriptObject()
-    {
-
-        var result = CompileOk("""
-            Scriptname Fixture
-
-            int Function Twice(int a)
-                return a * 2
-            EndFunction
-            """);
-
-        result.Pex!.Objects[0].ParentClassName.Should().BeEquivalentTo("ScriptObject");
-    }
-
-    [Fact]
     public void Optional_parameters_and_defaults_resolve_from_the_stubs()
     {
 

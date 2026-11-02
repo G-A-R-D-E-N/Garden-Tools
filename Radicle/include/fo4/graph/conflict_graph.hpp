@@ -6,6 +6,8 @@
 
 #include <cstddef>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <span>
 #include <vector>
 
@@ -41,14 +43,23 @@ public:
 
   const std::vector<RecordVersion>& versions(const FormKey& key) const noexcept;
   const RecordVersion* winner(const FormKey& key) const noexcept;
-  const std::vector<ReferencedByHit>& referenced_by(const FormKey& key) const noexcept;
-  const std::vector<OutgoingReferenceHit>& references_from(const FormKey& key) const noexcept;
+  const std::vector<ReferencedByHit>& referenced_by(const FormKey& key) const;
+  const std::vector<OutgoingReferenceHit>& references_from(const FormKey& key) const;
+  void release_references() const;
+  bool references_built() const;
   std::vector<FormKey> conflicts() const;
+  std::vector<FormKey> all_keys() const;
 
 private:
+  void ensure_references() const;
+
   std::map<FormKey, std::vector<RecordVersion>> records_;
-  std::map<FormKey, std::vector<ReferencedByHit>> inbound_;
-  std::map<FormKey, std::vector<OutgoingReferenceHit>> outbound_;
+  // Constraint: plugins must outlive any reference query, because ensure_references reads them lazily.
+  std::vector<const Plugin*> plugins_;
+  mutable std::map<FormKey, std::vector<ReferencedByHit>> inbound_;
+  mutable std::map<FormKey, std::vector<OutgoingReferenceHit>> outbound_;
+  mutable std::unique_ptr<std::mutex> referencesMutex_ = std::make_unique<std::mutex>();
+  mutable bool referencesBuilt_{false};
 };
 
 }  // namespace fo4

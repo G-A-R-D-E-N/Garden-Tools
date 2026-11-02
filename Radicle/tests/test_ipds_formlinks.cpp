@@ -158,48 +158,23 @@ TEST(FormLink, IpdsPnamRemapsMaterialAndImpactLanes) {
   EXPECT_EQ(misc_pnam->data, control.bytes);
 }
 
-TEST(FormLink, IpdsPnamMalformedPayloadFailsClosedWithoutMutation) {
-  std::vector<std::byte> malformed(11);
-  for (std::size_t i = 0; i < malformed.size(); ++i) {
-    malformed[i] = std::byte{static_cast<std::uint8_t>(i)};
+TEST(FormLink, IpdsPnamInvalidSizedPayloadsFailClosedWithoutMutation) {
+  for (const std::size_t size : {11u, 16u, 0u}) {
+    SCOPED_TRACE(size);
+    std::vector<std::byte> payload(size);
+    for (std::size_t i = 0; i < payload.size(); ++i) {
+      payload[i] = std::byte{static_cast<std::uint8_t>(i)};
+    }
+    auto out = plugin_header();
+    append_ipds_record(out, 0x03000800, {payload});
+    auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+    const auto before = fo4::write_plugin(plugin);
+
+    EXPECT_THROW(
+        (void)fo4::remap_plugin_masters(plugin, reordered_masters()),
+        fo4::FormIdError);
+    EXPECT_EQ(fo4::write_plugin(plugin), before);
   }
-  auto out = plugin_header();
-  append_ipds_record(out, 0x03000800, {malformed});
-  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-
-  EXPECT_THROW(
-      (void)fo4::remap_plugin_masters(plugin, reordered_masters()),
-      fo4::FormIdError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
-}
-
-TEST(FormLink, IpdsPnamSixteenBytePayloadFailsClosedInStrictRemap) {
-  std::vector<std::byte> sixteen_bytes(16);
-  for (std::size_t i = 0; i < sixteen_bytes.size(); ++i) {
-    sixteen_bytes[i] = std::byte{static_cast<std::uint8_t>(i)};
-  }
-  auto out = plugin_header();
-  append_ipds_record(out, 0x03000800, {sixteen_bytes});
-  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-
-  EXPECT_THROW(
-      (void)fo4::remap_plugin_masters(plugin, reordered_masters()),
-      fo4::FormIdError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
-}
-
-TEST(FormLink, IpdsPnamEmptyPayloadFailsClosedInStrictRemap) {
-  auto out = plugin_header();
-  append_ipds_record(out, 0x03000800, {std::vector<std::byte>{}});
-  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-
-  EXPECT_THROW(
-      (void)fo4::remap_plugin_masters(plugin, reordered_masters()),
-      fo4::FormIdError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(FormLink, IpdsPnamCollisionControlsPreserveNavmAndRemapNpc) {
@@ -287,7 +262,7 @@ TEST(FormLink, IpdsPnamCollectionPreservesTraversalOrder) {
   append_ipds_record(out, 0x03000800, {pnam0.bytes, pnam1.bytes});
   append_refr_record(out, 0x03000802, 0x00000043);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto links = fo4::collect_form_links(plugin);
   ASSERT_EQ(links.size(), 6);
 

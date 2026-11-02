@@ -38,7 +38,7 @@ TEST_P(WorldMiscRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryR
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::size_t batch_records = 0;
   std::size_t linked[std::size(k_batch)] = {};
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
@@ -88,5 +88,57 @@ TEST_P(WorldMiscRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryR
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, WorldMiscRecordsReal, testing::Values(
     "Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
     "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"));
+
+TEST(NavmeshObstacleReal, NocmRecordKeepsEveryUncountedRunUnderOneModel) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (!directory) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
+  }
+  record_game_build(detect_game_build(directory));
+  auto plugin = fo4::read_plugin_file(std::filesystem::path(directory) / "Fallout4.esm");
+  const auto group = fo4::schema::subrecord_group_descriptor(
+      fo4::Signature::from_string("NOCM"), R"(NOCM\Obstacle)");
+  ASSERT_TRUE(group.has_value());
+  const auto nocm = fo4::Signature::from_string("NOCM");
+  const auto indx = fo4::Signature::from_string("INDX");
+  const auto intv = fo4::Signature::from_string("INTV");
+  const auto data = fo4::Signature::from_string("DATA");
+  const auto nam1 = fo4::Signature::from_string("NAM1");
+  std::size_t records = 0;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (record.header.signature != nocm) return;
+    ++records;
+    const auto scoped = fo4::subrecord_group_spans(plugin, record.form_key, *group);
+    ASSERT_TRUE(scoped.has_value());
+    std::size_t runs = 0;
+    std::size_t datas = 0;
+    std::size_t models = 0;
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == data) ++datas;
+      if (subrecord.signature == nam1) ++models;
+    }
+    for (const auto& span : *scoped) {
+      runs += span.runs.size();
+      ASSERT_LT(span.first, span.end);
+      ASSERT_LE(span.end, record.subrecords.size());
+      EXPECT_EQ(record.subrecords[span.first].signature, indx);
+      EXPECT_EQ(record.subrecords[span.end - 1].signature, nam1);
+      for (const auto& run : span.runs) {
+        ASSERT_GE(run.first, span.first);
+        ASSERT_LE(run.end, span.end);
+        EXPECT_EQ(record.subrecords[run.first].signature, indx);
+        EXPECT_EQ(record.subrecords[run.end - 1].signature, intv);
+      }
+    }
+    EXPECT_EQ(scoped->size(), 87u);
+    EXPECT_EQ(runs, 197u);
+    EXPECT_EQ(datas, 1589u);
+    EXPECT_EQ(models, 87u);
+    const auto index = fo4::schema::scalar_field_descriptor("NOCM\\Index");
+    ASSERT_TRUE(index.has_value());
+    EXPECT_EQ(fo4::record_field_count(plugin, record.form_key, *index), 197u);
+  });
+  EXPECT_EQ(records, 1u);
+}
 
 }  // namespace

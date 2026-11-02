@@ -110,6 +110,19 @@ RADICLE_API radicle_status radicle_sound_sidechain_send(uint8_t sidechain_contro
 RADICLE_API radicle_status radicle_sound_small_rumble_send(uint8_t rumble_control, double* out_send);
 RADICLE_API radicle_status radicle_sound_big_rumble_send(uint8_t rumble_control, double* out_send);
 
+RADICLE_API radicle_status radicle_plugin_add_sound_file(radicle_plugin* plugin, radicle_form_key key,
+                                                         const char* file, size_t* out_file_index);
+RADICLE_API radicle_status radicle_plugin_remove_sound_file(radicle_plugin* plugin, radicle_form_key key,
+                                                            size_t file_index);
+RADICLE_API radicle_status radicle_plugin_set_sound_file(radicle_plugin* plugin, radicle_form_key key,
+                                                         size_t file_index, const char* file);
+RADICLE_API radicle_status radicle_plugin_add_sound_base_link(radicle_plugin* plugin, radicle_form_key key,
+                                                              radicle_form_key target);
+RADICLE_API radicle_status radicle_plugin_remove_sound_base_link(radicle_plugin* plugin, radicle_form_key key);
+RADICLE_API radicle_status radicle_plugin_create_sound_record(radicle_plugin* plugin, const char* signature,
+                                                              const char* editor_id_utf8,
+                                                              radicle_form_key* out_key);
+
 #ifdef __cplusplus
 }
 #endif

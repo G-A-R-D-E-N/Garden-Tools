@@ -25,11 +25,6 @@ using support::editorId;
 
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 std::size_t sizeArgument(const nlohmann::json& args,
                          std::size_t index,
                          std::size_t fallback,
@@ -55,7 +50,7 @@ std::optional<WorklistKind> worklistKind(std::string_view text) {
 }
 
 Result<fo4::FormKey> formKeyArgument(const nlohmann::json& args) {
-    const auto text = stringArgument(args, 0);
+    const auto text = support::stringArgument(args, 0);
     if (text.empty()) {
         return std::unexpected(Error{"FormKeyMissing", "FormKey is empty"});
     }
@@ -127,7 +122,7 @@ Result<nlohmann::json> RadiclePluginBackend::getDependencies(const nlohmann::jso
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* sourceWinner = graph_.winner(key);
+    const auto* sourceWinner = (*graph_).winner(key);
     if (sourceWinner == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",
@@ -137,12 +132,12 @@ Result<nlohmann::json> RadiclePluginBackend::getDependencies(const nlohmann::jso
 
     nlohmann::json rows = nlohmann::json::array();
     std::set<std::string> seen;
-    for (const auto& hit : graph_.references_from(key)) {
+    for (const auto& hit : (*graph_).references_from(key)) {
         if (hit.plugin != sourceWinner->plugin) continue;
         const auto targetText = hit.target.to_string();
         if (!seen.insert(targetText).second) continue;
 
-        const auto* targetWinner = graph_.winner(hit.target);
+        const auto* targetWinner = (*graph_).winner(hit.target);
         std::string editor;
         std::string type;
         std::string pluginName = std::string(hit.target.owner().filename());
@@ -174,7 +169,7 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* sourceWinner = graph_.winner(key);
+    const auto* sourceWinner = (*graph_).winner(key);
     if (sourceWinner == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",
@@ -184,8 +179,8 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
 
     nlohmann::json rows = nlohmann::json::array();
     std::set<std::pair<std::string, std::string>> seen;
-    for (const auto& hit : graph_.references_from(key)) {
-        if (hit.plugin != sourceWinner->plugin || graph_.winner(hit.target) != nullptr) continue;
+    for (const auto& hit : (*graph_).references_from(key)) {
+        if (hit.plugin != sourceWinner->plugin || (*graph_).winner(hit.target) != nullptr) continue;
         const auto target = hit.target.to_string();
         const auto signature = hit.subrecord.to_string();
         if (!seen.emplace(signature, target).second) continue;
@@ -221,7 +216,7 @@ Result<nlohmann::json> RadiclePluginBackend::getHistory(const nlohmann::json& ar
     const auto& key = *keyResult;
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto& versions = graph_.versions(key);
+    const auto& versions = (*graph_).versions(key);
     if (versions.empty()) {
         return std::unexpected(Error{
             "RecordNotFound",
@@ -249,9 +244,9 @@ Result<nlohmann::json> RadiclePluginBackend::getHistory(const nlohmann::json& ar
 
 Result<nlohmann::json> RadiclePluginBackend::getPluginWorklist(
     const nlohmann::json& arguments) const {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto kindText = stringArgument(arguments, 1);
-    auto signatureText = stringArgument(arguments, 2);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto kindText = support::stringArgument(arguments, 1);
+    auto signatureText = support::stringArgument(arguments, 2);
     std::transform(signatureText.begin(), signatureText.end(), signatureText.begin(),
                    [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
     const auto limit = sizeArgument(arguments, 3, 200, 5000);
@@ -295,7 +290,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPluginWorklist(
         if (record->header.signature == fo4::sig_tes4 || record->form_key.owner().empty()) continue;
         if (signature.has_value() && record->header.signature != *signature) continue;
 
-        const auto& versions = graph_.versions(record->form_key);
+        const auto& versions = (*graph_).versions(record->form_key);
         const auto self = std::find_if(versions.begin(), versions.end(), [&](const auto& version) {
             return version.plugin == loaded->plugin.key;
         });

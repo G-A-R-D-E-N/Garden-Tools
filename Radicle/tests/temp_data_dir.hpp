@@ -46,6 +46,7 @@ public:
 
   void write(const std::string& name, const std::vector<std::byte>& bytes, int rank) {
     const auto file = path_ / name;
+    std::filesystem::create_directories(file.parent_path());
     {
       std::ofstream out{file, std::ios::binary};
       out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));

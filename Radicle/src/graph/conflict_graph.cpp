@@ -3,6 +3,8 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_links.hpp"
 
+#include <utility>
+
 namespace fo4 {
 namespace {
 
@@ -18,6 +20,7 @@ bool has_identity(const FormKey& key) {
 
 ConflictGraph ConflictGraph::build(std::span<const Plugin* const> load_order) {
   ConflictGraph graph;
+  graph.plugins_.assign(load_order.begin(), load_order.end());
 
   for (std::size_t index = 0; index < load_order.size(); ++index) {
     const auto* plugin = load_order[index];
@@ -37,19 +40,33 @@ ConflictGraph ConflictGraph::build(std::span<const Plugin* const> load_order) {
           is_partial_form(*record),
       });
     }
+  }
 
+  return graph;
+}
+
+void ConflictGraph::ensure_references() const {
+  std::scoped_lock lock(*referencesMutex_);
+  if (referencesBuilt_) return;
+  decltype(inbound_) inbound;
+  decltype(outbound_) outbound;
+  for (std::size_t index = 0; index < plugins_.size(); ++index) {
+    const auto* plugin = plugins_[index];
+    if (plugin == nullptr) {
+      continue;
+    }
     for (const auto& link : collect_form_links(*plugin)) {
       if (!has_identity(link.key) || !has_identity(link.record)) {
         continue;
       }
-      graph.inbound_[link.key].push_back({
+      inbound[link.key].push_back({
           link.record,
           plugin->key,
           link.subrecord,
           link.offset,
           index,
       });
-      graph.outbound_[link.record].push_back({
+      outbound[link.record].push_back({
           link.key,
           plugin->key,
           link.subrecord,
@@ -58,8 +75,21 @@ ConflictGraph ConflictGraph::build(std::span<const Plugin* const> load_order) {
       });
     }
   }
+  inbound_ = std::move(inbound);
+  outbound_ = std::move(outbound);
+  referencesBuilt_ = true;
+}
 
-  return graph;
+void ConflictGraph::release_references() const {
+  std::scoped_lock lock(*referencesMutex_);
+  inbound_.clear();
+  outbound_.clear();
+  referencesBuilt_ = false;
+}
+
+bool ConflictGraph::references_built() const {
+  std::scoped_lock lock(*referencesMutex_);
+  return referencesBuilt_;
 }
 
 const std::vector<RecordVersion>& ConflictGraph::versions(const FormKey& key) const noexcept {
@@ -76,13 +106,15 @@ const RecordVersion* ConflictGraph::winner(const FormKey& key) const noexcept {
   return &entries.front();
 }
 
-const std::vector<ReferencedByHit>& ConflictGraph::referenced_by(const FormKey& key) const noexcept {
+const std::vector<ReferencedByHit>& ConflictGraph::referenced_by(const FormKey& key) const {
+  ensure_references();
   const auto it = inbound_.find(key);
   return it == inbound_.end() ? k_empty_references : it->second;
 }
 
 const std::vector<OutgoingReferenceHit>& ConflictGraph::references_from(
-    const FormKey& key) const noexcept {
+    const FormKey& key) const {
+  ensure_references();
   const auto it = outbound_.find(key);
   return it == outbound_.end() ? k_empty_outgoing_references : it->second;
 }
@@ -93,6 +125,14 @@ std::vector<FormKey> ConflictGraph::conflicts() const {
     if (versions.size() > 1) {
       out.push_back(key);
     }
+  }
+  return out;
+}
+
+std::vector<FormKey> ConflictGraph::all_keys() const {
+  std::vector<FormKey> out;
+  for (const auto& entry : records_) {
+    out.push_back(entry.first);
   }
   return out;
 }

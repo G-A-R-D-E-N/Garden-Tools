@@ -21,7 +21,14 @@ public sealed class WorldFixture : IDisposable
             ("DATA", F32(10, 20, 30, 0, 0, 1.5f)), ("MNAM", Z("note")),
         });
         var achr = new Rec("ACHR", 0x804, new[] { ("NAME", U32(0x810)), ("DATA", F32(0, 0, 0, 0, 0, 0)) });
-        var land = new Rec("LAND", 0x805, new[] { ("DATA", U32(1)) });
+        var land = new Rec("LAND", 0x805, new[]
+        {
+            ("DATA", U32(1)),
+            ("VHGT", F32(-1024).Concat(new byte[] { 1 }).Concat(new byte[1091]).ToArray()),
+            ("BTXT", U32(0x811).Concat(new byte[] { 0, 0, 0xFF, 0xFF }).ToArray()),
+            ("ATXT", U32(0x810).Concat(new byte[] { 0, 0, 0, 0 }).ToArray()),
+            ("VTXT", new byte[] { 0, 0, 0, 0 }.Concat(F32(1)).ToArray()),
+        });
         var interiorRef = new Rec("REFR", 0x821, new[] { ("NAME", U32(0x810)), ("DATA", F32(1, 1, 1, 0, 0, 0)) });
         Master = Directory.Write("Master.esm", Build(0x1, Array.Empty<string>(),
             Top("STAT", stat),
@@ -78,10 +85,20 @@ public class EnvironmentTests : IClassFixture<WorldFixture>
         Assert.Equal(new FormKey("Strong_PA.esp", 0x808), new FormKey("strong_PA.esp", 0x808));
         Assert.Single(new HashSet<FormKey> { new("Strong_PA.esp", 0x808), new("strong_PA.esp", 0x808) });
         Assert.NotEqual(new FormKey("Strong_PA.esp", 0x808), new FormKey("Strong_PA.esp", 0x809));
+        Assert.Single(new HashSet<FormKey> { default, default });
     }
 
     [Fact]
-    public void DefaultFormKeyCanBeHashed() => Assert.Single(new HashSet<FormKey> { default, default });
+    public void LandscapeHeightsAndBlendDecodeTheCellLand()
+    {
+        using var env = RadicleEnvironment.Load(new[] { _world.Master, _world.Patch });
+        var land = env.CellLandscape(M(0x802))!.Value;
+        Assert.Equal(-8184f, env.LandscapeHeights(land)!.Heights[0]);
+        var blend = env.LandscapeBlend(land);
+        Assert.Equal(M(0x811), blend.Base[0]);
+        Assert.Equal(M(0x810), blend.Layers[0].Texture);
+        Assert.Equal(1f, blend.Layers[0].Weights[0]);
+    }
 
     [Fact]
     public void LoadsPluginsAndResolvesVersions()
@@ -155,5 +172,95 @@ public class EnvironmentTests : IClassFixture<WorldFixture>
         Assert.Equal("note", original.Comments);
         Assert.Equal(new Vector3(99, 0, 0), env.PlacedReference(children[0].Record).Position);
         Assert.Throws<RadicleException>(() => env.PlacedReference(env.Winner(M(0x810))!.Value));
+    }
+
+    [Fact]
+    public void ExposesEmittanceOnlyWhenXemiIsPresent()
+    {
+        using var directory = new TempDirectory();
+        var path = directory.Write("Emit.esp", Build(0, Array.Empty<string>(),
+            Top("REFR",
+                new Rec("REFR", 0x800, new[] { ("NAME", U32(0x801)), ("XEMI", U32(0x802)), ("DATA", F32(0, 0, 0, 0, 0, 0)) }),
+                new Rec("REFR", 0x803, new[] { ("NAME", U32(0x801)), ("DATA", F32(0, 0, 0, 0, 0, 0)) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var withXemi = env.PlacedReference(env.Winner(new FormKey("Emit.esp", 0x800))!.Value);
+        Assert.Equal(new FormKey("Emit.esp", 0x802), withXemi.Emittance);
+        var withoutXemi = env.PlacedReference(env.Winner(new FormKey("Emit.esp", 0x803))!.Value);
+        Assert.Null(withoutXemi.Emittance);
+    }
+
+    // Regression: XRDS and XLIG must surface as stored values, and a short XLIG must not invent the later members.
+    [Fact]
+    public void ExposesStoredRadiusAndLightDataOnlyWhenTheSubrecordsArePresent()
+    {
+        using var directory = new TempDirectory();
+        var path = directory.Write("Light.esp", Build(0, Array.Empty<string>(),
+            Top("REFR",
+                new Rec("REFR", 0x800, new[] { ("XRDS", F32(365.5f)), ("XLIG", F32(10, 2.5f, 30, 4.5f, 5.5f, 6.5f)) }),
+                new Rec("REFR", 0x803, Array.Empty<(string, byte[])>()),
+                new Rec("REFR", 0x804, new[] { ("XLIG", F32(90, 1, 2048, 0.5f)) }),
+                new Rec("REFR", 0x805, new[] { ("XLIG", F32(90, 1, 2048, 0.5f, 10)) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        PlacedReference Get(uint id) => env.PlacedReference(env.Winner(new FormKey("Light.esp", id))!.Value);
+
+        var full = Get(0x800);
+        Assert.Equal(365.5f, full.Radius);
+        Assert.NotNull(full.LightData);
+        Assert.Equal(10f, full.LightData!.Fov);
+        Assert.Equal(2.5f, full.LightData.Fade);
+        Assert.Equal(30f, full.LightData.EndDistanceCap);
+        Assert.Equal(4.5f, full.LightData.ShadowDepthBias);
+        Assert.Equal(5.5f, full.LightData.NearClip);
+        Assert.Equal(6.5f, full.LightData.VolumetricIntensity);
+
+        var absent = Get(0x803);
+        Assert.Null(absent.Radius);
+        Assert.Null(absent.LightData);
+
+        var sixteen = Get(0x804);
+        Assert.Null(sixteen.Radius);
+        Assert.NotNull(sixteen.LightData);
+        Assert.Null(sixteen.LightData!.NearClip);
+        Assert.Null(sixteen.LightData.VolumetricIntensity);
+
+        var twenty = Get(0x805);
+        Assert.Equal(10f, twenty.LightData!.NearClip);
+        Assert.Null(twenty.LightData.VolumetricIntensity);
+    }
+
+    // Regression: a missing ADDN MODL must stay a null string and a missing LNAM a null key, not an empty value.
+    [Fact]
+    public void AddOnNodeKeepsMissingModelAndMissingLightNull()
+    {
+        using var directory = new TempDirectory();
+        var path = directory.Write("AddOn.esp", Build(0, Array.Empty<string>(),
+            Top("ADDN",
+                new Rec("ADDN", 0x800, new[] { ("DATA", U32(283)), ("LNAM", U32(0x801)), ("MODL", Z("Lights\\FireAddOn.nif")), ("DNAM", U32(0x0002011B)) }),
+                new Rec("ADDN", 0x802, new[] { ("DATA", U32(282)), ("MODL", Z("Lights\\Klaxon.nif")), ("DNAM", U32(0x00030000)) }),
+                new Rec("ADDN", 0x803, new[] { ("DATA", U32(281)), ("LNAM", U32(0x801)), ("DNAM", U32(0x00040001)) }),
+                new Rec("ADDN", 0x804, new[] { ("DATA", U32(280)), ("LNAM", U32(0x801)), ("MODL", Z("Lights\\LunchBox.nif")) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        AddOnNodeRecord Get(uint id) => env.AddOnNode(env.Winner(new FormKey("AddOn.esp", id))!.Value);
+
+        var full = Get(0x800);
+        Assert.Equal(283u, full.NodeIndex);
+        Assert.Equal(new FormKey("AddOn.esp", 0x801), full.Light);
+        Assert.Equal("Lights\\FireAddOn.nif", full.Model);
+        Assert.Equal((ushort)283, full.MasterParticleCap);
+        Assert.Equal((ushort)2, full.Flags);
+
+        var withoutLight = Get(0x802);
+        Assert.Null(withoutLight.Light);
+        Assert.Equal("Lights\\Klaxon.nif", withoutLight.Model);
+        Assert.Equal((ushort)0, withoutLight.MasterParticleCap);
+        Assert.Equal((ushort)3, withoutLight.Flags);
+
+        var withoutModel = Get(0x803);
+        Assert.Null(withoutModel.Model);
+        Assert.Equal(new FormKey("AddOn.esp", 0x801), withoutModel.Light);
+
+        var withoutDnam = Get(0x804);
+        Assert.Null(withoutDnam.MasterParticleCap);
+        Assert.Null(withoutDnam.Flags);
     }
 }
