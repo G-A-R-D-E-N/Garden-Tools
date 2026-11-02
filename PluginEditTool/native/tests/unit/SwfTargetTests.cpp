@@ -676,3 +676,57 @@ TEST_CASE("SwfTarget does not report a save when the atomic write fails") {
     CHECK_FALSE(saved.contains("saved"));
     CHECK(fs::is_directory(swfPath));
 }
+
+// Detects: a game archive SWF missing from ArchiveSwfs, opened under a name that does not resolve, or saved in place.
+TEST_CASE("SwfTarget lists game archive SWFs and opens one read-only by its resolved name") {
+    const fs::path dir = uniqueDir("fo4ide-swf-archive");
+    const RemoveAll cleanup{dir};
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {gameDataFolder(dir)};
+
+    const auto listed = replyJson(target.invoke("ArchiveSwfs", nlohmann::json::array()));
+    REQUIRE(listed.contains("entries"));
+    REQUIRE(listed.at("entries").size() == 1);
+    CHECK(listed.at("entries")[0].value("path", "") == "interface/test.swf");
+    CHECK(listed.at("entries")[0].value("archive", "") == "Fallout4 - Interface.ba2");
+
+    const auto opened = replyJson(target.invoke("OpenArchived", nlohmann::json::array({"Interface\\Test.swf"})));
+    CHECK_FALSE(opened.contains("error"));
+    CHECK(opened.value("archived", false) == true);
+    const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
+    REQUIRE(saved.contains("error"));
+    CHECK(saved.at("error").get<std::string>().find("Save As") != std::string::npos);
+    CHECK(replyJson(target.invoke("OpenArchived", nlohmann::json::array({"interface/missing.swf"}))).contains("error"));
+}
+
+// Detects: an archive movie saved in place, a cancelled Save As reported as saved, or a Save As that leaves the movie archive-bound.
+TEST_CASE("SwfTarget saves a game archive SWF only through Save As") {
+    const fs::path dir = uniqueDir("fo4ide-swf-archive-save");
+    const RemoveAll cleanup{dir};
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {gameDataFolder(dir / "Data")};
+    fs::create_directories(dir / "out");
+    REQUIRE_FALSE(replyJson(target.invoke("OpenArchived", nlohmann::json::array({"interface/test.swf"}))).contains("error"));
+    replyJson(target.invoke("RenameLabel", nlohmann::json::array({0, 0, "menu"})));
+    CHECK(replyJson(target.invoke("Save", nlohmann::json::array())).contains("error"));
+
+    const auto saveArgs = nlohmann::json::array({"Save the SWF movie", "SWF movie (*.swf)|*.swf"});
+    CHECK(replyJson(target.invoke("SaveAs", saveArgs)).value("saved", "x").empty());
+
+    const fs::path destination = dir / "out" / "menu.swf";
+    rooted.platform.saveSelection = destination;
+    const auto saved = replyJson(target.invoke("SaveAs", saveArgs));
+    CHECK(saved.value("saved", "") == fs::weakly_canonical(destination).string());
+    const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
+    CHECK(state.value("archived", true) == false);
+    CHECK(state.value("dirty", true) == false);
+    CHECK_FALSE(replyJson(target.invoke("Save", nlohmann::json::array())).contains("error"));
+
+    RootedTarget reopenedRooted;
+    *reopenedRooted.roots = {dir / "out"};
+    REQUIRE_FALSE(replyJson(reopenedRooted.target.invoke("Open", nlohmann::json::array({destination.string()}))).contains("error"));
+    const auto labels = replyJson(reopenedRooted.target.invoke("FrameLabels", nlohmann::json::array({0})));
+    CHECK(labels.at("labels")[0].value("name", "") == "menu");
+}

@@ -17,6 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include <fo4/archive/ba2.hpp>
 #include <fo4ide/app/SwfTarget.hpp>
 #include <fo4ide/core/PayloadLimits.hpp>
 #include <fo4ide/settings/Settings.hpp>
@@ -244,6 +245,23 @@ inline std::vector<std::byte> readFileBytes(const fs::path& path) {
     bytes.reserve(text.size());
     for (char c : text) bytes.push_back(static_cast<std::byte>(c));
     return bytes;
+}
+
+inline void writeGameArchive(const fs::path& path, const std::string& innerPath, const std::vector<std::byte>& bytes) {
+    fo4::archive::Ba2GeneralArchive archive;
+    fo4::archive::Ba2GeneralEntry entry;
+    entry.path = innerPath;
+    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(bytes));
+    archive.entries.push_back(std::move(entry));
+    fo4::archive::write_ba2_general_file(archive, path);
+}
+
+// Constraint: the archive is named after Fallout4.esm, so archive_load_order mounts it as the game's own archive.
+inline fs::path gameDataFolder(const fs::path& dir) {
+    fs::create_directories(dir);
+    writeBytes(dir / "Fallout4.esm", {});
+    writeGameArchive(dir / "Fallout4 - Interface.ba2", "interface/test.swf", fixtureMovie());
+    return dir;
 }
 
 }  // namespace swft_target_test

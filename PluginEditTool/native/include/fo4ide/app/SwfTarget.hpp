@@ -38,7 +38,11 @@ public:
 
 private:
     Result<nlohmann::json> open(const nlohmann::json& args);
+    Result<nlohmann::json> openArchived(const nlohmann::json& args);
+    Result<nlohmann::json> listArchives();
+    Result<nlohmann::json> adopt(std::vector<std::byte> bytes, const std::string& label, bool archived);
     Result<nlohmann::json> save();
+    Result<nlohmann::json> writeTo(const std::filesystem::path& destination);
     Result<nlohmann::json> snapshot(bool changed);
     bool reopenHistory(std::string& message);
     bool refreshFromHistory(std::string& message, bool undid);
@@ -51,6 +55,7 @@ private:
     radicle_swf* movie_{nullptr};
     radicle_swf_history* history_{nullptr};
     std::optional<std::string> path_;
+    bool archived_{false};
     std::optional<std::filesystem::path> browsed_;
     std::vector<std::byte> saved_;
     std::vector<std::byte> current_;

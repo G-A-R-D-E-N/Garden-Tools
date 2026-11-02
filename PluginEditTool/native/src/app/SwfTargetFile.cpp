@@ -4,13 +4,17 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
+#include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
 
+#include <fo4/archive/assets.hpp>
 #include <fo4/c_api.h>
 #include <fo4/c_api_swf.h>
 #include <fo4/io/atomic_write.hpp>
+#include <fo4/text/encoding.hpp>
 #include <fo4ide/core/PayloadLimits.hpp>
 
 #include "ServiceTargetSupport.hpp"
@@ -30,6 +34,21 @@ using swftarget::takeText;
 using swftarget::utf8Path;
 using swftarget::utf8String;
 
+fo4::archive::AssetResolver gameArchives(const std::vector<fs::path>& roots) {
+    // Constraint: swfRootsFor puts the game Data folder first, and it is the only root the archive browse reads.
+    const fs::path dataDir = roots.empty() ? fs::path{} : roots.front();
+    if (dataDir.empty()) throw std::runtime_error("no game Data folder is set in the settings");
+    std::vector<std::string> plugins;
+    std::error_code code;
+    for (fs::directory_iterator it(dataDir, code), end; !code && it != end; it.increment(code)) {
+        const std::string extension = fo4::text::fold(utf8String(it->path().extension()));
+        if (extension == ".esm" || extension == ".esp" || extension == ".esl") plugins.push_back(utf8String(it->path().filename()));
+    }
+    std::sort(plugins.begin(), plugins.end());
+    const auto archives = fo4::archive::archive_load_order(dataDir, {}, plugins);
+    return fo4::archive::AssetResolver::open_roots({}, archives);
+}
+
 }  // namespace
 
 std::vector<fs::path> swfRootsFor(const fo4ide::settings::Settings& settings) {
@@ -42,6 +61,7 @@ void SwfTarget::closeDocument() {
     history_ = nullptr;
     movie_ = nullptr;
     path_.reset();
+    archived_ = false;
     saved_.clear();
     current_.clear();
 }
@@ -90,7 +110,45 @@ Result<nlohmann::json> SwfTarget::open(const nlohmann::json& args) {
     if (stream.bad() || stream.gcount() != static_cast<std::streamsize>(bytes.size())) {
         return errorText("the SWF file could not be read: " + path);
     }
+    return adopt(std::move(bytes), rooted, false);
+}
 
+Result<nlohmann::json> SwfTarget::openArchived(const nlohmann::json& args) {
+    closeDocument();
+    const std::string name = support::stringArgument(args, 0);
+    try {
+        const auto resolver = gameArchives(roots_());
+        const std::string key = fo4::archive::normalize_asset_path(name);
+        const auto location = resolver.locate_in_archives(key);
+        if (!location) return errorText("no SWF named " + name + " is in the game archives");
+        const auto& archive = resolver.archives()[location->archive];
+        if (archive.entries()[location->entry].unpacked_size() > core::kMaxSwfFileBytes) {
+            return errorText("the SWF entry is larger than the 256 MiB limit: " + name);
+        }
+        std::vector<std::byte> bytes = resolver.read(*location);
+        return adopt(std::move(bytes), utf8String(archive.path()) + "/" + key, true);
+    } catch (const std::exception& ex) {
+        return errorText(std::string("the SWF could not be read from the game archives: ") + ex.what());
+    }
+}
+
+Result<nlohmann::json> SwfTarget::listArchives() {
+    try {
+        const auto resolver = gameArchives(roots_());
+        nlohmann::json entries = nlohmann::json::array();
+        for (const auto& listing : resolver.list("", ".swf", false)) {
+            entries.push_back(nlohmann::json{
+                {"path", listing.path},
+                {"archive", utf8String(resolver.archives()[listing.location.archive].path().filename())},
+                {"size", listing.size}});
+        }
+        return nlohmann::json(nlohmann::json{{"entries", std::move(entries)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
+    } catch (const std::exception& ex) {
+        return errorText(std::string("the game archives could not be listed: ") + ex.what());
+    }
+}
+
+Result<nlohmann::json> SwfTarget::adopt(std::vector<std::byte> bytes, const std::string& label, bool archived) {
     radicle_swf* movie = nullptr;
     const auto* data = bytes.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(bytes.data());
     radicle_status status = radicle_swf_open_bytes(data, bytes.size(), &movie);
@@ -109,14 +167,21 @@ Result<nlohmann::json> SwfTarget::open(const nlohmann::json& args) {
     }
     movie_ = movie;
     history_ = history;
-    path_ = rooted;
+    path_ = label;
+    archived_ = archived;
     saved_ = bytes;
     current_ = std::move(bytes);
     return snapshot(false);
 }
 
 Result<nlohmann::json> SwfTarget::save() {
+    // Constraint: a BA2 entry cannot be written in place, so an archive-opened movie is saved only through Save As.
+    if (archived_) return errorText("the SWF came from a game archive, so it can only be saved with Save As");
     if (!path_) return errorText("the document has no path to save to");
+    return writeTo(utf8Path(*path_));
+}
+
+Result<nlohmann::json> SwfTarget::writeTo(const fs::path& destination) {
     std::uint8_t* raw = nullptr;
     std::size_t size = 0;
     if (radicle_swf_history_write_bytes(history_, &raw, &size) != RADICLE_STATUS_OK) {
@@ -133,23 +198,27 @@ Result<nlohmann::json> SwfTarget::save() {
     radicle_swf_destroy(probe);
     const std::vector<std::byte> bytes(reinterpret_cast<const std::byte*>(raw),
                                        reinterpret_cast<const std::byte*>(raw) + size);
-    // Constraint: the first save must keep a .bak of the on-disk original, and later saves must never overwrite it.
-    const std::string backup = *path_ + ".bak";
     std::error_code code;
-    if (fs::exists(utf8Path(*path_), code) && !fs::exists(utf8Path(backup), code)) {
-        fs::copy_file(utf8Path(*path_), utf8Path(backup), code);
+    const fs::path full = fs::weakly_canonical(destination, code);
+    const std::string target = utf8String(code ? destination : full);
+    // Constraint: the first save must keep a .bak of the on-disk original, and later saves must never overwrite it.
+    const std::string backup = target + ".bak";
+    if (fs::exists(utf8Path(target), code) && !fs::exists(utf8Path(backup), code)) {
+        fs::copy_file(utf8Path(target), utf8Path(backup), code);
         if (code) {
             return errorText("the SWF backup could not be written: " + backup + ": " + code.message());
         }
     }
     try {
-        fo4::io::write_file_atomic(utf8Path(*path_), bytes);
+        fo4::io::write_file_atomic(utf8Path(target), bytes);
     } catch (const std::exception& ex) {
-        return errorText(std::string("the SWF file could not be written: ") + *path_ + ": " + ex.what());
+        return errorText(std::string("the SWF file could not be written: ") + target + ": " + ex.what());
     }
+    path_ = target;
+    archived_ = false;
     saved_ = bytes;
     current_ = bytes;
-    return nlohmann::json(nlohmann::json{{"saved", *path_}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
+    return nlohmann::json(nlohmann::json{{"saved", target}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 
 Result<nlohmann::json> SwfTarget::snapshot(bool changed) {
@@ -175,7 +244,8 @@ Result<nlohmann::json> SwfTarget::snapshot(bool changed) {
                         {"revision", radicle_swf_history_revision(history_)},
                         {"undo", undo},
                         {"redo", redo},
-                        {"dirty", current_ != saved_}};
+                        {"dirty", current_ != saved_},
+                        {"archived", archived_}};
     return nlohmann::json(body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 

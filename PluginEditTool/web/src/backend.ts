@@ -455,6 +455,9 @@ export interface SwfHost {
   ActionTags(): Promise<string>;
   Avm1Disassemble(tagIndex: number): Promise<string>;
   BrowseForFile(title: string, filter: string): Promise<string>;
+  ArchiveSwfs(): Promise<string>;
+  OpenArchived(name: string): Promise<string>;
+  SaveAs(title: string, filter: string): Promise<string>;
   AbcText(abc: number): Promise<string>;
   ApplyAbcText(abc: number, text: string): Promise<string>;
 }

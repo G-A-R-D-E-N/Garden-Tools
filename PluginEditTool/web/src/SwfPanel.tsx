@@ -14,8 +14,9 @@ type InstanceRow = {
   boundsX: number; boundsY: number; boundsWidth: number; boundsHeight: number;
   hasBounds: boolean; clipDepth: number;
 };
-type StateReply = { changed?: boolean; revision: number; undo: number; redo: number; dirty: boolean; error?: string };
+type StateReply = { changed?: boolean; revision: number; undo: number; redo: number; dirty: boolean; archived?: boolean; error?: string };
 type ErrorReply = { error?: string };
+type ArchiveSwfRow = { path: string; archive: string; size: number };
 
 type PlacementRow = { tagIndex: number; depth: number; character: number | null; insideSprite: boolean };
 type ActionTagRow = { tagIndex: number; code: number; insideSprite: boolean };
@@ -32,6 +33,7 @@ function parse<T>(reply: string): T & ErrorReply {
 export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const { confirm: askConfirm } = useDialogs();
   const [path, setPath] = useState('');
+  const [archiveSwfs, setArchiveSwfs] = useState<ArchiveSwfRow[]>([]);
   const [characters, setCharacters] = useState<CharacterRow[]>([]);
   const [labels, setLabels] = useState<LabelRow[]>([]);
   const [instances, setInstances] = useState<InstanceRow[]>([]);
@@ -143,9 +145,9 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     await loadAbc();
   }, [timeline, loadCharacters, loadLabels, applyRevision, loadAbc]);
 
-  const open = useCallback(async (target: string) => {
+  const openWith = useCallback(async (request: (bridge: SwfHost) => Promise<string>) => {
     const bridge = host();
-    if (!bridge || !target.trim()) return;
+    if (!bridge) return;
     if (state.dirty && !await askConfirm({
       title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard',
       message: 'Opening another SWF replaces the open movie and discards its unsaved changes.',
@@ -168,7 +170,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setInspectText('');
     setInspectError('');
     try {
-      const opened = parse<StateReply>(await bridge.Open(target.trim()));
+      const opened = parse<StateReply>(await request(bridge));
       if (opened.error) { setError(opened.error); return; }
       setState(opened);
       setDocumentId(++documentSeq.current);
@@ -197,6 +199,16 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     }
   }, [timeline, frame, state.dirty, askConfirm, loadCharacters, loadLabels, showFrame, loadAbc]);
 
+  const open = useCallback(async (target: string) => {
+    if (!target.trim()) return;
+    await openWith(bridge => bridge.Open(target.trim()));
+  }, [openWith]);
+
+  const openArchived = useCallback(async (name: string) => {
+    setArchiveSwfs([]);
+    await openWith(bridge => bridge.OpenArchived(name));
+  }, [openWith]);
+
   const browse = useCallback(async () => {
     const bridge = host();
     if (!bridge) return;
@@ -209,6 +221,26 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       setError(caught instanceof Error ? caught.message : String(caught));
     }
   }, [open]);
+
+  const browseArchives = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const reply = parse<{ entries?: ArchiveSwfRow[] }>(await bridge.ArchiveSwfs());
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setArchiveSwfs(reply.entries ?? []);
+  }, []);
+
+  // Constraint: an archive-opened movie has no file to write in place, so Save goes through this Save As dialog.
+  const saveAs = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const reply = parse<{ saved?: string }>(await bridge.SaveAs('Save the SWF movie', 'SWF movie (*.swf)|*.swf|All files|*.*'));
+    if (reply.error) { setError(reply.error); return; }
+    if (!reply.saved) return;
+    setError('');
+    await refresh();
+  }, [refresh]);
 
   const abcApplied = useCallback(async (reply: AbcReply) => {
     setError('');
@@ -410,11 +442,18 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
         <button type="button" onClick={() => void requestClose()}>Close</button>
         {state.dirty && <span className="swf-dirty">modified</span>}
         <button type="button" onClick={() => void browse()}>Browse…</button>
+        <button type="button" onClick={() => void browseArchives()}>From game archives…</button>
         <button type="button" disabled={busy || !path.trim()} onClick={() => void open(path)}>Open</button>
         <input value={path} onChange={event => setPath(event.target.value)} placeholder="Interface/Test.swf" />
+        {archiveSwfs.length > 0 && (
+          <select aria-label="Game archive SWFs" defaultValue="" onChange={event => void openArchived(event.target.value)}>
+            <option value="" disabled>Choose a movie</option>
+            {archiveSwfs.map(item => <option key={item.path} value={item.path}>{item.path} ({item.archive})</option>)}
+          </select>
+        )}
         <button type="button" onClick={() => void command('undo')} disabled={state.undo === 0} title="Undo"><RotateCcw size={14} /></button>
         <button type="button" onClick={() => void command('redo')} disabled={state.redo === 0} title="Redo"><RotateCw size={14} /></button>
-        <button type="button" onClick={() => void command('save')} title="Save"><SaveIcon size={14} /></button>
+        <button type="button" onClick={() => void (state.archived ? saveAs() : command('save'))} title={state.archived ? 'Save As' : 'Save'}><SaveIcon size={14} /></button>
       </header>
       <div className="swf-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={page === 'movie'} onClick={() => setPage('movie')}>Movie</button>

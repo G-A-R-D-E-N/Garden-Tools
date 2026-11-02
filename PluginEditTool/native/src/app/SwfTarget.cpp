@@ -101,6 +101,7 @@ bool splitRow(const std::string& row, long long& first, unsigned long long& seco
 std::optional<std::string_view> expectedArguments(std::string_view method) {
     static const std::map<std::string_view, std::string_view> kinds{
         {"Open", "s"},
+        {"OpenArchived", "s"},
         {"Timeline", "i"},
         {"FrameLabels", "h"},
         {"Frame", "ii"},
@@ -181,12 +182,23 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
         return swftarget::utf8String(*picked);
     }
 
+    if (method == "SaveAs") {
+        // Constraint: the dialog is modal, so it runs before mutex_ is taken, and the destination only ever comes from the dialog.
+        const auto picked = platform_.pickSavePath({support::stringArgument(args, 0), support::stringArgument(args, 1), {}});
+        if (!picked || picked->empty()) return nlohmann::json(nlohmann::json{{"saved", ""}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
+        std::lock_guard<std::mutex> guard(mutex_);
+        if (history_ == nullptr) return swftarget::errorText("no SWF document is open");
+        return writeTo(*picked);
+    }
+
     std::lock_guard<std::mutex> guard(mutex_);
     const std::string name(method);
 
     if (const auto refusal = argumentRefusal(name, args)) return swftarget::errorText(*refusal);
 
     if (name == "Open") return open(args);
+    if (name == "OpenArchived") return openArchived(args);
+    if (name == "ArchiveSwfs") return listArchives();
 
     if ((movie_ == nullptr || history_ == nullptr) && expectedArguments(name)) return swftarget::errorText("no SWF document is open");
 
