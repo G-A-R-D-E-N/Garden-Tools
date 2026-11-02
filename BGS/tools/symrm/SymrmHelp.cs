@@ -197,6 +197,12 @@ public static class SymrmHelp
         C("retime", "retime <animation.hkx-or-dir> [every-nth]",
           "Exercise animation retiming and verify decoded output, optionally sampling.", "none",
           "symrm retime ./Animations 10"),
+        C("gltf", "gltf <animation.gltf-or-glb> <skeleton.hkx> <template.hkx> <output.hkx>",
+          "Import a glTF animation, such as a Blender export, as a Fallout 4 animation. Bones match the " +
+          "skeleton by exact name and are refused, not guessed; the clip is written through the template's " +
+          "compressed animation, which must have one track per skeleton bone and no root motion.",
+          "--root-motion is refused: this import writes no root motion",
+          "symrm gltf idle.glb skeleton.hkx template.hkx idle-out.hkx"),
         C("run", "run <behaviour.hkx-or-dir> [event-or-seconds ...]",
           "Run the behaviour simulation harness and optionally send events or advance time.", "none",
           "symrm run MyBehavior.hkx Activate 0.5"),

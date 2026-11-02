@@ -44,6 +44,19 @@ public sealed class AnimationSaveTransactionTests
                         StringComparison.Ordinal);
     }
 
+    // Regression: a change to NativeAnimation.Recompress alters the bytes it writes for existing callers, so saved animations differ from the verified build.
+    [Theory]
+    [InlineData("Meshes/Actors/Character/Animations/Paired/PairedKill2HMBashKneeAndHead_AttackerLead.hkx",
+                "767DDE99C479E6F3B5B14E348A70388AF1925392C2E0DD493E8DA072F5819B3B")]
+    [InlineData("Meshes/Actors/RadRoach/Animations/TurnLeft90.hkx",
+                "4D8CCF73CFEEC3992A9E1E7160ED3E7674291A66FC20DDA5CE683624BE25C4C9")]
+    public void RecompressDefaultOutputIsByteIdenticalToTheVerifiedBuild(string relative, string sha256)
+    {
+        byte[] bytes = File.ReadAllBytes(TestFixtures.Path(relative));
+        var written = NativeAnimation.Recompress(bytes, new HkxBinaryReader().ReadAnimation(bytes));
+        Assert.Equal(sha256, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(written.Bytes)));
+    }
+
     [Fact]
     public void Commit_RejectsASourceChangeInjectedBeforePublication()
     {

@@ -87,6 +87,7 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 | `lifecycle` | Run the native open/edit/save/reload/validate/render lifecycle gate. |
 | `test` | Run the native/Havok regression harness used by BGS CI. |
 | `defaults` | Compare game class-registration defaults with the shipped table. |
+| `gltf` | Import a glTF animation, such as a Blender export, as a Fallout 4 animation. |
 
 ## Command-specific switches
 
@@ -250,3 +251,39 @@ only for frameType `0` (what every one of the 15,193 shipped default frames uses
 other value and every other reference-frame class are explicitly refused and are reported as
 `<class>, frameType <n>`. Positive angles turn left about up (right-handed, Y-forward, Z-up).
 Single-file output also shows duration, distance, turn, and representative samples.
+
+## `gltf` animation import
+
+`symrm gltf <animation.gltf-or-glb> <skeleton.hkx> <template.hkx> <output.hkx>` reads one glTF animation
+and writes it as a Fallout 4 animation. The glTF must hold one skin, which names the bones, and one
+animation. Animated bones match the skeleton by exact name. Nothing is guessed: an animated bone the
+skeleton does not have, or a bone whose parent differs from the skeleton's, refuses the import.
+
+```bash
+symrm gltf idle.glb skeleton.hkx template.hkx idle-out.hkx
+```
+
+- The template is an animation with a compressed class (spline or lossless). Its tracks may cover a subset
+  of the skeleton's bones: the template's own track-to-bone map is kept, so the paired kill (94 tracks,
+  CamTarget undriven) works against the 95-bone character skeleton. An animated bone the template has no
+  track for is refused, by name.
+- A template's root motion is replaced by a stationary reference frame with no travel. A template without
+  root motion gets none.
+- A template's annotations (events) are cleared, and the count is printed, so its events do not fire on the
+  new clip.
+- Channels read LINEAR and STEP keys. CUBICSPLINE is refused. Morph-weight channels and channels on
+  nodes that are not bones are ignored, and the counts are printed.
+- Skeleton bones with no animation hold the skeleton's reference pose. Animated bones whose glTF rest
+  pose differs from the skeleton's are listed, because their values are read as glTF local transforms.
+- glTF is Y-up in metres. The import uses the Blender glTF convention: glTF `-Z` is forward. The clip
+  is resampled to at least 30 frames per second.
+- The output is written through the template's animation, read back, and checked against the sampled
+  pose within the encoder's budget (0.01 units, 0.001 radians, 0.0005 scale). If the default rotation
+  encoding misses, the rotation is re-encoded with a tighter fit tolerance, still at format 1, the format
+  the committed vanilla clips use. Only if that also misses is format 2 tried. A clip that still misses
+  writes nothing.
+- `--root-motion` is refused. An existing output is refused without touching it.
+
+Print counts show the frames, animated bones, reference-pose bones, ignored joints, rest-pose
+differences, ignored channels, written tracks, cleared annotations, the root-motion replacement, the
+rotation format used, and the worst written error.
