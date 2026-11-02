@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -187,6 +188,7 @@ def prepare_checkout(t):
     if not current:
         return False
     git("clean", "-ffdx", "-e", "/build/")
+    shutil.rmtree(REPO_DIR / "build" / "zlib-src", ignore_errors=True)
     git("checkout", "-f", "--detach", "refs/real-data/candidate")
     return True
 

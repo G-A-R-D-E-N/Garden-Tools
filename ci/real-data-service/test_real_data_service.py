@@ -244,6 +244,19 @@ class CheckoutTest(ServiceTest):
         self.assertIn(("clean", "-ffdx", "-e", "/build/"), calls)
         self.assertIn(("checkout", "-f", "--detach", "refs/real-data/candidate"), calls)
 
+    # Detects: every run after the first stopping in 12 seconds because zlib was copied inside its old folder.
+    def test_zlib_copy_from_the_last_run_is_removed_and_the_build_tree_is_kept(self):
+        build = rds.REPO_DIR / "build"
+        (build / "zlib-src").mkdir(parents=True)
+        (build / "zlib-src" / "CMakeLists.txt").write_text("old", encoding="utf-8")
+        (build / "native").mkdir()
+        (rds.REPO_DIR / ".git").mkdir()
+        _, patcher = self.git_calls(f"{'d' * 40} {SHA}")
+        with patcher:
+            self.assertTrue(rds.prepare_checkout(target()))
+        self.assertFalse((build / "zlib-src").exists())
+        self.assertTrue((build / "native").exists())
+
 
 class GhPathTest(ServiceTest):
     def test_gh_path_given_at_install_is_used_for_the_run(self):

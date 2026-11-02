@@ -3017,3 +3017,7 @@ Failed names come only from the `The following tests FAILED:` section, not from 
 ## ci/real-data-service/test_real_data_service.py:RealCtestOutputTest — real ctest output
 
 `test_summary_and_failed_name_from_a_real_run` detects the summary or failure-line format drifting from real CTest output. `test_skipped_tests_are_never_reported_as_the_failure` detects a skipped test reported as the failing one, which the earlier parser did on this sample.
+
+## ci/real-data-service/real_data_service.py:prepare_checkout — zlib copy removed before each run
+
+`/build/` is kept between runs so builds stay incremental, but `.github/scripts/pinned-zlib-windows.ps1` copies its cache to `build\zlib-src` and then deletes `.git` there. When the folder already exists, `Copy-Item` nests the copy inside it, `.git` is missing, and the step stops the job within seconds. That script comes from each PR's checkout, so the service clears the folder rather than the script handling it.
