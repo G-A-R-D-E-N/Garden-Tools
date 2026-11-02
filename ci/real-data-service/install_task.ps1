@@ -36,6 +36,8 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
     -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
 if ($PSCmdlet.ShouldProcess($taskName, 'register the logon task')) {
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+    Stop-ScheduledTask -TaskName $taskName
+    Start-ScheduledTask -TaskName $taskName
     Get-ScheduledTask -TaskName $taskName | Select-Object TaskName, State | Format-List
 }
 "python: $python"
