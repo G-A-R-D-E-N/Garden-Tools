@@ -1,4 +1,5 @@
 #include "fo4/papyrus/decompiler.hpp"
+#include "fo4/papyrus/decompile_service.hpp"
 #include "fo4/pex/pex.hpp"
 
 #include <gtest/gtest-spi.h>
@@ -28,6 +29,12 @@
 #include <system_error>
 #include <utility>
 #include <vector>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 using fo4::papyrus::CodeGenerator;
 using fo4::papyrus::CodeGenOptions;
@@ -98,6 +105,15 @@ PexFile scriptWith(PexFunction fn, std::string objectName = "Probe") {
   file.computerName = "native";
   file.objects.push_back(std::move(object));
   return file;
+}
+
+void writePex(const std::filesystem::path& path, const std::string& name) {
+  auto pex = scriptWith(makeFunction("Run", {}, {}, {}), name);
+  pex.majorVersion = 3; pex.minorVersion = 9; pex.gameId = 2;
+  pex.rebuildStringTable();
+  const auto bytes = pex.toBytes();
+  std::ofstream file(path, std::ios::binary);
+  file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 }
 
 std::string uniqueRoot() {
@@ -194,6 +210,211 @@ struct DecompileFixture {
 
 }  // namespace
 
+// Detects: a folder decompile must retain nested names, report bad PEX files, and skip symlinks.
+TEST(PapyrusDecompiler, FolderDecompileWritesNamespacedSourceAndReportsFailures) {
+  DecompileFixture f;
+  const auto input = std::filesystem::path(f.root) / "input";
+  const auto output = std::filesystem::path(f.root) / "output";
+  std::filesystem::create_directories(input / "nested");
+  auto pex = scriptWith(makeFunction("Run", {}, {}, {}), "Space:Example");
+  pex.majorVersion = 3;
+  pex.minorVersion = 9;
+  pex.gameId = 2;
+  pex.rebuildStringTable();
+  const auto bytes = pex.toBytes();
+  std::ofstream good(input / "nested" / "example.PEX", std::ios::binary);
+  good.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  good.close();
+  std::ofstream(input / "bad.pex") << "invalid";
+  const auto result = fo4::papyrus::DecompileService::decompile(input.string(), output.string(), false, false);
+  EXPECT_NE(result.find("RESULT: 1/2 decompiled -> .psc"), std::string::npos);
+  EXPECT_NE(result.find("bad.pex:"), std::string::npos);
+  EXPECT_TRUE(std::filesystem::exists(output / "Space" / "Example.psc"));
+}
+
+// Detects: a linked input must not be decompiled a second time.
+TEST(PapyrusDecompiler, FolderDecompileSkipsInputSymlinks) {
+  DecompileFixture f;
+  const auto input = std::filesystem::path(f.root) / "input";
+  std::filesystem::create_directories(input);
+  writePex(input / "original.pex", "Example");
+  std::error_code ec;
+  std::filesystem::create_symlink(input / "original.pex", input / "link.pex", ec);
+  if (ec) GTEST_SKIP() << "Cannot create file symlink: " << ec.message();
+  const auto result = fo4::papyrus::DecompileService::decompile(input.string(), "", false, false);
+  EXPECT_NE(result.find("RESULT: 1/1 decompiled"), std::string::npos);
+}
+
+// Detects: an output namespace link must not redirect a decompile outside the output folder.
+TEST(PapyrusDecompiler, FolderDecompileRejectsLinkedNamespace) {
+  DecompileFixture f;
+  const auto root = std::filesystem::path(f.root);
+  const auto input = root / "input";
+  const auto output = root / "output";
+  const auto outside = root / "outside";
+  std::filesystem::create_directories(input);
+  std::filesystem::create_directories(output);
+  std::filesystem::create_directories(outside);
+  auto pex = scriptWith(makeFunction("Run", {}, {}, {}), "Space:Example");
+  pex.majorVersion = 3; pex.minorVersion = 9; pex.gameId = 2;
+  pex.rebuildStringTable();
+  const auto bytes = pex.toBytes();
+  std::ofstream file(input / "original.pex", std::ios::binary);
+  file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  file.close();
+  std::error_code ec;
+  std::filesystem::create_directory_symlink(outside, output / "Space", ec);
+  if (ec) GTEST_SKIP() << "Cannot create directory symlink: " << ec.message();
+  const auto result = fo4::papyrus::DecompileService::decompile(input.string(), output.string(), false, false);
+  EXPECT_NE(result.find("RESULT: 0/1 decompiled"), std::string::npos);
+  EXPECT_FALSE(std::filesystem::exists(outside / "Example.psc"));
+}
+
+// Detects: a destination link must not overwrite its external target.
+TEST(PapyrusDecompiler, DecompileDoesNotFollowDestinationLink) {
+  DecompileFixture f;
+  const auto root = std::filesystem::path(f.root);
+  std::filesystem::create_directories(root / "output");
+  auto pex = scriptWith(makeFunction("Run", {}, {}, {}), "Example");
+  pex.majorVersion = 3; pex.minorVersion = 9; pex.gameId = 2;
+  pex.rebuildStringTable();
+  const auto bytes = pex.toBytes();
+  std::ofstream file(root / "original.pex", std::ios::binary);
+  file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  file.close();
+  std::ofstream(root / "outside.psc") << "keep";
+  std::error_code ec;
+  std::filesystem::create_symlink(root / "outside.psc", root / "output" / "Example.psc", ec);
+  if (ec) GTEST_SKIP() << "Cannot create file symlink: " << ec.message();
+  fo4::papyrus::DecompileService::decompile((root / "original.pex").string(), (root / "output").string(), false, true);
+  std::ifstream outside(root / "outside.psc");
+  std::string contents; outside >> contents;
+  EXPECT_EQ(contents, "keep");
+  EXPECT_TRUE(std::filesystem::is_symlink(std::filesystem::symlink_status(root / "output" / "Example.psc")));
+}
+
+// Detects: scripts that derive the same destination must not silently overwrite each other.
+TEST(PapyrusDecompiler, FolderDecompileReportsDuplicateDestination) {
+  DecompileFixture f;
+  const auto root = std::filesystem::path(f.root);
+  std::filesystem::create_directories(root / "input");
+  auto pex = scriptWith(makeFunction("Run", {}, {}, {}), "Example");
+  pex.majorVersion = 3; pex.minorVersion = 9; pex.gameId = 2;
+  pex.rebuildStringTable();
+  const auto bytes = pex.toBytes();
+  for (const auto* name : {"a.pex", "b.pex"}) {
+    std::ofstream file(root / "input" / name, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  }
+  const auto result = fo4::papyrus::DecompileService::decompile((root / "input").string(), (root / "output").string(), false, false);
+  EXPECT_NE(result.find("RESULT: 1/2 decompiled"), std::string::npos);
+  EXPECT_NE(result.find("duplicate"), std::string::npos);
+}
+
+#ifndef _WIN32
+// Detects: case-distinct script names on a case-sensitive filesystem must both be written.
+TEST(PapyrusDecompiler, FolderDecompileKeepsCaseDistinctOutputs) {
+  DecompileFixture f;
+  const auto root = std::filesystem::path(f.root);
+  std::filesystem::create_directories(root / "input");
+  std::filesystem::create_directories(root / "output");
+  std::ofstream(root / "output" / "case-probe") << "probe";
+  if (std::filesystem::exists(root / "output" / "CASE-PROBE")) {
+    GTEST_SKIP() << "Output filesystem is case-insensitive";
+  }
+  for (const auto& [filename, object] : {std::pair{"a.pex", "Foo"}, std::pair{"b.pex", "foo"}}) {
+    writePex(root / "input" / filename, object);
+  }
+  const auto result = fo4::papyrus::DecompileService::decompile(
+      (root / "input").string(), (root / "output").string(), false, false);
+  EXPECT_NE(result.find("RESULT: 2/2 decompiled"), std::string::npos);
+  EXPECT_TRUE(std::filesystem::is_regular_file(root / "output" / "Foo.psc"));
+  EXPECT_TRUE(std::filesystem::is_regular_file(root / "output" / "foo.psc"));
+}
+
+// Detects: case aliases on a case-insensitive POSIX volume must not overwrite an earlier output.
+TEST(PapyrusDecompiler, FolderDecompileReportsCaseAliasesOnInsensitiveVolume) {
+  DecompileFixture f;
+  const auto root = std::filesystem::path(f.root);
+  std::filesystem::create_directories(root / "input");
+  std::filesystem::create_directories(root / "output");
+  std::ofstream(root / "output" / "case-probe") << "probe";
+  if (!std::filesystem::exists(root / "output" / "CASE-PROBE")) {
+    GTEST_SKIP() << "Output filesystem is case-sensitive";
+  }
+  for (const auto& [filename, object] : {std::pair{"a.pex", "Foo"}, std::pair{"b.pex", "foo"}}) {
+    writePex(root / "input" / filename, object);
+  }
+  const auto result = fo4::papyrus::DecompileService::decompile(
+      (root / "input").string(), (root / "output").string(), false, false);
+  EXPECT_NE(result.find("RESULT: 1/2 decompiled"), std::string::npos);
+  EXPECT_NE(result.find("duplicate output"), std::string::npos);
+}
+#endif
+
+#ifdef _WIN32
+// Detects: Windows trailing-dot aliases must not silently overwrite a different script.
+TEST(PapyrusDecompiler, FolderDecompileRejectsWindowsNamespaceAliases) {
+  DecompileFixture f;
+  const auto root = std::filesystem::path(f.root);
+  std::filesystem::create_directories(root / "input");
+  for (const auto& [filename, object] : {std::pair{"a.pex", "Space:Example"},
+                                         std::pair{"b.pex", "Space.:Example"}}) {
+    writePex(root / "input" / filename, object);
+  }
+  const auto result = fo4::papyrus::DecompileService::decompile(
+      (root / "input").string(), (root / "output").string(), false, false);
+  EXPECT_NE(result.find("RESULT: 1/2 decompiled"), std::string::npos);
+  EXPECT_NE(result.find("invalid Windows output"), std::string::npos);
+  EXPECT_TRUE(std::filesystem::is_regular_file(root / "output" / "Space" / "Example.psc"));
+}
+
+// Detects: a Windows short directory alias must not produce a second output for the same file.
+TEST(PapyrusDecompiler, FolderDecompileReportsWindowsShortNameAlias) {
+  DecompileFixture f;
+  const auto root = std::filesystem::path(f.root);
+  const auto folder = root / "output" / "LongNamespaceName";
+  std::filesystem::create_directories(root / "input");
+  std::filesystem::create_directories(folder);
+  const auto length = GetShortPathNameW(folder.c_str(), nullptr, 0);
+  if (!length) GTEST_SKIP() << "Short names unavailable";
+  std::wstring shortPath(length, L'\0');
+  const auto actual = GetShortPathNameW(folder.c_str(), shortPath.data(), length);
+  if (!actual || actual >= length) GTEST_SKIP() << "Short names unavailable";
+  shortPath.resize(actual);
+  const auto alias = std::filesystem::path(shortPath).filename().string();
+  if (alias == "LongNamespaceName") GTEST_SKIP() << "Filesystem did not assign a short name";
+  for (const auto& [filename, object] : {std::pair{std::string("a.pex"), std::string("LongNamespaceName:Example")},
+                                         std::pair{std::string("b.pex"), alias + ":Example"}}) {
+    writePex(root / "input" / filename, object);
+  }
+  const auto result = fo4::papyrus::DecompileService::decompile(
+      (root / "input").string(), (root / "output").string(), false, false);
+  EXPECT_NE(result.find("RESULT: 1/2 decompiled"), std::string::npos);
+  EXPECT_NE(result.find("duplicate output"), std::string::npos);
+}
+#endif
+
+// Detects: assembly folder output must use the input basename instead of the script namespace.
+TEST(PapyrusDecompiler, FolderDisassemblyUsesInputBasename) {
+  DecompileFixture f;
+  const auto input = std::filesystem::path(f.root) / "input";
+  const auto output = std::filesystem::path(f.root) / "output";
+  std::filesystem::create_directories(input);
+  auto pex = scriptWith(makeFunction("Run", {}, {}, {}), "Space:Example");
+  pex.majorVersion = 3;
+  pex.minorVersion = 9;
+  pex.gameId = 2;
+  pex.rebuildStringTable();
+  const auto bytes = pex.toBytes();
+  std::ofstream file(input / "original.pex", std::ios::binary);
+  file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  file.close();
+  const auto result = fo4::papyrus::DecompileService::decompile(input.string(), output.string(), true, false);
+  EXPECT_NE(result.find("RESULT: 1/1 decompiled -> .pas"), std::string::npos);
+  EXPECT_TRUE(std::filesystem::exists(output / "original.pas"));
+}
+
 TEST(PapyrusDecompiler, ZeroAssignmentToLocalIsHoistedToItsDeclaration) {
   const auto fn = makeFunction("Go", {}, {{"i", "int"}},
                            {step("assign", {identifier("i"), integer(0)}), step("return", {PexValue{}})});
@@ -276,7 +497,16 @@ TEST(PapyrusDecompiler, RemoteEventNameIsRebuiltFromTheSenderPrefix) {
 
 TEST(PapyrusDecompiler, ObjectNameThatIsNotASafeFileNameIsRefused) {
   const auto fn = makeFunction("Go", {}, {}, {step("return", {PexValue{}})});
-  EXPECT_THROW(Decompiler::toSource(scriptWith(fn, "Bad/Name")), std::runtime_error);
+  for (const auto& name : {"Bad/Name", "Namespace:..:escape", "Namespace:folder/escape",
+                           "Namespace:folder\\escape", "Namespace::escape"}) {
+    EXPECT_THROW(Decompiler::toSource(scriptWith(fn, name)), std::runtime_error) << name;
+  }
+}
+
+TEST(PapyrusDecompiler, NamespacedObjectNameIsAcceptedAndEmittedAsScriptName) {
+  const auto fn = makeFunction("Go", {}, {}, {step("return", {PexValue{}})});
+  const std::string text = Decompiler::toSource(scriptWith(fn, "Namespace:SafeScript"));
+  EXPECT_NE(text.find("ScriptName Namespace:SafeScript"), std::string::npos);
 }
 
 TEST(PapyrusDecompiler, SimpleFunctionRoundTrips) {

@@ -5,7 +5,7 @@
 #include <system_error>
 #include <utility>
 
-#include <fo4ide/papyrus/ScriptNames.hpp>
+#include <fo4/papyrus/script_names.hpp>
 
 #include "ServiceTargetSupport.hpp"
 
@@ -44,7 +44,7 @@ Result<std::optional<std::filesystem::path>> stageNamespacedScripts(
                 obj = extractScriptName(readFileText(file));
             } catch (...) {
             }
-            if (!obj.empty() && !papyrus::safeScriptObjectName(obj)) {
+            if (!obj.empty() && !fo4::papyrus::safeScriptObjectName(obj)) {
                 return std::unexpected(Error{"UnsafeScriptName",
                     "Refused to compile: '" + file.filename().string() + "' declares ScriptName '" +
                     obj + "', which has an unsafe namespace part. Nothing was staged."});

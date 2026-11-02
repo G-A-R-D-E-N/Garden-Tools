@@ -197,7 +197,6 @@ add_library(
     papyrus/Resolver.cpp
     papyrus/TypeChecker.cpp
     papyrus/CodeGenerator.cpp
-    papyrus/Decompiler.cpp
     papyrus/Symbols.cpp
     papyrus/CreationKitFidelity.cpp
     papyrus/AnalysisService.cpp

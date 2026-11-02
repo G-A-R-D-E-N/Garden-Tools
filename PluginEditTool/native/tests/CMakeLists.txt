@@ -82,8 +82,6 @@ add_executable(
     unit/PapyrusPexTests.cpp
     unit/PapyrusCodeGenTests.cpp
     unit/PapyrusUserFlagTableTests.cpp
-    unit/PapyrusDecompilerTests.cpp
-    unit/PapyrusSecurityTests.cpp
     unit/PapyrusSymbolsTests.cpp
     unit/PapyrusAnalysisServiceTests.cpp
 )

@@ -305,6 +305,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/papyrus/runtime.cpp
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
+  src/papyrus/decompile_service.cpp
   src/papyrus/decompiler.cpp
   src/papyrus/decompiler_expr.cpp
   src/papyrus/decompiler_stmt.cpp

@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -8,6 +9,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <fo4/papyrus/decompiler.hpp>
+#include <fo4/pex/pex.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 
@@ -261,6 +264,37 @@ TEST_CASE("PapyrusTarget Decompile shows the NOT SAVED trailer without write") {
     const auto text = result->get<std::string>();
     CHECK(text.find("ScriptName Greeter") != std::string::npos);
     CHECK(text.find("NOT SAVED") != std::string::npos);
+
+    const auto bytes = readBytes(pex);
+    const auto file = fo4::pex::PexFile::fromBytes(
+        std::vector<std::uint8_t>(bytes.begin(), bytes.end()));
+    for (const bool assembly : {false, true}) {
+        auto shown = target.invoke(
+            "Decompile", nlohmann::json::array({pex.string(), "", assembly, false}));
+        REQUIRE(shown.has_value());
+        const auto expected = assembly ? fo4::papyrus::Decompiler::disassemble(file)
+                                       : fo4::papyrus::Decompiler::toSource(file);
+        CHECK(shown->get<std::string>().rfind(expected, 0) == 0);
+    }
+}
+
+TEST_CASE("PapyrusTarget Decompile reports a .pex it cannot read as a failure, not a throw") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto junk = root / "x.pex";
+    touch(junk, "junk");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto result =
+        target.invoke("Decompile", nlohmann::json::array({junk.string(), "", false, false}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().rfind("Decompile failed for x.pex", 0) == 0);
 }
 
 TEST_CASE("PapyrusTarget Decompile writes a namespaced .psc when asked") {
