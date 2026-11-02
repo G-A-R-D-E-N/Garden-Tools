@@ -30,7 +30,10 @@ if ($PSCmdlet.ShouldProcess($serviceDir, 'copy the service files')) {
 $service = Join-Path $serviceDir 'real_data_service.py'
 $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $action = New-ScheduledTaskAction -Execute $python -Argument "-I -B `"$service`" --gh `"$ghPath`"" -WorkingDirectory $serviceDir
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
+$trigger = @(
+    (New-ScheduledTaskTrigger -AtLogOn -User $user),
+    (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 15))
+)
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
     -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)

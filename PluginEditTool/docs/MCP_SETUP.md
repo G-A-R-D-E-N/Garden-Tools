@@ -5,8 +5,8 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **161 tools**: 65 hand-written tools and 96 catalog tools. The 65 are 20 for plugins and records,
-23 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects and weapons), 5 for MO2 profile
+It advertises **163 tools**: 67 hand-written tools and 96 catalog tools. The 67 are 20 for plugins and records,
+25 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects, weapons and perks), 5 for MO2 profile
 and host state, 5 for Papyrus, and 12 for NIFs, materials, audio and BA2 archives (5 NIF, 2 material, 4 audio, 1
 archive). The 96 catalog tools are the editor parity set: 24 read-side (`McpCatalogRead.cpp`), 46 edit-side
 (`McpCatalogEdit.cpp`) and 26 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
@@ -131,7 +131,7 @@ six hex digits, a colon and the plugin that owns the record.
 
 #### create_record payloads
 
-`type` is the signature and `payload` is an object. These eighteen types have a verified layout. A payload
+`type` is the signature and `payload` is an object. These nineteen types have a verified layout. A payload
 that does not fit is rejected with `InvalidRecordCreationPayload`, and the message names the field.
 `editorId` may be written `editor_id`.
 
@@ -148,6 +148,7 @@ that does not fit is rejected with `InvalidRecordCreationPayload`, and the messa
 | `QUST`, `SPEL`, `MGEF`, `FLST`, `MESG` | `editorId` (non-empty; `editor_id` accepted) | none. Builds the schema's required subrecords from their registered defaults: `QUST` takes a zeroed `DNAM`, `MESG` an empty `DESC` plus `INAM` and `DNAM`, `MGEF` a zeroed `DATA`, `SPEL` `OBND`, `DESC` and `SPIT`, and `FLST` carries only its `EDID`. Nothing else is set at creation. |
 | `GLOB` | `editorId` (non-empty), `type` (`short`, `long`, `float` or `boolean`) | none. The type is the required `FNAM` byte the schema has no default for; `FLTV` is created as a zero `f32`. |
 | `PROJ`, `EXPL`, `HAZD` | none | `editorId`, `name`, `bounds` (six integers), and the type's own numbers and form-key links, for example `speed`, `range` and `explosionType` on `PROJ`; `force`, `damage` and `innerRadius` on `EXPL`; `radius`, `lifetime` and `spell` on `HAZD` |
+| `PERK` | `editorId` (non-empty; `editor_id` accepted) | `full` and `desc` (inline text; refused in localized plugins), `trait` (0 or 1, default 0), `level` (0-255, default 0), `ranks` (0-255, default 1), `playable` (0 or 1, default 1), `effects` (an array in the `set_perk_effects` shape; `quest` must be a loaded QUST, `ability` a loaded SPEL, and the parameter form and actor value a loaded record of the type the effect expects) |
 
 Any other signature is refused (`RecordCreationRequiresSchema`) unless the payload contains
 `"schema": true`. The record is then built from the schema's defaults, with an optional `editorId`, and
@@ -155,7 +156,7 @@ only for record types the schema layer can create on its own (`RecordNotAuthorab
 
 ### Typed records
 
-These read the winning version of a leveled list, NPC_, FACT or WEAP record and edit one plugin's version in memory. An edit needs `plugin` to already hold the record; call `save_plugin` to persist. `op` is `add`, `set` or `remove`. A refused edit leaves the plugin unchanged.
+These read the winning version of a leveled list, NPC_, FACT or WEAP record (PERK reads `plugin`'s version) and edit one plugin's version in memory. An edit needs `plugin` to already hold the record; call `save_plugin` to persist. `op` is `add`, `set` or `remove`. A refused edit leaves the plugin unchanged.
 
 | Tool | Arguments | Writes | What it does |
 |---|---|---|---|
@@ -178,6 +179,8 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record and 
 | `remove_script_property` | `plugin`, `form_key`, `script_index`, `property_index` | memory | Removes one property by property index. Call `save_plugin` to persist. |
 | `set_script_value` | `plugin`, `form_key`, `script_index`, `property_index`, `kind` [`value` `alias` `element`] | memory | Sets one VMAD property value. `kind` is `object`, `string`, `int`, `float` or `bool` and must match the stored property type; for `object` the `value` is a FormKey and `alias` an optional signed 16-bit index (default -1); for `int`/`float`/`bool` the value is text. `element` addresses an array element and defaults to 0. Refusals name the mismatch (`PropertyTypeMismatch`, `PropertyIndexOutOfRange`, `ElementIndexOutOfRange`, `InvalidPropertyValue`); call `save_plugin` to persist. |
 | `get_weapon_damage_types` | `form_key` | no | A WEAP record's damage types (read-only). |
+| `get_perk_effects` | `plugin`, `form_key` | no | A PERK record's effects: `type`, `rank`, `priority`, then `quest` and `questStage`, `ability`, or `entryPoint` and `function`; each effect's condition `tabs` and `parameters` (`data` is hex). |
+| `set_perk_effects` | `plugin`, `form_key`, `effects` | memory | Replaces the whole effect list with `effects`, in the shape `get_perk_effects` returns. An effect that omits `tabs` has its condition tabs cleared. Call `save_plugin` to persist. |
 | `get_magic_effects` | `plugin`, `form_key` | no | A SPEL, ALCH, ENCH or INGR record's effect list: count plus each effect's index, `effect` FormKey, `magnitude`, `area` and `duration`. |
 | `add_magic_effect` | `plugin`, `form_key`, `effect`, `magnitude`, `area`, `duration` | memory | Appends one effect (EFID/EFIT) to a SPEL, ALCH, ENCH or INGR record and returns its index. `effect` must be an MGEF FormKey, `magnitude` a number, `area` and `duration` integers. Call `save_plugin` to persist. |
 | `set_magic_effect` | `plugin`, `form_key`, `index`, `effect`, `magnitude`, `area`, `duration` | memory | Replaces one effect of the list by index; the record must be SPEL, ALCH, ENCH or INGR and `effect` an MGEF FormKey. Call `save_plugin` to persist. |

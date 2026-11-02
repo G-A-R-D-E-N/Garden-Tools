@@ -232,11 +232,13 @@ sort); PET's `compileFile` is file-local in Radicle; the Radicle parser and code
 ASCII `lower` and `iequals` helpers in `Radicle/src/papyrus/parser_detail.hpp` and `codegen_detail.hpp`. Only comments and blank
 lines differ otherwise.
 
-## PluginEditTool/native/src/graph/GraphCompiler.cpp:GraphCompiler (compileScript stays on PET)
+## PluginEditTool/native/src/app/GraphTarget.cpp:GraphTarget::compiler
 
-The graph compile still calls PET's `papyrus::compileScript` with PET's `ScriptIndex` and returns PET's `PexFile`. Radicle's
-`fo4::papyrus::compileScript` has the same pass order but returns Radicle types, so moving it means moving the graph's script index
-and PEX type too. It is left for the graph lift.
+`GraphTarget` keeps one `fo4::graph::GraphCompiler` and one `fo4::papyrus::ScriptIndex` per distinct base-import list, keyed on the
+joined roots, and rebuilds both when that list changes; `Refresh` drops them. The compile itself is
+`Radicle/src/graph/graph_compiler.cpp:GraphCompiler::compile`, so PET holds no graph or F4SE code: `PluginEditTool/native/src/graph/`,
+`src/f4se/` and their headers are deleted, and the Graph RPCs, `LoadScript`, the palette reads and the pinned-radicle graph test
+helper all call `fo4::graph`.
 
 ## PluginEditTool/native/tests/unit/PapyrusTargetTests.cpp:PapyrusTarget analysis RPCs match the PET oracle on real sources
 
@@ -422,3 +424,7 @@ The per-path worker in `PluginEditTool/native/src/app/ServiceTargets.cpp:CellTar
 ## PluginEditTool/native/src/app/ServiceTargets.cpp:serviceJsonText
 
 An error message can carry a path, and `nlohmann::json::dump` throws `type_error.316` on invalid UTF-8 unless it is told to replace it, so the four replies that can carry a filesystem error or a model path use `nlohmann::json::error_handler_t::replace`: `PluginEditTool/native/src/app/ServiceTargets.cpp:serviceJsonText`, the `GetGeometryBatch` argument reply, its `catch` reply, and `PluginEditTool/native/src/app/ServiceTargets.cpp:CellTarget::geometryBatch`'s result map, whose keys are the paths the client sent. A model path with a stray byte used to turn a mapped error into a thrown exception on the service thread; it now arrives with a replacement character. `PluginEditTool/native/src/app/ServiceTargets.cpp:SettingsTarget::getSettings` still dumps the `redactedSettings` result strictly, and that result can carry the configured Fallout, data and output paths.
+
+## PluginEditTool/native/tests/helpers/GraphTestSupport.hpp:fixtureRoot
+
+`PluginEditTool/native/tests/helpers/GraphTestSupport.hpp:fixtureRoot` joins `FO4IDE_TEST_FIXTURES_DIR` with a folder name, which is how `baseStubs()` and `graphScripts()` reach `PluginEditTool/native/tests/fixtures`. The define comes from `PluginEditTool/native/tests/CMakeLists.txt` (`FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"`), and the graph and Papyrus target cases feed those paths into `Settings::papyrusBaseImports`, so a target that drops the define fails to compile here, and a moved or renamed fixtures tree makes those cases resolve imports from the wrong directory. The header carries no comment saying so, because the value lives in CMake where a reader of the header cannot check it.

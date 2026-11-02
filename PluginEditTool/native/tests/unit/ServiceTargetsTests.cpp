@@ -13,10 +13,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4ide/app/ServiceTargets.hpp>
-#include <fo4ide/graph/GraphDocument.hpp>
+#include <fo4/graph/graph_document.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
-#include "../helpers/GraphBuilder.hpp"
+#include "../helpers/GraphTestSupport.hpp"
 #include "../helpers/NifFixture.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
 
@@ -484,8 +484,8 @@ TEST_CASE("GraphTarget validates documents and reports malformed input") {
 }
 
 TEST_CASE("GraphTarget resolves Extends and palette scripts from Settings base imports without the env var") {
-    using namespace fo4ide::graph;
-    using namespace fo4ide::graph::test;
+    using namespace fo4::graph;
+    using namespace fo4::graph::test;
 
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -544,8 +544,8 @@ TEST_CASE("GraphTarget SaveGraph reports malformed documents") {
 }
 
 TEST_CASE("GraphTarget CompileToPex errors instead of reporting a write that failed") {
-    using namespace fo4ide::graph;
-    using namespace fo4ide::graph::test;
+    using namespace fo4::graph;
+    using namespace fo4::graph::test;
 
     const auto root = tempRoot();
     Cleanup cleanup{root};

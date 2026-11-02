@@ -6,13 +6,13 @@
 #include <optional>
 #include <utility>
 
-#include <fo4ide/graph/GraphCompiler.hpp>
-#include <fo4ide/graph/GraphDocument.hpp>
-#include <fo4ide/graph/GraphScriptLoader.hpp>
-#include <fo4ide/graph/GraphToolService.hpp>
-#include <fo4ide/graph/NodeDefinition.hpp>
-#include <fo4ide/graph/NodePalette.hpp>
-#include <fo4ide/papyrus/ScriptIndex.hpp>
+#include <fo4/graph/graph_compiler.hpp>
+#include <fo4/graph/graph_document.hpp>
+#include <fo4/graph/graph_script_loader.hpp>
+#include <fo4/graph/graph_tool_service.hpp>
+#include <fo4/graph/node_definition.hpp>
+#include <fo4/graph/node_palette.hpp>
+#include <fo4/papyrus/script_index.hpp>
 
 #include "ServiceTargetSupport.hpp"
 
@@ -41,14 +41,14 @@ void writeFileBytes(const std::filesystem::path& path, const std::vector<std::ui
     if (!stream) throw std::runtime_error("Could not write '" + path.string() + "'.");
 }
 
-nlohmann::json describeNodeDefinition(const graph::NodeDefinition& definition) {
+nlohmann::json describeNodeDefinition(const fo4::graph::NodeDefinition& definition) {
     nlohmann::json pins = nlohmann::json::array();
     for (const auto& pin : definition.pins) {
         nlohmann::json entry;
         entry["id"] = pin.id;
         entry["name"] = pin.label.empty() ? pin.id : pin.label;
-        entry["kind"] = pin.kind == graph::PinKind::Exec ? "exec" : "data";
-        entry["dir"] = pin.direction == graph::PinDirection::In ? "in" : "out";
+        entry["kind"] = pin.kind == fo4::graph::PinKind::Exec ? "exec" : "data";
+        entry["dir"] = pin.direction == fo4::graph::PinDirection::In ? "in" : "out";
         entry["dataType"] = pin.type ? pin.type->toString() : std::string{};
         entry["optional"] = pin.isOptional;
         if (pin.declaredDefault) entry["defaultLiteral"] = *pin.declaredDefault;
@@ -60,7 +60,7 @@ nlohmann::json describeNodeDefinition(const graph::NodeDefinition& definition) {
     out["type"] = definition.id;
     out["label"] = definition.title;
     out["category"] = definition.category;
-    out["kind"] = std::string(graph::graphNodeKindName(definition.kind));
+    out["kind"] = std::string(fo4::graph::graphNodeKindName(definition.kind));
     if (definition.summary) out["summary"] = *definition.summary;
     out["isPure"] = definition.isPure;
     out["isGlobal"] = definition.isGlobal;
@@ -69,10 +69,10 @@ nlohmann::json describeNodeDefinition(const graph::NodeDefinition& definition) {
     return out;
 }
 
-nlohmann::json describeGraphDiagnostic(const graph::GraphDiagnostic& diagnostic) {
+nlohmann::json describeGraphDiagnostic(const fo4::graph::GraphDiagnostic& diagnostic) {
     nlohmann::json out;
     out["code"] = diagnostic.code;
-    out["severity"] = diagnostic.severity == graph::GraphSeverity::Error ? "error" : "warning";
+    out["severity"] = diagnostic.severity == fo4::graph::GraphSeverity::Error ? "error" : "warning";
     out["message"] = diagnostic.message;
     if (diagnostic.nodeId) out["nodeId"] = *diagnostic.nodeId;
     if (diagnostic.pinId) out["pinId"] = *diagnostic.pinId;
@@ -82,12 +82,12 @@ nlohmann::json describeGraphDiagnostic(const graph::GraphDiagnostic& diagnostic)
     return out;
 }
 
-std::string graphDiagnosticsJson(const std::vector<graph::GraphDiagnostic>& diagnostics) {
+std::string graphDiagnosticsJson(const std::vector<fo4::graph::GraphDiagnostic>& diagnostics) {
     nlohmann::json array = nlohmann::json::array();
     bool anyError = false;
     for (const auto& diagnostic : diagnostics) {
         array.push_back(describeGraphDiagnostic(diagnostic));
-        if (diagnostic.severity == graph::GraphSeverity::Error) anyError = true;
+        if (diagnostic.severity == fo4::graph::GraphSeverity::Error) anyError = true;
     }
     nlohmann::json out;
     out["diagnostics"] = std::move(array);
@@ -95,8 +95,8 @@ std::string graphDiagnosticsJson(const std::vector<graph::GraphDiagnostic>& diag
     return out.dump(2);
 }
 
-std::vector<graph::GraphDiagnostic> singleDiagnostic(
-    const std::optional<graph::GraphDiagnostic>& diagnostic) {
+std::vector<fo4::graph::GraphDiagnostic> singleDiagnostic(
+    const std::optional<fo4::graph::GraphDiagnostic>& diagnostic) {
     if (diagnostic) return {*diagnostic};
     return {};
 }
@@ -108,7 +108,7 @@ GraphTarget::GraphTarget(platform::Services& platform, tools::Locator& locator)
 
 GraphTarget::~GraphTarget() = default;
 
-graph::GraphCompiler& GraphTarget::compiler() {
+fo4::graph::GraphCompiler& GraphTarget::compiler() {
     const auto roots = locator_.papyrusBaseImports();
     std::string key;
     for (const auto& root : roots) {
@@ -116,9 +116,9 @@ graph::GraphCompiler& GraphTarget::compiler() {
         key.push_back('|');
     }
     if (!compiler_ || key != rootsKey_) {
-        index_ = std::make_unique<papyrus::ScriptIndex>(
-            graph::graphIndexFor(nullptr, nullptr, roots));
-        compiler_ = std::make_unique<graph::GraphCompiler>(*index_);
+        index_ = std::make_unique<fo4::papyrus::ScriptIndex>(
+            fo4::graph::graphIndexFor(nullptr, nullptr, roots));
+        compiler_ = std::make_unique<fo4::graph::GraphCompiler>(*index_);
         rootsKey_ = std::move(key);
     }
     return *compiler_;
@@ -151,7 +151,7 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
                       });
             const auto stats = palette.wikiStats();
             nlohmann::json out;
-            out["version"] = graph::GraphDocument::kCurrentSchema;
+            out["version"] = fo4::graph::GraphDocument::kCurrentSchema;
             out["builtins"] = std::move(builtins);
             out["scripts"] = scripts;
             out["wiki"] = {{"available", stats.available()}, {"pages", stats.pagesIndexed}};
@@ -170,7 +170,7 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
             const bool filterKind = !isWhitespace(kind) && !graphIEquals(kind, "any");
             nlohmann::json entries = nlohmann::json::array();
             for (const auto& entry : result.entries) {
-                const auto kindName = std::string(graph::graphNodeKindName(entry.kind));
+                const auto kindName = std::string(fo4::graph::graphNodeKindName(entry.kind));
                 if (filterKind && !graphIEquals(kindName, kind)) continue;
                 entries.push_back({{"id", entry.id},
                                    {"title", entry.title},
@@ -193,7 +193,7 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
             return nlohmann::json(describeNodeDefinition(*definition).dump(2));
         }
         if (method == "ValidateGraph") {
-            auto loaded = graph::documentJson::tryDeserialize(stringArgument(args, 0));
+            auto loaded = fo4::graph::documentJson::tryDeserialize(stringArgument(args, 0));
             if (!loaded.document) {
                 return nlohmann::json(graphDiagnosticsJson(singleDiagnostic(loaded.error)));
             }
@@ -201,11 +201,11 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
             return nlohmann::json(graphDiagnosticsJson(validation.diagnostics));
         }
         if (method == "CompileToSource") {
-            auto loaded = graph::documentJson::tryDeserialize(stringArgument(args, 0));
+            auto loaded = fo4::graph::documentJson::tryDeserialize(stringArgument(args, 0));
             if (!loaded.document) {
                 return nlohmann::json(graphDiagnosticsJson(singleDiagnostic(loaded.error)));
             }
-            graph::GraphCompileOptions options;
+            fo4::graph::GraphCompileOptions options;
             options.stopAfterSource = true;
             const auto result = compiler().compile(*loaded.document, options);
             nlohmann::json diagnostics = nlohmann::json::array();
@@ -219,7 +219,7 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
             return nlohmann::json(out.dump(2));
         }
         if (method == "CompileToPex") {
-            auto loaded = graph::documentJson::tryDeserialize(stringArgument(args, 0));
+            auto loaded = fo4::graph::documentJson::tryDeserialize(stringArgument(args, 0));
             if (!loaded.document) {
                 return nlohmann::json(graphDiagnosticsJson(singleDiagnostic(loaded.error)));
             }
@@ -252,7 +252,7 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
                 return nlohmann::json("Error: no file at " + path);
             }
             const auto text = readFileText(path);
-            auto loaded = graph::documentJson::tryDeserialize(text);
+            auto loaded = fo4::graph::documentJson::tryDeserialize(text);
             if (!loaded.document) {
                 return nlohmann::json(
                     "Error: " +
@@ -261,8 +261,9 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
             return nlohmann::json(text);
         }
         if (method == "LoadScript") {
-            const auto result = graph::GraphScriptLoader::load(stringArgument(args, 0),
-                                                               locator_.papyrusBaseImports());
+            const auto scriptPath = stringArgument(args, 0);
+            const auto result =
+                fo4::graph::GraphScriptLoader::load(scriptPath, locator_.papyrusBaseImports());
             if (result.failure) return nlohmann::json("Error: " + *result.failure);
             nlohmann::json diagnostics = nlohmann::json::array();
             for (const auto& diagnostic : result.diagnostics) {
@@ -271,21 +272,21 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
             nlohmann::json out;
             out["ok"] = result.success();
             if (result.document) {
-                out["document"] =
-                    nlohmann::json::parse(graph::documentJson::serialize(*result.document, false));
+                out["document"] = nlohmann::json::parse(
+                    fo4::graph::documentJson::serialize(*result.document, false));
             }
             out["diagnostics"] = std::move(diagnostics);
             return nlohmann::json(out.dump(2));
         }
         if (method == "SaveGraph") {
             const auto path = stringArgument(args, 0);
-            auto loaded = graph::documentJson::tryDeserialize(stringArgument(args, 1));
+            auto loaded = fo4::graph::documentJson::tryDeserialize(stringArgument(args, 1));
             if (!loaded.document) {
                 return nlohmann::json(
                     "Error: " +
                     (loaded.error ? loaded.error->message : std::string("malformed document")));
             }
-            graph::documentJson::saveFile(*loaded.document, path);
+            fo4::graph::documentJson::saveFile(*loaded.document, path);
             return nlohmann::json("");
         }
         if (method == "BrowseForGraph") {
