@@ -1,5 +1,6 @@
 #include "fo4/previs/previs_data.hpp"
 
+#include "fo4/archive/assets.hpp"
 #include "fo4/previs/csg.hpp"
 #include "fo4/previs/uvd.hpp"
 
@@ -278,9 +279,19 @@ void PrevisData::scan_archives(const fs::path& root) {
     paths.push_back(it->path());
   }
   std::sort(paths.begin(), paths.end());
+  std::vector<std::string> plugin_names;
+  for (const auto& plugin : env_->plugins()) plugin_names.emplace_back(plugin.key.filename());
+  const auto game_order = archive::archive_load_order(root, {}, plugin_names);
+  // Archive priority invariant: archive_load_order is lowest first, so it is scanned in reverse.
+  std::vector<fs::path> priority(game_order.rbegin(), game_order.rend());
+  for (auto& path : paths) {
+    if (std::find(game_order.begin(), game_order.end(), path) == game_order.end()) {
+      priority.push_back(std::move(path));
+    }
+  }
   const std::string base_lower = base_plugin_lower();
 
-  for (const auto& path : paths) {
+  for (const auto& path : priority) {
     if (!is_general_archive(path)) continue;
     try {
       archives_.push_back(archive::Ba2Reader::open(path));

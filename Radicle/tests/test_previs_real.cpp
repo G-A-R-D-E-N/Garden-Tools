@@ -585,7 +585,8 @@ TEST(PrevisReal, CApiReportSurface) {
   EXPECT_TRUE(saw_issue);
   // Range invariant: a truncated or wrapped code must not name a real issue.
   EXPECT_STREQ(radicle_previs_issue_name(7), "visi_stale");
-  EXPECT_STREQ(radicle_previs_issue_name(8), "unknown");
+  EXPECT_STREQ(radicle_previs_issue_name(8), "rvis_malformed");
+  EXPECT_STREQ(radicle_previs_issue_name(9), "unknown");
   EXPECT_STREQ(radicle_previs_issue_name(256), "unknown");
   EXPECT_STREQ(radicle_previs_issue_name(-1), "unknown");
 

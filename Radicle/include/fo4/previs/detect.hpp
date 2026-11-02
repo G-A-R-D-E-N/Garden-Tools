@@ -22,12 +22,13 @@ enum class PrevisIssue : std::uint8_t {
   xcri_malformed = 5,
   pcmb_stale = 6,
   visi_stale = 7,
+  rvis_malformed = 8,
 };
 
 std::string_view to_string(PrevisIssue issue) noexcept;
 
 // The C ABI must reject a code at or above this; a cast would otherwise wrap to a real token.
-inline constexpr std::int32_t k_previs_issue_count = 8;
+inline constexpr std::int32_t k_previs_issue_count = 9;
 
 struct CellIssue {
   PrevisIssue code{PrevisIssue::rvis_without_visi};
@@ -38,6 +39,7 @@ struct CellPrevisInput {
   bool has_pcmb{false};
   bool has_visi{false};
   bool has_rvis{false};
+  bool rvis_malformed{false};
   bool has_xcri{false};
   bool has_xpri{false};
   // A false presence flag requires a checked index; unchecked answers must skip.

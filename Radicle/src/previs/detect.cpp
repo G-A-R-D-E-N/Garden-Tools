@@ -26,6 +26,8 @@ std::string_view to_string(PrevisIssue issue) noexcept {
       return "pcmb_stale";
     case PrevisIssue::visi_stale:
       return "visi_stale";
+    case PrevisIssue::rvis_malformed:
+      return "rvis_malformed";
   }
   return "unknown";
 }
@@ -36,6 +38,11 @@ CellPrevisStatus diagnose_cell(const CellPrevisInput& in) {
   if (in.has_rvis && !in.has_visi) {
     out.broken = true;
     out.issues.push_back({PrevisIssue::rvis_without_visi, "RVIS is set but VISI is missing"});
+  }
+
+  if (in.rvis_malformed) {
+    out.broken = true;
+    out.issues.push_back({PrevisIssue::rvis_malformed, "RVIS is duplicated or not 4 bytes"});
   }
 
   // A VISI cell requires a valid tome; a missing or invalid one is broken.
@@ -165,6 +172,7 @@ std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
       in.has_pcmb = data.precombined_timestamp.has_value() && *data.precombined_timestamp != 0;
       in.has_visi = data.previs_timestamp.has_value() && *data.previs_timestamp != 0;
       in.has_rvis = data.previs_root.has_value() && !data.previs_root->owner().empty();
+      in.rvis_malformed = env::decode_previs_root(env, *ref).malformed;
       in.has_xcri = has_xcri_bytes(*ref->record);
       in.has_xpri = !data.previs_references.empty();
       const bool unmeasured =

@@ -224,6 +224,19 @@ CellData decode_cell(const Environment& env, const RecordRef& ref) {
   return data;
 }
 
+PrevisRoot decode_previs_root(const Environment& env, const RecordRef& ref) {
+  const Reader reader(env, ref, k_cell);
+  PrevisRoot out;
+  out.root = first_link(reader, k_rvis);
+  // Constraint: first_link is empty only when RVIS is absent or malformed.
+  if (!out.root) {
+    for (const auto& sub : ref.record->subrecords) {
+      if (sub.signature == k_rvis) out.malformed = true;
+    }
+  }
+  return out;
+}
+
 namespace {
 
 const RecordRef* winning_type(const Environment& env, const std::optional<FormKey>& key,

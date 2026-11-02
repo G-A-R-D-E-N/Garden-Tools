@@ -72,7 +72,9 @@ a lookup limited to one folder produces false misses.
 
 ## Detection (section 1.3)
 
-Broken cells: RVIS set without VISI; VISI set but its named tome is missing;
+Broken cells: RVIS set without VISI; a duplicate or non-4-byte RVIS
+(`rvis_malformed`, read through `env::decode_previs_root`, which `decode_cell`
+keeps reading as absent); VISI set but its named tome is missing;
 a tome that fails its CRC or structure check; XCRI with no CDX row for the
 cell (exterior uses the WRLD plus XCLC grid, interior the CELL); an XCRI OC id
 with no matching `_OC.NIF`; a malformed XCRI payload. Legal in vanilla, so
@@ -154,7 +156,12 @@ Data folder is the lowest; MO2 profile roots follow, highest last) and scans
 and the loose `Vis` and `Meshes\PreCombined` trees from each root. Roots are
 visited highest priority first, and inside one root loose files are visited
 before archives, so a higher-priority root wins and a loose tome beats an
-archive copy in the same root. Archives are indexed through the streaming
+archive copy in the same root. Within one root the archives follow
+`archive_load_order` (the plugin load order, with each plugin's `<stem>.ba2`
+and `<stem> - *.ba2` archives), last-loaded first, so the last-loaded archive
+holding an entry wins as it does in the game; an archive that no loaded plugin
+names is visited after all of them. The first copy found wins each entry.
+Archives are indexed through the streaming
 `Ba2Reader` and a tome is extracted only when a cell asks for it, because
 `Fallout4 - MeshesExtra.ba2` is 1.3 GB and eagerly keeping it resident is not
 affordable; the CSG files are read in full because the structure check needs
@@ -172,7 +179,8 @@ The C ABI (`include/fo4/c_api_previs.h`, ABI 104) exposes the report as an
 opaque handle with summary, per-cell and per-issue accessors; strings are
 borrowed until the report is destroyed and the report borrows its
 `radicle_env`. Issue names are range-checked: a wrapped code reports
-"unknown", never a real verdict. The FO4IDE RPC target `previs` (`Scan`,
+"unknown", never a real verdict. `rvis_malformed` (code 8) is a new enumerator
+with no new export or layout, so the ABI stays 104. The FO4IDE RPC target `previs` (`Scan`,
 `GetDataFolder`) hands the same report to the `PrevisPanel` as JSON, including
 capped broken, outdated and skipped rows; the panel shows the skipped table,
 states that the base game itself reports cells here, and keeps the green state

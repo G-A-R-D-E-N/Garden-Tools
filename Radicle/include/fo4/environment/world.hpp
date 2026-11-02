@@ -106,6 +106,12 @@ struct CellData {
   std::optional<std::string_view> water_environment_map;
 };
 
+// Constraint: a duplicate or non-4-byte RVIS sets malformed; decode_cell still reads it as absent.
+struct PrevisRoot {
+  std::optional<FormKey> root;
+  bool malformed{false};
+};
+
 struct LightingTemplateData {
   std::optional<CellLighting> lighting;
   std::optional<FormKey> god_rays;
@@ -126,6 +132,8 @@ public:
 // Both throw WorldDecodeError on a wrong signature or a malformed present subrecord.
 WorldspaceData decode_worldspace(const Environment& env, const RecordRef& ref);
 CellData decode_cell(const Environment& env, const RecordRef& ref);
+// Requires a CELL record; it throws WorldDecodeError on a wrong signature, like decode_cell.
+PrevisRoot decode_previs_root(const Environment& env, const RecordRef& ref);
 LightingTemplateData decode_lighting_template(const Environment& env, const RecordRef& ref);
 WaterSelection resolve_water(const Environment& env, const RecordRef& ref);
 

@@ -10033,7 +10033,7 @@ is always `8 + 4*mesh_count + 4*word_count`; both conditions are wire
 invariants, checked before any index is used. A count that cannot match the
 buffer must throw at the comparison, not reserve from the claimed count: the
 65536-word reference and a 4-billion mesh count both fail before any allocation
-(`Radicle/tests/test_previs.cpp:PrevisXcri.RejectsHugeCountsBeforeAllocating`).
+(`Radicle/tests/test_previs_units.cpp:PrevisXcri.RejectsHugeCountsBeforeAllocating`).
 This contradicts xEdit's declaration of 8-byte pairs, so the parser owns the
 pair split and the CELL layer only resolves each first word to a FormKey through
 the Environment (`decode_combined_index`). Every vanilla payload parses and
@@ -10142,9 +10142,9 @@ The inflation cap must be 65,536 bytes and not a multiple-sized guess: a
 file. The final chunk may be smaller, so the cap is an upper bound checked by
 the inflater returning `Z_STREAM_END`, not an exact-size requirement, and a
 stream that would exceed the cap must throw instead of truncating
-(`Radicle/tests/test_previs.cpp:PrevisCsg.RejectsInflateOverTheChunkCap`). A
+(`Radicle/tests/test_previs_units.cpp:PrevisCsg.RejectsInflateOverTheChunkCap`). A
 hostile `chunk_count` must fail on the table bound before any reserve
-(`Radicle/tests/test_previs.cpp:PrevisCsg.RejectsHugeChunkCountBeforeAllocating`).
+(`Radicle/tests/test_previs_units.cpp:PrevisCsg.RejectsHugeChunkCountBeforeAllocating`).
 `.psg` (the clean-mode twin) does not exist in vanilla data and its layout is
 unmeasured, so a `.psg`-shaped file records a problem and never passes as
 geometry (`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.PsgIsReportedUnsupportedAndNotCountedAsCsg`).
@@ -10164,7 +10164,7 @@ polynomial, init and xorout `0xFFFFFFFF`). This CRC variant is an assumption
 pinned by the real-data test over all 1,422 shipped tomes; the shipped data is
 the evidence, and a mismatch means the variant is wrong. A banner with no NUL in
 the image must throw rather than read past the buffer
-(`Radicle/tests/test_previs.cpp:PrevisUvd.RejectsUnterminatedBanner`).
+(`Radicle/tests/test_previs_units.cpp:PrevisUvd.RejectsUnterminatedBanner`).
 
 Tomes are not loose on a vanilla install: all 1,422 ship inside BA2 archives
 (`Fallout4 - MeshesExtra.ba2` 966, `DLCCoast - Main.ba2` 246,

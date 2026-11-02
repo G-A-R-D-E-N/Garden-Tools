@@ -2905,3 +2905,27 @@ The job runs only for changes to what it builds: `Radicle/`, `PluginEditTool/nat
 ## Radicle/tools/parity_matrix.py:main
 
 The build no longer runs `--check`, and `PluginEditTool/FO4RecordEditor.Tests/ShippedDocsTests.cs` is gone: a stale document must not fail a build or test. Run `python Radicle/tools/parity_matrix.py` by hand to refresh `Radicle/docs/FO4_PARITY.md`.
+
+## Radicle/src/previs/previs_data.cpp:PrevisData::scan_archives — archive precedence
+
+The scan used to visit each root's archives in file-name order and keep the first copy of an entry. A file name says nothing about load order: `Fallout4 - Main.ba2` sorts before `ZMod.ba2`, so a mod archive loaded later lost to the base archive. The scan now takes the order from `fo4::archive::archive_load_order` for that root and visits the last-loaded archive first. The first copy found still wins, through the `try_emplace` in `add_tome`, so the highest-priority copy of each entry is the one kept. Archives that no loaded plugin names are not mounted by the game; they are visited after the listed ones so they never shadow a listed archive. Roots are still visited highest first and loose files still come before archives within a root.
+
+`AssetResolver` does not fit this rule. `AssetResolver::locate` and `AssetResolver::list` check every root's loose files before any archive, so a loose file in a lower root would beat a higher root's archive, the opposite of the root rule here. Its roots are highest first, the reverse of `PrevisData::load`. `resolve_script_set` in `Radicle/src/pex_analysis/script_set.cpp` ranks loose above archive globally for the same reason. `archive_load_order` supplies only the order inside one root. It gets no INI list (`{}`), as the other callers without one do, so an archive named only in `Fallout4.ini` is treated as unlisted and visited after the listed archives.
+
+Tests: `Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.LaterLoadedArchiveWinsOverSortedFirstArchive` (failed before the change, with the sorted-first archive's bad tome winning), `LooseTomeBeatsEveryArchiveCopyInItsRoot` (a guard: loose beats the archive copies of the same root, and it passed before the change too), and `Radicle/tests/test_previs_real.cpp:VanillaLoadOrderGate` (the pinned vanilla table does not move).
+
+## Radicle/src/environment/world.cpp:decode_previs_root — malformed RVIS
+
+`first_link`, which `decode_cell` uses for RVIS, returns nothing for a duplicate or non-4-byte RVIS, the same as for an absent one. Water resolution and the other `decode_cell` callers depend on that tolerance, so `decode_cell` is unchanged and the strict read is a separate accessor. `decode_previs_root` returns the root and a `malformed` flag. `first_link` is empty only when RVIS is absent or malformed, so any RVIS subrecord left over means malformed. `Radicle/src/previs/detect.cpp:diagnose_load_order` sets `CellPrevisInput::rvis_malformed` from it, and `diagnose_cell` reports a broken cell with `PrevisIssue::rvis_malformed`.
+
+A malformed RVIS is never a root: `has_rvis` stays false, so the tome lookup falls back to the cell itself, as it did before this change. A malformed RVIS can therefore still show a `tome_invalid` or `tome_missing` on the cell's own tome, and a cell with no tome of its own skips as "VISI without RVIS". Both are existing behaviour, not changed here.
+
+Tests: `Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.MalformedRvisIsBrokenWhileMissingRvisIsNot` (malformed is broken, absent is not) and `PrevisLoadOrderTest.MalformedRvisStaysTolerantForWater` (water still decodes, the root stays empty).
+
+## Radicle/include/fo4/previs/detect.hpp:PrevisIssue — rvis_malformed code
+
+Code 8 is one enumerator. It adds no export and changes no C struct, so `RADICLE_ABI_VERSION` stays 104, as the earlier enumerator-only changes did. `radicle_previs_issue_name` in `Radicle/src/c_api_previs.cpp` maps every code below `k_previs_issue_count`, now 9, through `Radicle/src/previs/detect.cpp:to_string`, so no header or C# binding is regenerated. The FO4IDE panel takes the token from the native JSON in `PluginEditTool/native/src/rpc/PrevisTarget.cpp`, and has no table of its own. `Radicle/tests/test_previs_units.cpp:PrevisDetect.EveryIssueCodeHasAName` fails if a code has no name, and `Radicle/tests/test_previs_real.cpp:CApiReportSurface` pins code 8 as `rvis_malformed` and 9 as `unknown`.
+
+## Radicle/tests/test_previs_units.cpp:PrevisDetect — test file split
+
+`Radicle/tests/test_previs.cpp` was already 890 lines at HEAD, and the edit gate refuses any change that leaves a file above 750 lines. The codec tests (`PrevisCdx`, `PrevisCsg`, `PrevisXcri`, `PrevisUvd`, `PrevisDate`) and the pure `diagnose_cell` tests (`PrevisDetect`) moved unchanged to `Radicle/tests/test_previs_units.cpp`, and the byte helpers they share with the load-order tests moved to `Radicle/tests/previs_test_support.hpp` (`fo4::test::previs`). `test_previs.cpp` keeps the environment and asset-scan tests (`PrevisLoadOrderTest`). All 29 original tests are still present.
