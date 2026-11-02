@@ -13,8 +13,9 @@ public sealed class HkxAnimationCompressionTests
     public void QuantizedCompressionIsExplainedInPlainEnglish()
     {
         Assert.Equal(
-            "This animation uses Havok quantized compression (hkaQuantizedAnimation), which BGS cannot " +
-            "decode yet. The file has not been changed.",
+            "This animation uses Havok quantized compression (hkaQuantizedAnimation). BGS decodes only the " +
+            "layouts the reverse-engineering record fully specifies, and this file is not one of them. " +
+            "The file has not been changed.",
             AnimationCompression.Describe(Quantized));
     }
 
@@ -22,8 +23,9 @@ public sealed class HkxAnimationCompressionTests
     public void PredictiveCompressionIsExplainedInPlainEnglish()
     {
         Assert.Equal(
-            "This animation uses Havok predictive compression (hkaPredictiveCompressedAnimation), which " +
-            "BGS cannot decode yet. The file has not been changed.",
+            "This animation uses Havok predictive compression (hkaPredictiveCompressedAnimation). BGS decodes " +
+            "only the layouts the reverse-engineering record fully specifies, and this file is not one of them. " +
+            "The file has not been changed.",
             AnimationCompression.Describe(Predictive));
     }
 
@@ -131,4 +133,18 @@ public sealed class HkxAnimationCompressionTests
         Assert.False(animation.HasUnsupportedAnimation);
         Assert.Equal("hkaLosslessCompressedAnimation", animation.AnimationClass);
     }
+    [Fact]
+    public void ADecodedPredictiveClipStaysUnsavableAndTheReportSaysSo()
+    {
+        byte[] bytes = PredictivePlaybackTests.Fixture(31, 1, false);
+        var animation = new HkxBinaryReader().ReadAnimation(bytes);
+
+        var refused = Assert.Throws<InvalidOperationException>(() => NativeAnimation.Recompress(bytes, animation));
+        Assert.Contains("saving it is not supported yet", refused.Message, StringComparison.Ordinal);
+
+        var loss = Assert.Single(RoundTripReport.ForBytes(bytes).Losses);
+        Assert.Equal(RoundTripLossKind.UnsupportedAnimation, loss.Kind);
+        Assert.Equal(refused.Message, loss.Message);
+    }
+
 }
