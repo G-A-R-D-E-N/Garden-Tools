@@ -52,6 +52,7 @@ foreach ($key in $wf.Env.Keys) { Set-Item -Path "env:$key" -Value $wf.Env[$key] 
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('real-data-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Path $work | Out-Null
+$env:RUNNER_TEMP = $work
 $status = 0
 try {
     foreach ($name in 'GITHUB_ENV', 'GITHUB_PATH', 'GITHUB_OUTPUT') {
