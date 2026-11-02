@@ -3067,3 +3067,7 @@ GitHub delays cron heavily on the public repo: the 30-minute `Delete finished CI
 ## .github/scripts/check_abi_version_collision.py:without_inherited — a child that only carries its parent's number
 
 One number must name one surface, so siblings on a stack that each edit the C API under the same number still collide (`.github/scripts/test_check_abi_version_collision.py:test_sibling_pulls_on_one_stack_parent_collide`). A stacked pull request whose own diff never edits a `Radicle/include/fo4/c_api*.h` header adds no surface: it only carries the number it got from its parent, so it holds no claim. Before this, six children of #1049 that touch no header failed #1049's gate. `.github/scripts/check_abi_version_collision.py:pull_touches_header` reads the pull request's file list, and a list it cannot read exits 2 instead of passing.
+
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::writeTo — backups when Save As replaces another file
+
+Save keeps one `.bak` per movie and never overwrites it. Save As can target any file, so when the destination is not the open movie itself (or the movie came from a game archive), an existing file there is always backed up, to the first free name among `.bak`, `.bak1`, `.bak2` and so on. Before this, a leftover `.bak` from an earlier session meant the replaced file was lost. Test: `PluginEditTool/native/tests/unit/SwfTargetSaveAsTests.cpp`.

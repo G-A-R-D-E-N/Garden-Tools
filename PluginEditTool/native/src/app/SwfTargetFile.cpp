@@ -202,8 +202,15 @@ Result<nlohmann::json> SwfTarget::writeTo(const fs::path& destination) {
     const fs::path full = fs::weakly_canonical(destination, code);
     const std::string target = utf8String(code ? destination : full);
     // Constraint: the first save must keep a .bak of the on-disk original, and later saves must never overwrite it.
-    const std::string backup = target + ".bak";
-    if (fs::exists(utf8Path(target), code) && !fs::exists(utf8Path(backup), code)) {
+    std::string backup = target + ".bak";
+    bool needBackup = fs::exists(utf8Path(target), code) && !fs::exists(utf8Path(backup), code);
+    std::error_code same;
+    const bool ownFile = !archived_ && path_ && fs::equivalent(utf8Path(*path_), utf8Path(target), same) && !same;
+    if (!ownFile && fs::exists(utf8Path(target), code)) {
+        for (int n = 1; fs::exists(utf8Path(backup), code); ++n) backup = target + ".bak" + std::to_string(n);
+        needBackup = true;
+    }
+    if (needBackup) {
         fs::copy_file(utf8Path(target), utf8Path(backup), code);
         if (code) {
             return errorText("the SWF backup could not be written: " + backup + ": " + code.message());
