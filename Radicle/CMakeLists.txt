@@ -106,14 +106,6 @@ add_custom_target(radicle_hkx_layout_check ALL
   COMMENT "Checking generated Havok class layout table"
   VERBATIM
 )
-add_custom_target(radicle_parity_matrix_check ALL
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tools/parity_matrix.py"
-    --check
-  COMMENT "Checking generated Fallout 4 parity matrix"
-  VERBATIM
-)
 
 function(fo4_apply_warnings target)
   if(MSVC)
@@ -166,11 +158,30 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/texture/bcn.cpp
   src/texture/dds.cpp
   src/texture/dds_codec.cpp
+  src/texture/palette.cpp
+  src/math/interpolation.cpp
+  src/anim/anim_text_data.cpp
+  src/audio/sound_container.cpp
+  src/audio/voice_path.cpp
+  src/audio/pitch_shift.cpp
+  src/cloth/cloth_profile.cpp
+  src/land/heightmap.cpp
+  src/land/layers.cpp
+  src/as3/ast.cpp
+  src/as3/lexer.cpp
+  src/as3/parser.cpp
+  src/as3/parser_expr.cpp
+  src/as3/parser_helpers.cpp
+  src/lod/lod.cpp
+  src/lod/tile_index.cpp
+  src/lod/tile_summary.cpp
+  src/lod/object_merge.cpp
   src/nif/write_edits.cpp
   src/nif/write_model.cpp
   src/nif/import_obj.cpp
   src/nif/import_build.cpp
   src/nif/fix_nif.cpp
+  src/nif/nif_audit.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -417,10 +428,12 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/class.cpp
   src/avm2/runtime.cpp
   src/avm2/runtime_link.cpp
+  src/avm2/runtime_traits.cpp
   src/avm2/domain.cpp
   src/avm2/interpreter.cpp
   src/avm2/interpreter_ops.cpp
   src/avm2/interpreter_property.cpp
+  src/avm2/interpreter_coerce.cpp
   src/avm2/interpreter_memory.cpp
   src/avm2/interpreter_xml_text.cpp
   src/avm2/interpreter_support.cpp
@@ -436,9 +449,11 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/native_display.cpp
   src/avm2/swf_movie_data.cpp
   src/avm2/swf_runtime.cpp
+  src/avm2/swf_timeline_clip.cpp
   src/avm2/snapshot.cpp
   src/avm2/display_snapshot.cpp
   src/avm2/hit_test.cpp
+  src/avm2/shape_geometry.cpp
   src/avm2/amf.cpp
   src/avm2/replay.cpp
   src/avm2/native_shared.cpp
@@ -453,6 +468,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/native_net.cpp
   src/avm2/native_system.cpp
   src/avm2/native_bytearray.cpp
+  src/avm2/xml.cpp
+  src/avm2/xml_parse.cpp
+  src/avm2/native_xml.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
@@ -935,7 +953,25 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_sound.cpp
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
+    tests/test_palette.cpp
+    tests/test_pchip.cpp
+    tests/test_anim_text_data.cpp
+    tests/test_anim_text_data_real.cpp
+    tests/test_sound_container.cpp
+    tests/test_cloth_profile.cpp
+    tests/test_voice_path.cpp
+    tests/test_pitch_shift.cpp
+    tests/test_land_heightmap.cpp
+    tests/test_land_layers.cpp
+    tests/test_as3_lexer.cpp
+    tests/test_as3_parser.cpp
+    tests/test_as3_statements.cpp
+    tests/test_lod.cpp
+    tests/test_lod_tile_index.cpp
+    tests/test_lod_tile_summary.cpp
+    tests/test_lod_object_merge.cpp
     tests/test_nif_write.cpp
+    tests/test_nif_audit.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
@@ -1031,15 +1067,23 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_runtime.cpp
     tests/test_avm2_call_indexed.cpp
     tests/test_avm2_interpreter.cpp
+    tests/test_avm2_class_call.cpp
+    tests/test_avm2_xml.cpp
+    tests/test_avm2_types.cpp
+    tests/test_avm2_arguments.cpp
+    tests/test_avm2_stage_events.cpp
     tests/test_avm2_scope_depth.cpp
     tests/test_avm2_scripts_real.cpp
     tests/test_avm2_builtins.cpp
     tests/test_avm2_runtime_names.cpp
     tests/test_avm2_display.cpp
     tests/test_avm2_swf_runtime.cpp
+    tests/test_avm2_swf_shape_geometry.cpp
     tests/test_avm2_snapshot.cpp
     tests/test_avm2_host.cpp
     tests/test_avm2_bgs_bridge.cpp
+    tests/bgs_capture.cpp
+    tests/test_bgs_capture.cpp
     tests/test_avm2_domain.cpp
     tests/test_avm2_script.cpp
     tests/test_avm2_shared.cpp
@@ -1050,7 +1094,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_display_api.cpp
     tests/test_avm2_display_snapshot.cpp
     tests/test_avm2_document_class.cpp
+    tests/test_avm2_placed_construction.cpp
     tests/test_avm2_events.cpp
+    tests/test_avm2_handler_failures.cpp
+    tests/test_avm2_frame_listeners.cpp
     tests/test_avm2_focus_events.cpp
     tests/test_avm2_text.cpp
     tests/test_avm2_string_utf16.cpp

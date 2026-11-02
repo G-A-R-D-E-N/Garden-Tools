@@ -2654,6 +2654,23 @@ Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests
 - `TempRoot` (namespace `fo4ide_test`) creates its folder in the constructor. The destructor removes that folder and then the parent when the parent is empty, ignoring errors. The parent name is passed in full (for example `"fo4ide-lift-text"`), so temp paths are unchanged.
 - The temp root is used only inside the scope that owns it, so the lifetime is safe. Removal now also runs when a `REQUIRE` fails.
 
+## .github/scripts/check_abi_version_collision.py:claim_conflicts — one ABI number per surface
+
+`Radicle/bindings/csharp/Radicle.Interop/Core.cs:VerifyAbi` compares `radicle_abi_version()` with `RadicleNative.CompiledAbiVersion` for equality, so one number has to name one surface. Two open pull requests claiming 93 on the 92 base with different exports pass that guard and then fail on an export the library does not carry: on 2026-10-30 `nomad/602-capi-remaining` (#1033) and `nomad/nif-shader-alpha` (#1041) were both at 93, and only a reader noticed. `.github/public-ci/sync-from-private.py:publish` now runs this check on every exported pull request whose diff touches `Radicle/include/fo4/**`, the C# bindings or the ABI pin, from the public repository's hosted runner (see `.github/public-ci/sync-from-private.py:sync`); the private repository no longer has a workflow for it.
+
+Three rules, each with the case behind it:
+
+- `.github/scripts/check_abi_version_collision.py:local_problems`, rule 1: a pull request that edits a `Radicle/include/fo4/c_api*.h` header has to move the number off the base branch's, unless it sits on a stack whose number is above the stack root's — the stacked-child case, read from the open claims as `parent_version`. `.github/scripts/check_abi_version_collision.py:stack_root` walks the claims upward from the pull request's base (head branch to that claim's base) until `nomad/dev` or a branch no claim holds; a pull request based on `nomad/dev` itself has no stack parent, so a tracking pull request like #848 can never exempt anything. Two claims on one branch or a link loop fails the gate with exit 2, as does an unreadable stack root, and the number may be kept only above the root's number. `.github/scripts/check_abi_version_collision.py:claim_conflicts` also skips the number read at `nomad/dev` itself, so open tracking-style pull requests and siblings that never bumped never collide on it; a stack child keeping that shared number is still caught by rule 1 and the floor. `.github/scripts/check_abi_version_collision.py:main` reports only the conflict groups that contain the running pull request: two other pull requests colliding does not fail this one, and each of those two still fails on its own run. A pull request based straight on the base branch has no parent and still has to bump. It reads through `.github/scripts/check_abi_version_collision.py:changed_headers_from`, which diffs `FETCH_HEAD...HEAD` and needs full history on both sides.
+- `.github/scripts/check_abi_version_collision.py:claim_conflicts`, rule 2: two unrelated lineages may not claim the same number. One lineage is unbroken descent — a child supersedes its parent, so a chain joined by "this base is that head" (branch names or head shas, because the API need not return `base.ref`) counts once, and so does a pull request based on the base branch that still carries its parent's commits (the ancestry map gains the pair through the compare API, and only when one head is an ancestor of the other). Siblings on one stack parent descend from the same commit but from neither each other, so they are compared with each other instead of being unioned away. Forgejo bodies have no `status` field, only `commits`, `files` and `total_commits`, so `.github/scripts/check_abi_version_collision.py:compare_counts` reads each direction and `compare_status` counts: both zero is identical, one side zero is ahead/behind, both positive is diverged. A body without `total_commits` warns and yields no ancestry rather than guessing. Two calls per pair, and only inside groups that already share a number, so unrelated stacks cost nothing.
+- `.github/scripts/check_abi_version_collision.py:local_problems`, rule 3: a number below the base's is a stale branch merging after a newer bump, which has to be rebased and renumbered.
+
+Deliberately not enforced: a pull request that leaves the base number alone and touches no ABI header is the normal case (#1039 and #1040 stayed at 92), and two pull requests that both never bumped do not collide on the base number.
+
+The cross-pull-request half needs `GITHUB_TOKEN`, `GITHUB_API_URL` and `GITHUB_REPOSITORY`. When the runner supplies fewer than three, or the open list cannot be read, `.github/scripts/check_abi_version_collision.py:main` exits 2 instead of passing, because a gate that cannot run must not look green. `.github/scripts/check_abi_version_collision.py:open_pulls` stops only on an empty page, because a short page proves nothing about the next one, and raises when `MAX_PAGES` runs out instead of truncating: a silently cut list could hide a colliding claim and pass a pull request that should fail. A page that is not a list, or that holds anything but objects, raises the same way, so at most 450 open pull requests (50 per page over 10 pages) are listed, because an empty page has to arrive within `MAX_PAGES`. `.github/scripts/check_abi_version_collision.py:claim_of` callers skip only what is gone or undecided: an HTTP 404 warns and skips, because a pull request closed or rebased mid-run is gone on every runner, and `.github/scripts/check_abi_version_collision.py:MissingNumber` warns and skips, because a header with no number is that pull request's own exit-2 failure, not this run's. Everything else — a non-JSON body, undecodable bytes, a malformed payload, a null base, a non-string link — exits 2, because the gate cannot tell a corrupt claim from a colliding one. `.github/scripts/check_abi_version_collision.py:claim_of` raises `TypeError` unless the number is an int and every link is a string, so malformed pull objects reach that exit-2 arm instead of escaping as tracebacks from the ancestry walk. `VERSION` accepts `95u`, `95UL`, a trailing `//` comment and CRLF endings, the forms the macro takes in the tree. The one gap no per-pull-request check can close: a green run is not re-evaluated when a different pull request later moves onto the same number, so the branch that merges second is the one to re-check.
+
+`.github/public-ci/sync-from-private.py:publish` runs the check in a temporary worktree at the pull request head (`.github/public-ci/sync-from-private.py:worktree`), not at the merge commit, because the merge commit is the tree nobody authored and the script must not read it. The clone is full (`fetch-depth: 0` in `.github/public-ci/public-main/sync-from-private.yml`) because a shallow clone cannot answer a three-dot diff. `.github/scripts/check_abi_version_collision.py:changed_headers_from` diffs `FETCH_HEAD...HEAD`: two dots count the base's own header edits as the branch's, so a branch behind its base gets a false bump rejection; three dots keep only the branch's work, and the version-below-base rebase rejection in rule 3 still stands. The script fetches the base with no depth limit to match. A base branch that no longer exists fails the fetch, which `main` catches as exit 2 with an error, the same contract as a missing token. Scope: `RADICLE_ABI_VERSION` is defined only in `Radicle/include/fo4/c_api.h`, inside the workflow's `Radicle/include/fo4/**` paths; `Radicle/src/c_api_version.cpp` only returns the macro and the value pins (`Radicle/tests/test_c_api_quest.cpp`, `Radicle/bindings/csharp/**`) are covered too.
+
+Source comments in the script stay one constraint line each and point here; the reasoning lives in this entry, not in the docstrings. Tests: `.github/scripts/test_check_abi_version_collision.py` pins each rule, including the #1033/#1041 pair, a four-deep stack alone, a stack plus an unrelated claim, both no-bump cases, a stacked child keeping its parent's number, a dev-based pull request carrying its parent's commits, two siblings colliding on their stack parent's number, a dev-based header edit with no bump, main-level stack runs (a tracking branch grants nothing, a three-link stack may keep its number, a stack at the root's number must bump, an unreadable root or an ambiguous link exits 2), all four `compare_status` relations plus the missing-`total_commits` case against the real Forgejo body shape, a temporary-repo check that a branch behind its base reports no changed headers, the 404-skip and 500-fail claim split, non-JSON bodies failing and numberless headers skipping through `main`, malformed open-list pages (null, error object, list of strings) failing through `main` with the page named, corrupt-claim cases through `main` (invalid UTF-8, non-ASCII content, null base, list head ref), and the `VERSION` suffix, comment and CRLF forms. The suite is picked up by the existing `unittest discover -s .github/scripts` step in `.github/workflows/native-ci.yml`, so no new CI step was added for it.
 ## RadiclePluginMemory.cpp:releaseMemory — memory pressure on a full Fallout 4 load order
 
 - Scope: a fresh MCP server with the OG test profile (Fallout4.esm plus six official DLCs, about 460 MB of plugin files) commits roughly 4.7-4.9 GB and holds a 2.4-3.3 GB working set before the first tool call. The cost is the eager whole-file parse: `fo4::Plugin` keeps the original file bytes plus a fully materialized `Group`/`Record`/`Subrecord` tree (one heap vector per record and per subrecord), and the old eager rebuild then built a `fo4::ConflictGraph` over the whole load order. Repeated queries do not grow the process (measured: stable after five `list_records` calls), so this is baseline load cost, not a per-request leak. Everything is inherent to the current architecture; nothing in the VMAD or rich-record commits changed it (the previous build plateaus at the same 4.66 GB private bytes for the same profile).
@@ -2702,9 +2719,59 @@ Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests
 - Unverified: not built or run in this session; `Radicle/tests/test_formid.cpp:PluginKey.InternsBySpellingAndComparesFolded` has not been executed.
 ## .github/public-ci/export-public-ci.py:main
 
-CI runs on GitHub-hosted runners in public `G-A-R-D-E-N/Garden-Tools`. `.github/workflows/public-ci-export.yml` pushes a parentless snapshot of private `G-A-R-D-E-N/GardenTools` to `ci/pr-<n>` or `ci/<branch>`; each public workflow's `report` job posts `public-ci/<workflow>` on the private commit named by the `Source-Commit` trailer. A PR exports its merge commit, so a PR cut before this landed needs no rebase, but a stacked PR's base must contain these workflows first.
+CI runs on GitHub-hosted runners in public `G-A-R-D-E-N/Garden-Tools`. `.github/public-ci/sync-from-private.py:publish` pushes a parentless snapshot of the private repository to `ci/pr-<n>` or `ci/<branch>`, run from the public repository's schedule (see `.github/public-ci/sync-from-private.py:sync`); each public workflow's `report` job posts `public-ci/<workflow>` on the private commit named by the `Source-Commit` trailer. A PR exports its merge commit. The exporter is the integration branch's copy, not the pull request's, so a pull request cannot change its own deny list.
 
 `DENY` keeps docs, notes, runner setup and agent files private. `GAME_FILES` makes the export fail if a game-format file appears outside the list, so a new fixture has to be added on purpose.
+
+## .github/public-ci/sync-from-private.py:sync — private work reaches public CI on a five-minute schedule
+
+The public repository runs `.github/public-ci/public-main/sync-from-private.yml` (installed on its `main` as `.github/workflows/sync-from-private.yml`) every five minutes and on demand. That workflow does not use `actions/checkout` for the private repository. Its first step runs quietly: it initialises a repository, adds the private origin, fetches only the integration branch at depth 1 with the token in `GIT_CONFIG_*` (never in a command line), and checks it out. Its second step runs `.github/public-ci/sync-from-private.py:sync`. The old export workflow ran on each pull request event and each push; nothing in the private repository runs Actions for this now, and work is found from state.
+
+Each tick lists the open pull requests, the heads of the integration branch and `main`, the public `ci/*` refs, the latest status per context on each head that needs one, and the GitHub `mergeable` answer for a held head. Due targets (see `.github/public-ci/sync-from-private.py:is_due`) go oldest head commit first (`.github/public-ci/sync-from-private.py:oldest_first`). A tick walks that order and stops after `EXPORT_CAP` (5) successful exports; a refused or failed head does not use a slot. A `ci/pr-<n>` branch whose pull request is no longer open is deleted (`.github/public-ci/sync-from-private.py:stale_pr_branches`).
+
+Each export starts five public workflow runs (four CI workflows and the cleanup workflow), so a tick at the cap queues up to 25 runs. `.github/public-ci/sync-from-private.py:EXPORT_CAP` is the constant.
+
+Delay: a head reaches public CI at the next tick, up to about five minutes after the push, plus GitHub's schedule jitter and any wait in the concurrency group `sync-from-private` (one running and one waiting, `cancel-in-progress: false`). The job times out at 15 minutes.
+
+Real data stays private. The only workflow left in the private repository is the real-data workflow on a self-hosted runner that holds the Fallout 4 data. Game files cannot leave that machine, so no hosted job, the sync or the export can run those tests, and the export keeps denying the game-file fixtures (`.github/public-ci/export-public-ci.py:DENY`).
+
+Tokens: a git or gh command that touches the network gets the token through `GH_TOKEN` or `GIT_CONFIG_*` (`.github/public-ci/sync-from-private.py:base_env`). Local git commands, the worktree, the export and the checks get `.github/public-ci/sync-from-private.py:check_env`, which drops every token key. The ABI checker child gets `GITHUB_TOKEN` and the git header it needs for its one origin fetch, and nothing else of the token. Output of git, gh, the exporter and the checks is captured and not printed. A failed step is logged by name (`.github/public-ci/sync-from-private.py:run`, `Failed`, `reason`). The ABI check prints only `exit <code>`; the bundled-tools check prints its first error line with every token holding a slash, backslash or dot replaced by `<redacted>` (`.github/public-ci/sync-from-private.py:first_error`). A public log therefore shows PR numbers, short shas, public branch names and pass or fail.
+
+Tests: `.github/public-ci/test_sync_from_private.py` covers the decision logic, the status rules, the token boundary, the scratch tree, the after-push and export-failure rules, one tick, the workflow shape and the export newline guard. `--dry-run` prints `<branch> export|queued|handled|current|delete` and writes nothing; its `export` lines are the first `EXPORT_CAP` due heads, before any real refusal.
+
+## .github/public-ci/sync-from-private.py:is_due — what counts as already exported
+
+A head is not due while `.github/public-ci/sync-from-private.py:is_due` sees it held (`.github/public-ci/sync-from-private.py:holds`). Two holds exist. A conflict (`public-ci/export` failure with the conflict text) holds only while GitHub reports the pull request `CONFLICTING`. An export failure (`public-ci/export` failure with the export-failed text) holds only while the `mergeable` answer recorded in its `target_url` still matches. Any change of `mergeable` makes it due again, so a base change clears a conflict without a new push.
+
+Otherwise a head is due when its public `ci/*` branch carries a different `Source-Commit`, or when the branch is missing or has no trailer and the head is not recorded (`.github/public-ci/sync-from-private.py:recorded`). A head is recorded when its latest `public-ci/export` state is `success` or `error`, or when a `public-ci/<workflow>` status has finished (`success`, `failure` or `error`). Pending statuses are not records. Statuses are read newest first by `id`, and only the latest state per context counts (`.github/public-ci/sync-from-private.py:status_states`).
+
+The branch cannot say "already exported" by itself. The public `delete-finished-ci-branches` workflow deletes a `ci/*` branch once its runs have finished and it is over 15 minutes old, every 30 minutes, so a missing branch is the normal state of an old pull request. Counting it as unrecorded would re-export every open pull request on each tick, and each export starts five public runs.
+
+## .github/public-ci/sync-from-private.py:publish — write order, refusals and post-push errors
+
+Order: list the merge ref (pull requests only), fetch it at depth 2 (the merge and both parents) or depth 1 (a branch), export, post the pending records (`public-ci/export` and each workflow's `public-ci/*`), push, post `public-ci/export` success, then the ABI check (when needed) and the bundled-tools check. The pending records come before the push, so a failed status post stops the push and no public run can start for a head whose record was not written. A push that fails (`.github/public-ci/sync-from-private.py:PushFailed`) posts nothing more: the head stays due, the next tick attempts it once, and the run ends nonzero until it succeeds.
+
+Refusals (`.github/public-ci/sync-from-private.py:no_merge_commit`) run when a pull request's merge ref is absent from `git ls-remote` or does not contain the listed head. GitHub's `mergeable` decides. Only `CONFLICTING` posts `public-ci/export` failure with the conflict text, once. `UNKNOWN` or `MERGEABLE` posts nothing: a stale merge ref right after a push is the normal case while GitHub recomputes it, so the head stays due and takes no export slot. A branch whose fetched head does not equal the listed head waits for the next tick (`.github/public-ci/sync-from-private.py:merge_is_current`; a branch must match exactly, a pull request's second parent must be the head).
+
+Export failures before the push: `.github/public-ci/sync-from-private.py:sync` counts the failure, and for a pull request calls `.github/public-ci/sync-from-private.py:export_failed`, which posts `public-ci/export` failure with the fixed text "export failed; see the public sync run" and the `mergeable` answer in `target_url`. It posts only when the latest status does not already say the same with the same answer, so a head is not reddened every tick. The head is then held until `mergeable` changes.
+
+After the push (`.github/public-ci/sync-from-private.py:AfterPush`): the success post and both checks are one block. If any step raises, each `public-ci/` context not yet posted (`public-ci/export`, `public-ci/abi-version` when it was due, `public-ci/private-only-checks`) gets an `error` state, and the failure is re-raised as `AfterPush`. `error` counts as recorded, so the head is not due again.
+
+ABI check: `.github/public-ci/sync-from-private.py:publish` deepens the merge ref by 200 commits (`ABI_HISTORY`) only when the check is needed, then runs the integration branch's `.github/scripts/check_abi_version_collision.py` in a worktree at the head with `core.symlinks=false`, so no link from the pull request is ever created. The checker's three-dot diff needs the merge-base within those 200 commits; if it is not, the checker exits 2 and the status says `exit 2`. The checker's own `git fetch origin` of the base branch is unshallowed, as the checker always did, so that fetch costs the full base history. The status `public-ci/abi-version` prints `exit <code>` only.
+
+Bundled-tools check: `.github/public-ci/sync-from-private.py:scratch_tree` builds a scratch tree from the merge commit's blobs under `PluginEditTool` and `.forgejo`, writing regular files only. Symlinks and submodules are skipped, and a path that climbs out is refused, so the pull request's links are never followed. The integration branch's `.github/scripts/test_bundled_tools_manifest.py` is copied in and run there, and the status is `public-ci/private-only-checks`.
+
+Moved heads and the exporter: the exporter is the one on the integration branch, so a pull request's own edits to `.github/public-ci/export-public-ci.py` do not change what it publishes. The exporter refuses any path that contains a newline (`.github/public-ci/export-public-ci.py:main`).
+
+Trust: both checks run the integration branch's scripts, so no pull request's code executes with the export token in its environment. The ABI checker reads the pull request's head as data, and the bundled-tools test reads files that were copied as regular files. The old workflows ran each pull request's own copies with the repository token; this is a deliberate change, and a pull request that edits a checker takes effect only after it lands.
+
+Verified: `publish` and `sync` have unit tests that stub gh and git, and local-repository runs that stub only the status posts. The live GraphQL `mergeable` enum and status ids were read live (`MERGEABLE` on two open pull requests). Not exercised: the live token, live writes and the ABI check's API path.
+
+## .github/public-ci/public-main/sync-from-private.yml — install
+
+Install this file as `.github/workflows/sync-from-private.yml` on the public repository's `main`. The job reads the `garden-tools-ci` environment's secret, so that environment's deployment branches must allow `main` as well as `ci/**`. A `ci/**` rule alone blocks the job before it starts, because the job runs on `main`. The `ci/*` pattern misses `ci/nomad/dev`, which the existing `.github/public-ci/workflows/native-ci.yml:REAL_DATA_TEST_REGEX` entry already records.
+
+The token needs read on the private repository (contents and pull requests), commit status write on the private repository (`public-ci/*`) and push on the public repository (`ci/*`, including deleting them). The old workflows used the same token for these writes; nothing in this entry checks its scopes. Because the job does not use `actions/checkout` for the private repository, no checkout step prints the private repository's refs.
 
 ## .github/scripts/fetch-private-fixtures.sh:paths
 
@@ -2714,7 +2781,7 @@ Vanilla Bethesda files and third-party plugins must not be published (`BGS/tools
 
 Hosted runners have no Fallout 4 data, so the Windows test job excludes these tests. They run only in `.github/workflows/native-real-data.yml`, on a self-hosted runner labelled `fo4-data` that is registered to this private repo and nowhere else, and that workflow keeps its own copy of the regex; the two must match. The export denies `.github/workflows/*`, so it never reaches the public repo. `.forgejo/workflows/release.yml` stays on Forgejo because it reads local tool paths, and Forgejo prefers `.forgejo/workflows`, so once this tree reaches Forgejo that is the only workflow it runs there.
 
-The `garden-tools-ci` environment's branch rule must be `ci/**`: `ci/*` does not match `ci/nomad/dev`.
+The `garden-tools-ci` environment's branch rule must be `ci/**` and `main` (the sync job runs on `main`): `ci/*` does not match `ci/nomad/dev`.
 
 ## Radicle/CMakeLists.txt:RADICLE_SHARED
 
@@ -2830,3 +2897,123 @@ The destructor removes the shared parent when it looks empty, so a test creating
 - Earlier run of `PluginEditTool/native/apps/fo4ide/McpCatalog.cpp:registerCatalogTools` (a 154-tool build, before the dev port, not repeated after it): on the 8-plugin OGTest order after the target fix, 154 tools registered; sampled calls across every target succeeded — `get_conflicts`, `get_record_details`, `get_record_plugin_matrix`, `get_history`, `get_referenced_by`, `get_dependencies`, `get_containment_path`, `get_problems`, `get_condition_functions`, `get_condition_run_on_types`, `get_placed_references`, `get_placed_references_at_grid`, `strings_list_tables`, `graph_core_palette`, `script_analyze` and `archive_extract_file` (which reached its archive-open guard); the corrected namespace tools `clean_unused`, `reorder`, `set_light`, `fix`, `load_script`, `scan_conflicts` and `scan_broken_refs` reached their own handlers; mutation parity on a scratch plugin covered `create_plugin`/`create_record`/`add_master`/`copy_as_override`/`get_conditions`/`set_conditions`/`discard_plugin`, and `delete_record` reached its own reference-coverage refusal. The C# documentation test was not run locally.
 - Error semantics: the service targets (`archive`, `graph`, `papyrus`, `nif`, `material`, `audio`, `app`, `settings`) report some failures as ordinary strings beginning `Error:` or `ERR:` rather than RPC errors. `PluginEditTool/native/apps/fo4ide/McpCatalog.cpp:addCatalogTool` checks every string result, backend results included, for a leading `Error:` or `ERR:` and marks it `isError: true`; otherwise a missing archive/NIF/script looked like a success to MCP clients. Non-string results are never marked as errors.
 - Independent verification also reported two pre-existing limitations that are not MCP-only: the first `get_referenced_by`/`get_dependencies` call on the 482 MB order pays the lazy reference-index build in `Radicle/src/graph/conflict_graph.cpp:ensure_references` (about 113 s; later calls cached), and `set_conditions` rewrites three opaque CTDA bytes (`60 72 73 41` → `60 00 00 00`) that vanilla conditions carry in most sampled cases. `PluginEditTool/native/src/plugin/RadiclePluginMemory.cpp:releaseMemory` and `RadiclePluginGraphCache.cpp:reapIdleConflictGraph` call `HeapCompact` after `_heapmin`, but committed memory after a graph drop is still retained by the allocator, so only the working set visibly falls.
+
+## .github/workflows/native-real-data.yml:on
+
+The job runs only for changes to what it builds: `Radicle/`, `PluginEditTool/native/`, `cmake/`, the root `CMakeLists.txt`, `.github/scripts/` and this workflow. A PR touching only BGS, the web panels or docs does not queue on the single `fo4-data` runner, and shows no real-data check. `workflow_dispatch` still runs it on demand.
+
+## Radicle/tools/parity_matrix.py:main
+
+The build no longer runs `--check`, and `PluginEditTool/FO4RecordEditor.Tests/ShippedDocsTests.cs` is gone: a stale document must not fail a build or test. Run `python Radicle/tools/parity_matrix.py` by hand to refresh `Radicle/docs/FO4_PARITY.md`.
+
+## ci/real-data-service/real_data_service.py:open_targets — which heads are checked, and in what order
+
+The service lists open PRs with `gh pr list` (number, head sha, base, `updatedAt`, `isDraft`) and adds the `nomad/dev` head as a push-style target. `order` puts `nomad/dev` first, then PRs by newest `updatedAt`, so active work gets a result soonest. Draft PRs are skipped before any API call and never get a status. Changed paths for a PR come from its files list; for `nomad/dev` they are the diff against its first parent, which matches a push. The Radicle, PluginEditTool, cmake, root CMakeLists, `.github/scripts` and workflow paths are checked against the list in `TOUCHES`, which mirrors the `pull_request` paths of `.github/workflows/native-real-data.yml`. The list is hand-kept: when that workflow's paths change, change `TOUCHES` in the same commit.
+
+## ci/real-data-service/real_data_service.py:prepare_checkout — merge ref and clean tree
+
+A PR job runs on `refs/pull/<n>/merge` in the dedicated clone. The merge commit's second parent must equal the head that was listed; otherwise the head is left due with no status, because a newer merge ref will be picked up on a later pass. `git clean -ffdx -e /build/` keeps `build/native` (CMake objects, zlib copy) and the tracked `build/evidence` folder, so ccache and incremental builds survive between runs. The clone path is fixed, so the ccache base directory is the same on every run.
+
+## ci/real-data-service/real_data_service.py:wait_job — superseded heads and the 3-hour limit
+
+The job is polled every `POLL` seconds. When the head has moved, the process tree is killed and only `error` "superseded" is posted for the old sha. When `TIMEOUT` (3 hours) passes, the tree is killed and `error` "timed out" is posted. Statuses for superseded and timed-out heads are not retried; a new commit is the way to get a new run. `run_target` checks the head again after the process exits, so an old head never gets `success` or `failure` after a newer head arrives.
+
+## ci/real-data-service/real_data_service.py:acquire_lock — one run at a time
+
+The lock file records the owner's pid and start time. It is stale when that pid no longer exists (`pid_alive` uses `OpenProcess` and `GetExitCodeProcess`), when it is older than `LOCK_MAX_AGE` (the run timeout plus 10 minutes), or when it cannot be parsed and is older than 60 seconds, which is long enough for a write in progress. A fresh lock held by a live process blocks the pass, so a second service instance does nothing.
+
+## ci/real-data-service/real_data_service.py:clean — status text that may reach GitHub
+
+Every description passes through `clean` before it is sent. It removes the Windows user name (case-insensitive), any whitespace-separated token that contains a slash or backslash, and any character outside a small allowlist; the result is cut to 140 characters. Counts come from ctest's summary line and the first failing name from its "Failed" lines. `post` never sets `target_url`, so no link points at a local file.
+
+## ci/real-data-service/real_data_service.py:outcome — counts in the status
+
+`outcome` returns `N tests, M failed: <first failing name>` from ctest's `N tests failed out of T` summary, or `N tests, 0 failed` on success. A build or configure failure has no ctest summary, so it posts "no test summary (exit X), 0 tests run". The summary and the failed-name lines were checked against a real native-real-data run log (see `failed_names`).
+
+## ci/real-data-service/real_data_service.py:start_job — environment and priority of the job
+
+The job reads `FO4_DATA_DIR`, `CMAKE_BUILD_PARALLEL_LEVEL` and the profile-alias variables from the data runner's `.env`, read-only. Only these keys are copied; values are never logged. The job runs at below-normal priority, and its child processes inherit that class. Full output goes to `C:\ci\real-data\logs\<sha>.log`; `prune_logs` keeps the newest 50.
+
+## ci/real-data-service/run_real_data.ps1:Read-Workflow — steps and regex come from the workflow file that runs
+
+The steps and `REAL_DATA_TEST_REGEX` are read from the workflow file passed as `-Workflow`, which the service sets to `.github/workflows/native-real-data.yml` of the commit under test, or to the `nomad/dev` copy when the commit lacks it (`workflow_file`). The regex therefore cannot drift from the workflow, and a PR that edits the workflow runs its own steps. Each `run:` body is written to a temporary file and run in a child `powershell.exe` or `cmd.exe`, as the Actions runner does. `GITHUB_ENV` and `GITHUB_PATH` are read back after each step. A failed step stops the rest unless it is marked `if: always()`. The `has_data` gate is not evaluated: the Check step exits non-zero when data is missing, and the service refuses to start without `FO4_DATA_DIR`. The `Print Fallout 4 build` step runs as written. The parsed regex and all 9 `run:` bodies were compared with the YAML and matched exactly.
+
+## ci/real-data-service/install_task.ps1:Register-ScheduledTask — the logon task and its service copy
+
+The task `GardenRealDataService` runs `python -I -B <copy>\real_data_service.py --gh <gh.exe>` at logon for the current user, with interactive logon, limited run level (no administrator rights), restart on failure (up to 999 times, 1 minute apart), no execution time limit and `IgnoreNew` for multiple instances. The install copies the files of `ci/real-data-service` to `C:\ci\real-data\service` and the task runs that copy, so removing or switching the worktree does not break it. Re-running the install from the source folder overwrites the copy; running it from the copy skips the copy. `-WhatIf` resolves and prints the paths without copying or registering. The restart count of 999 is not checked against this machine's cmdlet, and the task has not been registered here. The install does not read or change the existing data runner service.
+
+## ci/real-data-service/test_real_data_service.py:DueDecisionTest — due and not-affected decisions
+
+`test_scope_path_without_status_is_due` detects a PR touching `Radicle/` with no status being skipped. `test_posted_status_is_done_without_listing_files` detects a head with a result being rebuilt on every two-minute pass. `test_pending_status_left_by_a_dead_run_is_due_again` detects a crashed run's `pending` status blocking its head forever. `test_untouched_paths_are_not_affected` detects a prefix match such as `Radiclexx/` counting as `Radicle/`. `test_root_cmakelists_matches_exactly_and_workflow_file_is_in_scope` detects a nested `CMakeLists.txt` triggering a build, or the workflow file itself being left out.
+
+## ci/real-data-service/test_real_data_service.py:NotAffectedTest — out-of-scope PRs
+
+`test_untouched_target_gets_success_without_running_a_job` detects an out-of-scope PR leaving with no status (blocking merge), or an out-of-scope PR starting a build on the single data runner.
+
+## ci/real-data-service/test_real_data_service.py:StatusTextTest — status text
+
+`test_failure_text_has_no_path_or_username` detects a failing test name carrying a drive-letter path or the Windows user name into a GitHub status. `test_counts_and_first_failing_name` detects a count or first-failure name being posted wrong. `test_success_text` and `test_no_summary_means_build_failed_with_no_counts` detect the success and build-failure wording changing silently.
+
+## ci/real-data-service/test_real_data_service.py:RunTargetTest — superseded, timeout and result
+
+`test_newer_head_stops_job_and_posts_only_superseded` detects an old head still building after a push, or posting a result for it. `test_head_moving_before_exit_posts_superseded_not_the_result` detects a result posted for a head that is no longer the PR's head. `test_job_past_the_run_timeout_is_killed_and_posts_timed_out` detects a hung job that never ends and never reports. `test_final_result_is_read_from_the_local_log` detects the wrong log or count being reported for the head.
+
+## ci/real-data-service/test_real_data_service.py:LockTest — stale and live locks
+
+`test_stale_lock_from_a_dead_process_is_taken_over` detects a crashed service blocking every later run. `test_fresh_lock_held_by_a_live_process_blocks` detects a second instance starting a run while the first is still building on the same clone. `test_lock_older_than_the_limit_is_stale_even_when_the_pid_lives` detects a reused pid blocking the service forever.
+
+## ci/real-data-service/test_real_data_service.py:OneAtATimeTest — one pass at a time
+
+`test_second_acquire_fails_until_release` detects two runs owning the lock at once. `test_pass_does_nothing_while_another_run_holds_the_lock` detects a pass that lists PRs or starts jobs while another run is active on the single clone.
+
+## ci/real-data-service/test_real_data_service.py:CheckoutTest — merge ref check before a build
+
+`test_merge_ref_whose_second_parent_is_an_older_head_is_left_due` detects a PR whose merge ref was computed for an older head being built and reported against the new head. `test_current_merge_ref_is_checked_out_after_a_clean_that_keeps_build` detects the clean step deleting `build/native` (and the ccache-friendly build tree) or the checkout being skipped for a current merge ref.
+
+## ci/real-data-service/real_data_service.py:plan — decision order per target
+
+Draft first (no API call), then done (any `real-data` status except `pending`), then earlier (a successful check-run named after `CHECK_RUN`: that job already passed on the earlier runner, so `run_pass` posts `success` "passed on the earlier runner" and no build runs), then run or not affected from the changed paths. Failed, cancelled and missing check-runs do not count as passed. `passed_earlier` reads all check-runs of the head through the commits API.
+
+## ci/real-data-service/real_data_service.py:in_scope — what counts as touching
+
+`in_scope` applies `TOUCHES` and two deliberate exclusions: `EXCLUDED_PREFIXES` (`Radicle/docs/`) and `EXCLUDED_SUFFIXES` (`.md`). A docs-only PR is therefore "not affected" and is posted `success` without a build. This differs from the workflow, whose `pull_request` paths still match any `Radicle/**` change; the service deliberately does not build docs-only heads.
+
+## ci/real-data-service/real_data_service.py:workflow_file — which workflow file runs
+
+The job uses `.github/workflows/native-real-data.yml` of the commit under test. A commit without that file (older branches, stale merges) falls back to the copy on `nomad/dev`, fetched into `refs/real-data/dev` and written to `C:\ci\real-data\fallback\native-real-data.yml`. `start_job` passes the chosen path to `run_real_data.ps1` as `-Workflow`.
+
+## ci/real-data-service/real_data_service.py:failed_names — which test names are reported
+
+Failed names come only from the `The following tests FAILED:` section, not from every `***state` line. A skipped test prints `***Skipped` in the progress output and is listed under `did not run`; the earlier line-based pattern reported such a skipped test as the failure. The `outcome` sample in `test_real_data_service.py` is a short extract of a real native-real-data run (501 tests, 1 failed, from run 41278444834) with timestamps, log prefixes and paths removed. Its progress-line dot leaders were shortened to keep the sample readable.
+
+## ci/real-data-service/install_task.ps1:Resolve-Python — absolute paths written into the task
+
+`Resolve-Python` returns the `-Python` value, refusing the Windows Store alias under WindowsApps with a message, or else the first `python.exe` on PATH outside WindowsApps. `gh` is resolved the same way. Both absolute paths go into the task: python as the action executable and gh as the `--gh` argument, which sets the service's `GH` for every `gh` call. `git` is still found by name on PATH.
+
+## ci/real-data-service/test_real_data_service.py:DocsExclusionTest — docs are not build triggers
+
+`test_docs_and_markdown_are_not_in_scope` detects a docs or markdown change starting a real-data build on the single runner. `test_source_under_the_same_roots_is_still_in_scope` detects the exclusion removing real source from the trigger. `test_docs_only_pr_is_not_affected` detects a docs-only PR left without any status.
+
+## ci/real-data-service/test_real_data_service.py:EarlierPassTest — heads that already passed
+
+`test_successful_check_run_counts_without_listing_files_or_building` detects a head that already passed on the earlier runner being built again. `test_failed_cancelled_or_missing_check_run_does_not_count` detects a failed or cancelled check being taken as a pass. `test_run_pass_posts_earlier_success_and_builds_nothing` detects an earlier pass that starts a job or posts nothing.
+
+## ci/real-data-service/test_real_data_service.py:DraftTest — drafts stay unstatused
+
+`test_draft_is_skipped_without_any_github_call` detects drafts costing API calls or builds. `test_run_pass_leaves_drafts_unstatused` detects a draft getting a status, which would block or mislead a merge decision.
+
+## ci/real-data-service/test_real_data_service.py:OrderTest — dev head first, then newest updated
+
+`test_dev_head_first_then_newest_updated_pr` detects active PRs queued behind old ones, and the dev head missing its place at the front.
+
+## ci/real-data-service/test_real_data_service.py:WorkflowFileTest — which workflow runs
+
+`test_checkout_workflow_is_used_when_the_commit_has_it` detects the service running a stale copy of the steps when the commit carries its own workflow. `test_dev_copy_is_used_when_the_commit_lacks_the_workflow` detects a commit without the workflow file failing with nothing to run.
+
+## ci/real-data-service/test_real_data_service.py:GhPathTest — gh path from the install
+
+`test_gh_path_given_at_install_is_used_for_the_run` detects the logon task calling a `gh` that is not on its PATH.
+
+## ci/real-data-service/test_real_data_service.py:RealCtestOutputTest — real ctest output
+
+`test_summary_and_failed_name_from_a_real_run` detects the summary or failure-line format drifting from real CTest output. `test_skipped_tests_are_never_reported_as_the_failure` detects a skipped test reported as the failing one, which the earlier parser did on this sample.

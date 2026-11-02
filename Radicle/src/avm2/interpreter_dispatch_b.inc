@@ -24,7 +24,7 @@
                       "cannot read " + property_text(*multiname) + " from " +
                           value_kind_name(object.kind()));
         }
-        ExecutionResult nested = get_property(frame, *object.as_object(), *multiname, depth);
+        ExecutionResult nested = get_property(frame, object.as_object(), *multiname, depth);
         if (!nested.ok()) {
           return nested;
         }
@@ -63,7 +63,7 @@
                           value_kind_name(object.kind()));
         }
         ExecutionResult nested =
-            set_property(frame, *object.as_object(), *multiname, value,
+            set_property(frame, object.as_object(), *multiname, value,
                          instruction.opcode == op::k_initproperty, depth);
         if (!nested.ok()) {
           return nested;
@@ -75,7 +75,7 @@
         if (multiname == nullptr) {
           return fail(InterpreterStatus::TypeError, "getlex has an invalid multiname");
         }
-        Object* owner = nullptr;
+        std::shared_ptr<Object> owner;
         bool found = false;
         status = find_scope_binding(frame, *multiname, false, owner, found, message);
         if (status != InterpreterStatus::Ok) {
@@ -85,7 +85,7 @@
           push_value(Value::undefined());
           break;
         }
-        ExecutionResult nested = get_property(frame, *owner, *multiname, depth);
+        ExecutionResult nested = get_property(frame, owner, *multiname, depth);
         if (!nested.ok()) {
           return nested;
         }
@@ -106,7 +106,7 @@
         if (status != InterpreterStatus::Ok) {
           break;
         }
-        Object* owner = nullptr;
+        std::shared_ptr<Object> owner;
         bool found = false;
         status = find_scope_binding(frame, *multiname,
                                     instruction.opcode == op::k_findpropstrict, owner, found,
@@ -115,7 +115,7 @@
           break;
         }
         if (found) {
-          push_value(borrowed_object(*owner));
+          push_value(Value::object(owner));
         } else {
           push_value(Value::null());
         }
@@ -208,18 +208,30 @@
           if (status != InterpreterStatus::Ok || !object.is_object()) {
             break;
           }
-          const Trait* trait =
-              frame.owner_class->super->resolve_instance_trait(*multiname);
-          if (trait == nullptr || !trait->is_slot_like()) {
-            return fail(InterpreterStatus::NoSuchProperty,
-                        "super has no slot " + property_text(*multiname));
-          }
           Object& target = *object.as_object();
-          if (trait->slot_id >= target.slots().size()) {
-            target.resize_slots(trait->slot_id + 1);
+          PropertyLookup lookup;
+          lookup_class_traits(frame.owner_class->super, false, *multiname, &target.slots(), lookup);
+          if (lookup.kind == LookupKind::Accessor && lookup.setter != nullptr) {
+            ExecutionResult written = invoke(*lookup.setter, object, {value}, {}, depth);
+            if (!written.ok()) {
+              return written;
+            }
+            break;
           }
-          target.slots()[trait->slot_id] = value;
-          break;
+          if (lookup.kind == LookupKind::Slot && lookup.trait != nullptr &&
+              lookup.trait->is_slot_like()) {
+            if (lookup.trait->slot_id >= target.slots().size()) {
+              target.resize_slots(lookup.trait->slot_id + 1);
+            }
+            target.slots()[lookup.trait->slot_id] = value;
+            break;
+          }
+          if (target.kind() == ObjectKind::Display &&
+              write_display_property(static_cast<DisplayObject&>(target), *multiname, value)) {
+            break;
+          }
+          return fail(InterpreterStatus::NoSuchProperty,
+                      "super has no property " + property_text(*multiname));
         }
         Value object;
         pop_value(object);
@@ -229,20 +241,32 @@
         if (!object.is_object()) {
           return fail(InterpreterStatus::NullReference, "getsuper needs an object");
         }
-        const Trait* trait = frame.owner_class->super->resolve_instance_trait(*multiname);
-        if (trait == nullptr) {
-          push_value(Value::undefined());
+        Object& target = *object.as_object();
+        PropertyLookup lookup;
+        lookup_class_traits(frame.owner_class->super, false, *multiname, &target.slots(), lookup);
+        if (lookup.kind == LookupKind::Accessor) {
+          if (lookup.getter == nullptr) {
+            push_value(Value::undefined());
+            break;
+          }
+          ExecutionResult read = invoke(*lookup.getter, object, {}, {}, depth);
+          if (!read.ok()) {
+            return read;
+          }
+          push_value(read.value);
           break;
         }
-        if (trait->is_slot_like()) {
-          Object& target = *object.as_object();
-          push_value(trait->slot_id < target.slots().size()
-                         ? target.slots()[trait->slot_id]
-                         : Value::undefined());
-        } else if (trait->function != nullptr) {
-          push_value(Value::object(trait->function));
+        if (lookup.kind == LookupKind::Slot) {
+          push_value(lookup.value);
+        } else if (lookup.kind == LookupKind::Method && lookup.trait != nullptr &&
+                   lookup.trait->function != nullptr) {
+          push_value(Value::object(lookup.trait->function));
         } else {
-          push_value(Value::undefined());
+          Value out;
+          const bool native = target.kind() == ObjectKind::Display &&
+                              read_display_property(*this, static_cast<DisplayObject&>(target),
+                                                    *multiname, out);
+          push_value(native ? out : Value::undefined());
         }
         break;
       }
@@ -315,29 +339,25 @@
         const std::uint32_t count = count_operand(instruction);
         std::vector<Value> arguments;
         status = pop_arguments(frame, count, arguments, message);
-        Value function;
-        if (status == InterpreterStatus::Ok) {
-          pop_value(function);
-        }
         Value receiver;
         if (status == InterpreterStatus::Ok) {
           pop_value(receiver);
+        }
+        Value function;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(function);
         }
         if (status != InterpreterStatus::Ok) {
           break;
         }
         if (function.is_object() && function.as_object()->kind() == ObjectKind::Class) {
-          const Class* called_class =
-              static_cast<const ClassObject&>(*function.as_object()).represented_class();
-          if (called_class != nullptr && called_class->native_constructor != 0) {
-            ExecutionResult converted = call_native_id(called_class->native_constructor, function,
-                                                       arguments, depth);
-            if (!converted.ok()) {
-              return converted;
-            }
-            push_value(converted.value);
-            break;
+          ExecutionResult converted =
+              call_class(static_cast<const ClassObject&>(*function.as_object()), arguments, depth);
+          if (!converted.ok()) {
+            return converted;
           }
+          push_value(converted.value);
+          break;
         }
         if (!function.is_object() || function.as_object()->kind() != ObjectKind::Function) {
           if (limits_.lenient_builtins) {
@@ -430,7 +450,7 @@
           return fail(InterpreterStatus::CannotConstruct,
                       "constructprop needs an object holding a class");
         }
-        ExecutionResult class_value = get_property(frame, *target.as_object(), *multiname, depth);
+        ExecutionResult class_value = get_property(frame, target.as_object(), *multiname, depth);
         if (!class_value.ok()) {
           return class_value;
         }
@@ -483,7 +503,7 @@
                       "cannot call " + property_text(*multiname) + " on " +
                           value_kind_name(receiver.kind()));
         }
-        ExecutionResult nested = call_property(frame, *receiver.as_object(), *multiname, arguments,
+        ExecutionResult nested = call_property(frame, receiver.as_object(), *multiname, arguments,
                                                depth);
         if (!nested.ok()) {
           return nested;
@@ -641,7 +661,7 @@
           multiname.kind = MultinameKind::QName;
           multiname.name = key.name;
           multiname.namespaces.push_back(key.name_space);
-          ExecutionResult nested = get_property(frame, *object.as_object(), multiname, depth);
+          ExecutionResult nested = get_property(frame, object.as_object(), multiname, depth);
           if (!nested.ok()) {
             return nested;
           }
@@ -686,7 +706,7 @@
               if (target_class == nullptr || target_class->class_object == nullptr) {
                 type_matches = true;
               } else {
-                type_matches = is_instance_of(value, borrowed_object(*target_class->class_object));
+                type_matches = is_instance_of(value, Value::object(target_class->class_object));
               }
             }
           }

@@ -143,20 +143,21 @@ public partial class MainWindow : Window
         var skeleton = PoseSkeleton();
         if (skeleton == null)
         {
-            SetPlaybackSummary("No skeleton is resolved for this file, so a mesh has nothing to hang on.",
+            _pendingSkinMesh = path;
+            SetPlaybackSummary("Mesh selected. Open an animation with a skeleton to bind it.",
                                Ux.BadBrush);
             return false;
         }
 
         ClearMesh();
-        int approximated = 0;
         try
         {
             var nif = NifFile.Read(path);
+            var tree = MeshNodeTree(path, skeleton);
             foreach (var shape in NifGeometry.Shapes(nif))
             {
-                approximated += ApproximateHelperBoneInterim(shape, skeleton);
                 var binding = SkinnedMesh.Bind(shape, skeleton);
+                SkinnedMesh.Resolve(binding, shape, tree);
                 _meshShapes.Add((shape, binding, SkinnedMesh.Edges(shape)));
                 int[] indices = shape.Indices.ToArray();
                 _meshTriangles.Add(indices);
@@ -196,9 +197,7 @@ public partial class MainWindow : Window
                       (missing.Count > 6 ? ", and more" : "") +
                       ". Those bones keep their whole weight, so a vertex weighted only to them follows " +
                       "this frame's placement of the bones that did match.";
-        if (approximated > 0)
-            report += $"   {approximated} helper bone{(approximated == 1 ? "" : "s")} approximated by " +
-                      "their parent bone.";
+        report += "   " + SkinResolutionSummary();
 
         SetPlaybackSummary(settingsWarning ?? report,
                            settingsWarning == null && missing.Count == 0 ? Ux.MetaBrush : Ux.WarnBrush);
@@ -232,6 +231,7 @@ public partial class MainWindow : Window
         _meshSkins.Clear();
         _meshSegmentCount = 0;
         _meshPath = "";
+        _pendingSkinMesh = null;
         _skeleton.ShowMesh(null);
         SetViewportMesh(null);
     }
@@ -311,6 +311,7 @@ public partial class MainWindow : Window
         _dropButton.Content = "Drop";
         _frameLabel.Text = "";
         _skeleton.Reset();
+        _skeleton.ShowRootMotion(null, System.Numerics.Vector3.Zero);
         UpdateScaleStatus();
 
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +
@@ -429,6 +430,7 @@ public partial class MainWindow : Window
 
     private void Stop()
     {
+        ResetRootTravelLoop();
         _clock?.Stop();
         _clock = null;
         _playback.Stop();
@@ -447,7 +449,8 @@ public partial class MainWindow : Window
 
         _playback.Show(frame);
         var posed = AnimationPose.At(_poseSkeleton, _poseAnimation, _playback.Frame);
-        if (_followTravel) posed = WithTravel(posed);
+        posed = WithTravel(posed);
+        UpdateRootMotionView();
 
         _skeleton.Update(posed);
         UpdateMesh(posed, _poseSkeleton);
@@ -458,28 +461,8 @@ public partial class MainWindow : Window
         UpdateFrameLabel();
     }
 
-    private AnimationPose.Pose WithTravel(AnimationPose.Pose pose)
-    {
-        if (!_poseMotion.Any || _poseAnimation == null) return pose;
-
-        float fraction = _playback.Fraction;
-
-        var at = RootMotion.At(_poseMotion, fraction);
-        var turn = System.Numerics.Quaternion.CreateFromAxisAngle(System.Numerics.Vector3.Normalize(_poseMotion.Up), at.TurnRadians);
-
-        var moved = new AnimationPose.Pose { Frame = pose.Frame, Time = pose.Time };
-        moved.Links.AddRange(pose.Links);
-
-        foreach (var bone in pose.Bones)
-        {
-            var position = System.Numerics.Vector3.Transform(bone.Position, turn) + at.Position;
-            moved.Bones.Add(bone with { Position = position, Rotation = turn * bone.Rotation });
-            moved.Min = System.Numerics.Vector3.Min(moved.Min, position);
-            moved.Max = System.Numerics.Vector3.Max(moved.Max, position);
-        }
-
-        return moved;
-    }
+    private AnimationPose.Pose WithTravel(AnimationPose.Pose pose) =>
+        RootMotion.Place(pose, _poseMotion, pose.Time);
 
     private void UpdateFrameLabel()
     {

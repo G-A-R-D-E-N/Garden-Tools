@@ -312,7 +312,7 @@ ExecutionResult array_for_each(Interpreter& interpreter, const Value& self,
   for (std::size_t index = 0; index < array->elements().size(); ++index) {
     ExecutionResult called = interpreter.call_function(
         function, this_arg, {array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
-                             detail::borrowed_object(*array)},
+                             Value::object(array->shared_from_this())},
         depth + 1);
     if (!called.ok()) {
       return called;
@@ -335,7 +335,7 @@ ExecutionResult array_map(Interpreter& interpreter, const Value& self,
     ExecutionResult called = interpreter.call_function(
         function, Value::undefined(),
         {array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
-         detail::borrowed_object(*array)},
+         Value::object(array->shared_from_this())},
         depth + 1);
     if (!called.ok()) {
       return called;
@@ -359,7 +359,7 @@ ExecutionResult array_filter(Interpreter& interpreter, const Value& self,
     ExecutionResult called = interpreter.call_function(
         function, Value::undefined(),
         {array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
-         detail::borrowed_object(*array)},
+         Value::object(array->shared_from_this())},
         depth + 1);
     if (!called.ok()) {
       return called;
@@ -385,7 +385,7 @@ ExecutionResult array_every(Interpreter& interpreter, const Value& self,
     ExecutionResult called = interpreter.call_function(
         function, this_arg,
         {array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
-         detail::borrowed_object(*array)},
+         Value::object(array->shared_from_this())},
         depth + 1);
     if (!called.ok()) {
       return called;
@@ -411,7 +411,7 @@ ExecutionResult array_some(Interpreter& interpreter, const Value& self,
     ExecutionResult called = interpreter.call_function(
         function, this_arg,
         {array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
-         detail::borrowed_object(*array)},
+         Value::object(array->shared_from_this())},
         depth + 1);
     if (!called.ok()) {
       return called;
@@ -439,7 +439,7 @@ ExecutionResult array_reduce(Interpreter& interpreter, const Value& self,
     ExecutionResult called = interpreter.call_function(
         function, Value::undefined(),
         {accumulator, array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
-         detail::borrowed_object(*array)},
+         Value::object(array->shared_from_this())},
         depth + 1);
     if (!called.ok()) {
       return called;

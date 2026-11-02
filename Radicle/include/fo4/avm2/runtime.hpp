@@ -23,6 +23,7 @@
 
 namespace fo4::avm2 {
 
+class DisplayObject;
 class MovieClip;
 
 enum class RuntimeStatus : std::uint8_t {
@@ -47,17 +48,19 @@ struct RuntimeLoad {
 };
 
 RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, Multiname& out);
+Value constant_value(const abc::AbcFile& file, abc::AbcValueKind kind, std::uint32_t index);
 
 struct ScriptEntry {
   const abc::AbcFile* file{nullptr};
   std::uint32_t init_method{0};
   std::uint32_t script_index{0};
+  std::shared_ptr<Object> global;
 };
 
 class Runtime {
  public:
   Runtime();
-  ~Runtime() = default;
+  ~Runtime();
 
   Runtime(const Runtime&) = delete;
   Runtime& operator=(const Runtime&) = delete;
@@ -100,6 +103,17 @@ class Runtime {
   const std::vector<std::shared_ptr<MovieClip>>& movie_clips() const noexcept {
     return movie_clips_;
   }
+  void track_frame_listener(const std::shared_ptr<DisplayObject>& object);
+  void untrack_frame_listener(const DisplayObject* object);
+  const std::vector<std::shared_ptr<DisplayObject>>& frame_listener_objects() const noexcept {
+    return frame_listener_objects_;
+  }
+  void request_render() noexcept { render_requested_ = true; }
+  bool take_render_request() noexcept {
+    const bool requested = render_requested_;
+    render_requested_ = false;
+    return requested;
+  }
 
   const Class* find_class(const Multiname& multiname) const;
   const Class* find_class(std::string_view rendered_name) const;
@@ -140,12 +154,14 @@ class Runtime {
   Class* ensure_external_class(const Multiname& multiname);
   Class* add_builtin_class(std::string name, std::string package, Class* super);
   RuntimeStatus build_class_shells();
-  RuntimeStatus build_shells_for_file(const abc::AbcFile& file);
+  RuntimeStatus build_shells_for_file(const abc::AbcFile& file,
+                                      const std::shared_ptr<ApplicationDomainObject>& domain);
   RuntimeStatus resolve_hierarchy();
   RuntimeStatus build_traits();
   RuntimeStatus install_builtins();
   RuntimeStatus install_system_builtins();
   RuntimeStatus install_bytearray_builtins();
+  RuntimeStatus install_xml_builtins();
   RuntimeStatus build_script_globals();
   void apply_class_slots();
   void build_prototypes();
@@ -163,6 +179,7 @@ class Runtime {
   std::unordered_map<std::string, Class*> class_by_instance_;
   std::unordered_map<const Class*, Class*> vector_classes_;
   std::vector<ScriptEntry> scripts_;
+  std::vector<std::shared_ptr<FunctionObject>> script_functions_;
   std::shared_ptr<Object> global_object_;
   std::shared_ptr<FontRegistry> fonts_{std::make_shared<FontRegistry>()};
   HostBridge host_;
@@ -171,6 +188,8 @@ class Runtime {
   std::map<std::uint32_t, SoundResource> sound_table_;
   std::uint32_t next_sound_id_{1};
   std::vector<std::shared_ptr<MovieClip>> movie_clips_;
+  std::vector<std::shared_ptr<DisplayObject>> frame_listener_objects_;
+  bool render_requested_{false};
   std::shared_ptr<ApplicationDomainObject> current_domain_;
   std::map<std::string, std::shared_ptr<Object>> external_callbacks_;
   bool linked_{false};

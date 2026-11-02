@@ -460,7 +460,9 @@ TEST(AddOnNodeReal, AddOnNodeKnownAnswersMatchFallout4Records) {
     EXPECT_EQ(*data.node_index, known.node_index);
     EXPECT_EQ(data.model.has_value(), known.model);
     EXPECT_EQ(data.light.has_value(), known.light);
-    if (data.model) { EXPECT_FALSE(data.model->empty()); }
+    if (data.model) {
+      EXPECT_FALSE(data.model->empty());
+    }
     if (data.light) {
       EXPECT_EQ(data.light->owner(), fo4::PluginKey::from_filename("Fallout4.esm"));
     }

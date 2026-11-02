@@ -31,7 +31,9 @@ TEST(SwfRealData, InterfaceGfxAvm1StreamsDecodeAndReencodeByteIdentically) {
   std::size_t rejected = 0;
   std::size_t mismatched = 0;
   for (const auto& entry : archive.entries) {
-    const auto file_name = std::filesystem::path(entry.path).filename().string();
+    std::string normalized = entry.path;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    const auto file_name = std::filesystem::path(normalized).filename().string();
     if (std::find(named.begin(), named.end(), file_name) == named.end()) {
       continue;
     }

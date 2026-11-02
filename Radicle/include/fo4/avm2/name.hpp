@@ -56,6 +56,7 @@ struct Multiname {
 };
 
 std::string render_multiname(const Multiname& multiname);
+std::string rendered_class_name(std::string_view name);
 
 struct Key {
   Namespace name_space;
