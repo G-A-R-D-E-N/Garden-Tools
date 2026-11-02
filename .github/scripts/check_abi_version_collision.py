@@ -11,6 +11,7 @@ Exit codes: 0 clear, 1 a claim disagrees with another, 2 the gate could not run.
 
 import argparse
 import base64
+import fnmatch
 import json
 import os
 import re
@@ -203,6 +204,33 @@ def stack_root(claims, base):
     return root if links else None
 
 
+def pull_touches_header(api, repo, token, number):
+    """Whether the pull request's own diff edits an ABI header; running out of pages fails (see code-notes)."""
+    for page in range(1, MAX_PAGES + 1):
+        batch = get_json("{}/repos/{}/pulls/{}/files?per_page=100&limit=100&page={}".format(
+            api, repo, number, page), token)
+        if not isinstance(batch, list):
+            raise ValueError("file page {} of #{} is not a list".format(page, number))
+        if not batch:
+            return False
+        if any(fnmatch.fnmatch(item["filename"], HEADER_GLOB) for item in batch):
+            return True
+    raise ValueError("#{} changes more files than {} pages; refusing to guess".format(number, MAX_PAGES))
+
+
+def without_inherited(claims, touches_header):
+    """Drops a stacked pull request that only carries its parent's number (see code-notes)."""
+    by_head_ref = {claim["head_ref"]: claim for claim in claims if claim.get("head_ref")}
+    kept = []
+    for claim in claims:
+        parent = by_head_ref.get(claim.get("base_ref") or "")
+        if (parent is not None and parent["number"] != claim["number"]
+                and parent["version"] == claim["version"] and not touches_header(claim["number"])):
+            continue
+        kept.append(claim)
+    return kept
+
+
 def read_version_at(api, repo, token, ref, where):
     """Number the header carries at a branch or sha; the caller exits 2 when it cannot be read (see code-notes)."""
     contents = get_json("{}/repos/{}/contents/{}?ref={}".format(api, repo, HEADER, ref), token)
@@ -383,9 +411,16 @@ def main(argv=None):
         print("::error::cannot read the integration branch {} ({}); the gate needs it, so this is exit 2, not a pass".format(
             INTEGRATION_BRANCH, error))
         return 2
+    try:
+        holders = without_inherited(claims, lambda number: pull_touches_header(
+            arguments.api_url, arguments.repo, arguments.token, number))
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print("::error::cannot read a stacked pull request's files ({}); the gate needs them, so this is exit 2, "
+              "not a pass".format(error))
+        return 2
     conflicts = claim_conflicts(
-        claims, base_version,
-        ancestry_of(claims, base_version, arguments.api_url, arguments.repo,
+        holders, base_version,
+        ancestry_of(holders, base_version, arguments.api_url, arguments.repo,
                     arguments.token),
         shared)
     mine_conflicts = [(version, numbers) for version, numbers in conflicts

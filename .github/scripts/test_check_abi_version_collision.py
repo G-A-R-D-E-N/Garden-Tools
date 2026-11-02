@@ -131,6 +131,32 @@ class ClaimConflictsTest(unittest.TestCase):
             ancestry={1042: {1041}, 1043: {1041}}))
 
 
+class InheritedClaimTest(unittest.TestCase):
+    def stack(self):
+        return [claim(1049, 102, head_ref="stack", base_ref="nomad/dev"),
+                claim(1081, 102, head_ref="child-a", base_ref="stack"),
+                claim(1082, 102, head_ref="child-b", base_ref="stack"),
+                claim(1086, 102, head_ref="grandchild", base_ref="child-a")]
+
+    # Detects: children that never edit the C API failing their parent's gate for carrying its number.
+    def test_children_that_leave_the_header_alone_hold_no_claim(self):
+        kept = check.without_inherited(self.stack(), lambda number: False)
+        self.assertEqual([1049], [item["number"] for item in kept])
+        self.assertEqual([], check.claim_conflicts(kept, 100))
+
+    # Detects: two siblings adding different exports under one number passing the gate.
+    def test_siblings_that_edit_the_header_still_collide(self):
+        kept = check.without_inherited(self.stack(), lambda number: number in (1081, 1082))
+        self.assertEqual([(102, [1049, 1081, 1082])], check.claim_conflicts(
+            kept, 100, ancestry={1081: {1049}, 1082: {1049}}))
+
+    def test_a_bumped_child_keeps_its_claim_without_reading_its_files(self):
+        claims = [claim(1049, 102, head_ref="stack", base_ref="nomad/dev"),
+                  claim(1081, 103, head_ref="child-a", base_ref="stack")]
+        kept = check.without_inherited(claims, lambda number: self.fail("no read needed"))
+        self.assertEqual([1049, 1081], [item["number"] for item in kept])
+
+
 class CompareStatusTest(unittest.TestCase):
     def run_with(self, bodies):
         seen = []
