@@ -245,7 +245,7 @@ TEST(AnimTextData, CapsTheIdleListAtTheListLimit) {
 // Detects: a named list whose count includes a blank entry, which the shipped ThrowingBottle01 list carries and must round-trip.
 TEST(AnimTextData, RoundTripsANamedListWithABlankEntry) {
   const std::string text =
-      "3\r\n0\r\nThrowingBottle01\r\n3\r\nBehaviors\Behavior.hkx\r\nCharacters\Character.hkx\r\n\r\n0\r\n";
+      "3\r\n0\r\nThrowingBottle01\r\n3\r\nBehaviors\\Behavior.hkx\r\nCharacters\\Character.hkx\r\n\r\n0\r\n";
   const auto list = parse_anim_file_list(text);
   ASSERT_EQ(list.files.size(), 3U);
   EXPECT_EQ(list.files[2], "");
