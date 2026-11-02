@@ -221,6 +221,20 @@ class WorkflowFileTest(ServiceTest):
         self.assertTrue(path.is_relative_to(rds.ROOT))
 
 
+class PublicSyncTest(ServiceTest):
+    def test_sync_is_requested_on_the_public_repo(self):
+        with mock.patch.object(rds, "gh") as gh:
+            rds.request_public_sync()
+        gh.assert_called_once_with("workflow", "run", "sync-from-private.yml", "--repo", "G-A-R-D-E-N/Garden-Tools",
+                                   "--ref", "main")
+
+    # Detects: a GitHub outage ending the sync thread, so private pushes wait hours for a delayed schedule.
+    def test_a_failed_request_does_not_stop_the_loop(self):
+        error = subprocess.CalledProcessError(1, "gh")
+        with mock.patch.object(rds, "gh", side_effect=error):
+            rds.request_public_sync()
+
+
 class CheckoutTest(ServiceTest):
     def git_calls(self, parents):
         calls = []
@@ -243,6 +257,21 @@ class CheckoutTest(ServiceTest):
             self.assertTrue(rds.prepare_checkout(target()))
         self.assertIn(("clean", "-ffdx", "-e", "/build/"), calls)
         self.assertIn(("checkout", "-f", "--detach", "refs/real-data/candidate"), calls)
+
+    # Detects: every run after the first stopping in 12 seconds because zlib was copied inside its old folder.
+    def test_zlib_copy_from_the_last_run_is_removed_and_the_build_tree_is_kept(self):
+        build = rds.REPO_DIR / "build"
+        (build / "zlib-src").mkdir(parents=True)
+        pack = build / "zlib-src" / "pack.idx"
+        pack.write_text("old", encoding="utf-8")
+        pack.chmod(0o444)
+        (build / "native").mkdir()
+        (rds.REPO_DIR / ".git").mkdir()
+        _, patcher = self.git_calls(f"{'d' * 40} {SHA}")
+        with patcher:
+            self.assertTrue(rds.prepare_checkout(target()))
+        self.assertFalse((build / "zlib-src").exists())
+        self.assertTrue((build / "native").exists())
 
 
 class GhPathTest(ServiceTest):

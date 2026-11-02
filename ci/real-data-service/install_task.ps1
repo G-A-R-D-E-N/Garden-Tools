@@ -36,6 +36,11 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
     -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
 if ($PSCmdlet.ShouldProcess($taskName, 'register the logon task')) {
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+    Stop-ScheduledTask -TaskName $taskName
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
+        Where-Object { $_.CommandLine -match 'run_real_data\.ps1' } |
+        ForEach-Object { taskkill.exe /PID $_.ProcessId /T /F | Out-Null }
+    Start-ScheduledTask -TaskName $taskName
     Get-ScheduledTask -TaskName $taskName | Select-Object TaskName, State | Format-List
 }
 "python: $python"

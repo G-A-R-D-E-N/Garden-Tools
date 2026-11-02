@@ -5,8 +5,11 @@ import json
 import logging
 import os
 import re
+import shutil
+import stat
 import subprocess
 import sys
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -14,6 +17,9 @@ from pathlib import Path
 
 REPO = "G-A-R-D-E-N/GardenTools"
 REPO_URL = f"https://github.com/{REPO}.git"
+PUBLIC_REPO = "G-A-R-D-E-N/Garden-Tools"
+SYNC_WORKFLOW = "sync-from-private.yml"
+SYNC_EVERY = 300
 DEV_BRANCH = "nomad/dev"
 CONTEXT = "real-data"
 CHECK_RUN = "Native real-data tests (Windows, MSVC, Fallout 4 data)"
@@ -176,6 +182,15 @@ def outcome(text, rc):
     return "failure", f"{total} tests, {failed} failed{detail}"
 
 
+def remove_tree(path):
+    def retry_writable(func, target, _exc):
+        os.chmod(target, stat.S_IWRITE)
+        func(target)
+
+    if path.exists():
+        shutil.rmtree(path, onexc=retry_writable)
+
+
 def prepare_checkout(t):
     if not (REPO_DIR / ".git").exists():
         ROOT.mkdir(parents=True, exist_ok=True)
@@ -187,6 +202,7 @@ def prepare_checkout(t):
     if not current:
         return False
     git("clean", "-ffdx", "-e", "/build/")
+    remove_tree(REPO_DIR / "build" / "zlib-src")
     git("checkout", "-f", "--detach", "refs/real-data/candidate")
     return True
 
@@ -334,6 +350,19 @@ def run_pass(dry_run=False):
     return counts
 
 
+def request_public_sync():
+    try:
+        gh("workflow", "run", SYNC_WORKFLOW, "--repo", PUBLIC_REPO, "--ref", "main")
+    except (subprocess.CalledProcessError, OSError) as error:
+        logging.warning("public CI sync not started: %s", error)
+
+
+def public_sync_loop():
+    while True:
+        request_public_sync()
+        time.sleep(SYNC_EVERY)
+
+
 def main(argv=None):
     global GH
     parser = argparse.ArgumentParser()
@@ -353,6 +382,7 @@ def main(argv=None):
     if args.once:
         run_pass()
         return 0
+    threading.Thread(target=public_sync_loop, daemon=True).start()
     while True:
         try:
             run_pass()
