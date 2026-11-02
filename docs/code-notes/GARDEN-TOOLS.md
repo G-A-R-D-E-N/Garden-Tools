@@ -3021,3 +3021,5 @@ Failed names come only from the `The following tests FAILED:` section, not from 
 ## ci/real-data-service/real_data_service.py:prepare_checkout — zlib copy removed before each run
 
 `/build/` is kept between runs so builds stay incremental, but `.github/scripts/pinned-zlib-windows.ps1` copies its cache to `build\zlib-src` and then deletes `.git` there. When the folder already exists, `Copy-Item` nests the copy inside it, `.git` is missing, and the step stops the job within seconds. That script comes from each PR's checkout, so the service clears the folder rather than the script handling it.
+
+Git pack files are read-only and `shutil.rmtree` cannot delete those on Windows, so `remove_tree` clears the flag and retries. It does not ignore errors: a delete that fails stops that target with a logged exception and posts no status, instead of a false test failure.

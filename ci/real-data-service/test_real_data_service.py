@@ -248,7 +248,9 @@ class CheckoutTest(ServiceTest):
     def test_zlib_copy_from_the_last_run_is_removed_and_the_build_tree_is_kept(self):
         build = rds.REPO_DIR / "build"
         (build / "zlib-src").mkdir(parents=True)
-        (build / "zlib-src" / "CMakeLists.txt").write_text("old", encoding="utf-8")
+        pack = build / "zlib-src" / "pack.idx"
+        pack.write_text("old", encoding="utf-8")
+        pack.chmod(0o444)
         (build / "native").mkdir()
         (rds.REPO_DIR / ".git").mkdir()
         _, patcher = self.git_calls(f"{'d' * 40} {SHA}")

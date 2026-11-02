@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -177,6 +178,15 @@ def outcome(text, rc):
     return "failure", f"{total} tests, {failed} failed{detail}"
 
 
+def remove_tree(path):
+    def retry_writable(func, target, _exc):
+        os.chmod(target, stat.S_IWRITE)
+        func(target)
+
+    if path.exists():
+        shutil.rmtree(path, onexc=retry_writable)
+
+
 def prepare_checkout(t):
     if not (REPO_DIR / ".git").exists():
         ROOT.mkdir(parents=True, exist_ok=True)
@@ -188,7 +198,7 @@ def prepare_checkout(t):
     if not current:
         return False
     git("clean", "-ffdx", "-e", "/build/")
-    shutil.rmtree(REPO_DIR / "build" / "zlib-src", ignore_errors=True)
+    remove_tree(REPO_DIR / "build" / "zlib-src")
     git("checkout", "-f", "--detach", "refs/real-data/candidate")
     return True
 
