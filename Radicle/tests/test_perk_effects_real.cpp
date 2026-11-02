@@ -56,6 +56,52 @@ TEST(PerkEffectsReal, SetPerkNextRewritesEveryVanillaNextLinkByteForByte) {
     EXPECT_EQ(subrecord_payload(*rewritten), subrecord_payload(*source)) << key.to_string();
   }
   EXPECT_GT(linked, 0u);
+  RecordProperty("FalloutEsmPerkCount", static_cast<int>(perks.size()));
+  RecordProperty("FalloutEsmPerkNextLinkCount", static_cast<int>(linked));
+}
+
+// Detects: rewriting each vanilla PERK's existing SNAM and FNAM to the value it already holds must leave every PERK subrecord byte-identical.
+TEST(PerkEffectsReal, SetPerkSoundAndSwfRewriteEveryVanillaSnamAndFnamByteForByte) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (directory == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run the official-master PERK sound and SWF round-trip";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto original = fo4::read_plugin_file(std::filesystem::path{directory} / "Fallout4.esm");
+
+  std::vector<fo4::FormKey> perks;
+  fo4::visit_records(original, [&](const fo4::Record& record) {
+    if (record.header.signature.to_string() == "PERK") perks.push_back(record.form_key);
+  });
+  ASSERT_GT(perks.size(), 0u);
+  RecordProperty("FalloutEsmPerkCount", static_cast<int>(perks.size()));
+
+  auto copy = original;
+  std::size_t sounds = 0;
+  std::size_t swfs = 0;
+  for (const auto& key : perks) {
+    const auto* source = fo4::find_record(original, key);
+    ASSERT_NE(source, nullptr) << key.to_string();
+    const auto links = fo4::forms::read_perk_links(original, *source);
+    if (links.sound != fo4::FormKey{}) {
+      ++sounds;
+      ASSERT_EQ(fo4::forms::set_perk_sound(copy, key, links.sound), fo4::forms::PerkLinkWrite::written)
+          << key.to_string();
+    }
+    if (links.swf.has_value()) {
+      ++swfs;
+      ASSERT_FALSE(links.swf->empty()) << "empty FNAM " << key.to_string();
+      ASSERT_EQ(fo4::forms::set_perk_swf(copy, key, *links.swf), fo4::forms::PerkLinkWrite::written)
+          << key.to_string();
+    }
+    const auto* rewritten = fo4::find_record(copy, key);
+    ASSERT_NE(rewritten, nullptr) << key.to_string();
+    EXPECT_EQ(subrecord_payload(*rewritten), subrecord_payload(*source)) << key.to_string();
+  }
+  EXPECT_GT(sounds, 0u);
+  EXPECT_GT(swfs, 0u);
+  RecordProperty("FalloutEsmPerkSoundCount", static_cast<int>(sounds));
+  RecordProperty("FalloutEsmPerkSwfCount", static_cast<int>(swfs));
 }
 
 TEST(PerkEffectsReal, SetPerkEffectsRewritesEveryFalloutEsmPerkByteForByte) {
@@ -71,6 +117,7 @@ TEST(PerkEffectsReal, SetPerkEffectsRewritesEveryFalloutEsmPerkByteForByte) {
     if (record.header.signature.to_string() == "PERK") perks.push_back(record.form_key);
   });
   ASSERT_FALSE(perks.empty());
+  RecordProperty("FalloutEsmPerkCount", static_cast<int>(perks.size()));
 
   auto copy = original;
   for (const auto& key : perks) {

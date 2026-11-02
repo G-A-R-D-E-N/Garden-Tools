@@ -259,6 +259,60 @@ TEST(PerkAuthoring, PerkFunctionTypeFollowsEpftAndEntryFunction) {
   EXPECT_EQ(fo4::forms::perk_function_type(effect), fo4::forms::PerkFunctionType::none);
 }
 
+// Detects: set_perk_sound and set_perk_swf must insert SNAM and FNAM at their schema positions, rewrite them in place, and remove them on an empty value.
+TEST(PerkAuthoring, SetPerkSoundAndSwfInsertInSchemaOrderRewriteAndRemove) {
+  auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
+  fo4::forms::PerkCreation creation;
+  creation.editor_id = "RadicleSoundSwf";
+  creation.effects = {ability_effect()};
+  const auto key = fo4::forms::create_perk(plugin, creation);
+  const auto signatures_now = [&plugin, &key]() {
+    const auto* record = fo4::find_record(plugin, key);
+    return signatures(*record);
+  };
+
+  EXPECT_EQ(fo4::forms::set_perk_swf(plugin, key, "Interface\\Perk.swf"), fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(fo4::forms::set_perk_sound(plugin, key, fo4::FormKey::parse("000B00:Fallout4.esm")),
+            fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(fo4::forms::set_perk_next(plugin, key, fo4::FormKey::parse("000C00:Fallout4.esm")),
+            fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(signatures_now(),
+            (std::vector<std::string>{"EDID", "DATA", "SNAM", "NNAM", "FNAM", "PRKE", "DATA", "PRKF"}));
+
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  auto links = fo4::forms::read_perk_links(plugin, *record);
+  EXPECT_EQ(links.sound, fo4::FormKey::parse("000B00:Fallout4.esm"));
+  ASSERT_TRUE(links.swf.has_value());
+  EXPECT_EQ(*links.swf, "Interface\\Perk.swf");
+
+  EXPECT_EQ(fo4::forms::set_perk_sound(plugin, key, fo4::FormKey::parse("000D00:Fallout4.esm")),
+            fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(fo4::forms::set_perk_swf(plugin, key, "Other.swf"), fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(signatures_now(),
+            (std::vector<std::string>{"EDID", "DATA", "SNAM", "NNAM", "FNAM", "PRKE", "DATA", "PRKF"}));
+  record = fo4::find_record(plugin, key);
+  links = fo4::forms::read_perk_links(plugin, *record);
+  EXPECT_EQ(links.sound, fo4::FormKey::parse("000D00:Fallout4.esm"));
+  ASSERT_TRUE(links.swf.has_value());
+  EXPECT_EQ(*links.swf, "Other.swf");
+
+  EXPECT_EQ(fo4::forms::set_perk_sound(plugin, key, fo4::FormKey{}), fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(signatures_now(), (std::vector<std::string>{"EDID", "DATA", "NNAM", "FNAM", "PRKE", "DATA", "PRKF"}));
+  EXPECT_EQ(fo4::forms::set_perk_swf(plugin, key, ""), fo4::forms::PerkLinkWrite::written);
+  EXPECT_EQ(signatures_now(), (std::vector<std::string>{"EDID", "DATA", "NNAM", "PRKE", "DATA", "PRKF"}));
+  record = fo4::find_record(plugin, key);
+  links = fo4::forms::read_perk_links(plugin, *record);
+  EXPECT_EQ(links.sound, fo4::FormKey{});
+  EXPECT_FALSE(links.swf.has_value());
+  EXPECT_EQ(links.next_perk, fo4::FormKey::parse("000C00:Fallout4.esm"));
+
+  EXPECT_EQ(fo4::forms::set_perk_swf(plugin, fo4::FormKey::parse("000E01:Patch.esp"), "x"),
+            fo4::forms::PerkLinkWrite::record_missing);
+  EXPECT_EQ(fo4::forms::set_perk_sound(plugin, fo4::FormKey::parse("000E01:Patch.esp"), fo4::FormKey{}),
+            fo4::forms::PerkLinkWrite::record_missing);
+}
+
 TEST(PerkAuthoring, RefusesOutOfRangeTraitAndLeavesThePluginUnchanged) {
   auto plugin = fo4::read_plugin(make_patch(0), "Patch.esp");
   const auto before = fo4::write_plugin(plugin);

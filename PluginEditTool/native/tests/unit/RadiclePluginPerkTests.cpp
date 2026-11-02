@@ -512,3 +512,41 @@ TEST_CASE("Native CreateRecord writes localized PERK text as string IDs past the
     CHECK(descriptionRows[0] == nlohmann::json{{"id", 9}, {"text", "Existing description"}});
     CHECK(descriptionRows[1] == nlohmann::json{{"id", 11}, {"text", "New description"}});
 }
+
+// Detects: set_perk_sound and set_perk_swf must insert, rewrite and remove SNAM and FNAM, and must refuse a sound that is not an SNDR by name.
+TEST_CASE("Native SetPerkSound and SetPerkSwf insert, rewrite and remove, and refuse a non-SNDR sound") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esp";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(masterPath, makeMasterPlugin());
+    writeBytes(patchPath, makePatchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, masterPath, patchPath);
+    const auto perk = createPerk(backend, nlohmann::json{{"editorId", "SoundPerk"}});
+
+    const auto refused = backend.setPerkSound(nlohmann::json::array({"Patch.esp", perk, "000100:Master.esp"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "InvalidTypedFormKey");
+    const auto notText = backend.setPerkSound(nlohmann::json::array({"Patch.esp", perk, 5}));
+    REQUIRE_FALSE(notText.has_value());
+    CHECK(notText.error().type == "InvalidPerkSound");
+    const auto unrepresentable = backend.setPerkSwf(nlohmann::json::array({"Patch.esp", perk, "\xE4\xB8\xAD"}));
+    REQUIRE_FALSE(unrepresentable.has_value());
+    CHECK(unrepresentable.error().type == "InvalidPerkSwf");
+
+    REQUIRE(backend.setPerkSound(nlohmann::json::array({"Patch.esp", perk, "000B00:Master.esp"})).has_value());
+    REQUIRE(backend.setPerkSwf(nlohmann::json::array({"Patch.esp", perk, "Interface\\Perk.swf"})).has_value());
+    auto links = backend.getPerkLinks(nlohmann::json::array({"Patch.esp", perk}));
+    REQUIRE(links.has_value());
+    CHECK((*links)["sound"] == "000B00:Master.esp");
+    CHECK((*links)["swf"] == "Interface\\Perk.swf");
+
+    REQUIRE(backend.setPerkSound(nlohmann::json::array({"Patch.esp", perk, ""})).has_value());
+    REQUIRE(backend.setPerkSwf(nlohmann::json::array({"Patch.esp", perk, ""})).has_value());
+    links = backend.getPerkLinks(nlohmann::json::array({"Patch.esp", perk}));
+    REQUIRE(links.has_value());
+    CHECK((*links)["sound"].is_null());
+    CHECK((*links)["swf"].is_null());
+}

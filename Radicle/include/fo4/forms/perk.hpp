@@ -111,6 +111,8 @@ PerkEffectWrite set_perk_effects(Plugin& plugin,
 PerkLinks read_perk_links(const Plugin& plugin, const Record& record);
 
 PerkLinkWrite set_perk_next(Plugin& plugin, const FormKey& key, const FormKey& next_perk);
+PerkLinkWrite set_perk_sound(Plugin& plugin, const FormKey& key, const FormKey& sound);
+PerkLinkWrite set_perk_swf(Plugin& plugin, const FormKey& key, std::string_view stored_swf);
 
 PerkFunctionType perk_function_type(const PerkEffectEntry& effect);
 std::optional<float> perk_epfd_float(const PerkEffectEntry& effect);

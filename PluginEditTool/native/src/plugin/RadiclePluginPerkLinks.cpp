@@ -90,4 +90,84 @@ Result<nlohmann::json> RadiclePluginBackend::setPerkNext(const nlohmann::json& a
                           " in " + pluginName + ". Call save_plugin to persist.");
 }
 
+Result<nlohmann::json> RadiclePluginBackend::setPerkSound(const nlohmann::json& arguments) {
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto key = support::formKeyArgument(support::stringArgument(arguments, 1));
+    if (!key) return std::unexpected(key.error());
+    if (!arguments.is_array() || arguments.size() <= 2 || !arguments[2].is_string()) {
+        return std::unexpected(Error{"InvalidPerkSound", "PERK sound must be a string: an SNDR FormKey, or empty to remove it"});
+    }
+    const auto text = arguments[2].get<std::string>();
+    fo4::FormKey sound;
+    if (!text.empty()) {
+        const auto parsed = support::formKeyArgument(text);
+        if (!parsed) return std::unexpected(Error{"InvalidPerkSound", "PERK sound must be an SNDR FormKey or empty"});
+        sound = *parsed;
+    }
+
+    std::optional<Error> refusal;
+    const auto edit = [&](fo4::Plugin& mutated) {
+        const auto* record = fo4::find_record(mutated, *key);
+        if (const auto error = wrongPerkType(*record, *key)) {
+            refusal = *error;
+            return;
+        }
+        if (sound != fo4::FormKey{}) {
+            if (const auto error = checkLoadedSlot(graph_, sound, {"SNDR"}, "PERK sound")) {
+                refusal = *error;
+                return;
+            }
+            if (const auto error = requireDeclaredOwner(mutated, sound, "PERK sound")) {
+                refusal = *error;
+                return;
+            }
+        }
+        if (fo4::forms::set_perk_sound(mutated, *key, sound) != fo4::forms::PerkLinkWrite::written) {
+            refusal = Error{"PerkWriteFailed", "PERK sound could not be written to " + key->to_string()};
+        }
+    };
+    const auto staged = stageTypedRecordEdit(pluginName, *key, "PerkWriteFailed", edit);
+    if (refusal.has_value()) return std::unexpected(*refusal);
+    if (!staged) return std::unexpected(staged.error());
+    if (sound == fo4::FormKey{}) {
+        if (!*staged) return nlohmann::json("No change for PERK sound on " + key->to_string() + " in " + pluginName + ".");
+        return nlohmann::json("Removed PERK sound from " + key->to_string() + " in " + pluginName + ". Call save_plugin to persist.");
+    }
+    if (!*staged) return nlohmann::json("No change for PERK sound on " + key->to_string() + " in " + pluginName + ".");
+    return nlohmann::json("Set PERK sound on " + key->to_string() + " to " + sound.to_string() + " in " +
+                          pluginName + ". Call save_plugin to persist.");
+}
+
+Result<nlohmann::json> RadiclePluginBackend::setPerkSwf(const nlohmann::json& arguments) {
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto key = support::formKeyArgument(support::stringArgument(arguments, 1));
+    if (!key) return std::unexpected(key.error());
+    if (!arguments.is_array() || arguments.size() <= 2 || !arguments[2].is_string()) {
+        return std::unexpected(Error{"InvalidPerkSwf", "PERK swf must be a string; empty removes the FNAM"});
+    }
+    const auto text = arguments[2].get<std::string>();
+    const auto stored = fo4::text::utf8_to_windows1252(text);
+    if (!stored) return std::unexpected(Error{"InvalidPerkSwf", "PERK swf is not representable in Windows-1252"});
+
+    std::optional<Error> refusal;
+    const auto edit = [&](fo4::Plugin& mutated) {
+        const auto* record = fo4::find_record(mutated, *key);
+        if (const auto error = wrongPerkType(*record, *key)) {
+            refusal = *error;
+            return;
+        }
+        if (fo4::forms::set_perk_swf(mutated, *key, *stored) != fo4::forms::PerkLinkWrite::written) {
+            refusal = Error{"PerkWriteFailed", "PERK swf could not be written to " + key->to_string()};
+        }
+    };
+    const auto staged = stageTypedRecordEdit(pluginName, *key, "PerkWriteFailed", edit);
+    if (refusal.has_value()) return std::unexpected(*refusal);
+    if (!staged) return std::unexpected(staged.error());
+    if (!*staged) return nlohmann::json("No change for PERK swf on " + key->to_string() + " in " + pluginName + ".");
+    if (stored->empty()) {
+        return nlohmann::json("Removed PERK swf from " + key->to_string() + " in " + pluginName + ". Call save_plugin to persist.");
+    }
+    return nlohmann::json("Set PERK swf on " + key->to_string() + " in " + pluginName + ". Call save_plugin to persist.");
+}
+
 }  // namespace fo4ide::plugin

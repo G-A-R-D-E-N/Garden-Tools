@@ -5,8 +5,8 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **164 tools**: 68 hand-written tools and 96 catalog tools. The 68 are 20 for plugins and records,
-27 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects, weapons and perks), 5 for MO2 profile
+It advertises **166 tools**: 70 hand-written tools and 96 catalog tools. The 70 are 20 for plugins and records,
+29 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects, weapons and perks), 5 for MO2 profile
 and host state, 5 for Papyrus, and 11 for NIFs, materials, audio and BA2 archives (4 NIF, 2 material, 4 audio, 1
 archive). The 96 catalog tools are the editor parity set: 24 read-side (`McpCatalogRead.cpp`), 46 edit-side
 (`McpCatalogEdit.cpp`) and 26 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
@@ -183,8 +183,10 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record (PER
 | `set_perk_effects` | `plugin`, `form_key`, `effects` | memory | Replaces the whole effect list with `effects`, in the shape `get_perk_effects` returns. Each effect's `parameters` take either `data` (hex) or the typed fields for its EPFT, not both; `form` and `actorValue` accept a FormKey or an editor ID of a loaded record (the form type is checked as before: LVLI for EPFT 3, SPEL for EPFT 4 and 5, AVIF for the actor value). An effect that omits `tabs` has its condition tabs cleared. Call `save_plugin` to persist. |
 | `get_perk_links` | `plugin`, `form_key` | no | A PERK record's `nextPerk` (NNAM), `sound` (SNAM), `swf` (FNAM) and the root `conditions` that gate it, in the `get_conditions` shape. Absent links read as `null`. |
 | `set_perk_next` | `plugin`, `form_key`, `next` | memory | Sets the NNAM next-perk link. `next` must be a PERK FormKey; any other record, an unresolved key or an editor ID is refused by name. A record without NNAM gets one inserted before its FNAM or effects. Clear the link with `set_field` `PERK\NextPerk` = `NULL`. Call `save_plugin` to persist. |
+| `set_perk_sound` | `plugin`, `form_key`, `sound` | memory | Sets the SNAM sound link. `sound` must be an SNDR FormKey (any other record is refused by name); an empty `sound` removes the SNAM. A missing SNAM is inserted after DATA, and an existing one is rewritten in place. Call `save_plugin` to persist. |
+| `set_perk_swf` | `plugin`, `form_key`, `swf` | memory | Sets the FNAM SWF text from UTF-8 text that must be representable in Windows-1252; an empty `swf` removes the FNAM. A missing FNAM is inserted before the effects, and an existing one is rewritten in place. Call `save_plugin` to persist. |
 
-PERK root conditions are written with `set_conditions` and read with `get_conditions`, and `sound` and `swf` are edited with `set_field` as `PERK\Sound` and `PERK\SWF`. Those two edit an existing SNAM or FNAM only; a PERK that lacks one is refused rather than given a guessed insertion position.
+PERK root conditions are written with `set_conditions` and read with `get_conditions`. `set_field` with `PERK\Sound` or `PERK\SWF` still edits only an existing SNAM or FNAM; use `set_perk_sound` and `set_perk_swf` to insert one.
 | `get_magic_effects` | `plugin`, `form_key` | no | A SPEL, ALCH, ENCH or INGR record's effect list: count plus each effect's index, `effect` FormKey, `magnitude`, `area` and `duration`. |
 | `add_magic_effect` | `plugin`, `form_key`, `effect`, `magnitude`, `area`, `duration` | memory | Appends one effect (EFID/EFIT) to a SPEL, ALCH, ENCH or INGR record and returns its index. `effect` must be an MGEF FormKey, `magnitude` a number, `area` and `duration` integers. Call `save_plugin` to persist. |
 | `set_magic_effect` | `plugin`, `form_key`, `index`, `effect`, `magnitude`, `area`, `duration` | memory | Replaces one effect of the list by index; the record must be SPEL, ALCH, ENCH or INGR and `effect` an MGEF FormKey. Call `save_plugin` to persist. |

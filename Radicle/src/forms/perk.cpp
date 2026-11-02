@@ -8,6 +8,7 @@
 #include "../plugin/record_edit.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -375,27 +376,61 @@ PerkLinks read_perk_links(const Plugin& plugin, const Record& record) {
   return links;
 }
 
-PerkLinkWrite set_perk_next(Plugin& plugin, const FormKey& key, const FormKey& next_perk) {
+namespace {
+
+constexpr std::array<Signature, 3> k_followers_sound{k_nnam, k_fnam, k_prke};
+constexpr std::array<Signature, 2> k_followers_next{k_fnam, k_prke};
+constexpr std::array<Signature, 1> k_followers_swf{k_prke};
+
+PerkLinkWrite write_perk_link(Plugin& plugin,
+                              const FormKey& key,
+                              Signature signature,
+                              std::optional<std::vector<std::byte>> payload,
+                              std::size_t fixed_size,
+                              std::span<const Signature> followers) {
   assign_record_form_keys(plugin);
-  const auto raw = u32_bytes(encode_plugin_form_id(next_perk, plugin_form_id_context(plugin)).value());
   auto* record = fo4::detail::find_mutable_record(plugin, key);
   if (record == nullptr) return PerkLinkWrite::record_missing;
   if (record->header.signature != k_perk) return PerkLinkWrite::unsupported_record;
 
   const auto existing = std::find_if(record->subrecords.begin(), record->subrecords.end(),
-                                     [](const Subrecord& subrecord) { return subrecord.signature == k_nnam; });
-  if (existing != record->subrecords.end()) {
-    if (existing->data.size() != 4) return PerkLinkWrite::unexpected_layout;
-    existing->data = raw;
+                                     [signature](const Subrecord& subrecord) { return subrecord.signature == signature; });
+  if (!payload.has_value()) {
+    if (existing != record->subrecords.end()) record->subrecords.erase(existing);
+  } else if (existing != record->subrecords.end()) {
+    if (fixed_size != 0 && existing->data.size() != fixed_size) return PerkLinkWrite::unexpected_layout;
+    existing->data = std::move(*payload);
   } else {
-    const auto before_effects = std::find_if(record->subrecords.begin(), record->subrecords.end(),
-                                             [](const Subrecord& subrecord) {
-                                               return subrecord.signature == k_fnam || subrecord.signature == k_prke;
-                                             });
-    record->subrecords.insert(before_effects, make_subrecord(k_nnam, raw));
+    const auto before = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+                                     [followers](const Subrecord& subrecord) {
+                                       return std::find(followers.begin(), followers.end(), subrecord.signature) !=
+                                              followers.end();
+                                     });
+    record->subrecords.insert(before, make_subrecord(signature, std::move(*payload)));
   }
   fo4::detail::mark_record_modified(plugin, *record);
   return PerkLinkWrite::written;
+}
+
+}  // namespace
+
+PerkLinkWrite set_perk_next(Plugin& plugin, const FormKey& key, const FormKey& next_perk) {
+  const auto raw = u32_bytes(encode_plugin_form_id(next_perk, plugin_form_id_context(plugin)).value());
+  return write_perk_link(plugin, key, k_nnam, raw, 4, k_followers_next);
+}
+
+PerkLinkWrite set_perk_sound(Plugin& plugin, const FormKey& key, const FormKey& sound) {
+  std::optional<std::vector<std::byte>> payload;
+  if (sound != FormKey{}) {
+    payload = u32_bytes(encode_plugin_form_id(sound, plugin_form_id_context(plugin)).value());
+  }
+  return write_perk_link(plugin, key, k_snam, std::move(payload), 4, k_followers_sound);
+}
+
+PerkLinkWrite set_perk_swf(Plugin& plugin, const FormKey& key, std::string_view stored_swf) {
+  std::optional<std::vector<std::byte>> payload;
+  if (!stored_swf.empty()) payload = zstring_bytes(stored_swf);
+  return write_perk_link(plugin, key, k_fnam, std::move(payload), 0, k_followers_swf);
 }
 
 FormKey create_perk(Plugin& plugin, const PerkCreation& creation) {

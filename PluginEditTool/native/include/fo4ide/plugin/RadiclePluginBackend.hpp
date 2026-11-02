@@ -101,6 +101,8 @@ public:
     Result<nlohmann::json> setPerkEffects(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getPerkLinks(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPerkNext(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setPerkSound(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setPerkSwf(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> setScriptValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> releaseMemory(const nlohmann::json& arguments) override;

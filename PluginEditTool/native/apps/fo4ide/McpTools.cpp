@@ -215,8 +215,12 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"form_key", "string"}, {"effects", "array", false, k_perk_effect_items}})) return false;
     if (!add("get_perk_links", "Get a PERK record's links from plugin's version (read-only): nextPerk (NNAM, a PERK FormKey or null), sound (SNAM, an SNDR FormKey or null), swf (FNAM, the SWF text or null) and conditions (the root condition list that gates the perk, in the get_conditions shape)", "backend", "GetPerkLinks",
              {{"plugin", "string"}, {"form_key", "string"}})) return false;
-    if (!add("set_perk_next", "Set a PERK record's next-perk link (NNAM) in memory. next must be a PERK FormKey; a record without NNAM gets one inserted before its FNAM or effects. Call save_plugin to persist. Sound and swf are set with set_field on an existing SNAM or FNAM", "backend", "SetPerkNext",
+    if (!add("set_perk_next", "Set a PERK record's next-perk link (NNAM) in memory. next must be a PERK FormKey; a record without NNAM gets one inserted before its FNAM or effects. Call save_plugin to persist. Sound and swf are set with set_perk_sound and set_perk_swf", "backend", "SetPerkNext",
              {{"plugin", "string"}, {"form_key", "string"}, {"next", "string"}})) return false;
+    if (!add("set_perk_sound", "Set a PERK record's sound (SNAM) in memory to an SNDR FormKey. The SNAM is inserted after DATA when absent and rewritten in place otherwise; an empty sound removes it. Call save_plugin to persist", "backend", "SetPerkSound",
+             {{"plugin", "string"}, {"form_key", "string"}, {"sound", "string"}})) return false;
+    if (!add("set_perk_swf", "Set a PERK record's SWF text (FNAM) in memory from UTF-8 text that must be representable in Windows-1252. The FNAM is inserted before the effects when absent and rewritten in place otherwise; an empty swf removes it. Call save_plugin to persist", "backend", "SetPerkSwf",
+             {{"plugin", "string"}, {"form_key", "string"}, {"swf", "string"}})) return false;
     return true;
 }
 
