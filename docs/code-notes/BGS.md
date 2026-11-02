@@ -1524,3 +1524,81 @@ When `--out` names the file that was read, `MapperOne` writes with `FileSafety.R
 ## `src/Hkx/NifCollisionDecoder.cs:ShapeReader.Compound` — total instance cap
 
 The 8192-instance limit applied to each compound, not to the decode. Up to 8192 compounds of 8192 instances each, about 67 million records with their transform and scale arrays, were allowed. `ShapeReader` now counts instances across one decode and stops at `MaxInstances` (65536), recording `instances capped at 65536` in `NifCollisionModel.Notes`. Like the other caps, that note is part of the manifest hash, so a capped decode cannot collide with an uncapped one.
+
+## `BGS/src/Nif/NodeTree.cs:NodeTree.Resolve` — skin bones outside the Havok skeleton
+
+A skin bone that the Havok skeleton does not name is looked up in the NIF node trees, in order: `skeleton.nif` (the skeleton's own NIF, added by `BGS/app/MainWindow.Skinning.cs:MeshNodeTree`) and then the body mesh. From the named node the walk goes up through parents until a node names a skeleton bone, and the local transforms passed on the way are kept as `Link.LocalChain`, so the bone is posed with the offset its NIF node carries. A parent cycle stops after one pass over the tree. Only when neither tree yields a skeleton bone does `Resolve` fall back to `SkinnedMesh.ResolveSkinBoneName` (`X_skin` to `X`) with an identity chain, reported as the source `interim approximation`. That fallback places the bone where dev's helper approximation did.
+
+## `BGS/app/MainWindow.Pose.cs:ApproximateHelperBoneInterim` — kept for its tests and the corpus baseline
+
+`ApproximateHelperBoneInterim` is not deleted. `BGS/tools/tests/Viewport3DTests.cs:SkinBoneNamesResolveAgainstTheSkeleton` pins its rename, and `BGS/tools/tests/SkinCorpusTests.cs:ReferencePoseCorpusComparesActualInterimAndNodeResolver` uses it as the baseline the resolver is measured against. `BGS/app/MainWindow.Pose.cs:LoadMesh` no longer calls it, because renaming a helper bone first would hide its NIF node offset from the resolver.
+
+## `BGS/app/MainWindow.Skinning.cs:RebindMesh` — a mesh follows the skeleton it is shown on
+
+A mesh chosen before any skeleton exists is kept as `_pendingSkinMesh` and drawn when an animation supplies one, from `BGS/app/MainWindow.Playback.cs:LoadPoseBody`. When an animation with a skeleton opens, `RebindMesh` rebinds every loaded shape against it, so a binding never outlives the skeleton it was resolved against. `BGS/app/MainWindow.Pose.cs:ClearMesh` drops the pending mesh, so choosing no mesh, opening a document and a successful load all cancel it.
+
+## `BGS/app/MainWindow.Playback.cs:SkeletonBytesOrNull` — Radicle native-load failures stay visible
+
+Dev's `SkeletonBytesOrNull` (#700) swallows only what `GameData.IsSkippableArchiveFailure` accepts. That predicate lets a Radicle native-load failure through, so `LoadPose` reports it. `BGS/tools/tests/Ba2RadicleTests.cs:PlaybackSkeletonLookupReportsNativeLoadFailureButSkipsCorruptArchives` pins that split. Catching `InvalidDataException` directly, as the salvaged `ArchiveSkeleton` did, would hide the native-load failure, so dev's helper stays.
+
+
+## `BGS/src/Hkx/RootMotion.cs:RootMotion.Read` — provenance and frame kinds
+
+Provenance: Fallout4.exe 1.10.163, GT #520 comments 16593 and 16778 (RE-025). Default reference frames with frameType 0 contain 16-byte samples: xyz translation and w, an unwrapped angle in radians about up, sampled at 30 Hz. Queries clamp and interpolate components; positive w turns left. `RootMotion.Read` accepts frameType 0 and 1, and only on the class `hkaDefaultAnimatedReferenceFrame`: all 15,193 shipped default frames store 0, and tag 1 is the same DEFAULT payload under the other enum name, so refusing it would make trim, loop and save read such a frame as no motion at all, while frameType 2 (PARAMETRIC), every other tag and every other reference-frame class are refused and named in the unsupported reason as `<class>, frameType <n>`. No windowed/blended query is inferred.
+
+## `BGS/app/MainWindow.RootMotion.cs:UpdateRootMotionView` — placement, camera and loop
+
+Playback places the pose with the sampled translation and rotation. Follow travel OFF keeps the camera fixed; ON offsets its centre by the sampled translation, holding travel in the viewport without changing world placement. Loop queries restart the clip rather than accumulating its transform; during playback with Follow travel OFF a loop offset, not the base centre, is moved backwards by the clip travel on each wrap so the pose does not jump in the viewport, and Stop, a scrub, a pause and a fresh open clear that offset back to the base centre (Stop calls `ResetRootTravelLoop` and `ResetRootMotionView` clears it on every open). The ground overlay shows the path, one-second ticks and the final facing arrow.
+
+## `BGS/tools/symrm/MotionCli.cs:MotionData` — archive census
+
+Installed archive census through GameData/Ba2: 13,990 animation entries, 13,162 carrying samples, 828 without samples, zero unsupported or unreadable. Three carrying clips exceed the preview bound of 1,000,000 units: Character/Animations/Weapon/Pistol/Stand_to_Run_L180.hkx (131,548,976 units), Character/Animations/Stand_to_Run_L180.hkx and its Weapon/GripRifleStraight variant (78,007,424 each). The next largest distance is Vertibird/Animations/TakeoffUntrained.hkx at 7,544.326 units. Final sample angles are reported unwrapped in degrees, ranging from -372.605 to 360.000; multi-turn angles are valid.
+
+## `BGS/tools/symrm/MotionCli.cs:DumpMotionFrame` — the pistol outlier
+
+The pistol outlier is stored data, not a wrong pointer or stride: its default frame is at data-section offset 0x9ed0, array header 0x9f18 has a local fixup to 0x9f30 (frame + 0x60), and its 31 contiguous vec4 samples end exactly at the next object, hkaAnimationBinding at 0xa120. Sample 1 raw bytes are B57384485DF8184A8062F6CA00000000; xyz decode to 271261.66, 2506263.2, -8073536. Sample 6 z is 17265380 while w advances smoothly to pi. These values genuinely reside in the reference-frame payload. How the game treats this broken-looking content is not established here.
+
+## `BGS/app/MainWindow.RootMotion.cs:ResetRootMotionView` — camera framing limit
+
+With Follow travel OFF the camera centre is the one captured when the file opened (the frame-0 pose centre) and the fit is that pose's radius, so framing comes from the frame-0 pose alone: a clip whose path travels more than a few body radii walks out of the viewport, and the ground path with its ticks is drawn beyond the framing. `SkeletonView` has no fit-to-arbitrary-bounds helper - `SkeletonView.Frame()` reframes on the current pose, the mesh or the measured bodies - so widening the fit to the path bounds needs a new helper; until then the fixed camera is the manual answer and the drawn path shows where the clip goes.
+
+## `BGS/src/Hkx/RootMotion.cs:RootMotion.Motion` — invalid travel
+
+Raw distance and samples remain reportable. Non-finite samples/metadata or total travel above 1,000,000 units show `root motion looks invalid (x units)`, are neither applied to the pose/camera nor drawn, and are counted separately (within the carrying total) by the corpus report. This is a viewer sanity bound, not a claimed game limit.
+
+## `BGS/src/Hkx/AnimationEdit.cs:TrimMotion` — known gap: refused frames are not trimmed or retimed
+
+A frame that `RootMotion.Read` refuses (frameType 2, or a reference-frame class other than the default) reports `Any` false. `BGS/src/Hkx/AnimationEdit.cs:TrimMotion` and `RetimeMotion` return such a motion unchanged, and the `replacingMotion` test in `BGS/src/Hkx/NativeAnimation.cs:Interleave` and `BGS/src/Hkx/NativeAnimation.cs:Recompress` then keeps the original reference frame rather than rewriting it. No bytes are lost, but a trimmed or retimed clip keeps its untrimmed root motion, so the root travel no longer lines up with its frames. `Loop` leaves root motion as it is by design. The census above found no shipped clip in that state; a modded clip can be. Not guarded in this change.
+
+## `BGS/tools/tests/RootMotionTests.cs` — the regression each test detects
+
+- `RootMotionTests.cs:InterpolatesComponentsAndAccumulatesCurvedDistance` — component interpolation, curved (summed) distance and the unwrapped turn.
+- `RootMotionTests.cs:QueriesClamp` — queries outside the clip clamp to its ends.
+- `RootMotionTests.cs:ExplicitLoopQueriesWrapWithoutAccumulatingPastCycles` — loop queries wrap instead of accumulating cycles.
+- `RootMotionTests.cs:PositiveAngleTurnsForwardLeftAboutUp` — the sign of a positive turn (left about up).
+- `RootMotionTests.cs:SyntheticDefaultFrameParsesThenPlacesWithoutMutatingPose` — a parsed default frame places bones without changing the source pose.
+- `RootMotionTests.cs:FrameKindsHaveExplicitRefusals` — only frameType 0 and 1 of the default class are read; every other kind is refused with its reason.
+- `RootMotionTests.cs:NullExtractedPointerDoesNotBorrowAnUnrelatedFrame` — a null `extractedMotion` pointer does not pick up an unrelated frame object.
+- `RootMotionTests.cs:CommittedTurningFixtureHasPositiveAngle` — the committed RadRoach turn clip reads as a positive turn.
+- `RootMotionTests.cs:InvalidTravelIsRetainedButNeverPlaced` — travel above 1,000,000 units, infinite or NaN is kept but never placed.
+- `RootMotionTests.cs:FiniteTravelDoesNotHideNonFiniteAngle` — a finite distance does not hide a NaN angle from the previewable check.
+- `RootMotionTests.cs:MetricsFollowSamplesAddedAfterAQuery` — the cached distance is recomputed after samples are added.
+- `RootMotionTests.cs:MultiTurnAnglesStayUnwrapped` — multi-turn angles stay unwrapped.
+
+## `BGS/tools/tests/NodeTreeTests.cs` — the regression each test detects
+
+- `NodeTreeTests.cs:ResolverUsesNearestExactAncestorAndOrderedSources` — a farther ancestor, or the body tree ranked above `skeleton.nif`, would move a helper bone.
+- `NodeTreeTests.cs:DisconnectedAndCyclicTreesFallBackWithoutChangingExactBind` — a cyclic parent chain must end, and an unresolved name must fall back without changing the exact-name bind.
+- `NodeTreeTests.cs:VanillaMaleRestPoseReproducesVerticesAfterOutputPlacementRemoval` — on the vanilla male body the reference pose reproduces the mesh vertices; needs `BGS_SKIN_DATA`.
+
+## `BGS/tools/tests/SkinCorpusTests.cs:ReferencePoseCorpusComparesActualInterimAndNodeResolver` — resolver accuracy gate
+
+Compares the interim rename and the node resolver against the vanilla rest pose over 55 files. It asserts that exactly 55 files were measured, that every compared vertex error is finite, and that the resolver never leaves more bones unmatched than the exact bind; it writes each file's interim and resolver errors to test output, and does not assert a threshold on them. Needs `BGS_SKIN_DATA`. `BGS/tools/tests/TestSupport.cs:SkinDataFactAttribute` marks it and the vanilla `NodeTreeTests` case as skipped, not passed, when that variable is unset.
+
+## `BGS/tools/uismoke/Smoke.RootMotion.cs:RootMotionSmoke` and `RootMotionLoopSmoke` — UI regressions
+
+`RootMotionSmoke` detects Follow travel OFF moving the camera, Follow travel OFF leaving the placed skeleton still, Follow travel ON changing the placed skeleton, Follow travel ON not holding the travel in the viewport, and the camera not returning at frame 0. `RootMotionLoopSmoke` detects playback across the loop wrap not moving the fixed camera, and a scrub to frame 0 not clearing the loop offset. Both run in the ragdoll lifecycle smoke runner (`BGS/tools/uismoke/RagdollLifecycleSmoke.cs:LifecycleSmoke`).
+
+## `BGS/tools/uismoke/Smoke.Skinning.cs:SkinningSmoke` — skin binding through the UI
+
+Detects a mesh chosen before an animation failing to bind when the skeleton arrives, a mesh that does not rebind when the animation changes, and a malformed `skeleton.nif` failing to fall back to the body tree. Returns 0 without `BGS_SKIN_DATA`, as the smoke runner has no skip state.
