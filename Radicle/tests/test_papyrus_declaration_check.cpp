@@ -65,6 +65,45 @@ TEST(PapyrusDeclarationCheck, TwoHandlersForOneRemoteTypeAndEventAreReported) {
   EXPECT_NE(problems[0].message.find("'Actor.OnActivate'"), std::string::npos);
 }
 
+// Invariant: a variable and a function with one name are refused; regression: both compiled.
+TEST(PapyrusDeclarationCheck, VariableAndFunctionSharingOneNameAreReportedAsOneProblem) {
+  const auto problems = duplicates_in(
+      "ScriptName Dup\n"
+      "int Foo = 0\n"
+      "Function Foo()\n"
+      "EndFunction\n");
+  ASSERT_EQ(problems.size(), 1u);
+  EXPECT_EQ(problems[0].code, fo4::papyrus::DiagnosticCode::DuplicateDeclaration);
+  EXPECT_EQ(problems[0].severity, fo4::papyrus::Severity::Warning);
+  EXPECT_NE(problems[0].message.find("'Foo' is already declared as a variable in this script"),
+            std::string::npos);
+}
+
+// Invariant: a variable and a property with one name are reported as a warning; regression: unreported.
+TEST(PapyrusDeclarationCheck, VariableAndPropertySharingOneNameAreReportedAsOneWarning) {
+  const auto problems = duplicates_in(
+      "ScriptName Dup\n"
+      "int Foo = 0\n"
+      "int Property Foo Auto\n");
+  ASSERT_EQ(problems.size(), 1u);
+  EXPECT_EQ(problems[0].severity, fo4::papyrus::Severity::Warning);
+  EXPECT_NE(problems[0].message.find("'Foo' is already declared as a variable in this script"),
+            std::string::npos);
+}
+
+// Invariant: a property and an event with one name are refused; regression: the event shadowed it.
+TEST(PapyrusDeclarationCheck, PropertyAndEventSharingOneNameAreReportedAsOneProblem) {
+  const auto problems = duplicates_in(
+      "ScriptName Dup\n"
+      "int Property At = 0 Auto\n"
+      "Event At()\n"
+      "EndEvent\n");
+  ASSERT_EQ(problems.size(), 1u);
+  EXPECT_EQ(problems[0].severity, fo4::papyrus::Severity::Warning);
+  EXPECT_NE(problems[0].message.find("'At' is already declared as a property in this script"),
+            std::string::npos);
+}
+
 // Invariant: a repeated variable name and a repeated property name are each reported under their own kind.
 TEST(PapyrusDeclarationCheck, RepeatedVariableAndRepeatedPropertyAreEachReportedByKind) {
   const auto problems = duplicates_in(

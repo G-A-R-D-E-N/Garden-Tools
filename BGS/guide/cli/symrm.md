@@ -37,7 +37,7 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 | `ragdoll` | Read a file's ragdolls, edit masses, materials and joint limits, and rebuild. |
 | `extract` | Extract matching BA2 entries, optionally preserving their directory tree. |
 | `ba2` | Inspect a Bethesda BA2 archive and its entries. |
-| `motion` | Inspect decoded root-motion data. |
+| `motion` | Inspect decoded root-motion data, or dump the archive entries one substring matches. |
 | `pose` | Pose a decoded animation against a skeleton and print the result. |
 | `channels` | Compare animation channels with the rig they drive. |
 | `packfile` | Inspect packfile sections, fixups, and round-trip structure. |
@@ -87,6 +87,7 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 | `lifecycle` | Run the native open/edit/save/reload/validate/render lifecycle gate. |
 | `test` | Run the native/Havok regression harness used by BGS CI. |
 | `defaults` | Compare game class-registration defaults with the shipped table. |
+| `gltf` | Import a glTF animation, such as a Blender export, as a Fallout 4 animation. |
 
 ## Command-specific switches
 
@@ -99,6 +100,7 @@ The catalog exposes the switches currently parsed by `symrm`:
 - `defaults`: `--write`
 - `mapper`: `--recompute`, `--out <file>`, `--force`, `--data <Data folder or MO2 instance>`
 - `check` and `chain`: `--data`, `--plugins`
+- `motion`: `--data <Data folder or MO2 instance>`, plus an optional entry substring to dump matches
 - `crash` and `sweep`: `--data`, `--mods`, `--profile`
 - `diff`: `--data`, `--mods`, `--profile`
 
@@ -211,3 +213,77 @@ Re-run on the vanilla install (`7` archives): `41` files carry an `hknpRagdollDa
 least one body, `154` more skeleton-named files carry none, `0` unreadable. `41 of 41` unedited forced
 rebuilds were byte-identical, `41 of 41` mass edits and `40 of 41` limit edits read back as edited (one
 rig has no limit-bearing constraint to edit at all), `0` failures, exit 0.
+
+## Root motion corpus
+
+`symrm motion <animation.hkx-or-dir>` reads one clip or recursively scans loose HKX files.
+`symrm motion --data "<Fallout 4 folder>\Data"` discovers game archives
+through GameData and reads HKX entries under `animations/` in every `*Animations*.ba2`
+through Ba2/Radicle, without extracting or writing game data. Counts are archive entries,
+including duplicate virtual paths across archives, not a load-order-resolved asset count.
+Texture and unrelated archives are not opened; plugins and user mod profiles do not affect the sweep.
+
+An optional entry substring narrows the sweep to the entries whose archive path contains it:
+
+```bash
+symrm motion --data "/path/to/Data"                  # count every animation entry in the archives
+symrm motion --data "/path/to/Data" TurnLeft90       # dump each matching entry
+symrm motion ./Animations/TurnLeft90.hkx             # dump one loose clip
+```
+
+With a substring each match is read and dumped rather than counted: the clip's decoded sample table
+(one line per 16-byte sample: `x`, `y`, `z` and the raw angle in radians, plus `up`, `forward` and the
+raw total distance), then the reference frame object, its `referenceFrameSamples` array header, the
+local fixup target that holds the samples inline, the 16-byte stride, and every sample's raw bytes at
+that target. An animation with no `extractedMotion`, a null one, a frame class without the field and an
+array header with no local fixup are each noted and skipped instead of failing the run. The sweep ends
+with the number of entries that matched and how many were dumped, and exits `1` when nothing matched or
+any entry could not be read.
+
+The report counts animations carrying supported samples (including stationary samples),
+clips without samples, unsupported class/frameType kinds, and read failures. Maximum distance
+is the sum of sample-to-sample translation lengths, not endpoint displacement. Final-angle
+range is the stored final angle in degrees, not reduced modulo 360, and a non-finite angle is
+left out of it. Unsupported kinds are counted separately by class and frameType. Empty sweeps
+and read failures return exit code 1. Only an `hkaDefaultAnimatedReferenceFrame` is decoded, and
+only for frameType `0` (what every one of the 15,193 shipped default frames uses) and frameType
+`1` (`DEFAULT`, the same payload under the other enum tag); frameType `2` (`PARAMETRIC`), any
+other value and every other reference-frame class are explicitly refused and are reported as
+`<class>, frameType <n>`. Positive angles turn left about up (right-handed, Y-forward, Z-up).
+Single-file output also shows duration, distance, turn, and representative samples.
+
+## `gltf` animation import
+
+`symrm gltf <animation.gltf-or-glb> <skeleton.hkx> <template.hkx> <output.hkx>` reads one glTF animation
+and writes it as a Fallout 4 animation. The glTF must hold one skin, which names the bones, and one
+animation. Animated bones match the skeleton by exact name. Nothing is guessed: an animated bone the
+skeleton does not have, or a bone whose parent differs from the skeleton's, refuses the import.
+
+```bash
+symrm gltf idle.glb skeleton.hkx template.hkx idle-out.hkx
+```
+
+- The template is an animation with a compressed class (spline or lossless). Its tracks may cover a subset
+  of the skeleton's bones: the template's own track-to-bone map is kept, so the paired kill (94 tracks,
+  CamTarget undriven) works against the 95-bone character skeleton. An animated bone the template has no
+  track for is refused, by name.
+- A template's root motion is replaced by a stationary reference frame with no travel. A template without
+  root motion gets none.
+- A template's annotations (events) are cleared, and the count is printed, so its events do not fire on the
+  new clip.
+- Channels read LINEAR and STEP keys. CUBICSPLINE is refused. Morph-weight channels and channels on
+  nodes that are not bones are ignored, and the counts are printed.
+- Skeleton bones with no animation hold the skeleton's reference pose. Animated bones whose glTF rest
+  pose differs from the skeleton's are listed, because their values are read as glTF local transforms.
+- glTF is Y-up in metres. The import uses the Blender glTF convention: glTF `-Z` is forward. The clip
+  is resampled to at least 30 frames per second.
+- The output is written through the template's animation, read back, and checked against the sampled
+  pose within the encoder's budget (0.01 units, 0.001 radians, 0.0005 scale). If the default rotation
+  encoding misses, the rotation is re-encoded with a tighter fit tolerance, still at format 1, the format
+  the committed vanilla clips use. Only if that also misses is format 2 tried. A clip that still misses
+  writes nothing.
+- `--root-motion` is refused. An existing output is refused without touching it.
+
+Print counts show the frames, animated bones, reference-pose bones, ignored joints, rest-pose
+differences, ignored channels, written tracks, cleared annotations, the root-motion replacement, the
+rotation format used, and the worst written error.

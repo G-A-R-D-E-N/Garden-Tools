@@ -112,4 +112,14 @@ public sealed class ExportRecoveryTests
         Assert.Equal(ExportFormats.Collision, json["format"]!.GetValue<string>());
         Assert.Equal("multi.nif", json["source"]!.GetValue<string>());
     }
+    [Fact]
+    public void ADecodedPredictiveClipIsNotExportedYet()
+    {
+        var animation = new HkxBinaryReader().ReadAnimation(PredictivePlaybackTests.Fixture(31, 1, false));
+
+        Assert.DoesNotContain(AnimationCompression.PredictiveClass, HkxAnimationData.ExportableAnimationClasses);
+        var error = Assert.Throws<InvalidDataException>(() => AnimationExport.Json(animation, "clip.hkx"));
+        Assert.Contains("which is not exported yet", error.Message, StringComparison.Ordinal);
+    }
+
 }

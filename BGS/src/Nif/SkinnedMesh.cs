@@ -12,6 +12,7 @@ public static class SkinnedMesh
     {
 
         public int[] ToSkeleton = Array.Empty<int>();
+        public NodeTree.Link?[] Resolved = Array.Empty<NodeTree.Link?>();
 
         public readonly List<string> Unmatched = new();
 
@@ -47,6 +48,18 @@ public static class SkinnedMesh
         return binding;
     }
 
+    public static void Resolve(Binding binding, NifShape shape, NodeTree tree)
+    {
+        binding.Resolved = new NodeTree.Link?[binding.Total];
+        binding.Unmatched.Clear();
+        for (int b = 0; b < binding.Total; b++)
+        {
+            if (binding.ToSkeleton[b] >= 0) continue;
+            binding.Resolved[b] = tree.Resolve(shape.BoneNames[b]);
+            if (binding.Resolved[b] == null) binding.Unmatched.Add(shape.BoneNames[b]);
+        }
+    }
+
     private static Matrix4x4 Bind(Matrix4x4 stored)
     {
         var m = Matrix4x4.Transpose(stored);
@@ -67,7 +80,14 @@ public static class SkinnedMesh
             return null;
 
         int at = binding.ToSkeleton[bone];
-        if (at < 0 || at >= pose.Bones.Count) return null;
+        if (at < 0)
+        {
+            if (bone >= binding.Resolved.Length || binding.Resolved[bone] is not { } resolved) return null;
+            return resolved.SkeletonBone < pose.Bones.Count
+                ? Bind(shape.SkinToBone[bone]) * NodeTree.World(pose, resolved)
+                : null;
+        }
+        if (at >= pose.Bones.Count) return null;
 
         var posed = pose.Bones[at];
         var world = Matrix4x4.CreateFromQuaternion(posed.Rotation);
@@ -106,16 +126,8 @@ public static class SkinnedMesh
         Array.Clear(usable);
         for (int b = 0; b < boneCount; b++)
         {
-            int at = binding.ToSkeleton[b];
-            if (at < 0 || at >= pose.Bones.Count) continue;
-
-            var bone = pose.Bones[at];
-            var world = Matrix4x4.CreateFromQuaternion(bone.Rotation);
-            world.M41 = bone.Position.X;
-            world.M42 = bone.Position.Y;
-            world.M43 = bone.Position.Z;
-
-            boneMatrix[b] = Bind(shape.SkinToBone[b]) * world;
+            if (BoneMatrix(shape, binding, pose, b) is not { } matrix) continue;
+            boneMatrix[b] = matrix;
             usable[b] = true;
         }
 

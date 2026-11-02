@@ -69,9 +69,11 @@ public static class SymrmHelp
         C("ba2", "ba2 <archive.ba2> [query] [extension]",
           "Inspect a Bethesda BA2 archive and optionally filter its entries.", "none",
           "symrm ba2 Fallout4.ba2 behavior .hkx"),
-        C("motion", "motion <animation.hkx-or-dir>",
-          "Inspect decoded root-motion data.", "none",
-          "symrm motion WalkForward.hkx"),
+        C("motion", "motion <animation.hkx-or-dir> | motion --data <folder> [entry substring]",
+          "Inspect one clip's root motion, or sweep the game's animation archives; a substring dumps each " +
+          "matching entry's sample table and raw reference-frame bytes instead of counting.",
+          "--data <folder>; [entry substring]",
+          "symrm motion --data ./Data TurnLeft90"),
         C("pose", "pose <skeleton.hkx> <animation.hkx> [frame]",
           "Pose a decoded animation against a skeleton and print the selected frame.", "none",
           "symrm pose skeleton.hkx Idle.hkx 12"),
@@ -195,6 +197,12 @@ public static class SymrmHelp
         C("retime", "retime <animation.hkx-or-dir> [every-nth]",
           "Exercise animation retiming and verify decoded output, optionally sampling.", "none",
           "symrm retime ./Animations 10"),
+        C("gltf", "gltf <animation.gltf-or-glb> <skeleton.hkx> <template.hkx> <output.hkx>",
+          "Import a glTF animation, such as a Blender export, as a Fallout 4 animation. Bones match the " +
+          "skeleton by exact name and are refused, not guessed; the clip is written through the template's " +
+          "compressed animation, which must have one track per skeleton bone and no root motion.",
+          "--root-motion is refused: this import writes no root motion",
+          "symrm gltf idle.glb skeleton.hkx template.hkx idle-out.hkx"),
         C("run", "run <behaviour.hkx-or-dir> [event-or-seconds ...]",
           "Run the behaviour simulation harness and optionally send events or advance time.", "none",
           "symrm run MyBehavior.hkx Activate 0.5"),

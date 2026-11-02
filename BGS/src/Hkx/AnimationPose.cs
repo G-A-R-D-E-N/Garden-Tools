@@ -14,6 +14,7 @@ public static class AnimationPose
         public int Frame;
         public float Time;
         public readonly List<Bone> Bones = new();
+        public readonly List<float> Floats = new();
 
         public readonly List<(int From, int To)> Links = new();
 
@@ -34,8 +35,13 @@ public static class AnimationPose
 
     public static Pose ReferencePose(HkxSkeleton skeleton) => At(skeleton, null, 0);
 
-    public static Pose At(HkxSkeleton skeleton, HkxAnimationData? animation, int frame)
+    public static Pose At(HkxSkeleton skeleton, HkxAnimationData? animation, int frame) => At(skeleton, animation, (float)frame);
+
+    public static Pose At(HkxSkeleton skeleton, HkxAnimationData? animation, float sample)
     {
+        if (!float.IsFinite(sample)) throw new ArgumentOutOfRangeException(nameof(sample));
+        if (animation != null) sample = Math.Clamp(sample, 0, Math.Max(0, animation.NumFrames - 1));
+        int frame = (int)sample;
         var pose = new Pose { Frame = frame };
         int count = skeleton.BoneNames.Count;
         if (count == 0) return pose;
@@ -44,7 +50,13 @@ public static class AnimationPose
         {
             frame = Math.Clamp(frame, 0, Math.Max(0, animation.NumFrames - 1));
             pose.Frame = frame;
-            pose.Time = frame * animation.FrameDuration;
+            pose.Time = sample * animation.FrameDuration;
+            foreach (var values in animation.FloatTracks)
+            {
+                if (values.Count == 0) { pose.Floats.Add(0f); continue; }
+                int at = Math.Min(frame, values.Count - 1);
+                pose.Floats.Add(float.Lerp(values[at], values[Math.Min(at + 1, values.Count - 1)], sample - frame));
+            }
         }
 
         var trackForBone = TracksByBone(skeleton, animation);
@@ -54,6 +66,13 @@ public static class AnimationPose
         for (int i = 0; i < count; i++)
         {
             var local = Local(skeleton, animation, trackForBone[i], i, frame);
+            if (sample > frame && animation != null)
+            {
+                var next = Local(skeleton, animation, trackForBone[i], i, Math.Min(frame + 1, animation.NumFrames - 1));
+                float fraction = sample - frame;
+                local = new HkxBonePose(Vector3.Lerp(local.Translation, next.Translation, fraction),
+                    Quaternion.Slerp(local.Rotation, next.Rotation, fraction), Vector3.Lerp(local.Scale, next.Scale, fraction));
+            }
             var matrix = Matrix4x4.CreateScale(local.Scale)
                        * Matrix4x4.CreateFromQuaternion(local.Rotation)
                        * Matrix4x4.CreateTranslation(local.Translation);

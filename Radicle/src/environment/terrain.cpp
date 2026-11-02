@@ -1,5 +1,6 @@
 #include "fo4/environment/terrain.hpp"
 
+#include "fo4/land/heightmap.hpp"
 #include "record_reader.hpp"
 
 #include <algorithm>
@@ -18,7 +19,6 @@ constexpr Signature sig(const char (&text)[5]) {
 
 constexpr std::size_t k_vhgt_size = 4 + k_land_vertices + 3;
 constexpr std::size_t k_vertex3_size = k_land_vertices * 3;
-constexpr float k_land_height_scale = 8.0f;
 constexpr std::size_t k_quadrant_span = (k_land_grid - 1) / 2;
 constexpr std::size_t k_alpha_cells = k_land_alpha_grid * k_land_alpha_grid;
 
@@ -200,18 +200,14 @@ std::optional<std::string_view> landscape_texture_diffuse(const Environment& env
 
 std::optional<LandHeightGrid> decode_land_heights(const LandscapeData& land) {
   if (!land.height_offset || land.heights.size() != k_land_vertices) return std::nullopt;
-  LandHeightGrid grid;
-  grid.base = *land.height_offset;
-  float row_start = grid.base * k_land_height_scale;
-  for (std::size_t y = 0; y < k_land_grid; ++y) {
-    float current = row_start;
-    for (std::size_t x = 0; x < k_land_grid; ++x) {
-      const auto delta = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(land.heights[y * k_land_grid + x]));
-      current += static_cast<float>(delta) * k_land_height_scale;
-      grid.heights[y * k_land_grid + x] = current;
-      if (x == 0) row_start = current;
-    }
+  fo4::land::LandHeightmap heightmap;
+  heightmap.offset = *land.height_offset;
+  for (std::size_t index = 0; index < k_land_vertices; ++index) {
+    heightmap.deltas[index] = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(land.heights[index]));
   }
+  LandHeightGrid grid;
+  grid.base = heightmap.offset;
+  grid.heights = fo4::land::land_heights(heightmap);
   return grid;
 }
 
