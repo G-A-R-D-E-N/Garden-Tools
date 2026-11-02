@@ -221,6 +221,20 @@ class WorkflowFileTest(ServiceTest):
         self.assertTrue(path.is_relative_to(rds.ROOT))
 
 
+class PublicSyncTest(ServiceTest):
+    def test_sync_is_requested_on_the_public_repo(self):
+        with mock.patch.object(rds, "gh") as gh:
+            rds.request_public_sync()
+        gh.assert_called_once_with("workflow", "run", "sync-from-private.yml", "--repo", "G-A-R-D-E-N/Garden-Tools",
+                                   "--ref", "main")
+
+    # Detects: a GitHub outage ending the sync thread, so private pushes wait hours for a delayed schedule.
+    def test_a_failed_request_does_not_stop_the_loop(self):
+        error = subprocess.CalledProcessError(1, "gh")
+        with mock.patch.object(rds, "gh", side_effect=error):
+            rds.request_public_sync()
+
+
 class CheckoutTest(ServiceTest):
     def git_calls(self, parents):
         calls = []
