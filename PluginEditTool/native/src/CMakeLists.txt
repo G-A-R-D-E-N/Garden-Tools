@@ -44,6 +44,7 @@ add_library(
     plugin/RadiclePluginReferenceRemap.cpp
     plugin/RadiclePluginOverridePatch.cpp
     plugin/RadiclePluginLeveled.cpp
+    plugin/RadiclePluginPerk.cpp
     plugin/RadiclePluginSeq.cpp
     plugin/RadiclePluginCompare.cpp
     plugin/RadiclePluginDisabledOverride.cpp

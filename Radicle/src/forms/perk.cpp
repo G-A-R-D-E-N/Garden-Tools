@@ -1,13 +1,20 @@
 #include "fo4/forms/perk.hpp"
 
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
+#include "fo4/schema/preflight.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "../plugin/record_edit.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <span>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -27,6 +34,8 @@ constexpr auto k_epfd = Signature::from_string("EPFD");
 constexpr auto k_ctda = Signature::from_string("CTDA");
 constexpr auto k_cis1 = Signature::from_string("CIS1");
 constexpr auto k_cis2 = Signature::from_string("CIS2");
+constexpr auto k_full = Signature::from_string("FULL");
+constexpr auto k_desc = Signature::from_string("DESC");
 
 constexpr std::size_t k_prke_size = 3;
 constexpr std::size_t k_quest_stage_size = 6;
@@ -301,6 +310,21 @@ std::vector<Subrecord> encode_effects(const PluginFormIdContext& context,
   return encoded;
 }
 
+std::vector<std::byte> zstring_bytes(std::string_view text) {
+  const auto bytes = std::as_bytes(std::span{text});
+  std::vector<std::byte> data{bytes.begin(), bytes.end()};
+  data.push_back(std::byte{0});
+  return data;
+}
+
+void set_header_scalar(Plugin& plugin, const FormKey& key, std::string_view path, std::uint8_t value) {
+  const auto field = schema::scalar_field_descriptor(k_perk, path).value();
+  const auto status = set_record_scalar(plugin, key, field, std::to_string(value));
+  if (status != ScalarMutationStatus::updated && status != ScalarMutationStatus::unchanged) {
+    throw PerkError("PERK header field " + std::string(path) + " could not be set");
+  }
+}
+
 }  // namespace
 
 std::vector<PerkEffectEntry> read_perk_effects(const Plugin& plugin, const Record& record) {
@@ -329,6 +353,48 @@ PerkEffectWrite set_perk_effects(Plugin& plugin,
                             std::make_move_iterator(encoded.end()));
   fo4::detail::mark_record_modified(plugin, *record);
   return PerkEffectWrite::written;
+}
+
+FormKey create_perk(Plugin& plugin, const PerkCreation& creation) {
+  const bool has_text = !creation.full_name.empty() || !creation.description.empty();
+  if (has_text && plugin.header.tes4_flags.is_localized()) {
+    throw PerkError(
+        "PERK FULL and DESC creation in localized plugins is disabled until string-table authoring is implemented");
+  }
+
+  auto next = plugin;
+  const auto created = create_record(next, k_perk, stored_editor_id(creation.editor_id));
+  if (created.status != RecordCreateStatus::created) throw PerkError("PERK creation failed");
+  const auto key = created.key;
+
+  auto* record = fo4::detail::find_mutable_record(next, key);
+  if (record == nullptr) throw PerkError("PERK record missing after creation");
+  const auto data = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+                                 [](const Subrecord& subrecord) { return subrecord.signature == k_data; });
+  std::vector<Subrecord> text;
+  if (!creation.full_name.empty()) {
+    text.push_back(make_subrecord(k_full, zstring_bytes(stored_inline_text(creation.full_name, "PERK full name"))));
+  }
+  if (!creation.description.empty()) {
+    text.push_back(make_subrecord(k_desc, zstring_bytes(stored_inline_text(creation.description, "PERK description"))));
+  }
+  record->subrecords.insert(data, std::make_move_iterator(text.begin()), std::make_move_iterator(text.end()));
+
+  set_header_scalar(next, key, "PERK\\Trait", creation.trait);
+  set_header_scalar(next, key, "PERK\\Level", creation.level);
+  set_header_scalar(next, key, "PERK\\NumRanks", creation.ranks);
+  set_header_scalar(next, key, "PERK\\Playable", creation.playable);
+  if (set_perk_effects(next, key, creation.effects) != PerkEffectWrite::written) {
+    throw PerkError("PERK effects could not be written");
+  }
+
+  for (const auto& issue : schema::preflight_authoring_record(next, key)) {
+    if (issue.severity == schema::PreflightSeverity::error) {
+      throw PerkError("PERK authoring preflight failed: " + issue.message);
+    }
+  }
+  plugin = std::move(next);
+  return key;
 }
 
 std::optional<float> perk_epfd_float(const PerkEffectEntry& effect) {

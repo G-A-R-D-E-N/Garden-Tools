@@ -665,6 +665,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_real_plugin.cpp
     tests/test_row_roundtrip_real.cpp
     tests/test_actor_value_perk_real.cpp
+    tests/test_perk_effects_real.cpp
     tests/test_formkey_load.cpp
     tests/test_master_kinds.cpp
     tests/test_master_metadata.cpp
@@ -811,6 +812,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_package_tree_c_api.cpp
     tests/test_package_tree_real.cpp
     tests/test_perk_entrypoints.cpp
+    tests/test_perk_authoring.cpp
     tests/test_perk_rows.cpp
     tests/test_vegetation.cpp
     tests/test_vegetation_edit.cpp

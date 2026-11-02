@@ -497,6 +497,8 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "AddScriptProperty") return backend_.addScriptProperty(args);
         if (method == "RemoveScriptProperty") return backend_.removeScriptProperty(args);
         if (method == "EditNpcEntries") return backend_.editNpcEntries(args);
+        if (method == "GetPerkEffects") return backend_.getPerkEffects(args);
+        if (method == "SetPerkEffects") return backend_.setPerkEffects(args);
         if (method == "GetFaction") return backend_.getFaction(args);
         if (method == "EditFactionEntries") return backend_.editFactionEntries(args);
         if (method == "GetWeaponDamageTypes") return backend_.getWeaponDamageTypes(args);
