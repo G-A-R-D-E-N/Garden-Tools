@@ -146,7 +146,7 @@ public sealed class ExportRunner
                 Write(ExportFormats.SkeletonFolder, stem, ".skeleton.json",
                       SkeletonExport.Json(reader.ReadSkeleton(bytes), source), source, inputSha));
 
-        if (classes.Any(name => Array.IndexOf(HkxAnimationData.DecodedAnimationClasses, name) >= 0))
+        if (classes.Any(name => Array.IndexOf(HkxAnimationData.ExportableAnimationClasses, name) >= 0))
             exported |= Attempt(source, "animation", () =>
             {
                 if (!reader.TryReadAnimation(bytes, out var animation))

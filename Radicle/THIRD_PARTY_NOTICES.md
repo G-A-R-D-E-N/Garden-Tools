@@ -148,3 +148,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## modkit21, bacup and related repositories
+
+The AS3, LOD, LAND, FUZE and XWMA, cloth profile, voice path, pitch shift, pchip and palette, animation text table and NIF audit code under `Radicle/src` and `Radicle/include/fo4` was written from study of the upstream reference repositories, which are licensed GPL-3.0.
