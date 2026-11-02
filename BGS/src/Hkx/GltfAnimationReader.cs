@@ -219,7 +219,7 @@ public sealed class GltfScene
             return Convert.FromBase64String(uri[(comma + 1)..]);
         }
 
-        string relative = Uri.UnescapeDataString(uri);
+        string relative = Uri.UnescapeDataString(uri).Replace('\\', '/');
         if (relative.Contains("://", StringComparison.Ordinal) || Path.IsPathRooted(relative))
             throw new NotSupportedException($"external buffer '{uri}' must be a relative file beside the glTF.");
 
