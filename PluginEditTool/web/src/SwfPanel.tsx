@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-react';
+import type { SwfHost } from './backend';
+import { getSwf } from './backend';
+import SwfAbcPage, { type AbcBlockRow, type AbcReply } from './SwfAbcPage';
+import { useDialogs } from './useDialogs';
 import './SwfPanel.css';
 
 type CharacterRow = { id: number; kind: string; tagIndex: number; name: string; imported: string };
@@ -10,48 +14,15 @@ type InstanceRow = {
   boundsX: number; boundsY: number; boundsWidth: number; boundsHeight: number;
   hasBounds: boolean; clipDepth: number;
 };
-type StateReply = { changed?: boolean; revision: number; undo: number; redo: number; dirty: boolean; error?: string };
+type StateReply = { changed?: boolean; revision: number; undo: number; redo: number; dirty: boolean; archived?: boolean; error?: string };
 type ErrorReply = { error?: string };
+type ArchiveSwfRow = { path: string; archive: string; size: number };
 
 type PlacementRow = { tagIndex: number; depth: number; character: number | null; insideSprite: boolean };
-type AbcMethodRow = { index: number; name: string; returnType: string; hasBody: boolean };
-type AbcBlockRow = { abc: number; name: string; classes: string[]; scripts: string[]; methods: AbcMethodRow[] };
 type ActionTagRow = { tagIndex: number; code: number; insideSprite: boolean };
 
-type SwfHost = {
-  Open(path: string): Promise<string>;
-  Characters(): Promise<string>;
-  FrameLabels(timeline: number): Promise<string>;
-  Frame(timeline: number, frame: number): Promise<string>;
-  Timeline(index: number): Promise<string>;
-  RenameLabel(timeline: number, labelIndex: number, name: string): Promise<string>;
-  Undo(): Promise<string>;
-  Redo(): Promise<string>;
-  State(): Promise<string>;
-  Save(): Promise<string>;
-  AddLabel(frame: number, name: string, timeline: number): Promise<string>;
-  RemoveLabel(timeline: number, labelIndex: number): Promise<string>;
-  Placements(): Promise<string>;
-  SetDepth(tagIndex: number, depth: number): Promise<string>;
-  PlacementMatrix(tagIndex: number): Promise<string>;
-  SetTransform(tagIndex: number, x: number, y: number, scaleX: number, scaleY: number, rotate0: number, rotate1: number): Promise<string>;
-  InsertKeyframe(tagIndex: number, frame: number): Promise<string>;
-  ReadEditText(tagIndex: number): Promise<string>;
-  EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
-  AbcBlocks(): Promise<string>;
-  Disassemble(abc: number, methodIndex: number): Promise<string>;
-  ShapeSvg(characterId: number): Promise<string>;
-  FrameSvg(frame: number): Promise<string>;
-  BitmapPng(tagIndex: number): Promise<string>;
-  BitmapJpeg(tagIndex: number): Promise<string>;
-  InspectText(): Promise<string>;
-  ActionTags(): Promise<string>;
-  Avm1Disassemble(tagIndex: number): Promise<string>;
-};
-
 function host(): SwfHost | null {
-  const bridge = (globalThis as { chrome?: { webview?: { hostObjects?: Record<string, SwfHost> } } }).chrome;
-  return bridge?.webview?.hostObjects?.swf ?? null;
+  return getSwf() ?? null;
 }
 
 function parse<T>(reply: string): T & ErrorReply {
@@ -60,7 +31,9 @@ function parse<T>(reply: string): T & ErrorReply {
 
 // Constraint: every refusal from Radicle is shown verbatim next to the field that caused it.
 export default function SwfPanel({ onClose }: { onClose: () => void }) {
+  const { confirm: askConfirm } = useDialogs();
   const [path, setPath] = useState('');
+  const [archiveSwfs, setArchiveSwfs] = useState<ArchiveSwfRow[]>([]);
   const [characters, setCharacters] = useState<CharacterRow[]>([]);
   const [labels, setLabels] = useState<LabelRow[]>([]);
   const [instances, setInstances] = useState<InstanceRow[]>([]);
@@ -80,9 +53,9 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [editText, setEditText] = useState({ text: '', color: '', x0: 0, x1: 0, y0: 0, y1: 0 });
   const [abcBlocks, setAbcBlocks] = useState<AbcBlockRow[]>([]);
   const [abcError, setAbcError] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [selectedMethod, setSelectedMethod] = useState<{ key: string; label: string } | null>(null);
-  const selectedMethodKey = useRef('');
+  const [documentId, setDocumentId] = useState(0);
+  const documentSeq = useRef(0);
+  const [page, setPage] = useState<'movie' | 'abc'>('movie');
   const labelRequest = useRef(0);
   const [shapeSvg, setShapeSvg] = useState('');
   const shapeRequest = useRef(0);
@@ -152,6 +125,14 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     await redrawPreview();
   }, [redrawPreview]);
 
+  const loadAbc = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const reply = parse<{ blocks: AbcBlockRow[] }>(await bridge.AbcBlocks());
+    setAbcError(reply.error ?? '');
+    setAbcBlocks(reply.blocks ?? []);
+  }, []);
+
   const refresh = useCallback(async () => {
     const bridge = host();
     if (!bridge) return;
@@ -161,18 +142,21 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setSelectedLabel(null);
     await loadCharacters();
     await loadLabels(timeline);
-  }, [timeline, loadCharacters, loadLabels, applyRevision]);
+    await loadAbc();
+  }, [timeline, loadCharacters, loadLabels, applyRevision, loadAbc]);
 
-  const open = useCallback(async () => {
+  const openWith = useCallback(async (request: (bridge: SwfHost) => Promise<string>) => {
     const bridge = host();
-    if (!bridge || !path.trim()) return;
+    if (!bridge) return;
+    if (state.dirty && !await askConfirm({
+      title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard',
+      message: 'Opening another SWF replaces the open movie and discards its unsaved changes.',
+    })) return;
     setBusy(true);
     setError('');
     setAbcBlocks([]);
     setAbcError('');
-    setInstructions('');
-    setSelectedMethod(null);
-    selectedMethodKey.current = '';
+    setDocumentId(0);
     shapeRequest.current += 1;
     setShapeSvg('');
     setBitmapSrc('');
@@ -186,9 +170,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setInspectText('');
     setInspectError('');
     try {
-      const opened = parse<StateReply>(await bridge.Open(path.trim()));
+      const opened = parse<StateReply>(await request(bridge));
       if (opened.error) { setError(opened.error); return; }
       setState(opened);
+      setDocumentId(++documentSeq.current);
       previewRevision.current = opened.revision;
       setSelectedLabel(null);
       await loadCharacters();
@@ -201,9 +186,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       setInstances(rows.rows ?? []);
       const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
       setPlacements(placementReply.placements ?? []);
-      const abcReply = parse<{ blocks: AbcBlockRow[] }>(await bridge.AbcBlocks());
-      setAbcError(abcReply.error ?? '');
-      setAbcBlocks(abcReply.blocks ?? []);
+      await loadAbc();
       const inspect = parse<{ text?: string }>(await bridge.InspectText());
       setInspectText(inspect.text ?? '');
       setInspectError(inspect.error ?? '');
@@ -214,7 +197,57 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
     }
-  }, [path, timeline, frame, loadCharacters, loadLabels, showFrame]);
+  }, [timeline, frame, state.dirty, askConfirm, loadCharacters, loadLabels, showFrame, loadAbc]);
+
+  const open = useCallback(async (target: string) => {
+    if (!target.trim()) return;
+    await openWith(bridge => bridge.Open(target.trim()));
+  }, [openWith]);
+
+  const openArchived = useCallback(async (name: string) => {
+    setArchiveSwfs([]);
+    await openWith(bridge => bridge.OpenArchived(name));
+  }, [openWith]);
+
+  const browse = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    try {
+      const picked = await bridge.BrowseForFile('Open a SWF movie', 'SWF movie (*.swf)|*.swf|All files|*.*');
+      if (!picked) return;
+      setPath(picked);
+      await open(picked);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }, [open]);
+
+  const browseArchives = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const reply = parse<{ entries?: ArchiveSwfRow[] }>(await bridge.ArchiveSwfs());
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setArchiveSwfs(reply.entries ?? []);
+  }, []);
+
+  // Constraint: an archive-opened movie has no file to write in place, so Save goes through this Save As dialog.
+  const saveAs = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const reply = parse<{ saved?: string }>(await bridge.SaveAs('Save the SWF movie', 'SWF movie (*.swf)|*.swf|All files|*.*'));
+    if (reply.error) { setError(reply.error); return; }
+    if (!reply.saved) return;
+    setError('');
+    await refresh();
+  }, [refresh]);
+
+  const abcApplied = useCallback(async (reply: AbcReply) => {
+    setError('');
+    setState(reply);
+    await applyRevision(reply.revision);
+    await loadAbc();
+  }, [applyRevision, loadAbc]);
 
   const pickFrame = useCallback(async (nextTimeline: number, nextFrame: number) => {
     const bridge = host();
@@ -360,24 +393,6 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     await loadCharacters();
     await loadLabels(timeline);
   }, [timeline, labelOwner, selectedLabel, loadCharacters, loadLabels, applyRevision]);
-  const pickMethod = useCallback(async (block: AbcBlockRow, method: AbcMethodRow) => {
-    const bridge = host();
-    if (!bridge) return;
-    const key = `${block.abc}:${method.index}`;
-    selectedMethodKey.current = key;
-    setSelectedMethod({ key, label: method.name || `method ${method.index}` });
-    setInstructions('');
-    try {
-      const reply = parse<{ text: string }>(await bridge.Disassemble(block.abc, method.index));
-      if (selectedMethodKey.current !== key) return;
-      if (reply.error) { setAbcError(reply.error); setInstructions(''); return; }
-      setAbcError('');
-      setInstructions(reply.text);
-    } catch (caught) {
-      if (selectedMethodKey.current !== key) return;
-      setAbcError(caught instanceof Error ? caught.message : String(caught));
-    }
-  }, []);
   const pickActionTag = useCallback(async (item: ActionTagRow) => {
     const bridge = host();
     if (!bridge) return;
@@ -402,6 +417,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
+      // Constraint: Ctrl+Z and Ctrl+Y typed in the ABC script box stay with the textarea's own undo.
+      if (event.target instanceof HTMLTextAreaElement) return;
       if (event.key === 'z' && !event.shiftKey) { event.preventDefault(); void command('undo'); }
       else if ((event.key === 'z' && event.shiftKey) || event.key === 'y') { event.preventDefault(); void command('redo'); }
     };
@@ -410,20 +427,40 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   }, [command]);
 
 
+  const requestClose = async () => {
+    if (state.dirty && !await askConfirm({
+      title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard',
+      message: 'The open SWF has unsaved changes. Closing the panel discards them.',
+    })) return;
+    onClose();
+  };
+
   return (
     <div className="swf-panel">
       <header className="swf-head">
         <strong>Interface (SWF)</strong>
-        <button type="button" onClick={onClose}>Close</button>
+        <button type="button" onClick={() => void requestClose()}>Close</button>
         {state.dirty && <span className="swf-dirty">modified</span>}
-        <button type="button" disabled={busy || !path.trim()} onClick={() => void open()}>Open</button>
+        <button type="button" onClick={() => void browse()}>Browse…</button>
+        <button type="button" onClick={() => void browseArchives()}>From game archives…</button>
+        <button type="button" disabled={busy || !path.trim()} onClick={() => void open(path)}>Open</button>
         <input value={path} onChange={event => setPath(event.target.value)} placeholder="Interface/Test.swf" />
+        {archiveSwfs.length > 0 && (
+          <select aria-label="Game archive SWFs" defaultValue="" onChange={event => void openArchived(event.target.value)}>
+            <option value="" disabled>Choose a movie</option>
+            {archiveSwfs.map(item => <option key={item.path} value={item.path}>{item.path} ({item.archive})</option>)}
+          </select>
+        )}
         <button type="button" onClick={() => void command('undo')} disabled={state.undo === 0} title="Undo"><RotateCcw size={14} /></button>
         <button type="button" onClick={() => void command('redo')} disabled={state.redo === 0} title="Redo"><RotateCw size={14} /></button>
-        <button type="button" onClick={() => void command('save')} title="Save"><SaveIcon size={14} /></button>
+        <button type="button" onClick={() => void (state.archived ? saveAs() : command('save'))} title={state.archived ? 'Save As' : 'Save'}><SaveIcon size={14} /></button>
       </header>
+      <div className="swf-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={page === 'movie'} onClick={() => setPage('movie')}>Movie</button>
+        <button type="button" role="tab" aria-selected={page === 'abc'} onClick={() => setPage('abc')}>ABC scripts</button>
+      </div>
       {error && <div className="swf-error"><AlertTriangle size={14} /> {error}</div>}
-      <div className="swf-body">
+      <div className="swf-body" hidden={page !== 'movie'}>
         <aside className="swf-left">
           <h4>Characters</h4>
           <ul>
@@ -564,37 +601,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               </>
             )}
           </section>
-          <section className="swf-abc" aria-label="ABC scripts">
-            <h4>Scripts (ABC)</h4>
-            {abcError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {abcError}</div>}
-            {!abcError && abcBlocks.length === 0 && <p>No ABC scripts in this SWF.</p>}
-            <ul>
-              {abcBlocks.map(block => (
-                <li key={block.abc}>
-                  <strong>{block.name || `ABC block ${block.abc}`}</strong>
-                  <ul>
-                    {block.classes.map((name, index) => <li key={`class-${index}`}>class {name}</li>)}
-                    {block.scripts.map((name, index) => <li key={`script-${index}`}>script {name}</li>)}
-                    {block.methods.map(method => (
-                      <li key={method.index}>
-                        <button
-                          type="button"
-                          disabled={!method.hasBody}
-                          aria-pressed={selectedMethod?.key === `${block.abc}:${method.index}`}
-                          onClick={() => void pickMethod(block, method)}
-                        >
-                          {method.name || `method ${method.index}`} : {method.returnType}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-            {selectedMethod && <h5>{selectedMethod.label}</h5>}
-            <pre aria-label="instructions">{instructions}</pre>
-          </section>
         </aside>
+      </div>
+      <div className="swf-page" hidden={page !== 'abc'}>
+        <SwfAbcPage key={documentId} blocks={abcBlocks} error={abcError} revision={state.revision} onApplied={abcApplied} />
       </div>
     </div>
   );

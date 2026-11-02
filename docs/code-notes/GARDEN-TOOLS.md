@@ -2895,6 +2895,40 @@ The destructor removes the shared parent when it looks empty, so a test creating
 - Error semantics: the service targets (`archive`, `graph`, `papyrus`, `nif`, `material`, `audio`, `app`, `settings`) report some failures as ordinary strings beginning `Error:` or `ERR:` rather than RPC errors. `PluginEditTool/native/apps/fo4ide/McpCatalog.cpp:addCatalogTool` checks every string result, backend results included, for a leading `Error:` or `ERR:` and marks it `isError: true`; otherwise a missing archive/NIF/script looked like a success to MCP clients. Non-string results are never marked as errors.
 - Independent verification also reported two pre-existing limitations that are not MCP-only: the first `get_referenced_by`/`get_dependencies` call on the 482 MB order pays the lazy reference-index build in `Radicle/src/graph/conflict_graph.cpp:ensure_references` (about 113 s; later calls cached), and `set_conditions` rewrites three opaque CTDA bytes (`60 72 73 41` → `60 00 00 00`) that vanilla conditions carry in most sampled cases. `PluginEditTool/native/src/plugin/RadiclePluginMemory.cpp:releaseMemory` and `RadiclePluginGraphCache.cpp:reapIdleConflictGraph` call `HeapCompact` after `_heapmin`, but committed memory after a graph drop is still retained by the allocator, so only the working set visibly falls.
 
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:gameArchives (game archive source for the SWF browse)
+
+`gameArchives` builds a read-only `fo4::archive::AssetResolver` over the game's BA2 archives, so the SWF panel can list and open archive entries. The Data folder is `roots[0]` of the `SwfRootsProvider`, because `swfRootsFor` puts `settings.dataFolder` first, and only that folder is read. The plugin names are the `.esm`, `.esp` and `.esl` files in it, sorted by name, passed to `fo4::archive::archive_load_order` with an empty INI list. This is the call `PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::stringAssets` makes. `archive_load_order` then mounts `<plugin>.ba2` and `<plugin> - *.ba2` for each plugin, so `Fallout4 - Interface.ba2` is found through `Fallout4.esm`. The resolver is opened with no loose roots, so `AssetResolver::list` and `locate_in_archives` see archive entries only.
+
+Limits, each taken on purpose for this slice:
+- The order is not the game's `plugins.txt`, because the SWF target has no plugin list. When two archives hold the same SWF path, the winner follows the sorted plugin order, which can differ from the game. Vanilla archives hold distinct SWF paths.
+- MO2 mod archives are not searched, and the game install is searched only through `DataFolder`; `Fallout4Path` is not used. The C# host's `PluginEditTool/FO4RecordEditor.Core/Services/AssetResolver.cs:AssetResolver.ArchiveIndexFor` indexes every `*.ba2` under the data root instead.
+- Every call opens every archive index again (`Radicle/src/archive/ba2_reader.cpp:Ba2Reader::open` reads the header, entry and name tables), with no cache. One malformed archive fails the whole call with its message. `RadiclePluginStrings.cpp` skips such an archive instead.
+
+Test: `PluginEditTool/native/tests/unit/SwfTargetTests.cpp:SwfTarget lists game archive SWFs and opens one read-only by its resolved name`.
+
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::openArchived (read-only archive open)
+
+`OpenArchived` takes one data-relative name, normalizes it with `fo4::archive::normalize_asset_path` (which refuses `..` and drive names), and resolves it with `AssetResolver::locate_in_archives`, which returns the highest-priority archive that holds the path. An entry whose unpacked size is over `core::kMaxSwfFileBytes` is refused before any read. The bytes then go through `SwfTarget::adopt`, the same decode as a loose `Open`, with `archived_` set and the label `<archive path>/<entry path>` that `InspectText` shows. Nothing on disk is written by this path.
+
+Test: `PluginEditTool/native/tests/unit/SwfTargetTests.cpp:SwfTarget lists game archive SWFs and opens one read-only by its resolved name`, which also pins the refused missing name and the refused in-place `Save`.
+
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::writeTo (Save and Save As share one write)
+
+`Save` and `SaveAs` both call `writeTo`. It re-decodes the history bytes before writing, makes the first-save `.bak` of the destination when none exists, and writes with `fo4::io::write_file_atomic`, as before. `Save` writes `*path_`. `SaveAs` writes to the destination the native dialog returned, after `weakly_canonical`, the same canonical rule `Open` uses. On success `path_` becomes that destination and `archived_` becomes false, so later Saves write there in place. An existing file at the destination gets a `.bak` first, so a Save As over a game file keeps its original bytes.
+
+`Save` on an archive-opened document refuses before any write, because a BA2 entry cannot be written in place. The panel sends such a document to `SaveAs` instead.
+
+Tests: `PluginEditTool/native/tests/unit/SwfTargetTests.cpp:SwfTarget saves a game archive SWF only through Save As` (in-place refusal, a cancelled dialog answering `{"saved": ""}`, Save As to a chosen path, and a reopen with the edit present).
+
+## PluginEditTool/native/src/app/SwfTarget.cpp:SwfTarget::invoke (SaveAs, OpenArchived and ArchiveSwfs dispatch)
+
+`SaveAs` shows the modal `pickSavePath` dialog before `mutex_` is taken, as `BrowseForFile` does, so the modal loop never holds the mutex. The destination comes only from the dialog, so the page cannot name a write path. The no-document refusal runs after the dialog returns, so a Save As with no movie open shows the dialog first. `OpenArchived` is in `expectedArguments` as `s`. `ArchiveSwfs` is not in that table, so it runs with no open document, as `Open` does. `SwfTarget::snapshot` in `PluginEditTool/native/src/app/SwfTargetFile.cpp` adds the `archived` flag that the panel reads.
+
+## web/src/SwfPanel.tsx:SwfPanel.openWith (one open path for files and archive entries)
+
+`open` (the typed path or Browse) and `openArchived` (a pick from the game archive list) share `openWith`. Both ask before discarding unsaved edits, reset the same state and load the same panels. `browseArchives` calls `ArchiveSwfs` and shows the `Game archive SWFs` select. A pick clears the select and calls `OpenArchived` with the listed path. While the open document is archive-backed (`State.archived`), the Save button is titled `Save As` and calls `saveAs`, which shows the native save dialog and refreshes on a non-empty `saved` reply. The panel never calls `Save` for such a document.
+
+Tests: `web/src/SwfPanel.archive.test.tsx` (`SwfPanel game archives`). It is a new file because `web/src/SwfPanel.test.tsx` is already at the 750-line limit.
 ## .github/workflows/native-real-data.yml:on
 
 The job runs only for changes to what it builds: `Radicle/`, `PluginEditTool/native/`, `cmake/`, the root `CMakeLists.txt`, `.github/scripts/` and this workflow. A PR touching only BGS, the web panels or docs does not queue on the single `fo4-data` runner, and shows no real-data check. `workflow_dispatch` still runs it on demand.
@@ -3031,6 +3065,9 @@ GitHub delays cron heavily on the public repo: the 30-minute `Delete finished CI
 
 One number must name one surface, so siblings on a stack that each edit the C API under the same number still collide (`.github/scripts/test_check_abi_version_collision.py:test_sibling_pulls_on_one_stack_parent_collide`). A stacked pull request whose own diff never edits a `Radicle/include/fo4/c_api*.h` header adds no surface: it only carries the number it got from its parent, so it holds no claim. Before this, six children of #1049 that touch no header failed #1049's gate. `.github/scripts/check_abi_version_collision.py:pull_touches_header` reads the pull request's file list, and a list it cannot read exits 2 instead of passing.
 
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::writeTo — backups when Save As replaces another file
+
+Save keeps one `.bak` per movie and never overwrites it. Save As can target any file, so when the destination is not the open movie itself (or the movie came from a game archive), an existing file there is always backed up, to the first free name among `.bak`, `.bak1`, `.bak2` and so on. Before this, a leftover `.bak` from an earlier session meant the replaced file was lost. Test: `PluginEditTool/native/tests/unit/SwfTargetSaveAsTests.cpp`.
 ## ci/real-data-service/install_task.ps1 — the task restarts a stopped service
 
 On 2026-11-02 the service process ended after a run without logging why, and the logon-only trigger never started it again, so real-data and the public CI sync stopped for hours. The task now also fires every 15 minutes; `-MultipleInstances IgnoreNew` and the run lock keep a running service from being doubled. `ci/real-data-service/real_data_service.py` logs any fatal exception as "service stopped" before exiting, so the next stop leaves a reason.
