@@ -74,13 +74,30 @@ enum class PerkEffectWrite {
 
 struct PerkCreation {
   std::string_view editor_id;
-  std::string_view full_name;
-  std::string_view description;
+  std::optional<schema::LocalizedString> full_name;
+  std::optional<schema::LocalizedString> description;
   std::uint8_t trait{0};
   std::uint8_t level{0};
   std::uint8_t ranks{1};
   std::uint8_t playable{1};
+  std::vector<CtdaCondition> conditions;
+  FormKey next_perk{};
+  FormKey sound{};
+  std::string_view swf;
   std::vector<PerkEffectEntry> effects;
+};
+
+struct PerkLinks {
+  FormKey next_perk{};
+  FormKey sound{};
+  std::optional<std::string> swf;
+};
+
+enum class PerkLinkWrite {
+  written,
+  record_missing,
+  unsupported_record,
+  unexpected_layout,
 };
 
 FormKey create_perk(Plugin& plugin, const PerkCreation& creation);
@@ -91,6 +108,11 @@ PerkEffectWrite set_perk_effects(Plugin& plugin,
                                  const FormKey& key,
                                  std::span<const PerkEffectEntry> effects);
 
+PerkLinks read_perk_links(const Plugin& plugin, const Record& record);
+
+PerkLinkWrite set_perk_next(Plugin& plugin, const FormKey& key, const FormKey& next_perk);
+
+PerkFunctionType perk_function_type(const PerkEffectEntry& effect);
 std::optional<float> perk_epfd_float(const PerkEffectEntry& effect);
 std::optional<std::pair<float, float>> perk_epfd_float_pair(const PerkEffectEntry& effect);
 std::optional<FormKey> perk_epfd_form(const Plugin& plugin, const PerkEffectEntry& effect);

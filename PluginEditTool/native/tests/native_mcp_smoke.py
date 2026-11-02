@@ -144,7 +144,7 @@ def main(executable):
                 gap_base = gap_path.read_bytes()
                 tools = {tool["name"]: tool for tool in rpc("tools/list")["tools"]}
                 assert len(tools) >= 160, f"Expected at least 160 MCP tools, got {len(tools)}"
-                for name in ("add_master", "add_masters", "set_script_value", "get_condition_functions", "create_placed_object","create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types", "get_perk_effects", "set_perk_effects", "add_sound_file", "remove_sound_file", "add_package_procedure", "remove_package_procedure", "set_sound_base", "create_sound", "add_script", "remove_script", "add_script_property", "remove_script_property", "get_magic_effects", "add_magic_effect", "set_magic_effect", "remove_magic_effect", "get_conflicts", "get_record_details", "get_conflict_matrix", "delete_record", "copy_as_override", "get_conditions", "set_conditions", "set_components", "describe_element", "add_element", "strings_list_tables", "graph_core_palette", "script_read_script", "archive_extract_file", "get_placed_references"):
+                for name in ("add_master", "add_masters", "set_script_value", "get_condition_functions", "create_placed_object","create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types", "get_perk_effects", "set_perk_effects", "get_perk_links", "set_perk_next", "add_sound_file", "remove_sound_file", "add_package_procedure", "remove_package_procedure", "set_sound_base", "create_sound", "add_script", "remove_script", "add_script_property", "remove_script_property", "get_magic_effects", "add_magic_effect", "set_magic_effect", "remove_magic_effect", "get_conflicts", "get_record_details", "get_conflict_matrix", "delete_record", "copy_as_override", "get_conditions", "set_conditions", "set_components", "describe_element", "add_element", "strings_list_tables", "graph_core_palette", "script_read_script", "archive_extract_file", "get_placed_references"):
                     assert name in tools, f"Missing MCP tool: {name}"
                 placed_schema = tools["create_placed_object"]["inputSchema"]
                 assert placed_schema["properties"]["x"]["type"] == "number", placed_schema
@@ -154,6 +154,10 @@ def main(executable):
                 leveled_schema = tools["set_leveled_list_settings"]["inputSchema"]
                 assert leveled_schema["properties"]["flags"]["type"] == "integer", leveled_schema
                 assert set(leveled_schema["required"]) == {"plugin", "form_key", "chance_none", "max_count", "flags"}, leveled_schema
+                perk_item = tools["set_perk_effects"]["inputSchema"]["properties"]["effects"]["items"]
+                assert perk_item["required"] == ["type"], perk_item
+                assert {"value", "value2", "form", "actorValue", "text", "data"} <= set(perk_item["properties"]["parameters"]["properties"]), perk_item
+                assert perk_item["properties"]["tabs"]["items"]["properties"]["conditions"]["items"]["properties"]["function"]["type"] == "string", perk_item
                 placed_args = {"plugin": gap, "cell": "000800:NativeMcpGap.esp", "baseObject": "000801:NativeMcpGap.esp", "x": 1, "y": 2, "z": 3}
                 assert call("create_placed_object", {"plugin": gap, "cell": "000800:NativeMcpGap.esp", "baseObject": "000801:NativeMcpGap.esp", "x": 1, "y": 2}, failed=True) == "Missing argument: z"
                 assert call("create_placed_object", dict(placed_args, x="1"), failed=True) == "x must be number"

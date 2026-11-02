@@ -153,6 +153,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
     try {
         auto mutated = loaded->plugin;
         fo4::FormKey key;
+        LocalizedStringAllocation strings;
 
         if (schemaCreation) {
             const auto* editor = editorIdPayloadField(*payload);
@@ -471,7 +472,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             if (!created) return std::unexpected(created.error());
             key = *created;
         } else if (signatureText == "PERK") {
-            const auto created = createPerkLocked(mutated, *payload);
+            const auto created = createPerkLocked(*loaded, mutated, *payload, strings);
             if (!created) return std::unexpected(created.error());
             key = *created;
         } else if (signatureText == "PROJ" || signatureText == "EXPL" || signatureText == "HAZD") {
@@ -489,6 +490,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         }
 
         stagePluginMutationLocked(*loaded, std::move(mutated));
+        stageLocalizedStrings(loaded->name, strings);
         return nlohmann::json(nlohmann::json{
             {"ok", true},
             {"plugin", pluginName},

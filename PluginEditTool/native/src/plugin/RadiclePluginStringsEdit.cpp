@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <limits>
 #include <mutex>
 #include <set>
 #include <string>
@@ -365,6 +366,52 @@ bool RadiclePluginBackend::hasStagedStringTables(std::string_view plugin) const 
     return std::any_of(stagedStrings_.begin(), stagedStrings_.end(), [plugin](const auto& entry) {
         return std::get<0>(entry.first) == plugin;
     });
+}
+
+Result<LocalizedStringAllocation> RadiclePluginBackend::openLocalizedStrings(
+    const LoadedPlugin& loaded, std::string_view language) const {
+    if (loaded.stagedLocalization.has_value()) return std::unexpected(pendingLocalizationError());
+    auto tables = readStringTables(loaded, language);
+    if (!tables) return std::unexpected(tables.error());
+    LocalizedStringAllocation allocation;
+    allocation.language = std::string(language);
+    std::uint32_t maximum = 0;
+    for (const auto source : {StringSource::normal, StringSource::dl, StringSource::il}) {
+        auto table = effectiveTable(*tables, source);
+        for (const auto& entry : table.entries) maximum = std::max(maximum, entry.id);
+        allocation.tables.emplace(source, std::move(table));
+    }
+    if (maximum == std::numeric_limits<std::uint32_t>::max()) {
+        return std::unexpected(Error{"LocalizedStringTableFull", "localized string-table ID space is exhausted"});
+    }
+    allocation.nextId = maximum + 1;
+    return allocation;
+}
+
+Result<std::uint32_t> RadiclePluginBackend::allocateLocalizedString(
+    LocalizedStringAllocation& allocation, StringSource source, std::string_view text) const {
+    const auto encoded = encodeStringText(allocation.language, text);
+    if (!encoded) return std::unexpected(encoded.error());
+    if (encoded->empty()) return std::unexpected(Error{"StringTextEmpty", "A new string must have text"});
+    const auto table = allocation.tables.find(source);
+    if (table == allocation.tables.end() || allocation.nextId == std::numeric_limits<std::uint32_t>::max()) {
+        return std::unexpected(Error{"LocalizedStringTableFull", "localized string-table ID space is exhausted"});
+    }
+    const auto id = allocation.nextId++;
+    try {
+        fo4::localization::insert_string(table->second, id, *encoded);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"StringEditFailed", error.what()});
+    }
+    allocation.touched.insert(source);
+    return id;
+}
+
+void RadiclePluginBackend::stageLocalizedStrings(std::string_view plugin,
+                                                 const LocalizedStringAllocation& allocation) {
+    for (const auto source : allocation.touched) {
+        stageStringTable(plugin, allocation.language, source, allocation.tables.at(source));
+    }
 }
 
 void RadiclePluginBackend::stageStringTable(std::string_view plugin,

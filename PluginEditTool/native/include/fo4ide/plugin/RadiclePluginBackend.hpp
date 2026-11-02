@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <shared_mutex>
 #include <stop_token>
 #include <string>
@@ -20,6 +21,7 @@
 #include <fo4/archive/assets.hpp>
 #include <fo4/environment/strings.hpp>
 #include <fo4/graph/conflict_graph.hpp>
+#include <fo4/localization/strings.hpp>
 #include <fo4/plugin/container.hpp>
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
@@ -42,6 +44,13 @@ void setLoadReadWindowHook(LoadReadWindowHook hook);
 
 Result<void> requirePluginUnchangedSince(const std::filesystem::path& path,
                                          std::filesystem::file_time_type loadedTime);
+
+struct LocalizedStringAllocation {
+    std::string language;
+    std::uint32_t nextId{1};
+    std::map<fo4::env::StringSource, fo4::localization::LocalizedStringTable> tables;
+    std::set<fo4::env::StringSource> touched;
+};
 
 class RadiclePluginBackend final : public IPluginBackend {
 public:
@@ -90,6 +99,8 @@ public:
     Result<nlohmann::json> editNpcEntries(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getPerkEffects(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPerkEffects(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getPerkLinks(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> setPerkNext(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> setScriptValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> releaseMemory(const nlohmann::json& arguments) override;
@@ -225,7 +236,16 @@ private:
     Result<fo4::FormKey> createProjectileLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
     Result<fo4::FormKey> createExplosionLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
     Result<fo4::FormKey> createHazardLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
-    Result<fo4::FormKey> createPerkLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
+    Result<fo4::FormKey> createPerkLocked(const LoadedPlugin& loaded,
+                                          fo4::Plugin& mutated,
+                                          const nlohmann::json& payload,
+                                          LocalizedStringAllocation& strings) const;
+    Result<LocalizedStringAllocation> openLocalizedStrings(const LoadedPlugin& loaded,
+                                                           std::string_view language) const;
+    Result<std::uint32_t> allocateLocalizedString(LocalizedStringAllocation& allocation,
+                                                  fo4::env::StringSource source,
+                                                  std::string_view text) const;
+    void stageLocalizedStrings(std::string_view plugin, const LocalizedStringAllocation& allocation);
 
     Result<nlohmann::json> describeElement(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> addElement(const nlohmann::json& arguments) override;

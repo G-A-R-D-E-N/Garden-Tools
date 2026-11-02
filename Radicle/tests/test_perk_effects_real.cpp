@@ -26,6 +26,38 @@ Payload subrecord_payload(const fo4::Record& record) {
 
 }  // namespace
 
+// Detects: set_perk_next with each vanilla NNAM must leave every PERK subrecord byte-identical.
+TEST(PerkEffectsReal, SetPerkNextRewritesEveryVanillaNextLinkByteForByte) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (directory == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run the official-master PERK link round-trip";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto original = fo4::read_plugin_file(std::filesystem::path{directory} / "Fallout4.esm");
+
+  std::vector<fo4::FormKey> perks;
+  fo4::visit_records(original, [&](const fo4::Record& record) {
+    if (record.header.signature.to_string() == "PERK") perks.push_back(record.form_key);
+  });
+  ASSERT_FALSE(perks.empty());
+
+  auto copy = original;
+  std::size_t linked = 0;
+  for (const auto& key : perks) {
+    const auto* source = fo4::find_record(original, key);
+    ASSERT_NE(source, nullptr) << key.to_string();
+    const auto links = fo4::forms::read_perk_links(original, *source);
+    if (links.next_perk == fo4::FormKey{}) continue;
+    ++linked;
+    ASSERT_EQ(fo4::forms::set_perk_next(copy, key, links.next_perk), fo4::forms::PerkLinkWrite::written)
+        << key.to_string();
+    const auto* rewritten = fo4::find_record(copy, key);
+    ASSERT_NE(rewritten, nullptr) << key.to_string();
+    EXPECT_EQ(subrecord_payload(*rewritten), subrecord_payload(*source)) << key.to_string();
+  }
+  EXPECT_GT(linked, 0u);
+}
+
 TEST(PerkEffectsReal, SetPerkEffectsRewritesEveryFalloutEsmPerkByteForByte) {
   const auto* directory = std::getenv("FO4_DATA_DIR");
   if (directory == nullptr) {

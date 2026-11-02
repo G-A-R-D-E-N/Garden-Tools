@@ -241,6 +241,12 @@ public:
     virtual Result<nlohmann::json> setPerkEffects(const nlohmann::json&) {
         return std::unexpected(Error{"PerkBackendUnavailable", "PERK effect writes are unavailable"});
     }
+    virtual Result<nlohmann::json> getPerkLinks(const nlohmann::json&) const {
+        return std::unexpected(Error{"PerkBackendUnavailable", "PERK link queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> setPerkNext(const nlohmann::json&) {
+        return std::unexpected(Error{"PerkBackendUnavailable", "PERK next writes are unavailable"});
+    }
     // Constraint: sound structure writes keep the in-memory plugin unchanged on refusal.
     // Constraint: package tree writes keep the in-memory plugin unchanged on refusal.
     virtual Result<nlohmann::json> addPackageProcedure(const nlohmann::json&) {
