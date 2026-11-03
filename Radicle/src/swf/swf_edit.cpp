@@ -70,6 +70,8 @@ bool quantize(double value, double scale, std::int32_t& out) noexcept {
   return true;
 }
 
+}  // namespace
+
 bool matrix_from_transform(const SwfTransform& transform, SwfMatrix& out) noexcept {
   SwfMatrix matrix;
   if (!quantize(transform.scale_x, 65536.0, matrix.scale_x) ||
@@ -150,6 +152,8 @@ bool append_tag(std::vector<std::byte>& out, const SwfTag& tag, std::span<const 
   return true;
 }
 
+namespace {
+
 // Constraint: the rebuilt body must keep the id, the frame count and every child header.
 bool assemble_sprite_body(const SwfTag& sprite,
                           const std::map<std::size_t, std::vector<std::byte>>& replaced,
@@ -174,6 +178,8 @@ bool assemble_sprite_body(const SwfTag& sprite,
   }
   return true;
 }
+
+}  // namespace
 
 // Precondition: the unedited rebuild must equal the body, so an edit cannot drop bytes it does not explain.
 bool rebuild_sprite_payload(const SwfTag& sprite,
@@ -204,8 +210,6 @@ bool splice_matrix(std::uint16_t tag_code, std::span<const std::byte> body, cons
   out.insert(out.end(), body.begin() + static_cast<std::ptrdiff_t>(span.end), body.end());
   return true;
 }
-
-}  // namespace
 
 bool placement_matrix_span(std::uint16_t tag_code, std::span<const std::byte> body,
                            SwfMatrixSpan& out) {

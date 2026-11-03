@@ -72,6 +72,57 @@ RADICLE_API radicle_status radicle_swf_insert_instance_transform_keyframe(radicl
                                                                           const radicle_swf_transform* transform,
                                                                           radicle_swf_plan_result* out_result);
 
+/* Invariant: the fields are raw MATRIX fixed point, 16.16 scale and rotate and twips translate. */
+typedef struct radicle_swf_placement_matrix_fields {
+  uint8_t has_scale;
+  int32_t scale_x;             /* must be 16.16 fixed, like the tag bytes */
+  int32_t scale_y;             /* must be 16.16 fixed, like the tag bytes */
+  uint8_t has_rotate;
+  int32_t rotate0;             /* must be 16.16 fixed, like the tag bytes */
+  int32_t rotate1;             /* must be 16.16 fixed, like the tag bytes */
+  int32_t translate_x;         /* must be twips, like the tag bytes */
+  int32_t translate_y;         /* must be twips, like the tag bytes */
+} radicle_swf_placement_matrix_fields;
+
+/* Invariant: a JSON array of {tag_index, depth, character_id, inside_sprite}; release *out_text with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_placements_json(const radicle_swf_history* history,
+                                                        uint8_t** out_text, size_t* out_size);
+
+/* Invariant: tag_index is a flat PlaceObject, PlaceObject2 or PlaceObject3 index; an unscaled tag reads 0x10000 on both axes. */
+RADICLE_API radicle_status radicle_swf_placement_matrix_at(const radicle_swf_history* history, size_t tag_index,
+                                                           radicle_swf_placement_matrix_fields* out_matrix);
+
+/* Requires tag_index to name a flat placement index. */
+RADICLE_API radicle_status radicle_swf_set_placement_depth(radicle_swf_history* history, size_t tag_index,
+                                                           uint16_t depth, radicle_swf_plan_result* out_result);
+
+/* Requires tag_index to name a flat placement index and every field to fit 31 bits. */
+RADICLE_API radicle_status radicle_swf_set_placement_transform(radicle_swf_history* history, size_t tag_index,
+                                                               int32_t x, int32_t y, int32_t scale_x,
+                                                               int32_t scale_y, int32_t rotate0, int32_t rotate1,
+                                                               radicle_swf_plan_result* out_result);
+
+/* Requires tag_index to name a flat PlaceObject2 index and frame to name a reached frame. */
+RADICLE_API radicle_status radicle_swf_insert_placement_keyframe(radicle_swf_history* history, size_t tag_index,
+                                                                 uint32_t frame,
+                                                                 radicle_swf_plan_result* out_result);
+
+/* Invariant: the ABC tag is resolved inside the history's own movie; insert is 1, replace is 0. */
+RADICLE_API radicle_status radicle_swf_history_abc_text_edit(radicle_swf_history* history, size_t abc,
+                                                             uint32_t body, size_t offset,
+                                                             const uint8_t* text, size_t size,
+                                                             uint8_t insert,
+                                                             radicle_swf_plan_result* out_result);
+
+/* Invariant: the whole ABC block is assembled from text and applied to the history's own movie; a refusal leaves the history unchanged. */
+RADICLE_API radicle_status radicle_swf_history_abc_apply_text(radicle_swf_history* history, size_t abc,
+                                                              const uint8_t* text, size_t size,
+                                                              radicle_swf_plan_result* out_result);
+
+/* Invariant: a JSON array of {tag_index, code, inside_sprite} for DoAction and DoInitAction in flat order; release *out_text with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_action_tags_json(const radicle_swf_history* history,
+                                                       uint8_t** out_text, size_t* out_size);
+
 #ifdef __cplusplus
 }
 #endif

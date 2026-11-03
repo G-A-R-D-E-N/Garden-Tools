@@ -45,6 +45,9 @@ add_library(
     plugin/RadiclePluginOverridePatch.cpp
     plugin/RadiclePluginLeveled.cpp
     plugin/RadiclePluginPerk.cpp
+    plugin/RadiclePluginPerkCreate.cpp
+    plugin/RadiclePluginPerkEpfd.cpp
+    plugin/RadiclePluginPerkLinks.cpp
     plugin/RadiclePluginSeq.cpp
     plugin/RadiclePluginCompare.cpp
     plugin/RadiclePluginDisabledOverride.cpp
@@ -231,11 +234,14 @@ add_library(
     app/MaterialTarget.cpp
     app/ArchiveTarget.cpp
     app/PluginBackendTarget.cpp
+    app/SwfTarget.cpp
+    app/SwfTargetFile.cpp
     app/WikiService.cpp
 )
 target_link_libraries(
     fo4ide_app
     PUBLIC
+        fo4
         fo4ide_core
         fo4ide_rpc
         fo4ide_settings
@@ -252,6 +258,10 @@ target_link_libraries(
         fo4ide_plugin_api
         Threads::Threads
 )
+# Constraint: the SWF target calls the C ABI, so a static Radicle build must link radicle_c too.
+if(TARGET radicle_c)
+    target_link_libraries(fo4ide_app PUBLIC radicle_c)
+endif()
 fo4ide_enable_warnings(fo4ide_app)
 fo4ide_enable_sanitizers(fo4ide_app)
 

@@ -1,6 +1,7 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_swf.h"
 #include "fo4/c_api_swf_verbs.h"
+#include "fo4/swf/swf.hpp"
 #include "abc_test_support.hpp"
 #include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
@@ -23,6 +24,8 @@ namespace {
 
 using swf_test::SwfBuilder;
 using swf_test::wrap_body;
+using swf_test::frame_label;
+using swf_test::placement_after_sprite_movie;
 
 struct SwfDeleter {
   void operator()(radicle_swf* swf) const { radicle_swf_destroy(swf); }
@@ -89,12 +92,6 @@ radicle_status apply(radicle_swf* swf, const Plan& builder, radicle_swf_plan_res
   return radicle_swf_apply_plan(swf, &plan, &result);
 }
 
-std::vector<std::byte> frame_label(std::string_view name) {
-  SwfBuilder body;
-  body.text(name);
-  return body.body;
-}
-
 std::vector<std::byte> place_move(std::uint16_t depth) {
   SwfBuilder body;
   body.u8(0x01);
@@ -128,36 +125,6 @@ std::vector<std::byte> sprite_movie() {
   SwfBuilder place;
   place.u8(0x02);
   place.u16(1);
-  place.u16(7);
-
-  SwfBuilder body;
-  body.rect(0, 11000, 0, 8000, 15);
-  body.u16(0x0C00);
-  body.u16(1);
-  body.tag(39, sprite.body, false);
-  body.tag(26, place.body, false);
-  body.tag(1);
-  body.tag(0);
-  return wrap_body(body.body, 6, false, false);
-}
-
-/* Invariant: with no leading tags, flat index 1 is the sprite's placement child and flat index 4 is the root placement after the DefineSprite. */
-std::vector<std::byte> placement_after_sprite_movie(int leading_tags = 0) {
-  SwfBuilder sprite;
-  sprite.u16(7);
-  sprite.u16(1);
-  for (int tag = 0; tag < leading_tags; ++tag) sprite.tag(43, frame_label("pad"), false);
-  SwfBuilder child;
-  child.u8(0x02);
-  child.u16(1);
-  child.u16(7);
-  sprite.tag(26, child.body, false);
-  sprite.tag(1);
-  sprite.tag(0);
-
-  SwfBuilder place;
-  place.u8(0x02);
-  place.u16(2);
   place.u16(7);
 
   SwfBuilder body;

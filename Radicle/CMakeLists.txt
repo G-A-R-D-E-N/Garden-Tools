@@ -384,6 +384,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/swf/swf_display.cpp
   src/swf/swf_frame_control.cpp
   src/swf/swf_edit.cpp
+  src/swf/swf_placement_edit.cpp
   src/swf/swf_depth.cpp
   src/swf/swf_keyframe.cpp
   src/swf/swf_characters.cpp
@@ -966,6 +967,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_characters.cpp
     tests/test_c_api_swf_history.cpp
     tests/test_c_api_swf_edit.cpp
+    tests/test_c_api_swf_verbs.cpp
     tests/test_c_api_swf_abc_sprite.cpp
     tests/test_c_api_swf_glyph.cpp
     tests/test_c_api_swf_sound.cpp

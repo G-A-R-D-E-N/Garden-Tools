@@ -1,8 +1,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SwfPanel from './SwfPanel';
+import type { ConfirmRequest } from './useDialogs';
 
 afterEach(cleanup);
+
+const confirm = vi.hoisted(() => vi.fn<(req: ConfirmRequest) => Promise<boolean>>());
+vi.mock('./useDialogs', () => ({ useDialogs: () => ({ confirm }) }));
+beforeEach(() => { confirm.mockReset(); confirm.mockResolvedValue(true); });
 
 function stubBridge(overrides: Record<string, unknown> = {}) {
   const swf = {
@@ -34,10 +39,22 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     ShapeSvg: vi.fn(async () => JSON.stringify({ svg: '<svg></svg>' })),
     BitmapPng: vi.fn(async () => JSON.stringify({ png: '' })),
     BitmapJpeg: vi.fn(async () => JSON.stringify({ jpeg: '' })),
+    AbcText: vi.fn(async () => JSON.stringify({ text: 'abc 46.16\n  string 1 "Foo"\n' })),
+    ApplyAbcText: vi.fn(async () => JSON.stringify({ changed: true, revision: 1, undo: 1, redo: 0, dirty: true })),
+    BrowseForFile: vi.fn(async () => ''),
     ...overrides,
   };
   vi.stubGlobal('chrome', { webview: { hostObjects: { swf } } });
   return swf;
+}
+
+async function openAbcTab(): Promise<HTMLTextAreaElement> {
+  render(<SwfPanel onClose={() => {}} />);
+  fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+  await act(async () => { fireEvent.click(screen.getByText('Open')); });
+  await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'ABC scripts' })); });
+  await waitFor(() => expect((screen.getByLabelText('ABC script') as HTMLTextAreaElement).value).toContain('"Foo"'));
+  return screen.getByLabelText('ABC script') as HTMLTextAreaElement;
 }
 
 describe('SwfPanel', () => {
@@ -570,5 +587,164 @@ describe('SwfPanel', () => {
       .toBe(`data:image/png;base64,${second}`);
     expect(swf.BitmapPng).toHaveBeenNthCalledWith(1, 4);
     expect(swf.BitmapPng).toHaveBeenNthCalledWith(2, 5);
+  });
+
+  it('browses to a SWF anywhere on disk and opens the picked path at once', async () => {
+    // Regression: detects Browse dropping the path the native dialog returned, which would leave a movie outside the roots unopened.
+    const picked = 'D:\\Mods\\Menu.swf';
+    const swf = stubBridge({ BrowseForFile: vi.fn(async () => picked) });
+    render(<SwfPanel onClose={() => {}} />);
+    await act(async () => { fireEvent.click(screen.getByText('Browse…')); });
+    await waitFor(() => expect(swf.Open).toHaveBeenCalledWith(picked));
+    expect(swf.BrowseForFile).toHaveBeenCalledWith('Open a SWF movie', 'SWF movie (*.swf)|*.swf|All files|*.*');
+    expect((screen.getByPlaceholderText('Interface/Test.swf') as HTMLInputElement).value).toBe(picked);
+  });
+
+  it('calls no Open when the Browse dialog is cancelled', async () => {
+    // Regression: detects a cancelled dialog's empty reply being sent to Open as a path.
+    const swf = stubBridge({ BrowseForFile: vi.fn(async () => '') });
+    render(<SwfPanel onClose={() => {}} />);
+    await act(async () => { fireEvent.click(screen.getByText('Browse…')); });
+    expect(swf.BrowseForFile).toHaveBeenCalledTimes(1);
+    expect(swf.Open).not.toHaveBeenCalled();
+  });
+
+  it('shows the ABC page in place of the movie page through the tab row', async () => {
+    // Regression: detects the ABC tab leaving the movie page visible or the script box missing from the ABC page.
+    stubBridge();
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText(/root · start/)).toBeTruthy();
+    expect(screen.getByText(/root · start/).closest('[hidden]')).toBeNull();
+
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'ABC scripts' })); });
+    expect(screen.getByRole('tab', { name: 'ABC scripts' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Movie' }).getAttribute('aria-selected')).toBe('false');
+    expect(screen.getByText(/root · start/).closest('[hidden]')).not.toBeNull();
+    expect(screen.getByLabelText('ABC script').closest('[hidden]')).toBeNull();
+  });
+
+  it('applies the edited ABC block text and redraws the preview without reading State', async () => {
+    // Invariant: Apply sends the whole draft for the block and redraws the frame preview from the reply revision without a State read; detects an apply that reloads State or leaves the preview on the pre-apply image.
+    const swf = stubBridge();
+    const script = await openAbcTab();
+    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(1));
+    fireEvent.change(script, { target: { value: 'abc 46.16\n  string 1 "Bar"\n' } });
+    await act(async () => { fireEvent.click(screen.getByText('Apply script')); });
+    await waitFor(() => expect(swf.ApplyAbcText).toHaveBeenCalledWith(0, 'abc 46.16\n  string 1 "Bar"\n'));
+    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(2));
+    expect(swf.State).not.toHaveBeenCalled();
+  });
+
+  it('shows a refused ABC apply verbatim and keeps the edited draft', async () => {
+    // Invariant: a refused apply shows the Radicle message verbatim and keeps the draft in the box; detects a refusal swallowed or the draft reset to the loaded text.
+    stubBridge({ ApplyAbcText: vi.fn(async () => JSON.stringify({ error: 'line 2: unknown instruction frob', status: 'ParseError' })) });
+    const script = await openAbcTab();
+    fireEvent.change(script, { target: { value: 'frob' } });
+    await act(async () => { fireEvent.click(screen.getByText('Apply script')); });
+    expect(await screen.findByText('line 2: unknown instruction frob')).toBeTruthy();
+    expect((screen.getByLabelText('ABC script') as HTMLTextAreaElement).value).toBe('frob');
+  });
+
+  it('keeps Ctrl+Z typed in the ABC script box out of the document Undo', async () => {
+    // Regression: detects Ctrl+Z in the script box also calling the document Undo, which would undo a movie edit while the user types.
+    const swf = stubBridge();
+    const script = await openAbcTab();
+    fireEvent.keyDown(script, { key: 'z', ctrlKey: true });
+    expect(swf.Undo).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    await waitFor(() => expect(swf.Undo).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps an unapplied ABC draft when a document undo changes the revision', async () => {
+    // Regression: detects a revision reload silently replacing the user's unapplied script with the document's text.
+    const swf = stubBridge({
+      State: vi.fn()
+        .mockResolvedValue(JSON.stringify({ revision: 2, undo: 0, redo: 1, dirty: true })),
+    });
+    const script = await openAbcTab();
+    fireEvent.change(script, { target: { value: 'draft text' } });
+    const calls = swf.AbcText.mock.calls.length;
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    await waitFor(() => expect(swf.AbcText.mock.calls.length).toBeGreaterThan(calls));
+    expect((screen.getByLabelText('ABC script') as HTMLTextAreaElement).value).toBe('draft text');
+  });
+
+  it('replaces the draft with the text Radicle reports after a successful apply', async () => {
+    // Regression: detects an applied script staying marked unapplied when Radicle renders it differently from what was typed.
+    const swf = stubBridge({
+      ApplyAbcText: vi.fn(async () => JSON.stringify({ changed: true, revision: 12, undo: 1, redo: 0, dirty: true })),
+    });
+    const script = await openAbcTab();
+    swf.AbcText.mockImplementation(async () => JSON.stringify({ text: 'canonical text' }));
+    fireEvent.change(script, { target: { value: 'typed text' } });
+    await act(async () => { fireEvent.click(screen.getByText('Apply script')); });
+    await waitFor(() => expect((screen.getByLabelText('ABC script') as HTMLTextAreaElement).value).toBe('canonical text'));
+    expect((screen.getByText('Apply script') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('keeps an apply refusal on screen when a method is picked', async () => {
+    // Regression: detects a successful method listing wiping the refusal while the rejected draft is still unapplied.
+    stubBridge({ ApplyAbcText: vi.fn(async () => JSON.stringify({ error: 'line 2: unknown instruction frob' })) });
+    const script = await openAbcTab();
+    fireEvent.change(script, { target: { value: 'frob' } });
+    await act(async () => { fireEvent.click(screen.getByText('Apply script')); });
+    await act(async () => { fireEvent.click(screen.getByText(/onLoad : void/)); });
+    await waitFor(() => expect(screen.getByLabelText('instructions').textContent).toContain('returnvoid'));
+    expect(screen.getByText('line 2: unknown instruction frob')).toBeTruthy();
+  });
+
+  it('keeps an unapplied ABC draft when the tab is switched away and back', async () => {
+    // Invariant: both pages stay mounted, so an unapplied script draft survives a tab switch; detects a page remount that drops the edited text.
+    stubBridge();
+    const script = await openAbcTab();
+    fireEvent.change(script, { target: { value: 'draft text' } });
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'Movie' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'ABC scripts' })); });
+    expect((screen.getByLabelText('ABC script') as HTMLTextAreaElement).value).toBe('draft text');
+    expect((screen.getByText('Apply script') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // Constraint: detects Close discarding unsaved edits without asking, or a refused close dropping the open document.
+  it('asks before closing with unsaved changes and keeps the document when refused', async () => {
+    stubBridge({ Open: vi.fn(async () => JSON.stringify({ revision: 1, undo: 1, redo: 0, dirty: true })) });
+    const onClose = vi.fn();
+    render(<SwfPanel onClose={onClose} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    confirm.mockResolvedValueOnce(false);
+    fireEvent.click(screen.getByText('Close'));
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('modified')).toBeTruthy();
+  });
+
+  // Constraint: detects Close on a clean document prompting the user for nothing.
+  it('closes a clean document without asking', async () => {
+    stubBridge();
+    const onClose = vi.fn();
+    render(<SwfPanel onClose={onClose} />);
+    fireEvent.click(screen.getByText('Close'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  // Constraint: detects Browse or Open replacing unsaved edits without asking first.
+  it('asks before Browse or Open replaces a dirty document', async () => {
+    const swf = stubBridge({
+      Open: vi.fn(async () => JSON.stringify({ revision: 1, undo: 1, redo: 0, dirty: true })),
+      BrowseForFile: vi.fn(async () => 'Interface/Other.swf'),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(swf.Open).toHaveBeenCalledTimes(1);
+    confirm.mockResolvedValue(false);
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    await act(async () => { fireEvent.click(screen.getByText('Browse…')); });
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+    expect(swf.Open).toHaveBeenCalledTimes(1);
   });
 });

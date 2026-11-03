@@ -82,6 +82,59 @@ public sealed class SwfInteropTests
         });
     }
 
+    [NativeFact]
+    public async Task AbcTextAndApplyAbcTextRoundTripAndRefuseMalformedText()
+    {
+        // Invariant: ApplyAbcText takes the text AbcText returns and reports the edit as changed, and malformed text answers the error shape without moving the revision; detects a block that does not round-trip or a refusal reported as a change.
+        await WithOpenMovie(SwfFixture.Movie(withAbc: true), async swf =>
+        {
+            Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
+            var text = Parse(await swf.AbcText(0)).GetProperty("text").GetString() ?? string.Empty;
+            Assert.Contains("string 1 \"Foo\"", text);
+
+            var applied = Parse(await swf.ApplyAbcText(0, text.Replace("string 1 \"Foo\"", "string 1 \"Bar\"")));
+            Assert.True(applied.GetProperty("changed").GetBoolean());
+            Assert.Contains("string 1 \"Bar\"", Parse(await swf.AbcText(0)).GetProperty("text").GetString() ?? string.Empty);
+
+            var revision = Parse(await swf.State()).GetProperty("revision").GetInt32();
+            var refusal = Parse(await swf.ApplyAbcText(0, "foo"));
+            Assert.False(string.IsNullOrEmpty(refusal.GetProperty("error").GetString()));
+            Assert.True(refusal.TryGetProperty("status", out _));
+            Assert.Equal(revision, Parse(await swf.State()).GetProperty("revision").GetInt32());
+        });
+    }
+
+    [NativeFact]
+    public async Task OpenRefusesAnOutsideFileUntilTheHostDialogPicksIt()
+    {
+        // Invariant: a loose file outside the configured roots opens only after BrowseForFile returned its path; detects a typed outside path being opened or a picked path being refused.
+        var outside = Path.Combine(Path.GetTempPath(), "fo4re-swf-picked-" + Guid.NewGuid().ToString("N") + ".swf");
+        File.WriteAllBytes(outside, SwfFixture.Movie());
+        var other = Path.Combine(Path.GetTempPath(), "fo4re-swf-other-" + Guid.NewGuid().ToString("N") + ".swf");
+        File.WriteAllBytes(other, SwfFixture.Movie());
+        var showFileDialog = HostServices.ShowFileDialog;
+        try
+        {
+            var swf = new SwfInterop();
+            Assert.True(Parse(await swf.Open(outside)).TryGetProperty("error", out _));
+
+            HostServices.ShowFileDialog = _ => "";
+            Assert.Equal("", swf.BrowseForFile("Open a SWF movie", "SWF movie (*.swf)|*.swf|All files|*.*"));
+            Assert.True(Parse(await swf.Open(outside)).TryGetProperty("error", out _));
+
+            HostServices.ShowFileDialog = _ => outside;
+            Assert.Equal(outside, swf.BrowseForFile("Open a SWF movie", "SWF movie (*.swf)|*.swf|All files|*.*"));
+            Assert.True(Parse(await swf.Open(other)).TryGetProperty("error", out _));
+            Assert.False(Parse(await swf.Open(outside)).TryGetProperty("error", out _));
+        }
+        finally
+        {
+            HostServices.ShowFileDialog = showFileDialog;
+            File.Delete(outside);
+            File.Delete(other);
+        }
+    }
+
     private static async Task WithOpenMovie(byte[] movie, Func<SwfInterop, Task> body)
     {
         var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-rpc-" + Guid.NewGuid().ToString("N"));

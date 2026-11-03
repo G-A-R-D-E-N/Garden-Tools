@@ -1,6 +1,7 @@
 #include "fo4/avm1/avm1.hpp"
 #include "fo4/c_api.h"
 #include "fo4/c_api_swf.h"
+#include "fo4/c_api_swf_verbs.h"
 #include "fo4/swf/swf.hpp"
 #include "fo4/swf/swf_timeline.hpp"
 #include "swf_movie_builder.hpp"
@@ -23,6 +24,12 @@ struct SwfDeleter {
 };
 
 using SwfHandle = std::unique_ptr<radicle_swf, SwfDeleter>;
+
+struct HistoryDeleter {
+  void operator()(radicle_swf_history* history) const { radicle_swf_history_destroy(history); }
+};
+
+using HistoryHandle = std::unique_ptr<radicle_swf_history, HistoryDeleter>;
 
 SwfHandle open(const std::vector<std::byte>& bytes) {
   radicle_swf* raw = nullptr;
@@ -140,6 +147,30 @@ TEST(CApiSwfTextTest, RefusesNonActionTagsAndUndecodableStreamsWithOutputsCleare
   EXPECT_EQ(text, nullptr);
   EXPECT_EQ(size, 0u);
   EXPECT_EQ(std::string(radicle_last_error()), stream.message);
+}
+
+TEST(CApiSwfTextTest, ActionTagsJsonListsDoActionsWithSpriteFlags) {
+  const auto file = open(action_movie());
+  ASSERT_NE(file, nullptr);
+  radicle_swf_history* raw = nullptr;
+  ASSERT_EQ(radicle_swf_history_create(file.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
+  const HistoryHandle history(raw);
+
+  std::uint8_t* text = nullptr;
+  std::size_t size = 0;
+  ASSERT_EQ(radicle_swf_action_tags_json(history.get(), &text, &size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const std::string list(reinterpret_cast<const char*>(text), size);
+  radicle_free_bytes(text);
+  EXPECT_EQ(list,
+            R"([{"tag_index":0,"code":12,"inside_sprite":false},{"tag_index":1,"code":59,"inside_sprite":false},{"tag_index":4,"code":12,"inside_sprite":true},{"tag_index":7,"code":12,"inside_sprite":false}])")
+      << list;
+
+  text = nullptr;
+  size = 77;
+  EXPECT_EQ(radicle_swf_action_tags_json(nullptr, &text, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(text, nullptr);
+  EXPECT_EQ(size, 0u);
 }
 
 TEST(CApiSwfTextTest, InspectTextMatchesTheCppInspectionAndRefusesANullName) {
