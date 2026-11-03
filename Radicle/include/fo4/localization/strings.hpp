@@ -33,6 +33,14 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+struct StringTableLimits {
+  std::size_t max_rows;
+  std::size_t max_records;
+  std::size_t max_text_bytes;
+};
+
+LocalizedStringTable read_string_table_bounded(std::span<const std::byte> bytes,
+                                               StringTableKind kind, StringTableLimits limits);
 LocalizedStringTable read_string_table(std::span<const std::byte> bytes,
                                        StringTableKind kind);
 LocalizedStringTable read_string_table_file(const std::filesystem::path& path,

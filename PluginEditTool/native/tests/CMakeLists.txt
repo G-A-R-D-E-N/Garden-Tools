@@ -112,6 +112,8 @@ fo4ide_add_test(fo4ide_test_swf_target unit/SwfTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_swf_target_save_as unit/SwfTargetSaveAsTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_settings_security unit/SettingsTargetSecurityTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_papyrus_target unit/PapyrusTargetTests.cpp fo4ide_app)
+target_sources(fo4ide_test_papyrus_target PRIVATE unit/PapyrusSnapshotFlagsTests.cpp)
+target_compile_definitions(fo4ide_test_papyrus_target PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_add_test(fo4ide_test_plugin_backend_target unit/PluginBackendTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_backend_target_perk unit/PluginBackendTargetPerkTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_element_routing unit/PluginBackendElementRoutingTests.cpp fo4ide_app)
@@ -136,8 +138,19 @@ add_executable(
     unit/RadiclePluginNameFieldTests.cpp
     unit/RadiclePluginQuestObjectiveTests.cpp
     unit/RadiclePluginQuestAuthorTests.cpp
+    unit/RadiclePluginJournalRootTests.cpp
+    unit/RadiclePluginJournalIntegrationTests.cpp
+    unit/RadiclePluginJournalDirectoryTests.cpp
+    unit/RadiclePluginJournalArchiveTests.cpp
+    unit/RadiclePluginJournalReadStringsTests.cpp
+    unit/RadiclePluginBa2SourceTests.cpp
+    unit/RadiclePluginStringJournalTests.cpp
+    unit/RadiclePluginWindowsJournalProbeTests.cpp
+    unit/RadiclePluginWindowsJournalSessionTests.cpp
+    unit/RadiclePluginWindowsJournalIntentTests.cpp
     unit/RadiclePluginHedrCountTests.cpp
     unit/RadiclePluginStringsTests.cpp
+    unit/RadiclePluginStringLanguagesTests.cpp
     unit/RadiclePluginWorklistTests.cpp
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
@@ -211,6 +224,8 @@ add_executable(
     unit/RadiclePluginProjFlagsTests.cpp
     unit/RadiclePluginProjExplHazdLimitsTests.cpp
     unit/RadiclePluginQuestAuthoringTests.cpp
+    unit/RadiclePluginQuestLocalizationTests.cpp
+    unit/RadiclePluginQuestReadbackTests.cpp
     unit/RadiclePluginQuestEventDataTests.cpp
     unit/RadiclePluginQuestPartialFormTests.cpp
     unit/RadiclePluginQuestCreateLevelTests.cpp
@@ -231,7 +246,11 @@ target_link_libraries(
     fo4ide_test_plugin_backend
     PRIVATE fo4ide_plugin fo4ide_app Catch2::Catch2WithMain ZLIB::ZLIB
 )
+if(WIN32)
+    target_link_libraries(fo4ide_test_plugin_backend PRIVATE ntdll advapi32 userenv)
+endif()
 target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
+target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 fo4ide_enable_warnings(fo4ide_test_plugin_backend)
 fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
 catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})

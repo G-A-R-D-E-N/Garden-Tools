@@ -11,6 +11,22 @@ add_library(
     plugin/RadiclePluginQueries.cpp
     plugin/RadiclePluginConditions.cpp
     plugin/RadiclePluginPending.cpp
+    plugin/RadiclePluginJournalLock.cpp
+    plugin/RadiclePluginJournalRoot.cpp
+    plugin/RadiclePluginJournalFiles.cpp
+    plugin/RadiclePluginJournalManifest.cpp
+    plugin/RadiclePluginJournalDestination.cpp
+    plugin/RadiclePluginJournalSession.cpp
+    plugin/RadiclePluginJournalArchiveOrder.cpp
+    plugin/RadiclePluginJournalPeers.cpp
+    plugin/RadiclePluginJournalProfile.cpp
+    plugin/RadiclePluginJournalReadStrings.cpp
+    plugin/RadiclePluginHeldArchives.cpp
+    plugin/RadiclePluginHeldStrings.cpp
+    plugin/RadiclePluginHeldLocalization.cpp
+    plugin/RadiclePluginHeldBackend.cpp
+    plugin/RadiclePluginJournalBackend.cpp
+    plugin/RadiclePluginBa2Source.cpp
     plugin/RadiclePluginAnalysis.cpp
     plugin/RadiclePluginMasters.cpp
     plugin/RadiclePluginMutation.cpp
@@ -34,9 +50,13 @@ add_library(
     plugin/RadiclePluginQuestExistingExtras.cpp
     plugin/RadiclePluginQuestLocalized.cpp
     plugin/RadiclePluginQuestObjectives.cpp
+    plugin/RadiclePluginQuestFragments.cpp
     plugin/RadiclePluginQuestReads.cpp
     plugin/RadiclePluginStrings.cpp
+    plugin/RadiclePluginStringLanguages.cpp
+    plugin/RadiclePluginPathIdentity.cpp
     plugin/RadiclePluginStringsEdit.cpp
+    plugin/RadiclePluginStringsOverlay.cpp
     plugin/RadiclePluginElement.cpp
     plugin/RadiclePluginMaintenance.cpp
     plugin/RadiclePluginCompact.cpp
@@ -70,6 +90,10 @@ add_library(
     plugin/ConditionFunctions.cpp
 )
 target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4 PRIVATE ZLIB::ZLIB)
+if(WIN32)
+    target_sources(fo4ide_plugin PRIVATE plugin/RadiclePluginWindowsJournalDirectory.cpp plugin/RadiclePluginWindowsJournalIntent.cpp plugin/RadiclePluginWindowsJournalDestination.cpp plugin/RadiclePluginWindowsJournalSession.cpp)
+    target_link_libraries(fo4ide_plugin PRIVATE advapi32 ntdll)
+endif()
 fo4ide_enable_warnings(fo4ide_plugin)
 fo4ide_enable_sanitizers(fo4ide_plugin)
 if(FO4IDE_BUILD_TESTS)
@@ -193,6 +217,7 @@ add_library(
     fo4ide_papyrus
     papyrus/Lexer.cpp
     papyrus/Parser.cpp
+    papyrus/ParserBoundedFile.cpp
     papyrus/Type.cpp
     papyrus/Binding.cpp
     papyrus/ScriptIndex.cpp
@@ -203,9 +228,19 @@ add_library(
     papyrus/Symbols.cpp
     papyrus/CreationKitFidelity.cpp
     papyrus/AnalysisService.cpp
+    papyrus/QuestFragmentSource.cpp
+    papyrus/SecureSourceSnapshot.cpp
+    papyrus/SecureSourceSnapshotWindows.cpp
     papyrus/CompileScript.cpp
 )
 target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4)
+if(WIN32)
+    target_link_libraries(fo4ide_papyrus PRIVATE ntdll)
+endif()
+if(FO4IDE_BUILD_TESTS)
+    target_compile_definitions(fo4ide_papyrus PRIVATE FO4IDE_TEST_HOOKS)
+endif()
+target_link_libraries(fo4ide_plugin PRIVATE fo4ide_papyrus)
 fo4ide_enable_warnings(fo4ide_papyrus)
 fo4ide_enable_sanitizers(fo4ide_papyrus)
 

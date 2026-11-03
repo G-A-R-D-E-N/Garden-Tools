@@ -57,6 +57,20 @@ fo4::localization::LocalizedStringTable sample(fo4::localization::StringTableKin
 
 }  // namespace
 
+// Detects: bounded held-source parsing must reject row, record and duplicate-offset text amplification before allocation.
+TEST(LocalizedStrings, BoundedParsingRejectsAmplificationAndMalformedOffsets) {
+  using namespace fo4::localization;
+  for (const auto kind : {StringTableKind::strings, StringTableKind::dlstrings, StringTableKind::ilstrings}) {
+    const auto encoded = write_string_table(sample(kind));
+    EXPECT_THROW(read_string_table_bounded(encoded, kind, {2, 8, 100}), StringTableError);
+    EXPECT_THROW(read_string_table_bounded(encoded, kind, {3, 1, 100}), StringTableError);
+    EXPECT_THROW(read_string_table_bounded(encoded, kind, {3, 2, 16}), StringTableError);
+    EXPECT_EQ(read_string_table_bounded(encoded, kind, {3, 2, 17}).entries.size(), 3u);
+    auto malformed = encoded; set_u32(malformed, 12, 1);
+    EXPECT_THROW(read_string_table_bounded(malformed, kind, {3, 2, 100}), StringTableError);
+  }
+}
+
 TEST(LocalizedStrings, StringsSortsIdsButPreservesIndependentDataOffsets) {
   const auto encoded = fo4::localization::write_string_table(
       sample(fo4::localization::StringTableKind::strings));

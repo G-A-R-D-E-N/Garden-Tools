@@ -58,7 +58,16 @@ PapyrusCompileResult compileScript(ScriptIndex& index, const Script* script,
         return result;
     }
 
-    const auto flagFile =
+    if (index.snapshotOnly() && options.flagFile) {
+        PapyrusCompileResult result;
+        result.script = script;
+        result.diagnostics = std::move(diagnostics);
+        result.diagnostics.push_back(Diagnostic{DiagnosticCode::CannotEmit, Severity::Error,
+            "Explicit flag files require an authorized snapshot", Span{}, sourceFileName});
+        result.sourcesComplete = false;
+        return result;
+    }
+    const auto flagFile = index.snapshotOnly() ? std::optional<std::filesystem::path>{} :
         options.flagFile ? *options.flagFile : UserFlagTable::findFlagFile(index.roots());
     std::optional<UserFlagTable> ownedTable;
     CodeGenOptions codegenOptions;
@@ -69,7 +78,11 @@ PapyrusCompileResult compileScript(ScriptIndex& index, const Script* script,
     codegenOptions.emitDebugInfo = options.emitDebugInfo;
     codegenOptions.emitDebugOnlyCode = options.emitDebugOnlyCode;
     codegenOptions.emitBetaOnlyCode = options.emitBetaOnlyCode;
-    if (flagFile) {
+    if (index.snapshotOnly() && index.snapshotFlags()) {
+        ownedTable = UserFlagTable::parse(*index.snapshotFlags());
+        if (ownedTable->flags().empty()) ownedTable = UserFlagTable::fallout4Default();
+        codegenOptions.userFlags = &*ownedTable;
+    } else if (flagFile) {
         ownedTable = UserFlagTable::fromFileOrDefault(*flagFile);
         codegenOptions.userFlags = &*ownedTable;
     }

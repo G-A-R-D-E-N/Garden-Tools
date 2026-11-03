@@ -1,9 +1,13 @@
 #include "fo4/c_api_vmad.h"
 #include "fo4/plugin/vmad_writer.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "plugin_bytes.hpp"
 #include "vmad_writer_fixture.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -111,6 +115,91 @@ struct CQuestPlugin {
 };
 
 }  // namespace
+
+// Detects: the first quest fragment must preserve existing scripts and survive a save and reload.
+TEST(VmadQuestFragments, FirstBindingPreservesLeadingScripts) {
+  constexpr std::string_view script = "IntegratedAddons:Fragments:Quests:QF_SimpleRadioFailsafes";
+  constexpr std::string_view function = "Fragment_Stage_0000_Item_00";
+  auto plugin = read_plugin(fixture::plugin_bytes(fixture::payload(), "QUST"), "Vmad.esp");
+  const auto before = fixture::subrecord(plugin).data;
+  ASSERT_EQ(bootstrap_quest_vmad_fragment(plugin, fixture::key(), 0, 0, script, function),
+            VmadStructureMutationStatus::updated);
+  const auto& vmad = fixture::subrecord(plugin).data;
+  ASSERT_GE(vmad.size(), before.size());
+  EXPECT_TRUE(std::equal(before.begin(), before.end(), vmad.begin()));
+  auto expected = before;
+  test::ByteWriter tail;
+  tail.u8(3); tail.u16(1); fixture::name(tail, script); tail.u8(0); tail.u16(0);
+  tail.u16(0); tail.u16(0); tail.i32(0); tail.u8(1);
+  fixture::name(tail, script); fixture::name(tail, function);
+  tail.u16(0);
+  expected.insert(expected.end(), tail.bytes.begin(), tail.bytes.end());
+  EXPECT_EQ(vmad, expected);
+  const auto extras = extras_of(vmad);
+  ASSERT_TRUE(extras.fully_consumed);
+  EXPECT_EQ(extras.script_name, script);
+  ASSERT_EQ(extras.fragments.size(), 1u);
+  EXPECT_EQ(extras.fragments[0].stage, 0);
+  EXPECT_EQ(extras.fragments[0].function, function);
+  const auto reread = read_plugin(write_plugin(plugin), "Vmad.esp");
+  EXPECT_EQ(fixture::subrecord(reread).data, vmad);
+}
+
+// Detects: bootstrapping must create a missing VMAD and refuse existing fragment data unchanged.
+TEST(VmadQuestFragments, FirstBindingCreatesVmadAndRefusesExistingExtras) {
+  auto bare = read_plugin(fixture::plugin_bytes_without_vmad("QUST"), "Vmad.esp");
+  ASSERT_EQ(bootstrap_quest_vmad_fragment(bare, fixture::key(), 10, 0, "QF_Test", "Fragment_10"),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(extras_of(fixture::subrecord(bare).data).fragments.size(), 1u);
+  auto existing = read_plugin(fixture::plugin_bytes(quest_bytes(fragment_tail()), "QUST"), "Vmad.esp");
+  const auto before = write_plugin(existing);
+  EXPECT_EQ(bootstrap_quest_vmad_fragment(existing, fixture::key(), 10, 0, "QF_Test", "Fragment_10"),
+            VmadStructureMutationStatus::not_authorable);
+  EXPECT_EQ(write_plugin(existing), before);
+}
+
+// Detects: a first fragment must preserve existing alias bindings in the quest VMAD.
+TEST(VmadQuestFragments, FirstBindingPreservesExistingQuestExtras) {
+  for (bool with_alias : {false, true}) {
+    test::ByteWriter tail;
+    tail.u8(3); tail.u16(0); tail.u16(0); tail.u16(with_alias ? 1 : 0);
+    if (with_alias) {
+      tail.u16(0); tail.u16(5); tail.u32(0x800); tail.u16(6); tail.u16(2); tail.u16(0);
+    }
+    auto plugin = read_plugin(fixture::plugin_bytes(quest_bytes(tail.bytes), "QUST"), "Vmad.esp");
+    const auto before = fixture::subrecord(plugin).data;
+    EXPECT_EQ(bootstrap_quest_vmad_fragment(plugin, fixture::key(), 10, 0, "QF_Test", "Fragment_10"),
+              VmadStructureMutationStatus::updated);
+    const auto& vmad = fixture::subrecord(plugin).data;
+    const auto extras = extras_of(vmad);
+    ASSERT_TRUE(extras.fully_consumed);
+    ASSERT_EQ(extras.fragments.size(), 1u);
+    EXPECT_EQ(extras.aliases.size(), with_alias ? 1u : 0u);
+    const auto alias_bytes = with_alias ? 16u : 2u;
+    EXPECT_TRUE(std::equal(before.end() - alias_bytes, before.end(), vmad.end() - alias_bytes));
+  }
+}
+
+// Detects: invalid names and damaged or duplicate VMADs must not alter the quest.
+TEST(VmadQuestFragments, FirstBindingRejectsInvalidInputsWithoutChanges) {
+  auto bad_tail = quest_bytes(fragment_tail());
+  bad_tail.pop_back();
+  for (const auto& bytes : {fixture::plugin_bytes(bad_tail, "QUST"),
+                            fixture::plugin_bytes(fixture::payload(), "QUST", true)}) {
+    auto plugin = read_plugin(bytes, "Vmad.esp");
+    const auto before = write_plugin(plugin);
+    EXPECT_THROW(bootstrap_quest_vmad_fragment(plugin, fixture::key(), 10, 0, "QF_Test", "Fragment_10"),
+                 schema::ScalarError);
+    EXPECT_EQ(write_plugin(plugin), before);
+  }
+  auto plugin = read_plugin(fixture::plugin_bytes(fixture::payload(), "QUST"), "Vmad.esp");
+  const auto before = write_plugin(plugin);
+  EXPECT_THROW(bootstrap_quest_vmad_fragment(plugin, fixture::key(), 10, 0, std::string(65536, 'x'), "F"),
+               schema::ScalarError);
+  EXPECT_THROW(bootstrap_quest_vmad_fragment(plugin, fixture::key(), 10, 0, "QF_Test", std::string(65536, 'x')),
+               schema::ScalarError);
+  EXPECT_EQ(write_plugin(plugin), before);
+}
 
 TEST(VmadQuestFragments, NamesAreRewrittenInPlace) {
   const auto tail = fragment_tail();
@@ -591,4 +680,18 @@ TEST(VmadQuestFragments, CApiPairFormRefusesDuplicatePairAndLeavesBytesUnchanged
   ASSERT_EQ(radicle_plugin_write_file(plugin.handle, output.string().c_str()), RADICLE_STATUS_OK);
   EXPECT_EQ(fixture::subrecord(fo4::read_plugin_file(output), "Refused.esp").data,
             fixture::subrecord(read_plugin(bytes, "Vmad.esp")).data);
+}
+
+// Detects: localized record creation must write the supplied required string ID and refuse missing IDs.
+TEST(QuestVmad, LocalizedCreationUsesSuppliedStringId) {
+  auto plugin = fo4::read_plugin(fo4::test::make_tes4_plugin(0x80, 1.0f, {}), "Localized.esp");
+  EXPECT_EQ(fo4::create_record(plugin, fo4::Signature::from_string("BOOK"), "NoDescription").status,
+            fo4::RecordCreateStatus::no_default);
+  const std::vector<fo4::LocalizedRowId> ids{{fo4::Signature::from_string("DESC"), 77}};
+  const auto created = fo4::create_record_with_localized_rows(plugin, fo4::Signature::from_string("BOOK"), "HasDescription", ids);
+  ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
+  const auto* record = fo4::find_record(plugin, created.key); ASSERT_NE(record, nullptr);
+  const auto found = std::find_if(record->subrecords.begin(), record->subrecords.end(), [](const auto& sub) { return sub.signature == fo4::Signature::from_string("DESC"); });
+  ASSERT_NE(found, record->subrecords.end());
+  EXPECT_EQ(found->data, (std::vector<std::byte>{std::byte{77}, std::byte{0}, std::byte{0}, std::byte{0}}));
 }

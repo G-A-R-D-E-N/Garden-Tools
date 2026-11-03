@@ -1,4 +1,5 @@
 #include <chrono>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -73,13 +74,13 @@ void writeHeader(fo4::test::ByteWriter& out,
     fo4::test::end_record(out, tes4);
 }
 
-std::vector<std::byte> baseQuestBytes() {
+std::vector<std::byte> baseQuestBytes(std::uint16_t flags = 0x0001u) {
     fo4::test::ByteWriter out;
     writeHeader(out, 0x801);
     const auto group = fo4::test::begin_group(out, "QUST", 0);
     const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800u, 131);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"AlreadyEnabled\0", 15});
-    writeQuestData(out, 0x0001u);
+    writeQuestData(out, flags);
     fo4::test::end_record(out, quest);
     fo4::test::end_group(out, group);
     return out.bytes;
@@ -158,6 +159,50 @@ TEST_CASE("Native CreateSeqFile emits only newly start-game-enabled quests") {
     stream.read(reinterpret_cast<char*>(&value), sizeof(value));
     REQUIRE(stream.good());
     CHECK(value == 0x01000801u);
+}
+
+// Detects: enabling a master quest in an override must encode that master's index rather than the patch's local index.
+TEST_CASE("Native CreateSeqFile retains the origin index for a newly enabled override") {
+    const auto root = seqTempRoot(); SeqCleanup cleanup{root};
+    const auto base = root / "Base.esm", plugin = root / "Patch.esp";
+    seqWriteBytes(base, baseQuestBytes(0)); seqWriteBytes(plugin, patchQuestBytes());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", nlohmann::json::array({
+        seqPluginEntry("Base.esm", base), seqPluginEntry("Patch.esp", plugin)})}}).has_value());
+    REQUIRE(backend.createSeqFile(nlohmann::json::array({"Patch.esp", ""})).has_value());
+    const auto seq = root / "Seq" / "Patch.seq";
+    REQUIRE(std::filesystem::file_size(seq) == 8);
+    std::ifstream stream(seq, std::ios::binary);
+    std::array<unsigned char, 8> actual{}; stream.read(reinterpret_cast<char*>(actual.data()), actual.size());
+    REQUIRE(stream.good());
+    const std::array<unsigned char, 8> expected{0x00, 0x08, 0, 0, 0x01, 0x08, 0, 1};
+    CHECK(actual == expected);
+}
+
+// Detects: multiple start-enabled quests with distinct other flag bits must retain record order and the plugin's master index in SEQ output.
+TEST_CASE("Native CreateSeqFile preserves multiple start-enabled quest IDs") {
+    const auto root = seqTempRoot(); SeqCleanup cleanup{root};
+    const auto base = root / "Base.esm", plugin = root / "Patch.esp";
+    seqWriteBytes(base, baseQuestBytes());
+    fo4::test::ByteWriter out; writeHeader(out, 0x26D9, {"Base.esm"});
+    const auto group = fo4::test::begin_group(out, "QUST", 0);
+    for (const auto [id, flags] : std::array<std::pair<std::uint32_t, std::uint16_t>, 3>{{
+            {0x01001733u, 0x0111u}, {0x010026D7u, 0x0001u}, {0x010026D8u, 0x0101u}}}) {
+        const auto quest = fo4::test::begin_record(out, "QUST", 0, id, 131);
+        writeQuestData(out, flags); fo4::test::end_record(out, quest);
+    }
+    fo4::test::end_group(out, group); seqWriteBytes(plugin, out.bytes);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", nlohmann::json::array({
+        seqPluginEntry("Base.esm", base), seqPluginEntry("Patch.esp", plugin)})}}).has_value());
+    REQUIRE(backend.createSeqFile(nlohmann::json::array({"Patch.esp", ""})).has_value());
+    const auto seq = root / "Seq" / "Patch.seq";
+    REQUIRE(std::filesystem::file_size(seq) == 12);
+    std::ifstream stream(seq, std::ios::binary);
+    std::array<unsigned char, 12> actual{}; stream.read(reinterpret_cast<char*>(actual.data()), actual.size());
+    REQUIRE(stream.good());
+    const std::array<unsigned char, 12> expected{0x33, 0x17, 0, 1, 0xD7, 0x26, 0, 1, 0xD8, 0x26, 0, 1};
+    CHECK(actual == expected);
 }
 
 TEST_CASE("Native CreateSeqFile reports a plugin folder with non-ANSI characters") {

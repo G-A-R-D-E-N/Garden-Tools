@@ -1,4 +1,5 @@
 #include "sha256.hpp"
+#include "fo4/io/sha256.hpp"
 
 #include <array>
 #include <cstddef>
@@ -106,3 +107,13 @@ std::string sha256Hex(std::string_view bytes) {
 }
 
 }  // namespace fo4::papyrus
+
+namespace fo4::io {
+
+std::string sha256_hex(std::span<const std::byte> bytes) {
+    if (bytes.empty()) return fo4::papyrus::sha256Hex({});
+    return fo4::papyrus::sha256Hex(
+        std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+}
+
+}

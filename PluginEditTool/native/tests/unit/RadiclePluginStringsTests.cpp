@@ -522,6 +522,54 @@ TEST_CASE("Discard drops staged string edits so reads show the saved table again
     CHECK_FALSE(tables[0].contains("pending"));
 }
 
+// Detects: discarding an independent AddString edit must preserve pending edits in other languages.
+TEST_CASE("Discard independent string allocation preserves other languages") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPlugin(backend, root);
+    REQUIRE(backend.invoke("strings.AddString", nlohmann::json::array({"Patch.esp", "en", "STRINGS", "Added"})).has_value());
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "de", "STRINGS", 10, "Geaendert"})).has_value());
+    REQUIRE(backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", "en"})).has_value());
+    const auto english = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS", "", 0, 200}));
+    const auto german = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "de", "STRINGS", "", 0, 200}));
+    CHECK_FALSE(english.contains("pending"));
+    CHECK(german["pending"] == true);
+    CHECK(german["rows"][0]["text"] == "Geaendert");
+    REQUIRE(backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", "de"})).has_value());
+}
+
+// Detects: a plugin-dependent localized edit must prevent discarding its table without blocking an unrelated language.
+TEST_CASE("Discard respects plugin-dependent localized languages") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPlugin(backend, root);
+    REQUIRE(backend.invokeBackend("CreateRecord", nlohmann::json::array({"Patch.esp", "QUST",
+        nlohmann::json{{"editorId", "Localized"}, {"name", "New title"}}})).has_value());
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "de", "STRINGS", 10, "Geaendert"})).has_value());
+    REQUIRE(backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", "de"})).has_value());
+    const auto rejected = backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", "en"}));
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().type == "LocalizedPendingPluginEdit");
+    const auto english = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS", "", 0, 200}));
+    CHECK(english["pending"] == true);
+}
+
+// Detects: removing or replacing a newly referenced string ID must be refused while nonconflicting edits remain available.
+TEST_CASE("String removals and imports preserve newly staged plugin references") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPlugin(backend, root);
+    REQUIRE(backend.invokeBackend("CreateRecord", nlohmann::json::array({"Patch.esp", "QUST",
+        nlohmann::json{{"editorId", "Localized"}, {"name", "New title"}}})).has_value());
+    const auto removed = backend.invoke("strings.RemoveString", nlohmann::json::array({"Patch.esp", "en", "STRINGS", 1001}));
+    REQUIRE_FALSE(removed.has_value());
+    CHECK(removed.error().type == "LocalizedStringInUse");
+    REQUIRE(backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS", R"({"rows":[{"id":20,"text":"Changed"}]})", "merge"})).has_value());
+    REQUIRE(backend.invoke("strings.RemoveString", nlohmann::json::array({"Patch.esp", "en", "STRINGS", 10})).has_value());
+    const auto unsafe = backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS", R"({"rows":[]})", "replace"}));
+    REQUIRE_FALSE(unsafe.has_value());
+    CHECK(unsafe.error().type == "LocalizedStringInUse");
+    REQUIRE(backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS",
+        R"({"rows":[{"id":1001,"text":"New title"}]})", "replace"})).has_value());
+}
+
 TEST_CASE("Staged string edits block a LoadMo2 or OpenPlugin reload without discardPending instead of dropping them (regression: silent loss of staged strings on reload)") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

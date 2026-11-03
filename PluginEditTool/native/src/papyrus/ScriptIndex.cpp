@@ -4,6 +4,7 @@
 #include <cctype>
 #include <set>
 #include <stack>
+#include <stdexcept>
 #include <system_error>
 
 #include <fo4ide/papyrus/Parser.hpp>
@@ -41,10 +42,10 @@ bool hasSuffix(std::string_view text, std::string_view suffix) {
 // lowercased key when no root contains the path (should not happen).
 std::string qualifiedNameOf(const std::filesystem::path& path,
                             const std::string& fallbackKey,
-                            const std::vector<std::filesystem::path>& roots) {
+                            const std::vector<std::filesystem::path>& roots, bool lexical) {
     std::error_code error;
     for (const auto& root : roots) {
-        auto relative = std::filesystem::relative(path, root, error);
+        auto relative = lexical ? path.lexically_relative(root) : std::filesystem::relative(path, root, error);
         if (error) {
             error.clear();
             continue;
@@ -61,7 +62,50 @@ std::string qualifiedNameOf(const std::filesystem::path& path,
 
 }  // namespace
 
-void ScriptIndex::addRoot(const std::filesystem::path& root) {
+void ScriptIndex::addSnapshot(const std::filesystem::path& root, const std::vector<SnapshotSource>& sources) {
+    if (!roots_.empty() && !snapshotOnly_) throw std::runtime_error("cannot mix snapshot and filesystem roots");
+    std::error_code error;
+    const auto full = std::filesystem::absolute(root, error).lexically_normal();
+    if (error || full.empty()) throw std::runtime_error("invalid snapshot root");
+    std::unordered_map<std::string, std::unique_ptr<Script>> captured;
+    std::optional<std::string> capturedFlags;
+    std::unordered_map<std::string, std::filesystem::path> qualified, bareNames;
+    for (const auto& source : sources) {
+        const auto& rel = source.relativePath;
+        if (rel.empty() || rel.is_absolute() || rel.has_root_name()) throw std::runtime_error("invalid snapshot path");
+        for (const auto& part : rel) if (part == "." || part == "..") throw std::runtime_error("invalid snapshot path");
+        auto text = rel.generic_string();
+#ifdef _WIN32
+        const bool isFlags = lower(text) == "institute_papyrus_flags.flg";
+#else
+        const bool isFlags = text == "Institute_Papyrus_Flags.flg";
+#endif
+        if (isFlags) {
+            if (capturedFlags) throw std::runtime_error("duplicate snapshot flag file");
+            capturedFlags = source.text;
+            continue;
+        }
+        if (!hasSuffix(lower(text), ".psc")) throw std::runtime_error("invalid snapshot extension");
+        text.resize(text.size() - 4);
+        std::replace(text.begin(), text.end(), '/', ':');
+        const auto path = (full / rel).lexically_normal();
+        const auto key = lower(text);
+        const auto bare = text.substr(text.find_last_of(':') + 1);
+        if (qualified.contains(key)) throw std::runtime_error("duplicate snapshot script");
+        qualified.emplace(key, path);
+        bareNames.try_emplace(lower(bare), path);
+        captured.emplace(path.string(), std::make_unique<Script>(Parser::parse(source.text, path.string())));
+    }
+    for (auto& [key, path] : qualified) byQualifiedName_.try_emplace(key, std::move(path));
+    for (auto& [key, path] : bareNames) byBaseName_.try_emplace(key, std::move(path));
+    for (auto& [key, script] : captured) snapshots_.try_emplace(key, std::move(script));
+    roots_.push_back(full);
+    if (!snapshotFlags_ && capturedFlags) snapshotFlags_ = std::move(capturedFlags);
+    snapshotOnly_ = true;
+}
+
+void ScriptIndex::addRoot(const std::filesystem::path& root, std::size_t maxEntries) {
+    if (snapshotOnly_) throw std::runtime_error("cannot mix snapshot and filesystem roots");
     std::error_code error;
     const auto full = std::filesystem::absolute(root, error);
     if (error || !std::filesystem::is_directory(full, error) || error) return;
@@ -69,7 +113,9 @@ void ScriptIndex::addRoot(const std::filesystem::path& root) {
     for (const auto& existing : roots_) {
         if (iequals(existing.string(), full.string())) return;
     }
-    roots_.push_back(full);
+    std::unordered_map<std::string, std::filesystem::path> qualified;
+    std::unordered_map<std::string, std::filesystem::path> bareNames;
+    std::size_t entries = 0;
 
     // Manual DFS mirroring PapyrusFileWalk: case-insensitive "*.psc" match,
     // symlinked directories are skipped (the C# checks LinkTarget is null).
@@ -83,10 +129,14 @@ void ScriptIndex::addRoot(const std::filesystem::path& root) {
         std::error_code walkError;
         for (auto it = std::filesystem::directory_iterator(dir, walkError);
              !walkError && it != std::filesystem::directory_iterator(); it.increment(walkError)) {
+            if (maxEntries && ++entries > maxEntries) throw std::runtime_error("Papyrus import tree exceeds its entry limit");
             const auto& entry = *it;
             std::error_code entryError;
             const auto status = entry.symlink_status(entryError);
-            if (entryError) continue;
+            if (entryError) {
+                if (maxEntries) throw std::runtime_error("cannot inspect Papyrus import entry");
+                continue;
+            }
 
             if (std::filesystem::is_regular_file(status)) {
                 const auto filename = entry.path().filename().string();
@@ -101,11 +151,11 @@ void ScriptIndex::addRoot(const std::filesystem::path& root) {
                     if (!hasSuffix(lower(text), ".psc")) continue;
                     text.resize(text.size() - 4);
                     std::replace(text.begin(), text.end(), '/', ':');
-                    if (!byQualifiedName_.contains(lower(text))) {
-                        byQualifiedName_[lower(text)] = entry.path();
+                    if (!qualified.contains(lower(text))) {
+                        qualified[lower(text)] = entry.path();
                     }
                     const auto bare = text.substr(text.find_last_of(':') + 1);
-                    if (!byBaseName_.contains(lower(bare))) byBaseName_[lower(bare)] = entry.path();
+                    if (!bareNames.contains(lower(bare))) bareNames[lower(bare)] = entry.path();
                 }
             } else if (std::filesystem::is_directory(status)) {
                 // Skip symlinked directories (reparse points), like the C#.
@@ -113,15 +163,19 @@ void ScriptIndex::addRoot(const std::filesystem::path& root) {
                 subdirs.push_back(entry.path());
             }
         }
+        if (walkError && maxEntries) throw std::runtime_error("cannot scan Papyrus import directory");
         for (auto it = subdirs.rbegin(); it != subdirs.rend(); ++it) pending.push(*it);
     }
+    for (auto& [key, path] : qualified) byQualifiedName_.try_emplace(key, std::move(path));
+    for (auto& [key, path] : bareNames) byBaseName_.try_emplace(key, std::move(path));
+    roots_.push_back(full);
 }
 
 std::vector<std::string> ScriptIndex::scriptNames() const {
     std::vector<std::string> names;
     names.reserve(byQualifiedName_.size());
     for (const auto& [key, path] : byQualifiedName_) {
-        names.push_back(qualifiedNameOf(path, key, roots_));
+        names.push_back(qualifiedNameOf(path, key, roots_, snapshotOnly_));
     }
     // Mirrors the C# ScriptNames: OrdinalIgnoreCase sort of the keys.
     std::sort(names.begin(), names.end(),
@@ -145,7 +199,16 @@ const Script* ScriptIndex::resolve(std::string_view scriptName) {
     return file ? parseCached(*file) : nullptr;
 }
 
+void ScriptIndex::setReadLimits(std::size_t maxFileBytes, std::size_t maxTotalBytes) {
+    if (!parsed_.empty()) throw std::logic_error("Papyrus read limits must be set before parsing");
+    maxFileBytes_ = maxFileBytes;
+    maxTotalBytes_ = maxTotalBytes;
+}
+
 const Script* ScriptIndex::parseCached(const std::filesystem::path& path) {
+    const auto snapshot = snapshots_.find(path.string());
+    if (snapshot != snapshots_.end()) return snapshot->second.get();
+    if (snapshotOnly_) return nullptr;
     std::error_code error;
     const auto size = std::filesystem::file_size(path, error);
     if (error) return nullptr;
@@ -160,11 +223,25 @@ const Script* ScriptIndex::parseCached(const std::filesystem::path& path) {
         return cached->second.script.get();
     }
 
-    auto parsed = Parser::parseFile(path);
+    std::size_t limit = maxFileBytes_;
+    if (maxTotalBytes_) {
+        std::size_t used = 0;
+        for (const auto& [cachedKey, entry] : parsed_) {
+            if (cachedKey == key) continue;
+            if (entry.size > maxTotalBytes_ - used) return nullptr;
+            used += static_cast<std::size_t>(entry.size);
+        }
+        const auto remaining = maxTotalBytes_ - used;
+        if (remaining == 0) return nullptr;
+        limit = limit ? std::min(limit, remaining) : remaining;
+    }
+    if (limit && size > limit) return nullptr;
+    std::size_t bytesRead = 0;
+    auto parsed = Parser::parseFile(path, limit, &bytesRead);
     if (!parsed) return nullptr;
 
     auto& entry = parsed_[key];
-    entry.size = size;
+    entry.size = bytesRead;
     entry.mtime = mtime;
     entry.script = std::make_unique<Script>(std::move(*parsed));
     return entry.script.get();

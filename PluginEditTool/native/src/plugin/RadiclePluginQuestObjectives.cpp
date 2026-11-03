@@ -1,4 +1,5 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -12,6 +13,7 @@
 
 #include <fo4/forms/quest.hpp>
 #include <fo4/graph/conflict_graph.hpp>
+#include <fo4/io/path_text.hpp>
 #include <fo4/plugin/container.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
@@ -25,6 +27,7 @@
 namespace fo4ide::plugin {
 
 using namespace questinternal;
+using fo4::env::StringSource;
 
 namespace {
 
@@ -80,61 +83,6 @@ std::optional<std::int32_t> resolveTargetAlias(const fo4::forms::QuestAliases& a
 
 }  // namespace
 
-Result<nlohmann::json> RadiclePluginBackend::getQuestObjectives(const nlohmann::json& arguments) const {
-    const auto pluginName = questStringArg(arguments, 0);
-    const auto recordText = questStringArg(arguments, 1);
-    if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
-    if (recordText.empty()) return std::unexpected(Error{"RecordMissing", "Record is empty"});
-
-    OpLock lock(*this, OpLock::Mode::Read);
-    const auto* loaded = findPlugin(pluginName);
-    if (loaded == nullptr) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
-
-    fo4::FormKey questKey;
-    try {
-        questKey = fo4::FormKey::parse(recordText);
-    } catch (const std::exception& error) {
-        return std::unexpected(Error{"InvalidFormKey", error.what()});
-    }
-    const auto* record = fo4::find_record(loaded->plugin, questKey);
-    if (record == nullptr) {
-        return std::unexpected(Error{"RecordNotFound", "Record is not present in " + pluginName + ": " + recordText});
-    }
-    if (record->header.signature != fo4::Signature::from_string("QUST")) {
-        return std::unexpected(Error{"RecordTypeMismatch", "GetQuestObjectives requires a QUST record"});
-    }
-
-    try {
-        const auto objectives = fo4::forms::decode_quest_objectives(loaded->plugin, questKey);
-        const auto aliases = fo4::forms::decode_quest_aliases(loaded->plugin, questKey);
-        nlohmann::json out = nlohmann::json::array();
-        for (const auto& objective : objectives.objectives) {
-            nlohmann::json targets = nlohmann::json::array();
-            for (const auto& target : objective.targets) {
-                nlohmann::json row{{"alias", target.alias}, {"flags", target.flags}};
-                for (const auto& alias : aliases.aliases) {
-                    if (alias.kind != fo4::forms::QuestAliasKind::collection &&
-                        static_cast<std::int32_t>(alias.id) == target.alias && alias.name.has_value()) {
-                        row["aliasName"] = *alias.name;
-                    }
-                }
-                if (target.keyword.has_value()) row["keyword"] = target.keyword->to_string();
-                targets.push_back(std::move(row));
-            }
-            const auto text = objective.display_text.has_value() && !objective.display_text->localized()
-                                  ? fo4::text::windows1252_to_utf8(objective.display_text->inline_text())
-                                  : std::string{};
-            out.push_back({{"index", objective.index}, {"flags", objective.flags},
-                           {"displayText", text}, {"targets", targets}});
-        }
-        return nlohmann::json{{"objectives", out}};
-    } catch (const fo4::forms::QuestError& error) {
-        return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
-    } catch (const std::exception& error) {
-        return std::unexpected(Error{"GetQuestObjectivesFailed", error.what()});
-    }
-}
-
 Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::json& arguments) {
     const auto pluginName = questStringArg(arguments, 0);
     const auto recordText = questStringArg(arguments, 1);
@@ -163,10 +111,108 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
     if (record->header.signature != fo4::Signature::from_string("QUST")) {
         return std::unexpected(Error{"RecordTypeMismatch", "SetQuestObjectives requires a QUST record"});
     }
-    if (loaded->plugin.header.tes4_flags.is_localized()) {
-        return std::unexpected(Error{
-            "LocalizedObjectiveTextUnsupported",
-            "SetQuestObjectives writes plain objective text; a localized plugin needs a string-table ID"});
+    const bool localized = loaded->plugin.header.tes4_flags.is_localized();
+    std::optional<LocalizedQuestTables> localizedTables;
+    std::optional<StagedLocalization> localizationState;
+    std::optional<LocalizedStringAllocation> sourceAllocation;
+    if (localized) {
+        localizedTables.emplace();
+        std::filesystem::path stringsDirectory;
+        if (arguments.is_array() && arguments.size() > 3 && arguments[3].is_object() &&
+            arguments[3].contains("stringsDirectory") && arguments[3]["stringsDirectory"].is_string()) {
+            stringsDirectory = fo4::io::from_utf8(arguments[3]["stringsDirectory"].get<std::string>());
+        }
+        const auto allowedDirectory = stringsDirectory.empty()
+                                          ? std::nullopt
+                                          : allowedLocalizationDirectory(stringsDirectory);
+        if (!stringsDirectory.empty() && !allowedDirectory.has_value()) {
+            return std::unexpected(Error{
+                "LocalizedSidecarPathNotAllowed",
+                "Refusing to write localized sidecars outside a trusted writable root: " +
+                    stringsDirectory.string()
+            });
+        }
+        bool allowAbsent = false;
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+        allowAbsent = allowedDirectory && !testJournalRoot_.empty() && !dataDirectory_.empty() &&
+            support::sameLocalizedPath(*allowedDirectory, loaded->path.parent_path() / "Strings");
+#endif
+        if (const auto error = loadLocalizedQuestTables(
+                arguments, loaded->path, allowedDirectory.value_or(std::filesystem::path{}),
+                *localizedTables, allowAbsent)) {
+            return std::unexpected(*error);
+        }
+        auto state = loaded->stagedLocalization.value_or(StagedLocalization{});
+        const auto overlay = [&](const std::filesystem::path& path,
+                                 std::string_view kind,
+                                 StringSource source,
+                                 fo4::localization::LocalizedStringTable& table,
+                                 const std::vector<std::byte>& original, bool originalExists)
+            -> std::optional<Error> {
+            auto file = localizationFile(path.parent_path(), fo4::io::utf8(path.filename()),
+                                         kind, localizedTables->language, original, originalExists);
+            if (!file) return Error{"LocalizedSidecarPathNotAllowed", "localized table is outside an approved writable root"};
+            if (auto staged = stagedStringTable(loaded->name, localizedTables->language, source, path)) {
+                if (staged->file.originalExists != file->originalExists ||
+                    staged->file.originalSize != file->originalSize ||
+                    staged->file.originalHash != file->originalHash) {
+                    return Error{"LocalizedSidecarChangedOnDisk", "localized sibling table changed after it was staged; reload before writing"};
+                }
+                table = std::move(staged->table);
+                *file = std::move(staged->file);
+            }
+            file->finalBytes.clear();
+            file->verifyOnly = true;
+            const auto previous = std::find_if(state.participants.begin(), state.participants.end(),
+                [&](const StagedLocalizationFile& item) { return support::sameLocalizedPath(item.path, file->path); });
+            if (previous == state.participants.end()) state.participants.push_back(std::move(*file));
+            else if (previous->originalExists != file->originalExists ||
+                     previous->originalSize != file->originalSize ||
+                     previous->originalHash != file->originalHash) {
+                return Error{"LocalizedSidecarChangedOnDisk", "localized sibling table baseline changed while editing"};
+            }
+            return std::nullopt;
+        };
+        if (const auto error = overlay(localizedTables->stringsPath, "strings", StringSource::normal,
+                                       localizedTables->strings, localizedTables->originalStringsBytes, localizedTables->stringsExist)) return std::unexpected(*error);
+        if (const auto error = overlay(localizedTables->dlstringsPath, "dlstrings", StringSource::dl,
+                                       localizedTables->dlstrings, localizedTables->originalDlstringsBytes, localizedTables->dlstringsExist)) return std::unexpected(*error);
+        if (const auto error = overlay(localizedTables->ilstringsPath, "ilstrings", StringSource::il,
+                                       localizedTables->ilstrings, localizedTables->originalIlstringsBytes, localizedTables->ilstringsExist)) return std::unexpected(*error);
+        std::uint32_t maximum = 0;
+        for (const auto* table : {&localizedTables->strings, &localizedTables->dlstrings, &localizedTables->ilstrings}) {
+            for (const auto& entry : table->entries) maximum = std::max(maximum, entry.id);
+        }
+        if (maximum == std::numeric_limits<std::uint32_t>::max()) return std::unexpected(Error{"LocalizedObjectiveTableFull", "localized string-table ID space is exhausted"});
+        localizedTables->nextId = maximum + 1;
+        bool heldSources = false;
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+        if (!testJournalRoot_.empty() && (!dataDirectory_.empty() ||
+            (loaded->stagedAllocation && loaded->stagedAllocation->heldGeneration))) {
+            if (!support::sameLocalizedPath(localizedTables->stringsPath.parent_path(), loaded->path.parent_path() / "Strings"))
+                return std::unexpected(Error{"LocalizedSourcesUnavailable", "custom quest string roots require held-source authorization"});
+            auto held = testOpenHeldLocalizedStrings(*loaded, localizedTables->language);
+            if (!held) return std::unexpected(held.error());
+            for (const auto& snapshot : held->sourceSnapshots) {
+                if ((snapshot.resolved.source == StringSource::normal && !localizedTables->stringsExist) ||
+                    (snapshot.resolved.source == StringSource::dl && !localizedTables->dlstringsExist) ||
+                    (snapshot.resolved.source == StringSource::il && !localizedTables->ilstringsExist))
+                    return std::unexpected(Error{"LocalizedAllocationSnapshotUnsupported", "a missing destination resolves to another source"});
+            }
+            localizedTables->nextId = std::max(localizedTables->nextId, held->nextId);
+            sourceAllocation.emplace(std::move(*held)); heldSources = true;
+        }
+#endif
+        if (!heldSources) {
+            sourceAllocation.emplace(); sourceAllocation->language = localizedTables->language;
+            const auto globalNext = nextLocalizedStringId(*loaded, &*sourceAllocation);
+            if (!globalNext) return std::unexpected(globalNext.error());
+            sourceAllocation->sourceSnapshots = sourceAllocation->allocationSources.at(sourceAllocation->language);
+            const auto combined = includeLocalizedDirectory(*loaded, *sourceAllocation, localizedTables->stringsPath.parent_path(), *globalNext);
+            if (!combined) return std::unexpected(combined.error());
+            localizedTables->nextId = std::max(localizedTables->nextId, *combined);
+        }
+        localizationState = std::move(state);
     }
 
     try {
@@ -203,8 +249,13 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
             if (displayText == element.end() || !displayText->is_string()) {
                 return std::unexpected(Error{kObjectiveError, "objective displayText must be a string"});
             }
-            const auto encoded = fo4::text::utf8_to_windows1252(displayText->get<std::string>());
-            if (!encoded || encoded->find('\0') != std::string::npos) {
+            const auto sourceText = displayText->get<std::string>();
+            if (sourceText.find('\0') != std::string::npos) {
+                return std::unexpected(Error{kObjectiveError, "objective displayText cannot contain NUL bytes"});
+            }
+            const auto encoded = localized ? std::optional<std::string>{sourceText}
+                                           : fo4::text::utf8_to_windows1252(sourceText);
+            if (!encoded) {
                 return std::unexpected(Error{kObjectiveError, "objective displayText must be Windows-1252 text without NUL bytes"});
             }
             fo4::schema::LocalizedString text;
@@ -278,6 +329,46 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
         }
 
         auto mutated = loaded->plugin;
+        bool localizedTableChanged = false;
+        if (localizedTables.has_value()) {
+            for (auto& objective : objectives.objectives) {
+                auto& text = *objective.display_text;
+                std::vector<std::byte> encodedText;
+                if (const auto error = encodeLocalizedText(
+                        localizedTables->language, *text.text, encodedText)) {
+                    return std::unexpected(*error);
+                }
+                std::optional<std::uint32_t> id;
+                const auto previousObjective = previousByIndex.find(objective.index);
+                if (previousObjective != previousByIndex.end() &&
+                    previousObjective->second->display_text.has_value() &&
+                    previousObjective->second->display_text->id.has_value()) {
+                    const auto previousId = *previousObjective->second->display_text->id;
+                    const auto* previousText = fo4::localization::find_string(
+                        localizedTables->strings, previousId);
+                    if (previousText == nullptr) {
+                        return std::unexpected(Error{
+                            "LocalizedObjectiveTableInvalid",
+                            "STRINGS is missing existing QUST NNAM ID " + std::to_string(previousId)
+                        });
+                    }
+                    if (previousText->text == encodedText) id = previousId;
+                }
+                if (!id.has_value()) {
+                    if (localizedTables->nextId == std::numeric_limits<std::uint32_t>::max()) {
+                        return std::unexpected(Error{
+                            "LocalizedObjectiveTableFull",
+                            "localized string-table ID space is exhausted"
+                        });
+                    }
+                    id = localizedTables->nextId++;
+                    localizedTables->strings.entries.push_back({*id, std::move(encodedText)});
+                    localizedTableChanged = true;
+                }
+                text.id = id;
+                text.text.reset();
+            }
+        }
         for (const auto& key : conditionKeys) ensureOwnerMaster(mutated, key.owner());
         const auto remappedPrevious = fo4::forms::decode_quest_objectives(mutated, questKey);
         const auto context = fo4::plugin_form_id_context(mutated);
@@ -327,6 +418,35 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
             }
         }
         fo4::forms::write_quest_objectives(mutated, questKey, objectives);
+        if (localizedTableChanged) {
+#ifdef FO4IDE_TEST_HOOKS
+            if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
+#endif
+            const auto baseline = std::find_if(
+                localizationState->participants.begin(), localizationState->participants.end(),
+                [&](const StagedLocalizationFile& file) { return support::sameLocalizedPath(file.path, localizedTables->stringsPath); });
+            if (baseline == localizationState->participants.end()) {
+                return std::unexpected(Error{"LocalizedObjectiveTableInvalid", "STRINGS baseline is missing"});
+            }
+            auto staged = prepareStringTable(
+                loaded->name, localizedTables->language, StringSource::normal,
+                localizedTables->strings, localizedTables->stringsPath.parent_path(), &*baseline);
+            if (!staged) return std::unexpected(staged.error());
+            const auto participant = std::find_if(
+                localizationState->participants.begin(), localizationState->participants.end(),
+                [&](const StagedLocalizationFile& file) { return support::sameLocalizedPath(file.path, staged->file.path); });
+            if (participant == localizationState->participants.end()) {
+                return std::unexpected(Error{"LocalizedObjectiveTableInvalid", "STRINGS baseline is missing"});
+            }
+            *participant = staged->file;
+            auto stagedResult = stageQuestLocalizationMutationLocked(
+                *loaded, std::move(*localizationState), std::move(mutated), StringSource::normal,
+                std::move(*staged), std::move(*sourceAllocation));
+            if (!stagedResult) return std::unexpected(stagedResult.error());
+            return nlohmann::json(
+                "Set " + std::to_string(objectives.objectives.size()) + " quest objective(s) on " +
+                recordText + " in " + pluginName + ". SavePlugin to persist.");
+        }
         stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Set " + std::to_string(objectives.objectives.size()) + " quest objective(s) on " +

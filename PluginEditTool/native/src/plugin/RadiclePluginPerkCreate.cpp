@@ -31,7 +31,7 @@ Result<std::string> perkLanguage(const nlohmann::json& payload) {
         return std::isalnum(ch) != 0;
     });
     if (!valid) return std::unexpected(Error{"InvalidStringLanguage", "PERK language must be an alphanumeric token"});
-    return language;
+    return fo4::text::fold(language);
 }
 
 }  // namespace

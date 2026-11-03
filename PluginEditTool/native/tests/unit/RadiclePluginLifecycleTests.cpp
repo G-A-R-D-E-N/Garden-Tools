@@ -168,6 +168,30 @@ void expectNothingPending(fo4ide::plugin::RadiclePluginBackend& backend) {
 
 }
 
+// Detects: same-timestamp external plugin changes must not be overwritten and successful saves must refresh the baseline.
+TEST_CASE("Native save checks the loaded plugin bytes and refreshes its baseline") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    const auto original = makePlugin(); writeBytes(path, original);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{{"plugins", nlohmann::json::array({pluginEntry("Patch.esp", path, "Test")})}};
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    REQUIRE(backend.invokeBackend("CreateRecord", nlohmann::json::array({"Patch.esp", "EYES", eyesPayload()})).has_value());
+    const auto timestamp = std::filesystem::last_write_time(path);
+    auto external = original; external.back() ^= std::byte{1}; writeBytes(path, external);
+    std::filesystem::last_write_time(path, timestamp);
+    CHECK_FALSE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK_FALSE(backend.invoke("backend.DiscardPlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(readBytes(path) == external);
+    writeBytes(path, original); std::filesystem::last_write_time(path, timestamp);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    auto second = eyesPayload(); second["editorId"] = "AnotherEyes";
+    REQUIRE(backend.invokeBackend("CreateRecord", nlohmann::json::array({"Patch.esp", "EYES", second})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto saved = fo4::read_plugin_file(path);
+    CHECK(fo4::find_record(saved, fo4::FormKey::parse("000900:Patch.esp")) != nullptr);
+    CHECK(fo4::find_record(saved, fo4::FormKey::parse("000901:Patch.esp")) != nullptr);
+}
+
 TEST_CASE("Native lifecycle creates renumbers and deletes a persisted typed record") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

@@ -10,12 +10,187 @@
 
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
-
+#include <fo4ide/papyrus/QuestFragmentSource.hpp>
+#include <fo4ide/papyrus/Parser.hpp>
+#include <fo4ide/papyrus/SecureSourceSnapshot.hpp>
 #include "../helpers/GraphTestSupport.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
 #include "../../src/app/PapyrusStaging.hpp"
 
+#ifdef __linux__
+#include <fcntl.h>
+#include <sched.h>
+#include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 using namespace fo4ide::app::test;
+#ifdef __linux__
+namespace {
+std::filesystem::path snapshotHookFile;
+void rewriteSnapshotSource() {
+    { std::ofstream out(snapshotHookFile, std::ios::binary | std::ios::trunc); out << "Scriptname Other\n"; }
+    const auto now = std::filesystem::last_write_time(snapshotHookFile);
+    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch());
+    std::filesystem::last_write_time(snapshotHookFile,
+        std::filesystem::file_time_type(seconds + std::chrono::milliseconds(200)));
+}
+#ifdef __linux__
+void swapSnapshotSourceForFifo() {
+    std::filesystem::remove(snapshotHookFile);
+    if (::mkfifo(snapshotHookFile.c_str(), 0600) != 0) throw std::runtime_error("cannot make test FIFO");
+}
+#endif
+}
+// Detects: an import snapshot must reject symlink escapes and overlarge source files.
+TEST_CASE("Secure Papyrus source snapshots are bounded and reject links") {
+    const auto root = tempRoot();
+    std::filesystem::create_directories(root / "nested");
+    { std::ofstream out(root / "nested" / "Quest.psc"); out << "Scriptname Quest\n"; }
+    const int fd = ::open(root.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    REQUIRE(fd >= 0);
+    const auto files = fo4ide::papyrus::snapshotPapyrusSources(fd, 100, 128, 256);
+    REQUIRE(files.size() == 1u);
+    CHECK(files[0].relativePath == std::filesystem::path("nested") / "Quest.psc");
+    CHECK(files[0].text == "Scriptname Quest\n");
+    CHECK_THROWS(fo4ide::papyrus::snapshotPapyrusSources(fd, 100, 4, 256));
+    snapshotHookFile = root / "nested" / "Quest.psc";
+    const auto now = std::filesystem::last_write_time(snapshotHookFile);
+    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch());
+    std::filesystem::last_write_time(snapshotHookFile,
+        std::filesystem::file_time_type(seconds + std::chrono::milliseconds(100)));
+    fo4ide::papyrus::setSnapshotReadHook(rewriteSnapshotSource);
+    CHECK_THROWS(fo4ide::papyrus::snapshotPapyrusSources(fd, 100, 128, 256));
+    fo4ide::papyrus::setSnapshotReadHook(nullptr);
+    std::error_code ec;
+    std::filesystem::create_directory_symlink(root.parent_path(), root / "nested" / "outside", ec);
+    if (!ec) CHECK_THROWS(fo4ide::papyrus::snapshotPapyrusSources(fd, 100, 128, 256));
+    ::close(fd);
+    std::filesystem::remove_all(root, ec);
+}
+// Detects: a deeply nested import tree must stop before exhausting the stack or file descriptors.
+TEST_CASE("Secure Papyrus source snapshots cap directory depth") {
+    const auto root = tempRoot();
+    auto nested = root;
+    for (int i = 0; i < 70; ++i) { nested /= "d"; std::filesystem::create_directories(nested); }
+    const int fd = ::open(root.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    REQUIRE(fd >= 0);
+    CHECK_THROWS(fo4ide::papyrus::snapshotPapyrusSources(fd, 1000, 128, 256));
+    ::close(fd);
+    std::error_code ec; std::filesystem::remove_all(root, ec);
+}
+#ifdef __linux__
+// Detects: an import entry replaced by a special file between inspection and open must be refused.
+TEST_CASE("Secure Papyrus source snapshots refuse a swapped special file") {
+    const auto root = tempRoot(); std::filesystem::create_directories(root);
+    snapshotHookFile = root / "Quest.psc";
+    { std::ofstream out(snapshotHookFile); out << "Scriptname Quest\n"; }
+    const int fd = ::open(root.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    REQUIRE(fd >= 0);
+    fo4ide::papyrus::setSnapshotBeforeOpenHook(swapSnapshotSourceForFifo);
+    CHECK_THROWS(fo4ide::papyrus::snapshotPapyrusSources(fd, 100, 128, 256));
+    fo4ide::papyrus::setSnapshotBeforeOpenHook(nullptr);
+    ::close(fd);
+    std::error_code ec; std::filesystem::remove_all(root, ec);
+}
+
+// Detects: an attacker-controlled bind mount beneath an import root must not be traversed.
+TEST_CASE("Secure Papyrus source snapshots refuse nested bind mounts") {
+    const auto root = tempRoot();
+    std::filesystem::create_directories(root / "tree" / "mounted");
+    std::filesystem::create_directories(root / "outside");
+    { std::ofstream out(root / "outside" / "Quest.psc"); out << "Scriptname Quest\n"; }
+    const auto child = ::fork();
+    REQUIRE(child >= 0);
+    if (child == 0) {
+        if (::unshare(CLONE_NEWNS) != 0 || ::mount(nullptr, "/", nullptr, MS_REC | MS_PRIVATE, nullptr) != 0 ||
+            ::mount((root / "outside").c_str(), (root / "tree" / "mounted").c_str(), nullptr, MS_BIND, nullptr) != 0) _exit(77);
+        const int fd = ::open((root / "tree").c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        if (fd < 0) _exit(2);
+        try { (void)fo4ide::papyrus::snapshotPapyrusSources(fd, 100, 128, 256); }
+        catch (...) { ::close(fd); _exit(0); }
+        ::close(fd); _exit(1);
+    }
+    int status = 0; REQUIRE(::waitpid(child, &status, 0) == child);
+    std::error_code ec; std::filesystem::remove_all(root, ec);
+    REQUIRE(WIFEXITED(status));
+    if (WEXITSTATUS(status) == 77) SKIP("mount namespace or bind mount is unavailable");
+    CHECK(WEXITSTATUS(status) == 0);
+}
+#endif
+#endif
+
+// Detects: an oversized import tree must stop before partially indexing scripts.
+TEST_CASE("Papyrus import indexing refuses oversized trees without retaining partial results") {
+    fo4ide::papyrus::ScriptIndex index;
+    CHECK_THROWS(index.addRoot(fo4::graph::test::baseStubs(), 1));
+    CHECK(index.count() == 0u);
+    CHECK(index.roots().empty());
+    index.addRoot(fo4::graph::test::baseStubs(), 10000);
+    CHECK(index.count() > 1u);
+}
+
+// Detects: oversized Papyrus imports must be refused before their contents are parsed.
+TEST_CASE("Papyrus import indexing enforces source byte limits") {
+    const auto root = tempRoot();
+    std::filesystem::create_directories(root);
+    const auto path = root / "Large.psc";
+    { std::ofstream out(path, std::ios::binary); out << std::string(1024, 'x'); }
+    fo4ide::papyrus::ScriptIndex index;
+    index.addRoot(root, 100);
+    index.setReadLimits(64, 128);
+    CHECK(index.resolve("Large") == nullptr);
+    { std::ofstream out(root / "Small1.psc", std::ios::binary); out << "Scriptname Small1\n"; }
+    { std::ofstream out(root / "Small2.psc", std::ios::binary); out << "Scriptname Small2\n"; }
+    fo4ide::papyrus::ScriptIndex aggregate;
+    aggregate.addRoot(root, 100);
+    aggregate.setReadLimits(64, 25);
+    REQUIRE(aggregate.resolve("Small1") != nullptr);
+    CHECK(aggregate.resolve("Small2") == nullptr);
+    CHECK_THROWS(aggregate.setReadLimits(1, 1));
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+// Detects: editing one generated quest fragment must keep the other stage functions intact.
+TEST_CASE("Quest fragment source updates one stage without dropping other stages") {
+    using namespace fo4ide::papyrus;
+    const std::vector<QuestFragmentAction> actions{{QuestFragmentActionKind::Display, 0},
+                                                    {QuestFragmentActionKind::Complete, 1},
+                                                    {QuestFragmentActionKind::SetStage, 20}};
+    const auto first = updateQuestFragmentSource({}, "QF_Test", 10, 0, actions);
+    REQUIRE(first.has_value());
+    CHECK_FALSE(Parser::parse(*first).hasErrors());
+    CHECK(first->find("SetObjectiveDisplayed(0)") != std::string::npos);
+    CHECK(first->find("SetObjectiveCompleted(1)") != std::string::npos);
+    CHECK(first->find("SetStage(20)") != std::string::npos);
+    const auto second = updateQuestFragmentSource(*first, "QF_Test", 20, 0, actions);
+    REQUIRE(second.has_value());
+    const auto changed = updateQuestFragmentSource(*second, "QF_Test", 10, 0,
+                                                   {{QuestFragmentActionKind::SetStage, 30}});
+    REQUIRE(changed.has_value());
+    CHECK(changed->find("Fragment_Stage_0020_Item_00") != std::string::npos);
+    CHECK(changed->find("SetStage(20)") != std::string::npos);
+    CHECK(changed->find("SetStage(30)") != std::string::npos);
+}
+
+// Detects: a third-party or malformed script must not be edited as managed fragment source.
+TEST_CASE("Quest fragment source refuses unowned or ambiguous scripts") {
+    using namespace fo4ide::papyrus;
+    const std::vector<QuestFragmentAction> actions{{QuestFragmentActionKind::SetStage, 20}};
+    CHECK_FALSE(updateQuestFragmentSource("Scriptname QF_Test Extends Quest\n", "QF_Test", 10, 0, actions));
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Test\nFunction Evil()", 10, 0, actions));
+    CHECK_FALSE(updateQuestFragmentSource({}, "Function", 10, 0, actions));
+    const auto source = updateQuestFragmentSource({}, "QF_Test", 10, 0, actions);
+    REQUIRE(source.has_value());
+    CHECK_FALSE(updateQuestFragmentSource(*source, "QF_Other", 10, 0, actions));
+    CHECK_FALSE(updateQuestFragmentSource(*source + "Function Broken(\n", "QF_Test", 10, 0, actions));
+    const auto typed = std::string("; GardenTools managed quest fragments\n") +
+        "Scriptname QF_Test Extends Quest Hidden Const\nInt Function Fragment_Stage_0010_Item_00()\n"
+        "Return 7\nEndFunction\n";
+    CHECK_FALSE(updateQuestFragmentSource(typed, "QF_Test", 10, 0, actions));
+}
 
 namespace {
 

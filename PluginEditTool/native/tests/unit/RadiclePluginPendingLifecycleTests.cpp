@@ -7,18 +7,75 @@
 #include <string_view>
 #include <thread>
 #include <vector>
-
 #include <catch2/catch_test_macros.hpp>
-
 #include <fo4/flags.hpp>
+#include <fo4/io/sha256.hpp>
+#include "../../src/plugin/RadiclePluginJournalSession.hpp"
 #include <fo4/forms/quest.hpp>
 #include <fo4/localization/strings.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
-
 #include "plugin_bytes.hpp"
-
 namespace {
+#ifdef __linux__
+void interruptBeforeJournalReplay(std::size_t committed) {
+    if (committed == 0) throw std::runtime_error("injected interruption");
+}
+#endif
+
+// Detects: orphaned journal files must not cause unbounded recovery enumeration.
+TEST_CASE("Journal enumeration refuses excessive entries") {
+#ifdef __linux__
+    const auto root = std::filesystem::temp_directory_path() / ("journal_cap_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    { fo4ide::plugin::detail::JournalRoot journal(root); for (std::size_t i = 0; i <= fo4ide::plugin::detail::kJournalMaxDirectoryEntries; ++i) journal.writeFile(std::string(32 - std::to_string(i).size(), '0') + std::to_string(i) + "_0.payload", {}); CHECK_THROWS(journal.listFiles()); }
+    { fo4ide::plugin::detail::JournalSession session(root); CHECK_NOTHROW(session.recover({})); }
+    { fo4ide::plugin::detail::JournalRoot journal(root); CHECK(journal.listFiles() == std::vector<std::string>{"global.lock"}); }
+    std::error_code ec; std::filesystem::remove_all(root, ec);
+#else
+    SUCCEED("held journal destinations are not implemented on this platform");
+#endif
+}
+// Detects: allocation preconditions must reject a changed sibling without creating an absent table.
+TEST_CASE("Journal verifies sibling tables without writing them") {
+#ifdef __linux__
+    using namespace fo4ide::plugin::detail;
+    const auto root = std::filesystem::temp_directory_path() /
+        ("fo4ide_journal_verify_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(root / "Strings");
+    const auto plugin = root / "Patch.esp", sibling = root / "Strings" / "Patch_en.STRINGS";
+    const std::vector<std::byte> oldPlugin{std::byte{1}}, newPlugin{std::byte{2}}, table{std::byte{3}};
+    { std::ofstream out(plugin, std::ios::binary); out.put('\1'); }
+    { std::ofstream out(sibling, std::ios::binary); out.put('\3'); }
+    JournalRoots roots; roots.plugin = plugin; roots.pluginDirectoryIdentity = JournalDestination::captureRoot(root);
+    roots.approvedRoots.push_back({root, *roots.pluginDirectoryIdentity});
+    JournalInput target{"plugin", "", true, fo4::io::sha256_hex(oldPlugin), oldPlugin.size(), newPlugin};
+    JournalInput observed{"strings", "en", true, fo4::io::sha256_hex(table), table.size(), {}};
+    observed.rootSelector = root; observed.directories = {"Strings"}; observed.verifyOnly = true;
+    JournalInput absent{"dlstrings", "en", false, "", 0, {}};
+    absent.rootSelector = root; absent.directories = {"Strings"}; absent.verifyOnly = true;
+    { std::ofstream out(sibling, std::ios::binary | std::ios::trunc); out.put('\4'); }
+    { JournalSession journal(root / "journal"); CHECK_THROWS(journal.publish(roots, {target, observed, absent})); }
+    CHECK_FALSE(std::filesystem::exists(root / "Strings" / "Patch_en.DLSTRINGS"));
+    { std::ofstream out(sibling, std::ios::binary | std::ios::trunc); out.put('\3'); }
+    {
+        JournalSession journal(root / "journal"); setJournalCommitHook(interruptBeforeJournalReplay);
+        CHECK_THROWS_AS(journal.publish(roots, {target, observed, absent}), JournalRecoveryRequired);
+        setJournalCommitHook(nullptr);
+    }
+    { std::ofstream out(sibling, std::ios::binary | std::ios::trunc); out.put('\4'); }
+    { JournalSession journal(root / "journal"); CHECK_THROWS_AS(journal.recover({roots}), JournalRecoveryRequired); }
+    { std::ifstream in(plugin, std::ios::binary); CHECK(in.get() == 1); }
+    { std::ofstream out(sibling, std::ios::binary | std::ios::trunc); out.put('\3'); }
+    { JournalSession journal(root / "journal"); CHECK_NOTHROW(journal.recover({roots})); }
+    { std::ifstream in(plugin, std::ios::binary); CHECK(in.get() == 2); }
+    { std::ifstream in(sibling, std::ios::binary); CHECK(in.get() == 3); }
+    CHECK_FALSE(std::filesystem::exists(root / "Strings" / "Patch_en.DLSTRINGS"));
+    std::error_code ec; std::filesystem::remove_all(root, ec);
+#else
+    SUCCEED("held journal destinations are not implemented on this platform");
+#endif
+}
+
 
 std::filesystem::path tempRoot() {
     const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -194,6 +251,47 @@ bool pluginPending(const nlohmann::json& rows, std::string_view name) {
     return false;
 }
 
+}
+// Detects: a restarted backend must recover trusted script and plugin artifacts before loading plugin bytes.
+TEST_CASE("Backend recovers a fragment journal before environment loading") {
+#ifdef __linux__
+    using namespace fo4ide::plugin::detail;
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    const auto pluginPath = root / "Patch.esp", scriptPath = root / "QF_Test.psc";
+    const auto original = makeSecondPlugin(); auto updated = original; updated[updated.size() - 4] = std::byte{20};
+    const auto scriptBefore = rawBytes("old"), scriptAfter = rawBytes("new");
+    writeBytes(pluginPath, original); writeBytes(scriptPath, scriptBefore);
+    JournalRoots roots; roots.plugin = pluginPath; roots.pluginDirectoryIdentity = JournalDestination::captureRoot(root);
+    roots.approvedRoots.push_back({root, *roots.pluginDirectoryIdentity});
+    JournalInput plugin{"plugin", "", true, fo4::io::sha256_hex(original), original.size(), updated};
+    JournalInput source{"psc", "QF_Test", true, fo4::io::sha256_hex(scriptBefore), scriptBefore.size(), scriptAfter};
+    source.rootSelector = root;
+    {
+        JournalSession journal(root / "journal"); setJournalCommitHook(interruptBeforeJournalReplay);
+        CHECK_THROWS_AS(journal.publish(roots, {plugin, source}), JournalRecoveryRequired);
+        setJournalCommitHook(nullptr);
+    }
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.testSetJournalRoot(root / "journal");
+    const auto environment = [&](const std::string& sourceName, const std::filesystem::path& path) { return nlohmann::json{{"plugins", nlohmann::json::array({
+        {{"name", "Patch.esp"}, {"path", path.string()}, {"source", sourceName}, {"resolved", true}}})}}; };
+    CHECK_FALSE(backend.invoke("environment.LoadMo2", environment("Data", pluginPath)).has_value());
+    std::error_code ec; std::filesystem::create_directory_symlink(root, root / "alias", ec);
+    if (!ec) CHECK_FALSE(backend.invoke("environment.LoadMo2", environment("Test", root / "alias" / "Patch.esp")).has_value());
+    CHECK(readBytes(pluginPath) == original); CHECK(readBytes(scriptPath) == scriptBefore);
+    const auto loaded = backend.invoke("environment.LoadMo2", environment("Test", pluginPath));
+    REQUIRE(loaded.has_value()); CHECK(loaded->at("loadedPlugins") == 1);
+    const auto gridResult = backend.invokeBackend("GetRecordsGrid", nlohmann::json::array({"Patch.esp", "REFR", 200, 0}));
+    REQUIRE(gridResult.has_value()); REQUIRE(gridResult->is_string());
+    const auto grid = nlohmann::json::parse(gridResult->get<std::string>());
+    const auto& columns = grid.at("columns");
+    const auto column = std::find(columns.begin(), columns.end(), "REFR\\HealthPercent");
+    REQUIRE(column != columns.end()); REQUIRE(grid.at("rows").size() == 1);
+    CHECK(grid.at("rows")[0].at("cells")[static_cast<std::size_t>(column - columns.begin())] == "20");
+    CHECK(readBytes(pluginPath) == updated); CHECK(readBytes(scriptPath) == scriptAfter);
+#else
+    SUCCEED("held journal destinations are not implemented on this platform");
+#endif
 }
 
 TEST_CASE("Localized CNAM stages sidecars until SavePlugin") {
@@ -542,7 +640,10 @@ TEST_CASE("LoadMo2 fails closed if a plugin becomes pending after the first chec
     fo4ide::plugin::RadiclePluginBackend backend;
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
     CHECK_FALSE(pluginPending(activePlugins(backend), "Patch.esp"));
-
+#ifdef __linux__
+    { fo4ide::plugin::detail::JournalRoot journal(root / "journal"); std::ofstream invalid(root / "journal" / "bad!"); }
+    backend.testSetJournalRoot(root / "journal");
+#endif
     LoadMo2Barrier barrier;
     fo4ide::Result<nlohmann::json> reloadResult = nlohmann::json(nullptr);
     std::thread reloader([&] {

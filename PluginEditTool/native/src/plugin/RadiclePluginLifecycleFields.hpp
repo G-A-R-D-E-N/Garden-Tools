@@ -415,24 +415,28 @@ inline Result<std::optional<std::vector<fo4::schema::SubrecordAuthoringConstrain
         }
         storage.clear();
         const auto name = payload.find("name");
+        bool hasTextName = false;
         if (name != payload.end()) {
             if (!name->is_string()) {
                 return std::unexpected(Error{"InvalidRecordCreationPayload", "QUST name must be a string"});
             }
-            if (localized) {
+            const auto& text = name->get_ref<const std::string&>();
+            hasTextName = !text.empty();
+            if (!localized) {
+                const auto encoded = fo4::text::utf8_to_windows1252(text);
+                if (!encoded || encoded->find('\0') != std::string::npos ||
+                    encoded->size() >= std::numeric_limits<std::uint16_t>::max()) {
+                    return std::unexpected(Error{
+                        "InvalidRecordCreationPayload",
+                        "QUST name must be Windows-1252 text without NUL bytes and fit in a subrecord"});
+                }
+                storage.insert(storage.end(), encoded->begin(), encoded->end());
+                storage.push_back(0);
+            } else if (text.find('\0') != std::string::npos) {
                 return std::unexpected(Error{
                     "InvalidRecordCreationPayload",
-                    "QUST name in a localized plugin needs a string-table ID, which create_record does not allocate"});
+                    "QUST name must not contain a NUL byte"});
             }
-            const auto encoded = fo4::text::utf8_to_windows1252(name->get<std::string>());
-            if (!encoded || encoded->find('\0') != std::string::npos ||
-                encoded->size() >= std::numeric_limits<std::uint16_t>::max()) {
-                return std::unexpected(Error{
-                    "InvalidRecordCreationPayload",
-                    "QUST name must be Windows-1252 text without NUL bytes and fit in a subrecord"});
-            }
-            storage.insert(storage.end(), encoded->begin(), encoded->end());
-            storage.push_back(0);
         }
         const auto dnamOffset = storage.size();
         storage.resize(dnamOffset + 12, 0);
@@ -453,10 +457,13 @@ inline Result<std::optional<std::vector<fo4::schema::SubrecordAuthoringConstrain
                 rule.default_data = storage.data() + dnamOffset;
                 rule.default_size = 12;
             }
-            if (name != payload.end() && rule.signature == fo4::Signature::from_string("FULL")) {
+            if (name != payload.end() && (!localized || hasTextName) &&
+                rule.signature == fo4::Signature::from_string("FULL")) {
                 rule.minimum = 1;
-                rule.default_data = storage.data();
-                rule.default_size = static_cast<std::uint16_t>(dnamOffset);
+                if (!localized) {
+                    rule.default_data = storage.data();
+                    rule.default_size = static_cast<std::uint16_t>(dnamOffset);
+                }
             }
         }
         rules.push_back(anam);

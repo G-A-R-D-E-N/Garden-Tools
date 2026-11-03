@@ -15,6 +15,9 @@
 #include <utility>
 
 #include "RadiclePluginSupport.hpp"
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#include "RadiclePluginBa2Source.hpp"
+#endif
 
 #include <fo4ide/plugin/ConditionCodec.hpp>
 #include <fo4/forms/eyes.hpp>
@@ -177,12 +180,26 @@ bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
 
 void RadiclePluginBackend::setDataDirectory(std::filesystem::path dataDirectory) {
     OpLock lock(*this, OpLock::Mode::Lifecycle);
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+    testDataReadRoot_.reset();
+    if (!dataDirectory.empty()) {
+        try {
+            const auto root = std::filesystem::absolute(dataDirectory).lexically_normal();
+            testDataReadRoot_ = std::make_shared<detail::Ba2ReadRoot>(detail::Ba2ReadRoot::authorize(root));
+        } catch (const std::exception&) {
+        }
+    }
+#endif
     dataDirectory_ = std::move(dataDirectory);
+    ++mutationEpoch_;
 }
 
 Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     std::string_view method,
     const nlohmann::json& arguments) {
+#ifdef FO4IDE_TEST_HOOKS
+    if (const auto error = testRecoveryGate(method, arguments)) return std::unexpected(*error);
+#endif
     if (method == "CreateRecord") return createRecord(arguments);
     if (method == "DeleteRecord") return deleteRecord(arguments);
     if (method == "RenumberRecord") return renumberRecord(arguments);
