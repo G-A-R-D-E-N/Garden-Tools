@@ -200,6 +200,7 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "appInterop.ScanBrokenRefs") return scanBrokenRefs();
     if (operation == "backend.OpenPlugin") return openPlugin(arguments);
     if (operation == "backend.SavePlugin") return savePlugin(arguments);
+    if (operation == "backend.RepairHedrCount") return repairHedrCount(arguments);
     if (operation == "backend.DiscardPlugin") return discardPlugin(arguments);
     // Scalar-schema aware on every entry path; setFieldValue falls back to
     // setField for non-schema fields.
