@@ -16,11 +16,13 @@ using JournalCommitHook = void (*)(std::size_t);
 void setJournalCommitHook(JournalCommitHook hook);
 using JournalTimestampHook = std::error_code (*)();
 void setJournalTimestampHook(JournalTimestampHook hook);
+#endif
 #ifdef _WIN32
 enum class WindowsJournalSessionStep { prepared, preflightComplete, stageCreated, stageReceipted, stageExposed,
     completionPublished, backupRemoved, stagingDirectoryRemoved, manifestRemoved, privateRecordRemoved };
 using WindowsJournalSessionHook = void (*)(WindowsJournalSessionStep, std::size_t,
     const std::filesystem::path&, const std::filesystem::path&);
+#ifdef FO4IDE_TEST_HOOKS
 void setWindowsJournalSessionHook(WindowsJournalSessionHook hook);
 #endif
 #endif
@@ -67,6 +69,8 @@ struct JournalReadConfiguration {
 
 using JournalPrepareRecovery = std::function<void(const JournalManifest&, const std::vector<std::byte>&, JournalReadConfiguration&)>;
 
+bool journalHasRecoveryFiles(const std::filesystem::path& root);
+
 class JournalSession {
 public:
     explicit JournalSession(const std::filesystem::path& root);
@@ -74,7 +78,7 @@ public:
                  const std::vector<JournalSourceSet>& sources = {},
                  const std::vector<JournalArchiveInventory>& archives = {},
                  const std::vector<JournalReadStringInventory>& readStrings = {});
-    void recover(const std::vector<JournalRoots>& approved, const JournalPrepareRecovery& prepare = {});
+    bool recover(const std::vector<JournalRoots>& approved, const JournalPrepareRecovery& prepare = {});
 
 private:
     void replay(std::string_view manifestName, const JournalRoots& roots,

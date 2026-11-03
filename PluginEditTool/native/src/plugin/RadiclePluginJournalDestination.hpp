@@ -21,7 +21,7 @@ void setJournalDirectoryEnumerationHook(JournalDirectoryEnumerationHook hook);
 #endif
 
 class JournalDirectoryLease;
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
 class WindowsJournalDirectory;
 class WindowsJournalSessionState;
 struct WindowsJournalReplacementRequest;
@@ -51,7 +51,7 @@ public:
     JournalDestination(const JournalDestination&) = delete;
     JournalDestination& operator=(const JournalDestination&) = delete;
     std::optional<std::vector<std::byte>> read(std::size_t maxBytes) const;
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
     WindowsJournalFileMetadata metadata() const;
 #endif
     void replace(bool originalExists, std::string_view originalHash, std::uint64_t originalSize,
@@ -62,7 +62,7 @@ public:
                                                    const JournalDirectoryIdentity& identity);
 
 private:
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
     friend class WindowsJournalDirectory;
     friend class WindowsJournalSessionState;
     WindowsJournalFileMetadata stagingMetadata() const;

@@ -70,7 +70,6 @@ public:
                                   const WindowsJournalFileSnapshot& replacement) const;
     WindowsJournalReplacementState inspectReplacement(const WindowsJournalReplacementRequest& request,
         const WindowsJournalReplacementExpectation& expected) const;
-#ifdef FO4IDE_TEST_HOOKS
     void persistReplacementIntent(const WindowsJournalReplacementRequest& request,
         const WindowsJournalReplacementExpectation& expected, const JournalDestination& destination) const;
     WindowsJournalReplacementState inspectReplacement(const WindowsJournalReplacementRequest& request,
@@ -78,7 +77,6 @@ public:
     void resumeReplacement(const WindowsJournalReplacementRequest& request,
         const WindowsJournalReplacementExpectation& expected, JournalDestination& destination) const;
     void resumeReplacement(const WindowsJournalReplacementRequest& request) const;
-#endif
     void resumeReplacement(const WindowsJournalReplacementRequest& request,
         const WindowsJournalReplacementExpectation& expected) const;
 

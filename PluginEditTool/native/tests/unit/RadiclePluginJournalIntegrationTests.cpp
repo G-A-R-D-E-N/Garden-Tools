@@ -20,6 +20,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
+#include "../helpers/GraphTestSupport.hpp"
 #include "../../src/plugin/RadiclePluginJournalSession.hpp"
 #include "../../src/plugin/RadiclePluginSupport.hpp"
 
@@ -91,12 +92,12 @@ std::vector<std::byte> emptyPlugin(std::uint32_t tes4Flags) {
     return out.bytes;
 }
 
-#ifdef __linux__
 std::size_t journalInterruptAt = 0;
-void terminateJournal(std::size_t committed) { if (committed == 1) ::_exit(91); }
 void interruptJournal(std::size_t committed) {
     if (committed == journalInterruptAt) throw std::runtime_error("injected interruption");
 }
+#ifdef __linux__
+void terminateJournal(std::size_t committed) { if (committed == 1) ::_exit(91); }
 std::vector<std::byte> journalBytes(std::string_view text) {
     const auto bytes = std::as_bytes(std::span{text.data(), text.size()});
     return {bytes.begin(), bytes.end()};
@@ -348,8 +349,8 @@ TEST_CASE("Custom localized source inventory protects quest IDs") {
         REQUIRE_FALSE(saved.has_value()); CHECK(saved.error().type == "JournalRecoveryRequired");
         questSiblingMutation = custom / "Patch_de.STRINGS"; addQuestSiblingDuringCommit();
         fo4ide::plugin::RadiclePluginBackend restarted; restarted.testSetJournalRoot(root / "journal");
-        const auto refused = restarted.invoke("environment.LoadMo2", loadArgs);
-        REQUIRE_FALSE(refused.has_value()); CHECK(refused.error().type == "JournalRecoveryRequired");
+        const auto warned = restarted.invoke("environment.LoadMo2", loadArgs);
+        REQUIRE(warned.has_value()); CHECK_FALSE(warned->at("warnings").empty());
         CHECK(readBytes(plugin) == emptyPlugin(fo4::RecordFlags::localized));
         std::filesystem::remove(questSiblingMutation);
         REQUIRE(restarted.invoke("environment.LoadMo2", loadArgs).has_value());
@@ -743,4 +744,99 @@ TEST_CASE("Quest journal confines recorded sidecar directories to approved roots
 #else
     SUCCEED("held journal destinations are not implemented on this platform");
 #endif
+}
+
+namespace {
+void stageQuestFragment(fo4ide::plugin::RadiclePluginBackend& backend, const std::filesystem::path& root) {
+    const auto plugin = root / "Patch.esp", imports = root / "imports";
+    writeBytes(plugin, emptyPlugin(0u));
+    std::filesystem::copy(fo4::graph::test::baseStubs(), imports, std::filesystem::copy_options::recursive);
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", nlohmann::json::array({{
+        {"name", "Patch.esp"}, {"path", plugin.string()}, {"source", "QuestTest"}, {"resolved", true}}})}}).has_value());
+    const auto created = backend.invokeBackend("CreateRecord", nlohmann::json::array({"Patch.esp", "QUST",
+        nlohmann::json{{"editorId", "CoWelcome"}}}));
+    REQUIRE(created.has_value());
+    const auto key = nlohmann::json::parse(created->get<std::string>()).at("formKey").get<std::string>();
+    REQUIRE(backend.invokeBackend("SetQuestStages", nlohmann::json::array({"Patch.esp", key,
+        nlohmann::json::array({{{"index", 10}, {"logEntry", "Begin"}}})})).has_value());
+    const auto actions = nlohmann::json::array({{{"kind", "stage"}, {"value", 10}}});
+    REQUIRE(backend.invokeBackend("SetQuestFragment", nlohmann::json::array({"Patch.esp", key, 10, 0, "QF_CoWelcome",
+        root.string(), imports.string(), actions})).has_value());
+}
+}
+
+TEST_CASE("Journal publishes a staged quest fragment script and PEX") {
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend; backend.testSetJournalRoot(root / "journal");
+    stageQuestFragment(backend, root);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(std::filesystem::exists(root / "QF_CoWelcome.psc"));
+    CHECK(std::filesystem::exists(root / "QF_CoWelcome.pex"));
+}
+
+TEST_CASE("Quest fragment save without a journal root is refused") {
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    stageQuestFragment(backend, root);
+    const auto saved = backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE_FALSE(saved.has_value());
+    CHECK(saved.error().type == "QuestFragmentSaveUnavailable");
+    CHECK_FALSE(std::filesystem::exists(root / "QF_CoWelcome.psc"));
+    CHECK_FALSE(std::filesystem::exists(root / "QF_CoWelcome.pex"));
+}
+
+TEST_CASE("Journal load with an absent journal root succeeds and creates nothing") {
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    writeBytes(root / "Patch.esp", emptyPlugin(0u));
+    fo4ide::plugin::RadiclePluginBackend backend; backend.testSetJournalRoot(root / "absent" / "journal");
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", nlohmann::json::array({{
+        {"name", "Patch.esp"}, {"path", (root / "Patch.esp").string()}, {"source", "QuestTest"}, {"resolved", true}}})}}).has_value());
+    CHECK_FALSE(std::filesystem::exists(root / "absent"));
+}
+
+TEST_CASE("Journal load ignores a leftover manifest for a plugin outside the profile") {
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    {
+        fo4ide::plugin::RadiclePluginBackend writer; writer.testSetJournalRoot(root / "journal");
+        stageQuestFragment(writer, root);
+        journalInterruptAt = 1; setJournalCommitHook(interruptJournal);
+        const auto saved = writer.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"}));
+        setJournalCommitHook(nullptr);
+        REQUIRE_FALSE(saved.has_value());
+    }
+    REQUIRE(journalHasRecoveryFiles(root / "journal"));
+    const auto plugin = root / "Other.esp", directory = root / "Strings";
+    writeBytes(plugin, emptyPlugin(fo4::RecordFlags::localized));
+    std::filesystem::create_directories(directory);
+    using Kind = fo4::localization::StringTableKind;
+    fo4::localization::write_string_table_file({Kind::strings, {{10, bytes("Name")}}}, directory / "Other_en.STRINGS");
+    fo4::localization::write_string_table_file({Kind::dlstrings, {{20, bytes("Log")}}}, directory / "Other_en.DLSTRINGS");
+    fo4::localization::write_string_table_file({Kind::ilstrings, {{30, bytes("Other")}}}, directory / "Other_en.ILSTRINGS");
+    fo4ide::plugin::RadiclePluginBackend loader; loader.testSetJournalRoot(root / "journal");
+    REQUIRE(loader.invoke("environment.LoadMo2", nlohmann::json{{"plugins", nlohmann::json::array({{
+        {"name", "Other.esp"}, {"path", plugin.string()}, {"source", "QuestTest"}, {"resolved", true}}})}}).has_value());
+    const auto created = loader.invokeBackend("CreateRecord", nlohmann::json::array({"Other.esp", "QUST",
+        nlohmann::json{{"editorId", "CleanQuest"}}}));
+    REQUIRE(created.has_value());
+    const auto key = nlohmann::json::parse(created->get<std::string>()).at("formKey").get<std::string>();
+    REQUIRE(loader.invokeBackend("SetQuestStages", nlohmann::json::array({"Other.esp", key,
+        nlohmann::json::array({{{"index", 10}, {"logEntry", "New log"}}}),
+        nlohmann::json{{"language", "en"}, {"stringsDirectory", directory.string()}}})).has_value());
+    REQUIRE(loader.invoke("backend.SavePlugin", nlohmann::json::array({"Other.esp"})).has_value());
+    CHECK(journalHasRecoveryFiles(root / "journal"));
+}
+
+TEST_CASE("Journal save sweeps orphaned authority sidecars without a manifest") {
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend; backend.testSetJournalRoot(root / "journal");
+    stageQuestFragment(backend, root);
+    std::filesystem::create_directories(root / "journal");
+    std::filesystem::permissions(root / "journal", std::filesystem::perms::owner_all);
+    std::vector<std::filesystem::path> orphans;
+    for (char digit = '0'; digit <= '7'; ++digit) {
+        orphans.push_back(root / "journal" / (std::string(31, '0') + digit + ".authority"));
+        writeBytes(orphans.back(), bytes("orphan"));
+    }
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    for (const auto& orphan : orphans) CHECK_FALSE(std::filesystem::exists(orphan));
 }

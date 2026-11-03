@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
 #include "RadiclePluginJournalDestination.hpp"
 #include "RadiclePluginJournalManifest.hpp"
 #include "RadiclePluginJournalSession.hpp"

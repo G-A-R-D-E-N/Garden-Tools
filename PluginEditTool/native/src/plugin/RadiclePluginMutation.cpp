@@ -197,9 +197,7 @@ void RadiclePluginBackend::setDataDirectory(std::filesystem::path dataDirectory)
 Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     std::string_view method,
     const nlohmann::json& arguments) {
-#ifdef FO4IDE_TEST_HOOKS
     if (const auto error = testRecoveryGate(method, arguments)) return std::unexpected(*error);
-#endif
     if (method == "CreateRecord") return createRecord(arguments);
     if (method == "DeleteRecord") return deleteRecord(arguments);
     if (method == "RenumberRecord") return renumberRecord(arguments);
@@ -212,6 +210,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "SetQuestAliases") return setQuestAliases(arguments);
     if (method == "SetQuestStages") return setQuestStages(arguments);
     if (method == "SetQuestObjectives") return setQuestObjectives(arguments);
+    if (method == "SetQuestFragment") return setQuestFragment(arguments);
     if (method == "GetQuestObjectives") return getQuestObjectives(arguments);
     if (method == "GetQuestStages") return getQuestStages(arguments);
     if (method == "GetQuestAliases") return getQuestAliases(arguments);

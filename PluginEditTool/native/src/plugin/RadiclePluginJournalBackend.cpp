@@ -1,7 +1,6 @@
 #include "RadiclePluginSupport.hpp"
-#ifdef FO4IDE_TEST_HOOKS
 #include "RadiclePluginJournalSession.hpp"
-#ifdef __linux__
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
 #include "RadiclePluginJournalProfile.hpp"
 #include "RadiclePluginBa2Source.hpp"
 #include "RadiclePluginHeldLocalization.hpp"
@@ -12,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdlib>
 #include <map>
 #include <span>
 #include <stdexcept>
@@ -19,16 +19,17 @@
 #include <utility>
 #include <vector>
 
+#ifdef FO4IDE_TEST_HOOKS
 namespace fo4ide::plugin::detail {
 namespace { JournalTimestampHook timestampHook = nullptr; }
 void setJournalTimestampHook(JournalTimestampHook hook) { timestampHook = hook; }
 }
+#endif
 
 namespace fo4ide::plugin {
 
-void RadiclePluginBackend::testRecoverJournal(detail::JournalSession& session,
-                                               const std::vector<detail::JournalRoots>& approved,
-                                               const nlohmann::json& arguments, TestReadRoots& readRoots) const {
+#ifdef FO4IDE_TEST_HOOKS
+void RadiclePluginBackend::testAuthorizeProfileReadRoots(const nlohmann::json& arguments, TestReadRoots& readRoots) {
 #ifdef __linux__
     for (const auto& entry : arguments.at("plugins")) {
         if (!entry.is_object() || !entry.value("resolved", false)) continue;
@@ -43,12 +44,21 @@ void RadiclePluginBackend::testRecoverJournal(detail::JournalSession& session,
             catch (const std::exception&) { throw detail::JournalRecoveryProfileInvalid("unavailable profile plugin: " + name); }
         }
     }
-    session.recover(approved, [&](const auto& manifest, const auto& finalPlugin, auto& config) {
+#else
+    (void)arguments; (void)readRoots;
+#endif
+}
+
+bool RadiclePluginBackend::testRecoverJournal(detail::JournalSession& session,
+                                               const std::vector<detail::JournalRoots>& approved,
+                                               const nlohmann::json& arguments, TestReadRoots& readRoots) const {
+#ifdef __linux__
+    return session.recover(approved, [&](const auto& manifest, const auto& finalPlugin, auto& config) {
         detail::prepareJournalProfile(arguments, dataDirectory_, testDataReadRoot_, readRoots, manifest, finalPlugin, config);
     });
 #else
     (void)arguments; (void)readRoots;
-    session.recover(approved);
+    return session.recover(approved);
 #endif
 }
 
@@ -77,8 +87,9 @@ RadiclePluginBackend::TestReadRoots RadiclePluginBackend::testFilterReadRoots(
 #endif
     return result;
 }
+#endif
 
-#ifdef __linux__
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
 bool RadiclePluginBackend::testHasReadAuthority(const std::filesystem::path& root) const {
     OpLock lock(*this, OpLock::Mode::Read);
     const auto found = testReadRoots_.find(std::filesystem::absolute(root).lexically_normal());
@@ -91,14 +102,37 @@ bool RadiclePluginBackend::testHasReadAuthority(const std::filesystem::path& roo
 std::optional<Error> RadiclePluginBackend::testRecoveryGate(std::string_view operation,
                                                            const nlohmann::json& arguments) const {
     OpLock lock(*this, OpLock::Mode::Read);
-    if (testRecoveryPlugin_.empty() || operation == "environment.LoadMo2") return std::nullopt;
+    if (recoveryPlugin_.empty() || operation == "environment.LoadMo2") return std::nullopt;
+    if (operation == "appInterop.GetPlugins" || operation == "appInterop.GetChildren" ||
+        operation == "appInterop.OpenRecord" || operation == "appInterop.ScanConflicts" ||
+        operation == "appInterop.ScanBrokenRefs") return std::nullopt;
     const bool grid = operation == "GetRecordsGrid" || operation == "backend.GetRecordsGrid";
     if (grid) {
         const auto name = support::stringArgument(arguments, 0);
-        if (!name.empty() && fo4::PluginKey::from_filename(name) != fo4::PluginKey::from_filename(testRecoveryPlugin_))
+        if (!name.empty() && fo4::PluginKey::from_filename(name) != fo4::PluginKey::from_filename(recoveryPlugin_))
             return std::nullopt;
     }
-    return Error{"JournalRecoveryRequired", "Plugin journal recovery is required: " + testRecoveryPlugin_};
+    return Error{"JournalRecoveryRequired", "Plugin journal recovery is required: " + recoveryPlugin_};
+}
+
+std::filesystem::path RadiclePluginBackend::defaultJournalRoot() {
+#if defined(FO4IDE_TEST_HOOKS)
+    return {};
+#elif defined(_WIN32)
+    const char* local = std::getenv("LOCALAPPDATA");
+    return local && *local ? std::filesystem::path(local) / "FO4IDE" / "journal" : std::filesystem::path{};
+#else
+    const char* home = std::getenv("HOME");
+    return home && *home ? std::filesystem::path(home) / ".fo4ide" / "journal" : std::filesystem::path{};
+#endif
+}
+
+void RadiclePluginBackend::ensureJournalParent(const std::filesystem::path& root) {
+    const auto parent = root.parent_path();
+    std::error_code ec;
+    if (parent.empty() || std::filesystem::is_directory(parent, ec)) return;
+    std::filesystem::create_directories(parent);
+    std::filesystem::permissions(parent, std::filesystem::perms::owner_all, std::filesystem::perm_options::replace);
 }
 
 namespace {
@@ -108,14 +142,14 @@ std::vector<std::byte> asBytes(std::string_view text) {
 }
 }
 
-Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loaded,
-                                                               const std::filesystem::path& output,
-                                                               std::optional<std::string_view> stringsOnly) {
+Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
+                                                        const std::filesystem::path& output,
+                                                        std::optional<std::string_view> stringsOnly) {
     using namespace detail;
     std::string pendingName = loaded.name;
     if (output != loaded.path) return std::unexpected(Error{"SavePathNotAllowed", "Journal Save As is unavailable"});
     try {
-#ifdef __linux__
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
         const auto held = loaded.stagedAllocation ? loaded.stagedAllocation->heldGeneration : nullptr;
         const auto dataRoot = held ? loaded.stagedAllocation->heldDataRoot : nullptr;
         if (held && stringsOnly) return std::unexpected(Error{"LocalizedSourceRecoveryUnavailable", "Selective saves require held-source rebasing"});
@@ -126,11 +160,12 @@ Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loa
         StateReleased released;
         std::unique_lock saveIo(saveIoMutex_);
         if (!diskMatchesBaseline(loaded)) return std::unexpected(Error{"PluginChangedOnDisk", "Plugin bytes changed after loading"});
+        ensureJournalParent(testJournalRoot_);
         JournalSession session(testJournalRoot_);
         if (loaded.stagedAllocation) {
             auto valid = validateLocalizedAllocation(loaded, *loaded.stagedAllocation);
             if (!valid) return std::unexpected(valid.error());
-#ifdef __linux__
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
             if (!held)
 #endif
             if (!dataDirectory_.empty()) {
@@ -138,7 +173,7 @@ Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loa
                 if (!std::filesystem::equivalent(dataDirectory_, loaded.path.parent_path(), ec) || ec)
                     return std::unexpected(Error{"LocalizedSourceRecoveryUnavailable", "Data source roots require recoverable read-only authorization"});
             }
-#ifdef __linux__
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
             if (!held)
 #endif
             {
@@ -153,7 +188,7 @@ Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loa
         for (const auto& path : trustedSaveRoots_) roots.approvedRoots.push_back({path, JournalDestination::captureRoot(path)});
         std::vector<JournalArchiveInventory> archives;
         std::vector<JournalReadStringInventory> readStrings;
-#ifdef __linux__
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
         if (held) {
             const auto& captured = held->archives();
             roots.approvedReadRoots = captured.readRoots();
@@ -201,7 +236,7 @@ Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loa
             if (!defaultRoot || !archiveRoot) return std::unexpected(Error{"StringSavePathNotAllowed", "allocation roots are not approved"});
             sourceNames[{defaultRoot->rootSelector, defaultRoot->directories}];
             sourcePresence[{defaultRoot->rootSelector, defaultRoot->directories}] = loaded.stagedAllocation->defaultDirectoryExists;
-#ifdef __linux__
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
             if (!held)
 #endif
             sourceSets.push_back({"archive-empty", archiveRoot->rootSelector, archiveRoot->directories, {}});
@@ -224,7 +259,7 @@ Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loa
             };
             auto included = addInventory(loaded.stagedAllocation->allocationSources, loaded.path.parent_path() / "Strings");
             if (!included) return std::unexpected(included.error());
-#ifdef __linux__
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
             if (held) {
                 const auto& directories = held->directories();
                 if (directories.empty() || !support::sameLocalizedPath(directories.front().directory(), loaded.path.parent_path() / "Strings"))
@@ -334,7 +369,9 @@ Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loa
         session.publish(roots, inputs, sourceSets, archives, readStrings);
         std::error_code ec;
         auto writtenTime = std::filesystem::last_write_time(output, ec);
+#ifdef FO4IDE_TEST_HOOKS
         if (timestampHook) ec = timestampHook();
+#endif
         if (ec) writtenTime = std::filesystem::file_time_type::min();
         saveIo.unlock();
         CommitScope commit;
@@ -356,7 +393,8 @@ Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loa
         discardStagedStringTables(loaded.name); loaded.dirty = false;
         return {};
     } catch (const JournalRecoveryRequired& error) {
-        testRecoveryPlugin_.swap(pendingName);
+        CommitScope commit;
+        recoveryPlugin_.swap(pendingName);
         return std::unexpected(Error{"JournalRecoveryRequired", error.what()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"JournalWriteFailed", error.what()});
@@ -364,4 +402,3 @@ Result<void> RadiclePluginBackend::persistJournalForTestLocked(LoadedPlugin& loa
 }
 
 }
-#endif

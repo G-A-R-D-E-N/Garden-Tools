@@ -1,7 +1,5 @@
 #include "RadiclePluginSupport.hpp"
-#ifdef FO4IDE_TEST_HOOKS
 #include "RadiclePluginJournalSession.hpp"
-#endif
 
 #include <algorithm>
 #include <array>
@@ -17,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/io/path_text.hpp>
 #include <fo4/plugin/reader.hpp>
 
 namespace fo4ide::plugin {
@@ -100,10 +99,8 @@ bool RadiclePluginBackend::fileUnchangedSinceLoad(const LoadedPlugin& loaded) co
 }
 
 std::optional<Error> RadiclePluginBackend::writeGuard(const LoadedPlugin& loaded) const {
-#ifdef FO4IDE_TEST_HOOKS
-    if (!testRecoveryPlugin_.empty() && fo4::PluginKey::from_filename(testRecoveryPlugin_) == loaded.plugin.key)
+    if (!recoveryPlugin_.empty() && fo4::PluginKey::from_filename(recoveryPlugin_) == loaded.plugin.key)
         return Error{"JournalRecoveryRequired", "Plugin journal recovery is required"};
-#endif
     if (!isEditable(loaded)) {
         return Error{
             "PluginReadOnly",
@@ -190,9 +187,7 @@ std::optional<std::filesystem::path> RadiclePluginBackend::allowedLocalizationDi
 
 Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
                                                      const nlohmann::json& arguments) {
-#ifdef FO4IDE_TEST_HOOKS
     if (const auto error = testRecoveryGate(operation, arguments)) return std::unexpected(*error);
-#endif
     if (operation == "environment.LoadMo2") return loadEnvironment(arguments);
     if (operation == "strings.ListStringTables") return listStringTables(arguments);
     if (operation == "strings.GetStrings") return getStrings(arguments);
@@ -290,16 +285,40 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 #ifdef FO4IDE_TEST_HOOKS
     if (loadMo2AfterPendingCheckHook) loadMo2AfterPendingCheckHook();
 #endif
-#ifdef FO4IDE_TEST_HOOKS
     std::unique_ptr<OpLock> recoveryState;
     std::unique_ptr<detail::JournalSession> recoverySession;
+    std::filesystem::path configuredJournalRoot;
+    nlohmann::json warnings = nlohmann::json::array();
+    bool recoveryFailed = false;
+    const auto gateRecovery = [&](const std::string& owner) {
+        if (!recoveryFailed) recoveryPlugin_ = owner;
+        recoveryFailed = true;
+    };
+#ifdef FO4IDE_TEST_HOOKS
     TestReadRoots candidateReadRoots;
+#endif
     try {
-        std::filesystem::path configuredJournalRoot;
         { OpLock lock(*this, OpLock::Mode::Read); configuredJournalRoot = testJournalRoot_; }
         if (!configuredJournalRoot.empty()) {
             recoveryState = std::make_unique<OpLock>(*this, OpLock::Mode::Lifecycle);
             if (testJournalRoot_ != configuredJournalRoot) throw std::runtime_error("journal root changed");
+            if (!detail::journalHasRecoveryFiles(configuredJournalRoot)) recoveryState.reset();
+        }
+#ifdef FO4IDE_TEST_HOOKS
+        if (!configuredJournalRoot.empty()) {
+            for (const auto& entry : arguments["plugins"]) {
+                if (!entry.is_object()) continue;
+                const auto name = entry.value("name", std::string{});
+                try {
+                    testAuthorizeProfileReadRoots(nlohmann::json{{"plugins", nlohmann::json::array({entry})}}, candidateReadRoots);
+                } catch (const std::exception& error) {
+                    if (recoveryState) gateRecovery(name);
+                    warnings.push_back(nlohmann::json{{"plugin", name}, {"warning", error.what()}});
+                }
+            }
+        }
+#endif
+        if (recoveryState) {
             const auto pending = dirtyPluginListLocked();
             if (mutationEpoch_ != consentEpoch || (!discardPending && !pending.empty()))
                 return std::unexpected(Error{"PluginHasPendingChanges", "Pending changes prevent journal recovery: " + pending});
@@ -308,35 +327,55 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             std::vector<detail::JournalApprovedRoot> directories;
             for (const auto& entry : arguments["plugins"]) {
                 if (!entry.is_object() || !entry.value("resolved", false)) continue;
-                LoadedPlugin candidate;
-                candidate.name = entry.value("name", std::string{});
-                candidate.source = entry.value("source", std::string{});
-                const auto path = entry.value("path", std::string{});
-                if (candidate.name.empty() || path.empty()) continue;
-                candidate.path = utf8Path(path);
-                if (!isEditable(candidate)) continue;
-                std::error_code ec;
-                const auto canonical = std::filesystem::absolute(candidate.path, ec).lexically_normal();
-                if (ec || canonical.empty() || asciiLower(canonical.filename().string()) != asciiLower(candidate.name))
-                    throw std::runtime_error("cannot authorize journal plugin identity");
-                const auto status = std::filesystem::symlink_status(canonical, ec);
-                if (ec || !std::filesystem::is_regular_file(status)) throw std::runtime_error("unsafe journal plugin");
-                auto identity = detail::JournalDestination::captureRoot(canonical.parent_path());
-                const auto root = canonical.parent_path();
-                if (std::none_of(directories.begin(), directories.end(), [&](const auto& item) { return item.path == root; }))
-                    directories.push_back({root, identity});
-                detail::JournalRoots item;
-                item.plugin = canonical; item.pluginDirectoryIdentity = std::move(identity);
-                approved.push_back(std::move(item));
+                try {
+                    LoadedPlugin candidate;
+                    candidate.name = entry.value("name", std::string{});
+                    candidate.source = entry.value("source", std::string{});
+                    const auto path = entry.value("path", std::string{});
+                    if (candidate.name.empty() || path.empty()) continue;
+                    candidate.path = utf8Path(path);
+                    if (!isEditable(candidate)) continue;
+                    std::error_code ec;
+                    const auto canonical = std::filesystem::absolute(candidate.path, ec).lexically_normal();
+                    if (ec || canonical.empty() || asciiLower(canonical.filename().string()) != asciiLower(candidate.name))
+                        throw std::runtime_error("cannot authorize journal plugin identity");
+                    const auto status = std::filesystem::symlink_status(canonical, ec);
+                    if (ec || !std::filesystem::is_regular_file(status)) throw std::runtime_error("unsafe journal plugin");
+                    auto identity = detail::JournalDestination::captureRoot(canonical.parent_path());
+                    const auto root = canonical.parent_path();
+                    if (std::none_of(directories.begin(), directories.end(), [&](const auto& item) { return item.path == root; }))
+                        directories.push_back({root, identity});
+                    detail::JournalRoots item;
+                    item.plugin = canonical; item.pluginDirectoryIdentity = std::move(identity);
+                    approved.push_back(std::move(item));
+                } catch (const std::exception& error) {
+                    gateRecovery(entry.value("name", std::string{}));
+                    warnings.push_back(nlohmann::json{{"plugin", entry.value("name", std::string{})}, {"warning", error.what()}});
+                }
             }
             for (auto& item : approved) item.approvedRoots = directories;
-            testRecoverJournal(*recoverySession, approved, arguments, candidateReadRoots);
+            bool recovered = false;
+            for (const auto& item : approved) {
+                const std::vector<detail::JournalRoots> owner{item};
+                const auto name = fo4::io::utf8(item.plugin.filename());
+                try {
+#ifdef FO4IDE_TEST_HOOKS
+                    if (testRecoverJournal(*recoverySession, owner, arguments, candidateReadRoots)) recovered = true;
+#else
+                    if (recoverySession->recover(owner)) recovered = true;
+#endif
+                } catch (const std::exception& error) {
+                    gateRecovery(name);
+                    warnings.push_back(nlohmann::json{{"plugin", name}, {"warning", error.what()}});
+                }
+            }
+            if (!recovered) recoverySession.reset();
         }
     } catch (const std::exception& error) {
-        return std::unexpected(Error{dynamic_cast<const detail::JournalRecoveryProfileInvalid*>(&error) ? "JournalRecoveryProfileInvalid" :
-            dynamic_cast<const detail::JournalRecoveryReadRootChanged*>(&error) ? "JournalRecoveryReadRootChanged" : "JournalRecoveryRequired", error.what()});
+        recoverySession.reset();
+        if (recoveryState) gateRecovery(fo4::io::utf8(configuredJournalRoot));
+        warnings.push_back(nlohmann::json{{"warning", error.what()}});
     }
-#endif
     std::vector<LoadedPlugin> loaded;
     nlohmann::json errors = nlohmann::json::array();
     for (const auto& entry : arguments["plugins"]) {
@@ -372,13 +411,11 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         }
     }
 
-#ifdef FO4IDE_TEST_HOOKS
     recoveryState.reset();
-#ifdef __linux__
-    if (recoverySession && !errors.empty()) return std::unexpected(Error{"JournalRecoveryProfileInvalid", "a profile plugin could not be loaded"});
-    try { if (recoverySession) candidateReadRoots = testFilterReadRoots(candidateReadRoots, loaded); }
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+    if (!configuredJournalRoot.empty() && !errors.empty()) return std::unexpected(Error{"JournalRecoveryProfileInvalid", "a profile plugin could not be loaded: " + errors.front().at("plugin").get<std::string>()});
+    try { if (!configuredJournalRoot.empty()) candidateReadRoots = testFilterReadRoots(candidateReadRoots, loaded); }
     catch (const std::exception& error) { return std::unexpected(Error{"JournalRecoveryProfileInvalid", error.what()}); }
-#endif
 #endif
     std::vector<fo4::MasterDescriptor> knownKinds;
     knownKinds.reserve(loaded.size());
@@ -425,9 +462,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 #if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
         testReadRoots_ = std::move(candidateReadRoots);
 #endif
-#ifdef FO4IDE_TEST_HOOKS
-        if (recoverySession) testRecoveryPlugin_.clear();
-#endif
+        if (!recoveryFailed) recoveryPlugin_.clear();
         {
             std::scoped_lock staged(stagedStringsMutex_);
             stagedStrings_.clear();
@@ -439,7 +474,8 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         {"ok", true},
         {"loadedPlugins", loadedCount},
         {"failedPlugins", errors.size()},
-        {"errors", std::move(errors)}
+        {"errors", std::move(errors)},
+        {"warnings", std::move(warnings)}
     };
 }
 

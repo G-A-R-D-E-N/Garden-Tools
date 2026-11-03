@@ -380,3 +380,68 @@ TEST_CASE("Windows split-store intent rejects mismatched stage attributes before
     CHECK(readSplitFile(root / "data" / "stage") == std::vector<std::byte>(splitBytes("updated").begin(), splitBytes("updated").end()));
 #endif
 }
+
+TEST_CASE("Windows destination creates nested missing journal directories through held handles") {
+#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+    namespace fs = std::filesystem;
+    const auto root = makeSplitRoot(); Cleanup cleanup{root};
+    makeSplitData(root / "data");
+    {
+        fo4ide::plugin::detail::JournalDestination destination(root / "data", {"alpha", "beta", "gamma"}, "destination", true);
+        CHECK_FALSE(destination.read(1).has_value());
+    }
+    CHECK(fs::is_directory(root / "data" / "alpha" / "beta" / "gamma"));
+    CHECK(splitSecurity(root / "data" / "alpha").find(L"ID;") != std::wstring::npos);
+    CHECK(splitSecurity(root / "data" / "alpha" / "beta").find(L"ID;") != std::wstring::npos);
+    CHECK_FALSE(fs::exists(root / "data" / "alpha" / "beta" / "gamma" / "destination"));
+#endif
+}
+
+TEST_CASE("Windows destination reuses existing journal directories and creates only the missing tail") {
+#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+    namespace fs = std::filesystem;
+    const auto root = makeSplitRoot(); Cleanup cleanup{root};
+    makeSplitData(root / "data");
+    fs::create_directory(root / "data" / "existing");
+    writeSplitFile(root / "data" / "existing" / "keep", "kept");
+    const auto identity = splitIdentity(root / "data" / "existing", true);
+    const auto kept = readSplitFile(root / "data" / "existing" / "keep");
+    {
+        fo4ide::plugin::detail::JournalDestination destination(root / "data", {"existing", "missing"}, "destination", true);
+        CHECK_FALSE(destination.read(1).has_value());
+    }
+    CHECK(splitIdentity(root / "data" / "existing", true) == identity);
+    CHECK(readSplitFile(root / "data" / "existing" / "keep") == kept);
+    CHECK(fs::is_directory(root / "data" / "existing" / "missing"));
+#endif
+}
+
+TEST_CASE("Windows destination never creates an absent authorized root or absent source directories") {
+#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+    namespace fs = std::filesystem;
+    const auto root = makeSplitRoot(); Cleanup cleanup{root};
+    makeSplitData(root / "data");
+    CHECK_THROWS_AS(fo4ide::plugin::detail::JournalDestination(root / "data" / "absent" / "root", {"child"}, "destination", true), std::runtime_error);
+    CHECK_FALSE(fs::exists(root / "data" / "absent"));
+    const auto identity = fo4ide::plugin::detail::JournalDestination::captureRoot(root / "data");
+    CHECK_THROWS_AS(fo4ide::plugin::detail::JournalDestination::listDirectory(root / "data", {"absent", "child"}, identity), fo4ide::plugin::detail::JournalDirectoryAbsent);
+    CHECK_FALSE(fs::exists(root / "data" / "absent"));
+#endif
+}
+
+TEST_CASE("Windows destination refuses file and reparse point components instead of creating beneath them") {
+#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+    namespace fs = std::filesystem;
+    const auto root = makeSplitRoot(); Cleanup cleanup{root};
+    makeSplitData(root / "data");
+    writeSplitFile(root / "data" / "plain", "file");
+    CHECK_THROWS(fo4ide::plugin::detail::JournalDestination(root / "data", {"plain", "after"}, "destination", true));
+    CHECK_FALSE(fs::exists(root / "data" / "plain" / "after"));
+    fs::create_directory(root / "data" / "target");
+    fs::create_directory(root / "data" / "link");
+    makeJunction(root / "data" / "link", root / "data" / "target");
+    JunctionCleanup junction{root / "data" / "link"};
+    CHECK_THROWS(fo4ide::plugin::detail::JournalDestination(root / "data", {"link", "after"}, "destination", true));
+    CHECK_FALSE(fs::exists(root / "data" / "target" / "after"));
+#endif
+}

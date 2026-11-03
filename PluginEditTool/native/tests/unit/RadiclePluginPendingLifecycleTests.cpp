@@ -275,9 +275,9 @@ TEST_CASE("Backend recovers a fragment journal before environment loading") {
     backend.testSetJournalRoot(root / "journal");
     const auto environment = [&](const std::string& sourceName, const std::filesystem::path& path) { return nlohmann::json{{"plugins", nlohmann::json::array({
         {{"name", "Patch.esp"}, {"path", path.string()}, {"source", sourceName}, {"resolved", true}}})}}; };
-    CHECK_FALSE(backend.invoke("environment.LoadMo2", environment("Data", pluginPath)).has_value());
+    CHECK(backend.invoke("environment.LoadMo2", environment("Data", pluginPath)).has_value());
     std::error_code ec; std::filesystem::create_directory_symlink(root, root / "alias", ec);
-    if (!ec) CHECK_FALSE(backend.invoke("environment.LoadMo2", environment("Test", root / "alias" / "Patch.esp")).has_value());
+    if (!ec) CHECK(backend.invoke("environment.LoadMo2", environment("Test", root / "alias" / "Patch.esp")).has_value());
     CHECK(readBytes(pluginPath) == original); CHECK(readBytes(scriptPath) == scriptBefore);
     const auto loaded = backend.invoke("environment.LoadMo2", environment("Test", pluginPath));
     REQUIRE(loaded.has_value()); CHECK(loaded->at("loadedPlugins") == 1);
@@ -289,6 +289,36 @@ TEST_CASE("Backend recovers a fragment journal before environment loading") {
     REQUIRE(column != columns.end()); REQUIRE(grid.at("rows").size() == 1);
     CHECK(grid.at("rows")[0].at("cells")[static_cast<std::size_t>(column - columns.begin())] == "20");
     CHECK(readBytes(pluginPath) == updated); CHECK(readBytes(scriptPath) == scriptAfter);
+#else
+    SUCCEED("held journal destinations are not implemented on this platform");
+#endif
+}
+
+TEST_CASE("Backend recovers each profile plugin's own interrupted fragment journal") {
+#ifdef __linux__
+    using namespace fo4ide::plugin::detail;
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    const auto firstPath = root / "First.esp", secondPath = root / "Second.esp";
+    const auto original = makeSecondPlugin(); auto updated = original; updated[updated.size() - 4] = std::byte{20};
+    writeBytes(firstPath, original); writeBytes(secondPath, original);
+    const auto journalRoot = root / "journal";
+    const JournalInput plugin{"plugin", "", true, fo4::io::sha256_hex(original), original.size(), updated};
+    for (const auto& pluginPath : {firstPath, secondPath}) {
+        JournalRoots roots; roots.plugin = pluginPath; roots.pluginDirectoryIdentity = JournalDestination::captureRoot(root);
+        roots.approvedRoots.push_back({root, *roots.pluginDirectoryIdentity});
+        JournalSession journal(journalRoot); setJournalCommitHook(interruptBeforeJournalReplay);
+        CHECK_THROWS_AS(journal.publish(roots, {plugin}), JournalRecoveryRequired);
+        setJournalCommitHook(nullptr);
+    }
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.testSetJournalRoot(journalRoot);
+    const auto args = nlohmann::json{{"plugins", nlohmann::json::array({
+        {{"name", "First.esp"}, {"path", firstPath.string()}, {"source", "Test"}, {"resolved", true}},
+        {{"name", "Second.esp"}, {"path", secondPath.string()}, {"source", "Test"}, {"resolved", true}}})}};
+    const auto loaded = backend.invoke("environment.LoadMo2", args);
+    REQUIRE(loaded.has_value()); CHECK(loaded->at("loadedPlugins") == 2);
+    CHECK(loaded->at("warnings").empty());
+    CHECK(readBytes(firstPath) == updated); CHECK(readBytes(secondPath) == updated);
 #else
     SUCCEED("held journal destinations are not implemented on this platform");
 #endif

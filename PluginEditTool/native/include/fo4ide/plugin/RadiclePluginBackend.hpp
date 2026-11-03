@@ -173,16 +173,18 @@ public:
 private:
 #ifdef FO4IDE_TEST_HOOKS
     using TestReadRoots = std::map<std::filesystem::path, std::shared_ptr<const detail::Ba2ReadRoot>>;
-    std::filesystem::path testJournalRoot_;
-    std::string testRecoveryPlugin_;
 #ifdef __linux__
     std::shared_ptr<const detail::Ba2ReadRoot> testDataReadRoot_;
     TestReadRoots testReadRoots_;
 #endif
-    std::optional<Error> testRecoveryGate(std::string_view operation, const nlohmann::json& arguments) const;
-    void testRecoverJournal(detail::JournalSession& session, const std::vector<detail::JournalRoots>& approved,
+    bool testRecoverJournal(detail::JournalSession& session, const std::vector<detail::JournalRoots>& approved,
                             const nlohmann::json& arguments, TestReadRoots& readRoots) const;
 #endif
+    static std::filesystem::path defaultJournalRoot();
+    static void ensureJournalParent(const std::filesystem::path& root);
+    std::filesystem::path testJournalRoot_{defaultJournalRoot()};
+    std::string recoveryPlugin_;
+    std::optional<Error> testRecoveryGate(std::string_view operation, const nlohmann::json& arguments) const;
     struct StagedQuestFragments {
         fo4::FormKey questKey;
         std::filesystem::path sourcePath;
@@ -235,6 +237,7 @@ private:
 
 #ifdef FO4IDE_TEST_HOOKS
     static TestReadRoots testFilterReadRoots(const TestReadRoots& roots, const std::vector<LoadedPlugin>& loaded);
+    static void testAuthorizeProfileReadRoots(const nlohmann::json& arguments, TestReadRoots& readRoots);
 #ifdef __linux__
     Result<std::shared_ptr<detail::HeldLocalizationGeneration>> testCaptureHeldGeneration(
         const LoadedPlugin& loaded, std::string_view language) const;
@@ -244,8 +247,6 @@ private:
     static void testReserveHeldWriter(detail::HeldLocalizationGeneration& generation,
                                       const fo4::localization::LocalizedStringTable& table);
 #endif
-    Result<void> persistJournalForTestLocked(LoadedPlugin& loaded, const std::filesystem::path& output,
-                                              std::optional<std::string_view> stringsOnly = std::nullopt);
 #endif
 
     enum class StateHold { None, Shared, Exclusive };
@@ -300,6 +301,8 @@ private:
                                                   const fo4::FormKey& key) const;
     void stageLocalizationMutationLocked(LoadedPlugin& loaded, StagedLocalization staged);
     Result<void> persistPluginLocked(LoadedPlugin& loaded, const std::filesystem::path& output);
+    Result<void> persistJournalLocked(LoadedPlugin& loaded, const std::filesystem::path& output,
+                                      std::optional<std::string_view> stringsOnly = std::nullopt);
     Result<nlohmann::json> discardPlugin(const nlohmann::json& arguments);
 
     Result<nlohmann::json> loadEnvironment(const nlohmann::json& arguments);

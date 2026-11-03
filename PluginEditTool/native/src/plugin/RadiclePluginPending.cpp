@@ -201,10 +201,8 @@ bool RadiclePluginBackend::stageQuestFragmentMutationLocked(
 
 Result<void> RadiclePluginBackend::persistPluginLocked(
     LoadedPlugin& loaded, const std::filesystem::path& output) {
-#ifdef FO4IDE_TEST_HOOKS
     if (!testJournalRoot_.empty() && (loaded.stagedQuestFragments || loaded.stagedLocalization || hasStagedStringTables(loaded.name)))
-        return persistJournalForTestLocked(loaded, output);
-#endif
+        return persistJournalLocked(loaded, output);
     if (loaded.stagedQuestFragments.has_value()) {
         return std::unexpected(Error{"QuestFragmentSaveUnavailable",
             "Quest fragments cannot be saved until recoverable script and plugin publication is available; discard the pending edit."});

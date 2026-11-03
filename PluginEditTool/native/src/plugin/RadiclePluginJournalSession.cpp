@@ -23,8 +23,10 @@ namespace fo4ide::plugin::detail {
 #ifdef FO4IDE_TEST_HOOKS
 namespace { JournalCommitHook commitHook = nullptr; }
 void setJournalCommitHook(JournalCommitHook hook) { commitHook = hook; }
+#endif
 #ifdef _WIN32
 namespace { WindowsJournalSessionHook windowsHook = nullptr; }
+#ifdef FO4IDE_TEST_HOOKS
 void setWindowsJournalSessionHook(WindowsJournalSessionHook hook) { windowsHook = hook; }
 #endif
 #endif
@@ -74,7 +76,7 @@ std::unique_ptr<JournalDestination> destination(const JournalManifestEntry& entr
     }
     const auto& identity = entry.kind == "plugin" ? roots.pluginDirectoryIdentity : roots.stringsDirectoryIdentity;
     if (!identity) throw std::runtime_error("journal destination root is not authorized");
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
     if (entry.kind == "plugin") return std::make_unique<JournalDestination>(roots.plugin.parent_path(), std::vector<std::string>{},
         fo4::io::utf8(roots.plugin.filename()), false, identity);
 #endif
@@ -102,7 +104,7 @@ bool orphanName(std::string_view name) {
         const char ch = name[i];
         if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f'))) return false;
     }
-    if (name.substr(32) == ".tmp") return true;
+    if (name.substr(32) == ".tmp" || name.substr(32) == ".authority") return true;
     if (name[32] != '_' || !name.ends_with(".payload")) return false;
     const auto number = name.substr(33, name.size() - 33 - 8);
     if (number.empty() || number.size() > 3 || (number.size() > 1 && number.front() == '0') ||
@@ -112,9 +114,36 @@ bool orphanName(std::string_view name) {
     return index < 128;
 }
 
+bool ownsManifest(const JournalRoot& root, std::string_view name, const JournalRoots& roots) {
+    try {
+        const auto bytes = root.readFile(name, kJournalMaxManifestBytes);
+        const auto manifest = decodeJournalManifest(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+#if defined(_WIN32)
+        return WindowsJournalSessionState::samePath(manifest.plugin, WindowsJournalSessionState::pluginIdentity(roots));
+#else
+        return sameJournalIdentity(journalIdentity(manifest.plugin), journalIdentity(roots.plugin));
+#endif
+    } catch (const std::exception& error) {
+        throw JournalRecoveryRequired("journal manifest cannot be attributed to a plugin: " + std::string(error.what()));
+    }
+}
+
+#if defined(_WIN32)
+bool ownsCompletion(const JournalRoot& root, std::string_view name, const JournalRoots& roots) {
+    try {
+        WindowsJournalDirectory journal(root.nativeHandle());
+        const auto document = WindowsJournalSessionState::completionDocument(journal, name);
+        const auto manifest = decodeJournalManifest(document);
+        return WindowsJournalSessionState::samePath(manifest.plugin, WindowsJournalSessionState::pluginIdentity(roots));
+    } catch (const std::exception& error) {
+        throw JournalRecoveryRequired("journal completion cannot be attributed to a plugin: " + std::string(error.what()));
+    }
+}
+#endif
+
 void cleanupUnpublished(JournalRoot& root) {
     const auto files = root.listFiles(4096);
-    if (std::any_of(files.begin(), files.end(), [](const auto& name) { return journalSuffix(name, ".manifest"); })) return;
+    if (std::any_of(files.begin(), files.end(), [](const auto& name) { return journalSuffix(name, ".manifest") || journalSuffix(name, ".complete"); })) return;
     for (const auto& name : files) if (orphanName(name)) root.removeFile(name);
 }
 
@@ -131,6 +160,17 @@ std::string transactionId() {
 
 JournalSession::JournalSession(const std::filesystem::path& root)
     : root_(root), lock_(root_, "global.lock") {}
+
+bool journalHasRecoveryFiles(const std::filesystem::path& root) {
+    std::error_code ec;
+    std::filesystem::directory_iterator entries(root, ec);
+    if (ec) return ec != std::errc::no_such_file_or_directory;
+    for (const std::filesystem::directory_iterator end; entries != end && !ec; entries.increment(ec)) {
+        const auto name = fo4::io::utf8(entries->path().filename());
+        if (journalSuffix(name, ".manifest") || journalSuffix(name, ".complete")) return true;
+    }
+    return static_cast<bool>(ec);
+}
 
 namespace {
 bool sameArchiveReference(const JournalArchiveReference& first, const JournalArchiveReference& second) {
@@ -306,21 +346,19 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
         }
         total += file.originalSize + file.finalBytes.size();
     }
-#if !defined(_WIN32) || !defined(FO4IDE_TEST_HOOKS)
     cleanupUnpublished(root_);
-#endif
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
     const auto existingFiles = root_.listFiles(kJournalMaxCleanupEntries);
 #else
     const auto existingFiles = root_.listFiles();
 #endif
     for (const auto& name : existingFiles) {
-        if (journalSuffix(name, ".manifest")) throw JournalRecoveryRequired("a journal transaction requires recovery");
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
-        if (journalSuffix(name, ".complete")) throw JournalRecoveryRequired("a completed Windows transaction requires cleanup");
+        if (journalSuffix(name, ".manifest") && ownsManifest(root_, name, roots)) throw JournalRecoveryRequired("a journal transaction requires recovery");
+#if defined(_WIN32)
+        if (journalSuffix(name, ".complete") && ownsCompletion(root_, name, roots)) throw JournalRecoveryRequired("a completed Windows transaction requires cleanup");
 #endif
     }
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
     if (std::count_if(existingFiles.begin(), existingFiles.end(), [](const auto& name) { return journalSuffix(name, ".authority"); }) >= 8 ||
         existingFiles.size() + 19 * files.size() + 4 > kJournalMaxCleanupEntries)
         throw JournalRecoveryRequired("uncommitted Windows journal files require manual attention");
@@ -388,7 +426,7 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
         }
         targets.push_back(std::move(target));
     }
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
     WindowsJournalDirectory windowsJournal(root_.nativeHandle());
     const auto authority = WindowsJournalSessionState::authorize(windowsJournal, document, manifest, paths, targets);
     if (windowsHook) windowsHook(WindowsJournalSessionStep::preflightComplete, 0, {}, {});
@@ -401,8 +439,9 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
             written.push_back(manifest.files[index].payload);
         }
         const auto temporary = id + ".tmp";
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
         root_.writeFile(id + ".authority", std::as_bytes(std::span(authority.data(), authority.size())));
+        written.push_back(id + ".authority");
 #endif
         root_.writeFile(temporary, std::span<const std::byte>(
             reinterpret_cast<const std::byte*>(document.data()), document.size()));
@@ -412,7 +451,7 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
 #ifdef FO4IDE_TEST_HOOKS
         if (commitHook) commitHook(0);
 #endif
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
         targets.clear();
         if (windowsHook) windowsHook(WindowsJournalSessionStep::prepared, 0, {}, {});
 #endif
@@ -424,30 +463,34 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
             catch (const std::exception& error) { throw JournalRecoveryRequired("journal publication or recovery requires attention: " + std::string(error.what())); }
             catch (...) { throw JournalRecoveryRequired("journal publication or recovery requires attention"); }
         }
-#if !defined(_WIN32) || !defined(FO4IDE_TEST_HOOKS)
         try {
             for (auto it = written.rbegin(); it != written.rend(); ++it) root_.removeFile(*it);
         } catch (const std::exception& error) {
             throw std::runtime_error("could not clean unpublished journal files: " + std::string(error.what()));
         }
-#endif
         std::rethrow_exception(failure);
     }
 }
 
-void JournalSession::recover(const std::vector<JournalRoots>& approved, const JournalPrepareRecovery& prepare) {
+bool JournalSession::recover(const std::vector<JournalRoots>& approved, const JournalPrepareRecovery& prepare) {
     try {
-#if !defined(_WIN32) || !defined(FO4IDE_TEST_HOOKS)
         cleanupUnpublished(root_);
-#endif
         std::vector<std::string> pending;
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+        const auto ownedByApproved = [&](const std::string& name) {
+            return std::any_of(approved.begin(), approved.end(), [&](const JournalRoots& roots) {
+#if defined(_WIN32)
+                if (journalSuffix(name, ".complete")) return ownsCompletion(root_, name, roots);
+#endif
+                return ownsManifest(root_, name, roots);
+            });
+        };
+#if defined(_WIN32)
         std::vector<std::string> completions;
         for (const auto& name : root_.listFiles(kJournalMaxCleanupEntries)) {
-            if (journalSuffix(name, ".manifest")) pending.push_back(name);
-            if (journalSuffix(name, ".complete")) completions.push_back(name);
+            if (journalSuffix(name, ".manifest") && ownedByApproved(name)) pending.push_back(name);
+            if (journalSuffix(name, ".complete") && ownedByApproved(name)) completions.push_back(name);
         }
-        if (pending.empty() && completions.empty()) return;
+        if (pending.empty() && completions.empty()) return false;
         if (pending.size() > 1 || completions.size() > 1) throw std::runtime_error("multiple Windows transactions require manual attention");
         const bool completionOnly = pending.empty();
         WindowsJournalDirectory windowsJournal(root_.nativeHandle());
@@ -456,9 +499,9 @@ void JournalSession::recover(const std::vector<JournalRoots>& approved, const Jo
             reinterpret_cast<const std::byte*>(recoveredDocument.data() + recoveredDocument.size())) : root_.readFile(pending.front(), kJournalMaxManifestBytes);
 #else
         for (const auto& name : root_.listFiles()) {
-            if (journalSuffix(name, ".manifest")) pending.push_back(name);
+            if (journalSuffix(name, ".manifest") && ownedByApproved(name)) pending.push_back(name);
         }
-        if (pending.empty()) return;
+        if (pending.empty()) return false;
         if (pending.size() != 1) throw std::runtime_error("multiple journal transactions require manual attention");
         const auto bytes = root_.readFile(pending.front(), kJournalMaxManifestBytes);
 #endif
@@ -468,7 +511,7 @@ void JournalSession::recover(const std::vector<JournalRoots>& approved, const Jo
         if (!pending.empty() && pending.front() != manifest.transaction + ".manifest") {
             throw std::runtime_error("journal manifest name does not match its transaction");
         }
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
         if (!completions.empty() && completions.front() != manifest.transaction + ".complete") throw std::runtime_error("Windows completion transaction is ambiguous");
         const auto recorded = manifest.plugin;
 #else
@@ -476,7 +519,7 @@ void JournalSession::recover(const std::vector<JournalRoots>& approved, const Jo
 #endif
         const JournalRoots* selected = nullptr;
         for (const auto& roots : approved) {
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
             if (!WindowsJournalSessionState::samePath(recorded, WindowsJournalSessionState::pluginIdentity(roots))) continue;
 #else
             if (!sameJournalIdentity(recorded, journalIdentity(roots.plugin))) continue;
@@ -484,8 +527,8 @@ void JournalSession::recover(const std::vector<JournalRoots>& approved, const Jo
             if (selected != nullptr) throw std::runtime_error("journal plugin authorization is ambiguous");
             selected = &roots;
         }
-        if (selected == nullptr) throw std::runtime_error("journal plugin is not authorized in this environment");
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+        if (selected == nullptr) return false;
+#if defined(_WIN32)
         if (completionOnly) {
             const auto paths = resolveJournalTargets(manifest, *selected);
             WindowsJournalSessionState::Targets targets;
@@ -496,7 +539,7 @@ void JournalSession::recover(const std::vector<JournalRoots>& approved, const Jo
             };
             revalidate();
             WindowsJournalSessionState::cleanup(windowsJournal, recoveredDocument, manifest, paths, targets, windowsHook, revalidate);
-            return;
+            return true;
         }
 #endif
         auto prepared = *selected;
@@ -515,6 +558,7 @@ void JournalSession::recover(const std::vector<JournalRoots>& approved, const Jo
             peers = std::move(readConfig.peers);
         }
         replay(pending.front(), prepared, peers);
+        return true;
     } catch (const JournalRecoveryRequired&) {
         throw;
     } catch (const std::exception& error) {
@@ -543,7 +587,7 @@ void JournalSession::replay(std::string_view manifestName, const JournalRoots& r
         const auto& entry = manifest.files[index];
         static_cast<void>(payload(root_, entry));
         auto target = destination(entry, roots, paths[index]);
-#if !defined(_WIN32) || !defined(FO4IDE_TEST_HOOKS)
+#if !defined(_WIN32)
         const auto current = target->read(static_cast<std::size_t>(std::max(entry.originalSize, entry.finalSize)));
         if (entry.verifyOnly) {
             if (!matches(current, entry.originalExists, entry.originalSize, entry.originalHash))
@@ -560,7 +604,7 @@ void JournalSession::replay(std::string_view manifestName, const JournalRoots& r
         targets.push_back(std::move(target));
     }
     for (const auto& peer : peers) verifyJournalPeer(peer);
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
     WindowsJournalDirectory windowsJournal(root_.nativeHandle());
     const std::string_view document(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     const auto revalidate = [&] {
@@ -575,7 +619,11 @@ void JournalSession::replay(std::string_view manifestName, const JournalRoots& r
     if (!WindowsJournalSessionState::cleanup(windowsJournal, document, manifest, paths, targets, nullptr, {}, true)) {
         WindowsJournalSessionState::prepare(windowsJournal, document, manifest, paths, targets, windowsHook, revalidate);
         WindowsJournalSessionState::apply(windowsJournal, manifest, paths, targets, revalidate,
+#ifdef FO4IDE_TEST_HOOKS
             [](std::size_t count) { if (commitHook) commitHook(count); });
+#else
+            {});
+#endif
     }
     WindowsJournalSessionState::cleanup(windowsJournal, document, manifest, paths, targets, windowsHook, revalidate);
 #else

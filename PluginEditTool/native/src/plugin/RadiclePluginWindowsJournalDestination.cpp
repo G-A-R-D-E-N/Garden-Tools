@@ -2,7 +2,7 @@
 #include "RadiclePluginWindowsJournalIntent.hpp"
 #include "RadiclePluginWindowsJournalNative.hpp"
 
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -158,6 +158,27 @@ Handle openChild(HANDLE parent, const std::wstring& name, bool directory, ACCESS
     }
     return Handle(raw);
 }
+void createDirectoryChild(HANDLE parent, const std::wstring& name) {
+    UNICODE_STRING component{};
+    component.Length = static_cast<USHORT>(name.size() * sizeof(wchar_t));
+    component.MaximumLength = component.Length;
+    component.Buffer = const_cast<wchar_t*>(name.data());
+    OBJECT_ATTRIBUTES attributes{};
+    attributes.Length = sizeof(attributes);
+    attributes.RootDirectory = parent;
+    attributes.ObjectName = &component;
+    attributes.Attributes = OBJ_CASE_INSENSITIVE;
+    IO_STATUS_BLOCK block{};
+    HANDLE raw = nullptr;
+    const auto status = ::NtCreateFile(&raw, READ_CONTROL | FILE_READ_ATTRIBUTES | SYNCHRONIZE, &attributes, &block, nullptr,
+        FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_CREATE, FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+        nullptr, 0);
+    Handle created(raw);
+    if (status >= 0) return;
+    const auto error = ::RtlNtStatusToDosError(status);
+    if (error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS) return;
+    throw std::system_error(static_cast<int>(error), std::system_category(), "create destination directory");
+}
 WindowsJournalFileMetadata fileMetadata(HANDLE file, bool inheritedOnly = false) {
     requireSafe(file, false);
     const auto information = basic(file);
@@ -273,7 +294,6 @@ JournalDestination::JournalDestination(const std::filesystem::path& root, const 
 JournalDestination::JournalDestination(const std::filesystem::path& root, const std::vector<std::string>& directories,
     std::string file, bool createDirectories, std::optional<JournalDirectoryIdentity> expectedRoot, bool captureOnly)
     : impl_(std::make_unique<Impl>()) {
-    if (createDirectories) throw std::runtime_error("Windows destination directory creation is not implemented");
     const auto drive = root.root_name().native();
     if (!root.is_absolute() || drive.size() != 2 || drive[1] != L':' ||
         !((drive[0] >= L'A' && drive[0] <= L'Z') || (drive[0] >= L'a' && drive[0] <= L'z')))
@@ -293,7 +313,19 @@ JournalDestination::JournalDestination(const std::filesystem::path& root, const 
     chain.handles.push_back(std::move(driveHandle));
     requireSafe(chain.handles.back().get(), true, true);
     for (std::size_t i = 0; i < names.size(); ++i) {
-        auto next = openChild(chain.handles.back().get(), names[i], true);
+        const auto parent = chain.handles.back().get();
+        auto next = openChild(parent, names[i], true);
+        if (!next && createDirectories && !captureOnly && i >= rootCount) {
+            auto writable = openChild(chain.handles[i - 1].get(), names[i - 1], true, GENERIC_WRITE);
+            if (!writable || identity(writable.get()) != chain.identities[i]) throw std::runtime_error("destination directory changed");
+            createDirectoryChild(writable.get(), names[i]);
+            if (!::FlushFileBuffers(writable.get())) {
+                const auto error = ::GetLastError();
+                if (error != ERROR_INVALID_FUNCTION && error != ERROR_ACCESS_DENIED && error != ERROR_INVALID_HANDLE)
+                    throw std::system_error(static_cast<int>(error), std::system_category(), "sync destination parent");
+            }
+            next = openChild(parent, names[i], true);
+        }
         if (!next) {
             if (captureOnly && i >= rootCount) throw JournalDirectoryAbsent("journal source directory is absent");
             throw std::runtime_error("destination directory is absent");

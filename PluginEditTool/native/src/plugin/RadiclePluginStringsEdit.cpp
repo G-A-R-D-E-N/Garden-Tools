@@ -405,16 +405,14 @@ Result<nlohmann::json> RadiclePluginBackend::saveStringTables(const nlohmann::js
         }
     }
     if (!pending.empty()) {
-#ifdef FO4IDE_TEST_HOOKS
         if (!testJournalRoot_.empty()) {
             std::vector<std::string> paths;
             for (const auto& table : pending) paths.push_back(fo4::io::utf8(table.file.path));
             auto response = support::dumpPayload({{"saved", paths}});
-            auto saved = persistJournalForTestLocked(*loaded, loaded->path, *language);
+            auto saved = persistJournalLocked(*loaded, loaded->path, *language);
             if (!saved) return std::unexpected(saved.error());
             return response;
         }
-#endif
         return std::unexpected(Error{"LocalizedSaveUnavailable", "Pending string tables require recoverable publication."});
     }
     std::vector<std::string> written;

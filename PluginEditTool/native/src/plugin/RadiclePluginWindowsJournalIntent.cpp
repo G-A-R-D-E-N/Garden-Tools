@@ -289,7 +289,6 @@ WindowsJournalReplacementState WindowsJournalDirectory::inspectReplacement(const
     return processReplacement(request, &expected, false);
 }
 
-#ifdef FO4IDE_TEST_HOOKS
 void WindowsJournalDirectory::persistReplacementIntent(const WindowsJournalReplacementRequest& request,
     const WindowsJournalReplacementExpectation& expected, const JournalDestination& destination) const {
     const auto base = recordBase(request);
@@ -315,13 +314,15 @@ void WindowsJournalDirectory::persistReplacementIntent(const WindowsJournalRepla
     const auto encoded = prepare();
     if (encoded != preflight) throw std::runtime_error("replacement artifacts changed after preflight");
     writeFile(base + ".intent.stage", bytes(encoded));
-    if (intentHook) intentHook(WindowsJournalIntentStep::intentWritten);
-    publishSnapshot(base + ".intent.stage", recordSnapshot(*this, base + ".intent.stage", encoded), base + ".intent");
-    if (intentHook) intentHook(WindowsJournalIntentStep::intentPublished);
-}
-#endif
-
 #ifdef FO4IDE_TEST_HOOKS
+    if (intentHook) intentHook(WindowsJournalIntentStep::intentWritten);
+#endif
+    publishSnapshot(base + ".intent.stage", recordSnapshot(*this, base + ".intent.stage", encoded), base + ".intent");
+#ifdef FO4IDE_TEST_HOOKS
+    if (intentHook) intentHook(WindowsJournalIntentStep::intentPublished);
+#endif
+}
+
 WindowsJournalReplacementState WindowsJournalDirectory::inspectReplacement(const WindowsJournalReplacementRequest& request,
     const WindowsJournalReplacementExpectation& expected, const JournalDestination& destination) const {
     static_cast<void>(recordBase(request));
@@ -346,17 +347,23 @@ void WindowsJournalDirectory::resumeReplacement(const WindowsJournalReplacementR
     auto current = validate();
     if (!trySnapshotFile(base + ".intent", maxIntentBytes)) {
         publishSnapshot(base + ".intent.stage", *boundRecord, base + ".intent");
+#ifdef FO4IDE_TEST_HOOKS
         if (intentHook) intentHook(WindowsJournalIntentStep::intentPublished);
+#endif
         current = validate();
     }
     if (current.first == WindowsJournalReplacementState::prepared && expected.originalExists) {
         destination.renameReplacementArtifact(request, current.second, true);
+#ifdef FO4IDE_TEST_HOOKS
         if (intentHook) intentHook(WindowsJournalIntentStep::originalBackedUp);
+#endif
         current = validate();
     }
     if (current.first == WindowsJournalReplacementState::prepared || current.first == WindowsJournalReplacementState::backedUp) {
         destination.renameReplacementArtifact(request, current.second, false);
+#ifdef FO4IDE_TEST_HOOKS
         if (intentHook) intentHook(WindowsJournalIntentStep::replacementPublished);
+#endif
     }
     current = validate();
     if (current.first != WindowsJournalReplacementState::applied) throw std::runtime_error("replacement was not applied");
@@ -365,19 +372,22 @@ void WindowsJournalDirectory::resumeReplacement(const WindowsJournalReplacementR
     if (trySnapshotFile(base + ".done", maxIntentBytes)) return;
     if (!trySnapshotFile(base + ".done.stage", maxIntentBytes)) {
         writeFile(base + ".done.stage", bytes(completion));
+#ifdef FO4IDE_TEST_HOOKS
         if (intentHook) intentHook(WindowsJournalIntentStep::doneWritten);
+#endif
     }
     current = validate();
     if (current.first != WindowsJournalReplacementState::applied) throw std::runtime_error("replacement changed before completion");
     publishSnapshot(base + ".done.stage", recordSnapshot(*this, base + ".done.stage", completion), base + ".done");
+#ifdef FO4IDE_TEST_HOOKS
     if (intentHook) intentHook(WindowsJournalIntentStep::donePublished);
+#endif
 }
 
 void WindowsJournalDirectory::resumeReplacement(const WindowsJournalReplacementRequest& request) const {
     const auto lock = lockReplacement();
     processReplacement(request, nullptr, true);
 }
-#endif
 
 void WindowsJournalDirectory::resumeReplacement(const WindowsJournalReplacementRequest& request,
     const WindowsJournalReplacementExpectation& expected) const {

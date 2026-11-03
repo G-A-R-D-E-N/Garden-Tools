@@ -5,10 +5,10 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **170 tools**: 70 hand-written tools and 100 catalog tools. The 70 are 20 for plugins and records,
+It advertises **172 tools**: 70 hand-written tools and 102 catalog tools. The 70 are 20 for plugins and records,
 29 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects, weapons and perks), 5 for MO2 profile
 and host state, 5 for Papyrus, and 11 for NIFs, materials, audio and BA2 archives (4 NIF, 2 material, 4 audio, 1
-archive). The 100 catalog tools are the editor parity set: 27 read-side (`McpCatalogRead.cpp`), 47 edit-side
+archive). The 102 catalog tools are the editor parity set: 27 read-side (`McpCatalogRead.cpp`), 49 edit-side
 (`McpCatalogEdit.cpp`) and 26 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
 blueprint graphs and `load_script`).
 
@@ -230,6 +230,7 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `set_quest_aliases` | `plugin`, `form_key`, `aliases_json` | memory | Editor operation: set quest aliases. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `set_quest_stages` | `plugin`, `form_key`, `stages_json` | memory | Editor operation: set quest stages. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `set_quest_objectives` | `plugin`, `form_key`, `objectives_json` | memory | Editor operation: set quest objectives. Replaces the whole objective list. Each target names an alias by ID or name (never a reference); conditions are optional. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_quest_fragment` | `plugin`, `form_key`, `stage`, `log_entry_index`, `script_name`, `output_directory`, `imports_directory`, `actions_json` | memory | Editor operation: stage a quest stage fragment (script and plugin change). The stage must exist; directories must be trusted save roots. save_plugin persists it and needs recoverable publication; discard_plugin drops a pending edit. |
 | `set_conditions` | `plugin`, `form_key`, `conditions_json` | memory | Editor operation: set conditions. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `add_list_item` | `plugin`, `form_key`, `field`, `value` | memory | Editor operation: add list item. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `remove_list_item` | `plugin`, `form_key`, `field`, `value` | memory | Editor operation: remove list item. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |

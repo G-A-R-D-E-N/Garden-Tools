@@ -332,8 +332,7 @@ TEST_CASE("Quest fragment imports allow only the known vanilla source roots") {
 #endif
 }
 
-// Detects: the incomplete quest fragment entry point must remain unavailable without modifying files.
-TEST_CASE("Native quest fragments cannot be invoked before safe publication is available") {
+TEST_CASE("Native quest fragments refuse an unapproved import directory without writing files") {
     const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
     writeBytes(path, emptyPlugin(0u));
     fo4ide::plugin::RadiclePluginBackend backend; loadPatch(backend, path);
@@ -356,6 +355,35 @@ TEST_CASE("Native quest fragments cannot be invoked before safe publication is a
     REQUIRE(backend.invoke("backend.DiscardPlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK_FALSE(std::filesystem::exists(root / "QF_CoWelcome.psc"));
     CHECK_FALSE(std::filesystem::exists(root / "QF_CoWelcome.pex"));
+}
+
+TEST_CASE("Native SetQuestFragment dispatches through invokeBackend like the test hook") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin(0u));
+    const auto imports = root / "imports";
+    std::filesystem::copy(fo4::graph::test::baseStubs(), imports, std::filesystem::copy_options::recursive);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPatch(backend, path);
+    const auto created = parseResult(backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Patch.esp", "QUST", nlohmann::json{{"editorId", "CoWelcome"}}})));
+    const auto key = created.at("formKey").get<std::string>();
+    REQUIRE(backend.invokeBackend("SetQuestStages", nlohmann::json::array({"Patch.esp", key,
+        nlohmann::json::array({{{"index", 10}, {"logEntry", "Begin"}}})})).has_value());
+    const auto actions = nlohmann::json::array({{{"kind", "stage"}, {"value", 10}}});
+    const auto args = [&](int stage) {
+        return nlohmann::json::array({"Patch.esp", key, stage, 0, "QF_CoWelcome", root.string(), imports.string(), actions});
+    };
+    const auto viaBackend = backend.invokeBackend("SetQuestFragment", args(99));
+    const auto viaHook = backend.testSetQuestFragment(args(99));
+    REQUIRE_FALSE(viaBackend.has_value());
+    REQUIRE_FALSE(viaHook.has_value());
+    CHECK(viaBackend.error().message == viaHook.error().message);
+    const auto staged = backend.invokeBackend("SetQuestFragment", args(10));
+    REQUIRE(staged.has_value());
+    CHECK(staged->at("function").get<std::string>() == "Fragment_Stage_0010_Item_00");
+    REQUIRE_FALSE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(readBytes(path) == emptyPlugin(0u));
+    CHECK_FALSE(std::filesystem::exists(root / "QF_CoWelcome.psc"));
+    REQUIRE(backend.invoke("backend.DiscardPlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 }
 
 // Detects: failed compilation and discarded pending quest changes must not publish source, PEX or plugin changes.

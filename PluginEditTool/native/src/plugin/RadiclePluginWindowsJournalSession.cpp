@@ -1,7 +1,7 @@
 #include "RadiclePluginWindowsJournalSession.hpp"
 #include "RadiclePluginWindowsJournalNative.hpp"
 
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
 #include <fo4/io/path_text.hpp>
 #include <fo4/io/sha256.hpp>
 #include <nlohmann/json.hpp>

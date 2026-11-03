@@ -345,7 +345,7 @@ JournalManifest decodeJournalManifest(std::string_view text) {
 
 std::vector<std::filesystem::path> resolveJournalTargets(const JournalManifest& manifest,
                                                         const JournalRoots& roots) {
-#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+#if defined(_WIN32)
     const auto plugin = WindowsJournalSessionState::pluginIdentity(roots);
     if (!WindowsJournalSessionState::samePath(plugin, manifest.plugin)) throw std::runtime_error("journal plugin identity is not authorized");
 #else
