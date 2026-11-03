@@ -384,8 +384,8 @@ std::vector<std::filesystem::path> resolveJournalTargets(const JournalManifest& 
             auto directory = approved.path;
             for (const auto& part : entry.directories) directory /= fo4::io::from_utf8(part);
             if (entry.kind == "strings" || entry.kind == "dlstrings" || entry.kind == "ilstrings") {
-                const auto extension = entry.kind == "strings" ? ".STRINGS" : entry.kind == "dlstrings" ? ".DLSTRINGS" : ".ILSTRINGS";
-                append(directory / fo4::io::from_utf8(fo4::io::utf8(plugin.stem()) + "_" + entry.name + extension));
+                const auto tableExtension = entry.kind == "strings" ? ".STRINGS" : entry.kind == "dlstrings" ? ".DLSTRINGS" : ".ILSTRINGS";
+                append(directory / fo4::io::from_utf8(fo4::io::utf8(plugin.stem()) + "_" + entry.name + tableExtension));
             } else if (entry.kind == "psc" || entry.kind == "pex") {
                 std::size_t begin = 0;
                 for (;;) {
@@ -401,9 +401,9 @@ std::vector<std::filesystem::path> resolveJournalTargets(const JournalManifest& 
         if ((entry.kind == "strings" || entry.kind == "dlstrings" || entry.kind == "ilstrings") &&
             token(entry.name, false) && roots.stringsDirectory.has_value()) {
             const auto directory = approvedDirectory(*roots.stringsDirectory);
-            const auto extension = entry.kind == "strings" ? ".STRINGS" :
+            const auto tableExtension = entry.kind == "strings" ? ".STRINGS" :
                 entry.kind == "dlstrings" ? ".DLSTRINGS" : ".ILSTRINGS";
-            const auto fileName = fo4::io::utf8(plugin.stem()) + "_" + entry.name + extension;
+            const auto fileName = fo4::io::utf8(plugin.stem()) + "_" + entry.name + tableExtension;
             const auto target = directory / fo4::io::from_utf8(fileName);
             requireSafeTarget(target);
             append(target);

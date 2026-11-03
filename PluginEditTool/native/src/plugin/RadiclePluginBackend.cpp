@@ -405,6 +405,10 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                 .plugin = std::move(plugin),
                 .dirty = false,
                 .stagedLocalization = std::nullopt,
+                .stagedAllocation = nullptr,
+                .stagedPluginLanguages = {},
+                .stagedPluginStringIds = {},
+                .stagedQuestFragments = std::nullopt,
             });
         } catch (const std::exception& error) {
             errors.push_back({{"plugin", name}, {"path", path}, {"error", error.what()}});
@@ -609,7 +613,8 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
             existing->dirty = false;
         } else {
             plugins_.push_back({
-                name, filePath, {}, readTime, false, std::move(plugin), false, std::nullopt
+                name, filePath, {}, readTime, false, std::move(plugin), false, std::nullopt,
+                nullptr, {}, {}, std::nullopt
             });
         }
 

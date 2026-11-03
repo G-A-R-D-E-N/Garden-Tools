@@ -44,7 +44,7 @@ public:
     const std::uint64_t bits = total_ * 8;
     block_[used_++] = 0x80;
     if (used_ > 56) {
-      std::fill(block_.begin() + static_cast<std::ptrdiff_t>(used_), block_.end(), 0);
+      std::fill(block_.begin() + static_cast<std::ptrdiff_t>(used_), block_.end(), std::uint8_t{0});
       compress(block_.data());
       used_ = 0;
     }

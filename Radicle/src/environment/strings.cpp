@@ -98,8 +98,8 @@ std::vector<PluginStringTableSnapshot> resolve_plugin_tables(const std::vector<F
         std::ifstream stream(found.path, std::ios::binary | std::ios::ate);
         if (!stream) throw localization::StringTableError("could not open localized string file");
         const auto end = static_cast<std::streamoff>(stream.tellg());
-        if (end < 0 || static_cast<std::uintmax_t>(end) > std::numeric_limits<std::size_t>::max() ||
-            static_cast<std::uintmax_t>(end) > std::numeric_limits<std::streamsize>::max()) {
+        if (end < 0 || static_cast<std::uintmax_t>(end) > static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max()) ||
+            static_cast<std::uintmax_t>(end) > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
           throw localization::StringTableError("localized string file has invalid size");
         }
         bytes.resize(static_cast<std::size_t>(end));
