@@ -186,7 +186,7 @@ TEST_CASE("Native CreateSeqFile preserves multiple start-enabled quest IDs") {
     seqWriteBytes(base, baseQuestBytes());
     fo4::test::ByteWriter out; writeHeader(out, 0x26D9, {"Base.esm"});
     const auto group = fo4::test::begin_group(out, "QUST", 0);
-    for (const auto [id, flags] : std::array<std::pair<std::uint32_t, std::uint16_t>, 3>{{
+    for (const auto& [id, flags] : std::array<std::pair<std::uint32_t, std::uint16_t>, 3>{{
             {0x01001733u, static_cast<std::uint16_t>(0x0111u)}, {0x010026D7u, static_cast<std::uint16_t>(0x0001u)},
             {0x010026D8u, static_cast<std::uint16_t>(0x0101u)}}}) {
         const auto quest = fo4::test::begin_record(out, "QUST", 0, id, 131);

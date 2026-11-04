@@ -212,8 +212,11 @@ WindowsJournalFileMetadata fileMetadata(HANDLE file, bool inheritedOnly = false)
         for (DWORD i = 0; i < dacl->AceCount; ++i) {
             void* entry = nullptr;
             if (!::GetAce(dacl, i, &entry)) fail("inspect inherited replacement ACE");
-            if (!(static_cast<ACE_HEADER*>(entry)->AceFlags & INHERITED_ACE))
-                throw std::runtime_error("absent replacement requires inherited ACEs");
+            const auto* header = static_cast<ACE_HEADER*>(entry);
+            if (!(header->AceFlags & INHERITED_ACE))
+                throw std::runtime_error("absent replacement requires inherited ACEs: ace " + std::to_string(i) + " of " +
+                    std::to_string(dacl->AceCount) + " type " + std::to_string(header->AceType) + " flags " + std::to_string(header->AceFlags) +
+                    " control " + std::to_string(control));
         }
     }
     wchar_t* encoded = nullptr;
