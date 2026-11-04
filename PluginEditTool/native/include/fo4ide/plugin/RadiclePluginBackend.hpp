@@ -505,7 +505,7 @@ private:
     std::optional<std::filesystem::path> allowedSavePath(
         const std::filesystem::path& path) const;
     std::optional<std::filesystem::path> allowedLocalizationDirectory(
-        const std::filesystem::path& path) const;
+        const std::filesystem::path& path, bool allowAbsent = false) const;
     std::shared_ptr<const fo4::ConflictGraph> conflictGraph() const;
     void markGraphDirtyLocked() const;
     void reapIdleConflictGraph(std::stop_token stop_token);

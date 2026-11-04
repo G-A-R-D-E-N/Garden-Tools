@@ -161,10 +161,14 @@ std::optional<std::filesystem::path> RadiclePluginBackend::allowedSavePath(
 }
 
 std::optional<std::filesystem::path> RadiclePluginBackend::allowedLocalizationDirectory(
-    const std::filesystem::path& path) const {
+    const std::filesystem::path& path, bool allowAbsent) const {
     std::error_code targetEc;
     const auto target = std::filesystem::weakly_canonical(path, targetEc);
-    if (targetEc || target.empty() || !std::filesystem::is_directory(target)) {
+    if (targetEc || target.empty()) return std::nullopt;
+    std::error_code statusEc;
+    const bool absent = allowAbsent &&
+        std::filesystem::status(target, statusEc).type() == std::filesystem::file_type::not_found;
+    if (!absent && !std::filesystem::is_directory(target)) {
         return std::nullopt;
     }
 

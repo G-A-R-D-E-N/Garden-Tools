@@ -122,9 +122,14 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
             arguments[3].contains("stringsDirectory") && arguments[3]["stringsDirectory"].is_string()) {
             stringsDirectory = fo4::io::from_utf8(arguments[3]["stringsDirectory"].get<std::string>());
         }
+        bool allowAbsent = false;
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+        allowAbsent = !stringsDirectory.empty() && !testJournalRoot_.empty() && !dataDirectory_.empty() &&
+            support::sameLocalizedPath(stringsDirectory, loaded->path.parent_path() / "Strings");
+#endif
         const auto allowedDirectory = stringsDirectory.empty()
                                           ? std::nullopt
-                                          : allowedLocalizationDirectory(stringsDirectory);
+                                          : allowedLocalizationDirectory(stringsDirectory, allowAbsent);
         if (!stringsDirectory.empty() && !allowedDirectory.has_value()) {
             return std::unexpected(Error{
                 "LocalizedSidecarPathNotAllowed",
@@ -132,11 +137,6 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
                     stringsDirectory.string()
             });
         }
-        bool allowAbsent = false;
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
-        allowAbsent = allowedDirectory && !testJournalRoot_.empty() && !dataDirectory_.empty() &&
-            support::sameLocalizedPath(*allowedDirectory, loaded->path.parent_path() / "Strings");
-#endif
         if (const auto error = loadLocalizedQuestTables(
                 arguments, loaded->path, allowedDirectory.value_or(std::filesystem::path{}),
                 *localizedTables, allowAbsent)) {
