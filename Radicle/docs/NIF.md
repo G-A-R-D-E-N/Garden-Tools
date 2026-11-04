@@ -819,3 +819,23 @@ Its parity items extend the list above:
     rather than chosen: the check is a NIF imported from a known OBJ and opened in the
     Creation Kit. The read side passes the stored pair through either way, and the
     round-trip test therefore cannot see this.
+
+### In-place shape ops
+
+`apply_shape_op` (`include/fo4/nif/shape_ops.hpp`) rewrites BSTriShape-family blocks in place.
+Ops: `recalc_normals` (crease in degrees, 180 smooths everything), `recalc_tangents`,
+`flip_normals`, `flip_winding`, `apply_transform` (bakes the node transform into positions,
+frame and sphere, then sets the transform to identity), `refresh_bounds`. Names parse through
+`parse_shape_op` and print through `shape_op_name`. Vertex and triangle counts never change;
+the output is read back and must match the input shape for shape.
+
+Refusals are listed in the report with the block number and a reason, and the block is left
+untouched:
+
+- `apply_transform`: skinned shapes (`Radicle/src/nif/shape_ops.cpp:apply_transform_block`),
+  half-precision positions, `BSDynamicTriShape`, and transforms that mirror or flatten.
+- `recalc_normals`: no normals stored. `recalc_tangents`: no tangents stored, or no UVs.
+- Any block that is not a tri-shape, or does not exist.
+
+Layout offsets come from `Radicle/src/nif/shape_ops_layout.cpp:read_layout`, which follows
+`read_shape`. Normals are smoothed by `Radicle/src/nif/shape_ops_normals.cpp:smooth_normals`.

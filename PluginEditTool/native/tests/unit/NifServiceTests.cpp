@@ -451,3 +451,88 @@ TEST_CASE("NifService in-process import rejects an OBJ without faces and writes 
     CHECK(result.error().message.find("OBJ has no faces to import") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(root / "points.nif"));
 }
+
+TEST_CASE("NifService shape op refresh_bounds writes a NIF that re-reads") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    const auto out = root / "bounds.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+    const auto before = fileBytes(nif);
+
+    fo4ide::assets::NifService service;
+    auto result = service.shapeOp(nif, out, "refresh_bounds", {}, 180.0f);
+
+    REQUIRE(result.has_value());
+    CHECK(result->starts_with("RESULT: shape op refresh_bounds OK (in-process)\nSaved: " + out.string() +
+                              "\nChanged blocks: "));
+    CHECK(fileBytes(nif) == before);
+    CHECK(std::filesystem::is_regular_file(out));
+    auto inspect = service.inspect(out);
+    REQUIRE(inspect.has_value());
+    CHECK(nlohmann::json::parse(*inspect).at("shapes").size() == 1);
+}
+
+TEST_CASE("NifService shape op flip_normals twice restores the geometry") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    const auto once = root / "once.nif";
+    const auto twice = root / "twice.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+
+    fo4ide::assets::NifService service;
+    REQUIRE(service.shapeOp(nif, once, "flip_normals", {}, 180.0f).has_value());
+    REQUIRE(service.shapeOp(once, twice, "flip_normals", {}, 180.0f).has_value());
+
+    auto original = service.geometry(nif);
+    auto restored = service.geometry(twice);
+    REQUIRE(original.has_value());
+    REQUIRE(restored.has_value());
+    CHECK(*restored == *original);
+}
+
+TEST_CASE("NifService shape op refuses an unknown op and writes nothing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM", {"Textures\\Thing_d.dds"}));
+
+    fo4ide::assets::NifService service;
+    auto result = service.shapeOp(nif, root / "out.nif", "bogus", {}, 180.0f);
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidShapeOp");
+    CHECK(result.error().message.find("refresh_bounds") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(root / "out.nif"));
+}
+
+TEST_CASE("NifService shape op refuses a missing NIF") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+
+    fo4ide::assets::NifService service;
+    auto result = service.shapeOp(root / "missing.nif", root / "out.nif", "refresh_bounds", {}, 180.0f);
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "FileNotFound");
+}
+
+TEST_CASE("NifService shape op refuses an existing output unless overwrite is set") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    const auto out = root / "out.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM", {"Textures\\Thing_d.dds"}));
+    touch(out, "keep");
+
+    fo4ide::assets::NifService service;
+    auto refused = service.shapeOp(nif, out, "refresh_bounds", {}, 180.0f);
+
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "OutputExists");
+    CHECK(fileBytes(out) == "keep");
+    CHECK(service.shapeOp(nif, out, "refresh_bounds", {}, 180.0f, true).has_value());
+}

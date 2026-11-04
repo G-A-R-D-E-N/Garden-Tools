@@ -21,11 +21,31 @@
 #include <string_view>
 #include <vector>
 
+namespace fo4::nif::import_detail {
+
+std::array<float, 4> bounding_sphere(const std::vector<Vec3>& positions) {
+  std::array<float, 3> center{};
+  const auto count = static_cast<float>(positions.size());
+  for (const auto& p : positions) {
+    for (std::size_t k = 0; k < 3; ++k) center[k] += p[k] / count;
+  }
+  float radius_sq = 0.0f;
+  for (const auto& p : positions) {
+    float distance_sq = 0.0f;
+    for (std::size_t k = 0; k < 3; ++k) distance_sq += (p[k] - center[k]) * (p[k] - center[k]);
+    radius_sq = std::max(radius_sq, distance_sq);
+  }
+  return {center[0], center[1], center[2], std::sqrt(radius_sq)};
+}
+
+}  // namespace fo4::nif::import_detail
+
 namespace fo4::nif {
 namespace {
 
 using import_detail::Mesh;
 using import_detail::Vec3;
+using import_detail::bounding_sphere;
 using write_detail::Bytes;
 using write_detail::append_int;
 using write_detail::append_sized;
@@ -76,21 +96,6 @@ Bytes root_block(std::int32_t name, std::int32_t collision) {
   append_int(out, std::uint32_t{1});
   append_int(out, k_shape_block);
   return out;
-}
-
-std::array<float, 4> bounding_sphere(const std::vector<Vec3>& positions) {
-  std::array<float, 3> center{};
-  const auto count = static_cast<float>(positions.size());
-  for (const auto& p : positions) {
-    for (std::size_t k = 0; k < 3; ++k) center[k] += p[k] / count;
-  }
-  float radius_sq = 0.0f;
-  for (const auto& p : positions) {
-    float distance_sq = 0.0f;
-    for (std::size_t k = 0; k < 3; ++k) distance_sq += (p[k] - center[k]) * (p[k] - center[k]);
-    radius_sq = std::max(radius_sq, distance_sq);
-  }
-  return {center[0], center[1], center[2], std::sqrt(radius_sq)};
 }
 
 void append_vertex(Bytes& out, const Mesh& mesh, std::size_t v) {

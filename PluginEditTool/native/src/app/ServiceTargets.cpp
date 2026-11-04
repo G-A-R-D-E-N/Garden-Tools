@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <exception>
+#include <limits>
 #include <map>
+#include <stdexcept>
 #include <system_error>
 #include <thread>
 #include <utility>
@@ -105,6 +108,20 @@ nlohmann::json serviceJsonText(Result<std::string> result) {
             .dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
     }
     return std::move(*result);
+}
+
+std::vector<std::uint32_t> shapeBlocks(const nlohmann::json* value) {
+    if (value == nullptr || value->is_null()) return {};
+    const auto list = value->is_string() ? nlohmann::json::parse(value->get<std::string>()) : *value;
+    if (!list.is_array()) throw std::invalid_argument("blocks must be a list of block ids");
+    std::vector<std::uint32_t> blocks;
+    for (const auto& id : list) {
+        if (!id.is_number_unsigned() || id.get<std::uint64_t>() > std::numeric_limits<std::uint32_t>::max()) {
+            throw std::invalid_argument("blocks must be a list of block ids");
+        }
+        blocks.push_back(id.get<std::uint32_t>());
+    }
+    return blocks;
 }
 
 }
@@ -241,6 +258,19 @@ Result<nlohmann::json> NifTarget::invoke(std::string_view method,
     if (method == "Tree") return serviceJsonText(service_.tree(stringArgument(args, 0)));
     if (method == "Fix") {
         return serviceText(service_.fix(stringArgument(args, 0), stringArgument(args, 1)));
+    }
+    if (method == "ShapeOp") {
+        try {
+            const auto* crease = argument(args, 4);
+            const auto creaseDegrees = crease && crease->is_number() ? crease->get<float>() : 180.0f;
+            auto result = service_.shapeOp(stringArgument(args, 0), stringArgument(args, 1),
+                                           stringArgument(args, 2), shapeBlocks(argument(args, 3)),
+                                           creaseDegrees, boolArgument(args, 5));
+            if (!result && result.error().type == "OutputExists") return nlohmann::json("Error: " + result.error().message);
+            return serviceText(std::move(result));
+        } catch (const std::exception& ex) {
+            return nlohmann::json("Error: " + std::string(ex.what()));
+        }
     }
     if (method == "Import") {
         assets::NifImportOptions options;

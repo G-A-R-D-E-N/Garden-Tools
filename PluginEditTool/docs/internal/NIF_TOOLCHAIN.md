@@ -42,6 +42,7 @@ only argument parsing, the service surface and JSON.
 | `fix` | `fix_nif` | recomputes tangents and bitangents, adds a missing BSXFlags, clears the BSX editor-marker bit, trims texture and material whitespace; idempotent |
 | `import` | `import_obj` | OBJ → `BSTriShape` + shader + texture set + BSX, with normals and tangents; `--from-blender` restores Z-up |
 | `set` | `apply_edits` / `apply_edits_json` | `{id,key,value}` edits; text, numbers, number lists and shader-flag name lists |
+| `shape op` | `apply_shape_op` | `recalc_normals`, `recalc_tangents`, `flip_normals`, `flip_winding`, `apply_transform`, `refresh_bounds` on chosen blocks, written to a new NIF (`shape_op` RPC, `nif_shape_op` MCP tool); the input NIF is not changed and vertex and triangle counts never change |
 
 Edits write each field where the matching reader reports it, copy a shared shader, texture set or
 alpha property before changing it, and pass a `bhkPhysicsSystem` packfile through untouched. An

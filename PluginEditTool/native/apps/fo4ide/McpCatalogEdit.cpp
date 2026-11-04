@@ -46,6 +46,7 @@ const CatalogTool kTools[] = {
     {"scan_conflicts", "appInterop", "ScanConflicts", "", "Editor query: scan conflicts. Same RPC the desktop editor uses."},
     {"scan_broken_refs", "appInterop", "ScanBrokenRefs", "", "Editor query: scan broken refs. Same RPC the desktop editor uses."},
     {"fix", "nif", "Fix", "nif_path:string,out_nif:string", "Editor operation: fix. Same RPC the desktop editor uses; writes out_nif to disk at once, not through save_plugin."},
+    {"shape_op", "nif", "ShapeOp", "nif_path:string,out_nif:string,op:string,blocks_json:string?,crease_degrees:number?,overwrite:boolean?", "Editor operation: shape op (recalc_normals, recalc_tangents, flip_normals, flip_winding, apply_transform, refresh_bounds). Same RPC the desktop editor uses; writes out_nif to disk at once, not through save_plugin. blocks_json is a JSON array of block ids."},
     {"reorder", "masters", "Reorder", "plugin:string,order_json:string", "Editor operation: reorder. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
     {"set_light", "masters", "SetLight", "plugin:string,light:boolean", "Editor operation: set light. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
     {"clean_unused", "masters", "CleanUnused", "plugin:string,apply:boolean", "Editor operation: clean unused. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},

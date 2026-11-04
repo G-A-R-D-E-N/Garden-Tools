@@ -6,6 +6,7 @@
 #include <fo4/nif/nif_fix.hpp>
 #include <fo4/nif/nif_import.hpp>
 #include <fo4/nif/nif_write.hpp>
+#include <fo4/nif/shape_ops.hpp>
 #include <fo4ide/assets/NifRender.hpp>
 
 #include <exception>
@@ -75,6 +76,30 @@ Result<std::string> fixInProcess(const std::filesystem::path& nifPath, const std
         (verify ? *verify : verify.error().message);
 }
 
+Result<std::string> shapeOpInProcess(const std::filesystem::path& nifPath, const std::filesystem::path& outputPath,
+                                     const fo4::nif::ShapeOpRequest& request) {
+    std::vector<std::byte> bytes;
+    fo4::nif::ShapeOpReport report;
+    try {
+        bytes = fo4::nif::apply_shape_op(readNif(nifPath), request, &report);
+    } catch (const fo4::parse_error& error) {
+        return std::unexpected(Error{"NifShapeOpFailed", error.parse_message()});
+    } catch (const std::exception& ex) {
+        return std::unexpected(Error{"NifShapeOpFailed", ex.what()});
+    }
+    if (auto committed = writeNif(bytes, outputPath); !committed) {
+        return std::unexpected(committed.error());
+    }
+    std::string changed;
+    for (const auto block : report.changed) changed += (changed.empty() ? "" : ", ") + std::to_string(block);
+    std::string skipped;
+    for (const auto& entry : report.skipped) skipped += (skipped.empty() ? "" : "; ") + entry;
+    const auto verify = renderVerify(outputPath);
+    return "RESULT: shape op " + std::string(fo4::nif::shape_op_name(request.op)) + " OK (in-process)\nSaved: " +
+        outputPath.string() + "\nChanged blocks: " + (changed.empty() ? "none" : changed) + "\nSkipped: " +
+        (skipped.empty() ? "none" : skipped) + "\n" + (verify ? *verify : verify.error().message);
+}
+
 }  // namespace
 
 Result<void> NifService::requireFile(const std::filesystem::path& path, std::string_view label) const {
@@ -110,6 +135,26 @@ Result<std::string> NifService::fix(const std::filesystem::path& nifPath,
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
     if (outputPath.empty()) return std::unexpected(Error{"InvalidPath", "Output NIF path is empty"});
     return fixInProcess(nifPath, outputPath);
+}
+
+Result<std::string> NifService::shapeOp(const std::filesystem::path& nifPath,
+                                        const std::filesystem::path& outputPath,
+                                        std::string_view op,
+                                        std::vector<std::uint32_t> blocks,
+                                        float creaseDegrees,
+                                        bool overwrite) const {
+    if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
+    if (outputPath.empty()) return std::unexpected(Error{"InvalidPath", "Output NIF path is empty"});
+    const auto parsed = fo4::nif::parse_shape_op(op);
+    if (!parsed) {
+        return std::unexpected(Error{"InvalidShapeOp", "Unknown shape op '" + std::string(op) +
+            "'. Valid ops: recalc_normals, recalc_tangents, flip_normals, flip_winding, apply_transform, refresh_bounds"});
+    }
+    std::error_code present;
+    if (!overwrite && std::filesystem::exists(outputPath, present)) {
+        return std::unexpected(Error{"OutputExists", "Refusing to replace an existing file without overwrite: " + outputPath.string()});
+    }
+    return shapeOpInProcess(nifPath, outputPath, fo4::nif::ShapeOpRequest{*parsed, std::move(blocks), creaseDegrees});
 }
 
 Result<std::string> NifService::importObj(const std::filesystem::path& objPath,

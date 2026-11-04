@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -29,6 +30,12 @@ public:
     Result<std::string> tree(const std::filesystem::path& nifPath) const;
     Result<std::string> fix(const std::filesystem::path& nifPath,
                             const std::filesystem::path& outputPath) const;
+    Result<std::string> shapeOp(const std::filesystem::path& nifPath,
+                                const std::filesystem::path& outputPath,
+                                std::string_view op,
+                                std::vector<std::uint32_t> blocks,
+                                float creaseDegrees,
+                                bool overwrite = false) const;
     Result<std::string> importObj(const std::filesystem::path& objPath,
                                   const std::filesystem::path& outputPath,
                                   const NifImportOptions& options = {}) const;

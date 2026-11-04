@@ -355,6 +355,23 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
             }, nlohmann::json::array({"obj_path", "out_nif"}))},
             "nif", "Import",
             {"obj_path", "out_nif", "material", "tex_diffuse", "tex_normal", "collision", "from_blender"})) return false;
+    if (!add({
+            "nif_shape_op",
+            "Run one shape operation on a NIF and write the result to out_nif. The NIF at nif_path is not changed. "
+            "op is one of recalc_normals, recalc_tangents, flip_normals, flip_winding, apply_transform or refresh_bounds. "
+            "blocks lists the block ids to change (default: every shape); a block that is not a tri-shape is reported as skipped. "
+            "crease_degrees applies to recalc_normals: edges sharper than that angle stay hard (default 180 smooths everything). "
+            "An existing NIF at out_nif is refused unless overwrite is true. Vertex and triangle counts never change.",
+            objectSchema({
+                {"nif_path", {{"type", "string"}, {"description", "Path to the NIF to read"}}},
+                {"out_nif", {{"type", "string"}, {"description", "Path to write the changed NIF"}}},
+                {"op", {{"type", "string"}, {"description", "recalc_normals, recalc_tangents, flip_normals, flip_winding, apply_transform or refresh_bounds"}}},
+                {"blocks", {{"type", "array"}, {"items", {{"type", "integer"}, {"minimum", 0}}},
+                            {"description", "Block ids to change. Default: every shape."}}},
+                {"crease_degrees", {{"type", "number"}, {"description", "recalc_normals only: edges sharper than this angle stay hard. Default 180."}}},
+                {"overwrite", {{"type", "boolean"}, {"description", "Replace an existing NIF at out_nif. Default false."}}}
+            }, nlohmann::json::array({"nif_path", "out_nif", "op"}))},
+            "nif", "ShapeOp", {"nif_path", "out_nif", "op", "blocks", "crease_degrees", "overwrite"})) return false;
 
     if (!add({
             "audio_convert_to_xwm",

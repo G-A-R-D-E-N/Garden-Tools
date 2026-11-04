@@ -23,5 +23,6 @@ struct Mesh {
 
 Mesh read_obj(std::string_view text, bool from_blender);
 void add_tangent_frame(Mesh& mesh);
+std::array<float, 4> bounding_sphere(const std::vector<Vec3>& positions);
 
 }
