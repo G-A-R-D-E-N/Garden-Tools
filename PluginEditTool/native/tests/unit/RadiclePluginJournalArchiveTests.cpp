@@ -146,7 +146,7 @@ TEST_CASE("Held archive provider order and payload generation stay coupled") {
     write(data / "Second.ba2", archiveBytes(std::byte{'B'}));
     auto rootLease = std::make_shared<Ba2ReadRoot>(Ba2ReadRoot::authorize(data));
     JournalReadConfiguration config;
-    config.approvedReadRoots.push_back({data, rootLease}); config.archiveDirectories.push_back({data, {}});
+    config.approvedReadRoots.push_back({data, rootLease}); config.archiveDirectories.push_back({data, {}, {}});
     config.archiveProviderOrder = {{data, {}, "First.ba2"}, {data, {}, "Second.ba2"}};
     CHECK_THROWS(HeldArchiveSet::capture(config, {2, 1024 * 1024}));
     CHECK_THROWS(HeldArchiveSet::capture(config, {10, 1}));
@@ -214,7 +214,7 @@ TEST_CASE("Held archive allocation refuses duplicate table names") {
     }
     write(data / "Duplicate.ba2", fo4::archive::write_ba2_general(archive));
     auto lease = std::make_shared<Ba2ReadRoot>(Ba2ReadRoot::authorize(data));
-    JournalReadConfiguration config; config.approvedReadRoots = {{data, lease}}; config.archiveDirectories = {{data, {}}};
+    JournalReadConfiguration config; config.approvedReadRoots = {{data, lease}}; config.archiveDirectories = {{data, {}, {}}};
     config.archiveProviderOrder = {{data, {}, "Duplicate.ba2"}};
     const auto held = HeldArchiveSet::capture(config);
     CHECK_THROWS(held.extractAll({"Strings/Patch_de.STRINGS"}, 16));
@@ -394,7 +394,7 @@ TEST_CASE("Journal replay verifies the full held archive provider hash") {
     roots.pluginDirectoryIdentity = JournalDestination::captureRoot(plugin.parent_path());
     roots.approvedRoots.push_back({plugin.parent_path(), *roots.pluginDirectoryIdentity});
     auto readRoot = std::make_shared<Ba2ReadRoot>(Ba2ReadRoot::authorize(data));
-    roots.approvedReadRoots.push_back({data, readRoot}); roots.archiveDirectories.push_back({data, {}});
+    roots.approvedReadRoots.push_back({data, readRoot}); roots.archiveDirectories.push_back({data, {}, {}});
     roots.archiveProviderOrder.push_back({data, {}, "Provider.ba2"});
     JournalArchiveInventory inventory{data, {}, {{"Provider.ba2", archiveBytes.size(), fo4::io::sha256_hex(archiveBytes)}}};
     JournalInput target{"plugin", "", true, fo4::io::sha256_hex(oldPlugin), oldPlugin.size(), newPlugin};
@@ -519,7 +519,7 @@ TEST_CASE("Journal archive inventory rejects mismatched and duplicate read roots
     write(plugin, before); write(data / "Provider.ba2", content); write(other / "Provider.ba2", content);
     JournalRoots roots; roots.plugin = plugin; roots.pluginDirectoryIdentity = JournalDestination::captureRoot(plugin.parent_path());
     roots.approvedReadRoots.push_back({other, std::make_shared<Ba2ReadRoot>(Ba2ReadRoot::authorize(data))});
-    roots.archiveDirectories.push_back({other, {}}); roots.archiveProviderOrder.push_back({other, {}, "Provider.ba2"});
+    roots.archiveDirectories.push_back({other, {}, {}}); roots.archiveProviderOrder.push_back({other, {}, "Provider.ba2"});
     const JournalArchiveInventory inventory{other, {}, {{"Provider.ba2", content.size(), fo4::io::sha256_hex(content)}}};
     const JournalInput target{"plugin", "", true, fo4::io::sha256_hex(before), before.size(), after};
     { JournalSession journal(root / "journal"); CHECK_THROWS(journal.publish(roots, {target}, {}, {inventory})); }

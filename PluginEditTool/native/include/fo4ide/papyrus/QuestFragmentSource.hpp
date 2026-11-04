@@ -11,8 +11,8 @@ namespace fo4ide::papyrus {
 enum class QuestFragmentActionKind { Display, Complete, SetStage };
 
 struct QuestFragmentAction {
-    QuestFragmentActionKind kind;
-    std::uint16_t value;
+    QuestFragmentActionKind kind{};
+    std::uint16_t value{};
 };
 
 std::expected<std::string, std::string> updateQuestFragmentSource(

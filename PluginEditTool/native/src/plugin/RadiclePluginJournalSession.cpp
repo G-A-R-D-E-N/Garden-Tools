@@ -548,7 +548,7 @@ bool JournalSession::recover(const std::vector<JournalRoots>& approved, const Jo
             const auto plugin = std::find_if(manifest.files.begin(), manifest.files.end(), [](const auto& entry) { return entry.kind == "plugin"; });
             if (plugin == manifest.files.end()) throw std::runtime_error("journal has no plugin payload");
             const auto finalPlugin = payload(root_, *plugin);
-            JournalReadConfiguration readConfig{prepared.approvedReadRoots, prepared.archiveDirectories, prepared.archiveProviderOrder};
+            JournalReadConfiguration readConfig{prepared.approvedReadRoots, prepared.archiveDirectories, prepared.archiveProviderOrder, {}, {}};
             readConfig.readStringDirectories = prepared.readStringDirectories;
             prepare(manifest, finalPlugin, readConfig);
             prepared.approvedReadRoots = std::move(readConfig.approvedReadRoots);

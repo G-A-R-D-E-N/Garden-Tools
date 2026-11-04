@@ -613,8 +613,18 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
             existing->dirty = false;
         } else {
             plugins_.push_back({
-                name, filePath, {}, readTime, false, std::move(plugin), false, std::nullopt,
-                nullptr, {}, {}, std::nullopt
+                .name = name,
+                .path = filePath,
+                .source = {},
+                .loadedTime = readTime,
+                .trusted = false,
+                .plugin = std::move(plugin),
+                .dirty = false,
+                .stagedLocalization = std::nullopt,
+                .stagedAllocation = nullptr,
+                .stagedPluginLanguages = {},
+                .stagedPluginStringIds = {},
+                .stagedQuestFragments = std::nullopt,
             });
         }
 

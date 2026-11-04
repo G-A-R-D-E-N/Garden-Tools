@@ -51,8 +51,8 @@ std::vector<std::string> components(const std::filesystem::path& path) {
 }
 
 struct Directories {
-    std::vector<std::shared_ptr<Handle>> held;
-    std::vector<std::string> names;
+    std::vector<std::shared_ptr<Handle>> held{};
+    std::vector<std::string> names{};
     void verify() const {
         for (std::size_t i = 0; i < held.size(); ++i) {
             struct stat st{};

@@ -265,9 +265,9 @@ public:
 };
 struct JournalDestination::Impl {
     std::shared_ptr<JournalDirectoryLease> chain = std::make_shared<JournalDirectoryLease>();
-    std::wstring file;
-    Handle original;
-    Identity originalIdentity;
+    std::wstring file{};
+    Handle original{};
+    Identity originalIdentity{};
     FILE_BASIC_INFO originalBasic{};
     void refreshEntry() {
         original.reset();

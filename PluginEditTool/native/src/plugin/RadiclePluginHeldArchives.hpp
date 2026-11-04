@@ -12,12 +12,12 @@
 
 namespace fo4ide::plugin::detail {
 struct HeldArchivePayload {
-    JournalArchiveReference provider;
-    std::vector<std::byte> bytes;
+    JournalArchiveReference provider{};
+    std::vector<std::byte> bytes{};
 };
 struct HeldArchiveMatch {
-    std::size_t requestIndex;
-    HeldArchivePayload payload;
+    std::size_t requestIndex{};
+    HeldArchivePayload payload{};
 };
 
 class HeldArchiveSet {
@@ -37,14 +37,14 @@ private:
     friend class HeldLocalizationGeneration;
     std::set<std::string> capturedLanguages(std::string_view pluginFilename) const;
     struct Source {
-        JournalArchiveReference reference;
-        std::shared_ptr<const fo4::archive::Ba2ByteSource> bytes;
-        std::uint64_t size;
-        std::string digest;
-        std::optional<fo4::archive::Ba2Snapshot> snapshot;
+        JournalArchiveReference reference{};
+        std::shared_ptr<const fo4::archive::Ba2ByteSource> bytes{};
+        std::uint64_t size{};
+        std::string digest{};
+        std::optional<fo4::archive::Ba2Snapshot> snapshot{};
     };
     struct Provider {
-        JournalArchiveReference reference;
+        JournalArchiveReference reference{};
         fo4::archive::Ba2Snapshot archive;
     };
     std::vector<JournalArchiveInventory> inventories_;

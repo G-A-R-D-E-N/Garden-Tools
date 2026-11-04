@@ -30,8 +30,8 @@ using namespace questinternal;
 namespace {
 
 struct QuestReadContext {
-    std::string language;
-    std::optional<std::filesystem::path> stringsDirectory;
+    std::string language{};
+    std::optional<std::filesystem::path> stringsDirectory{};
 };
 
 std::optional<Error> parseQuestReadContext(const nlohmann::json& arguments,

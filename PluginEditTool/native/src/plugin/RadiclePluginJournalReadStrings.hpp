@@ -13,16 +13,16 @@ struct JournalApprovedReadRoot;
 struct HeldStringTable;
 
 struct JournalReadStringFile {
-    std::string filename;
+    std::string filename{};
     std::uint64_t size{0};
-    std::string sha256;
+    std::string sha256{};
 };
 
 struct JournalReadStringInventory {
-    std::filesystem::path rootSelector;
-    std::vector<std::string> directories;
+    std::filesystem::path rootSelector{};
+    std::vector<std::string> directories{};
     bool exists{false};
-    std::vector<JournalReadStringFile> files;
+    std::vector<JournalReadStringFile> files{};
 };
 
 std::string encodeJournalReadStringInventories(const std::vector<JournalReadStringInventory>& inventories,

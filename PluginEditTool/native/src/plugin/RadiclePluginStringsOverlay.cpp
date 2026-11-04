@@ -88,8 +88,8 @@ Result<void> RadiclePluginBackend::validateStringIdsRetained(
     if (!destination) return std::unexpected(Error{"StringSavePathNotAllowed", "string table destination is outside an approved writable root"});
     const auto referenced = referencedIds(loaded.plugin, source);
     for (const auto& [key, ids] : loaded.stagedPluginStringIds) {
-        const auto& [lang, kind, path] = key;
-        if (lang != language || kind != source || !support::sameLocalizedPath(path, destination->path)) continue;
+        const auto& [lang, entryKind, path] = key;
+        if (lang != language || entryKind != source || !support::sameLocalizedPath(path, destination->path)) continue;
         for (const auto id : ids) {
             if (referenced.contains(id) && fo4::localization::find_string(table, id) == nullptr)
                 return std::unexpected(Error{"LocalizedStringInUse", "a staged plugin record references this string ID"});

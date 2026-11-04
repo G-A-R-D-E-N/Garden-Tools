@@ -48,7 +48,7 @@ public:
       compress(block_.data());
       used_ = 0;
     }
-    std::fill(block_.begin() + static_cast<std::ptrdiff_t>(used_), block_.begin() + 56, 0);
+    std::fill(block_.begin() + static_cast<std::ptrdiff_t>(used_), block_.begin() + 56, std::uint8_t{0});
     for (std::size_t i = 0; i < 8; ++i) block_[63 - i] = static_cast<std::uint8_t>(bits >> (i * 8));
     compress(block_.data());
     static constexpr char hex[] = "0123456789abcdef";

@@ -132,9 +132,9 @@ Result<std::set<std::string>> discoverPluginStringLanguages(
                     if (!path.starts_with(prefix)) continue;
                     std::string language;
                     if (matchingTableName(std::string_view(path).substr(prefix.size()), pluginStem, language)) {
-                        const auto dot = path.rfind('.');
+                        const auto extension = path.rfind('.');
                         const auto requested = fo4::archive::normalize_asset_path(
-                            std::string(prefix) + pluginStem + "_" + language + path.substr(dot));
+                            std::string(prefix) + pluginStem + "_" + language + path.substr(extension));
                         if (requested != normalized) return std::unexpected(unavailable("archive language path cannot be resolved consistently"));
                         languages.insert(std::move(language));
                     }

@@ -244,7 +244,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 allowedDirectory.value_or(std::filesystem::path{}), *localizedTables, allowAbsent)) {
             return std::unexpected(*error);
         }
-        auto localized = loaded->stagedLocalization.value_or(StagedLocalization{});
+        auto loadedLocalization = loaded->stagedLocalization.value_or(StagedLocalization{});
         const auto overlay = [&](const std::filesystem::path& path,
                                  std::string_view kind,
                                  StringSource source,
@@ -265,9 +265,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             }
             file->finalBytes.clear();
             file->verifyOnly = true;
-            const auto previous = std::find_if(localized.participants.begin(), localized.participants.end(),
+            const auto previous = std::find_if(loadedLocalization.participants.begin(), loadedLocalization.participants.end(),
                 [&](const StagedLocalizationFile& item) { return support::sameLocalizedPath(item.path, file->path); });
-            if (previous == localized.participants.end()) localized.participants.push_back(std::move(*file));
+            if (previous == loadedLocalization.participants.end()) loadedLocalization.participants.push_back(std::move(*file));
             else if (previous->originalExists != file->originalExists ||
                      previous->originalSize != file->originalSize ||
                      previous->originalHash != file->originalHash) {
@@ -314,7 +314,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             if (!combined) return std::unexpected(combined.error());
             localizedTables->nextId = std::max(localizedTables->nextId, *combined);
         }
-        localizationState = std::move(localized);
+        localizationState = std::move(loadedLocalization);
     }
     try {
         previousStages = fo4::forms::decode_quest_stages(loaded->plugin, questKey);

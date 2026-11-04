@@ -1,3 +1,4 @@
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "RadiclePluginWindowsJournalTestSupport.hpp"
 #include "../../src/plugin/RadiclePluginJournalSession.hpp"
 

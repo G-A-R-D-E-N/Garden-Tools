@@ -151,9 +151,9 @@ WindowsJournalFileMetadata decodeMetadata(const Json& record) {
     return {std::move(security), record.at("attributes").get<std::uint32_t>(), record.at("creationTime").get<std::int64_t>()};
 }
 struct Record {
-    Json value;
-    WindowsJournalFileSnapshot snapshot;
-    std::string name;
+    Json value{};
+    WindowsJournalFileSnapshot snapshot{};
+    std::string name{};
     bool pending{};
 };
 std::optional<Record> readRecord(const WindowsJournalDirectory& journal, const std::string& name, std::size_t limit = kJournalMaxManifestBytes) {
@@ -214,10 +214,10 @@ Handle receiptDirectory(HANDLE parent, const Json& value, const JournalManifest&
 using Snapshot = WindowsJournalFileSnapshot (*)(void*, std::size_t);
 struct OwnedStage {
     unsigned attempt{};
-    Handle directory;
-    Record directoryReceipt;
-    Record fileReceipt;
-    WindowsJournalFileIdentity identity;
+    Handle directory{};
+    Record directoryReceipt{};
+    Record fileReceipt{};
+    WindowsJournalFileIdentity identity{};
     bool exposed{};
 };
 std::optional<OwnedStage> ownedStage(const WindowsJournalDirectory& journal, HANDLE parent,

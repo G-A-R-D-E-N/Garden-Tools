@@ -63,10 +63,10 @@ WindowsJournalFileIdentity decodeIdentity(const Json& value) {
 }
 
 struct Evidence {
-    WindowsJournalFileIdentity identity;
+    WindowsJournalFileIdentity identity{};
     std::uint64_t size{};
-    std::string hash;
-    std::optional<WindowsJournalFileMetadata> metadata;
+    std::string hash{};
+    std::optional<WindowsJournalFileMetadata> metadata{};
 };
 
 Json evidenceJson(const WindowsJournalFileSnapshot& file) {
@@ -98,10 +98,10 @@ Evidence decodeEvidence(const Json& value, bool withMetadata) {
 }
 
 struct Intent {
-    WindowsJournalFileIdentity directory;
-    std::optional<Evidence> original;
-    Evidence replacement;
-    std::optional<WindowsJournalFileIdentity> recordDirectory;
+    WindowsJournalFileIdentity directory{};
+    std::optional<Evidence> original{};
+    Evidence replacement{};
+    std::optional<WindowsJournalFileIdentity> recordDirectory{};
 };
 
 std::string text(const WindowsJournalFileSnapshot& file) {

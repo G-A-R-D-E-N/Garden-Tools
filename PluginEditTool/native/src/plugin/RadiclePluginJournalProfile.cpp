@@ -55,12 +55,12 @@ void prepareJournalProfile(const nlohmann::json& arguments, const std::filesyste
     config.approvedReadRoots.clear(); config.archiveDirectories.clear();
     if (dataRoot) {
         config.approvedReadRoots.push_back({dataRoot->path(), dataRoot});
-        config.archiveDirectories.push_back({dataRoot->path(), {}});
+        config.archiveDirectories.push_back({dataRoot->path(), {}, {}});
         if (manifest.version == 3) config.readStringDirectories.push_back({dataRoot->path(), {"Strings"}, {}});
     }
     if (!dataRoot || !dataRoot->sameRoot(*modRoot)) {
         config.approvedReadRoots.push_back({modRoot->path(), modRoot});
-        config.archiveDirectories.push_back({modRoot->path(), {}});
+        config.archiveDirectories.push_back({modRoot->path(), {}, {}});
     }
     config.archiveProviderOrder = journalArchiveOrder(dataRoot, modRoot, names, ownName);
 }

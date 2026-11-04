@@ -27,16 +27,16 @@ struct WindowsJournalFileIdentity {
 };
 
 struct WindowsJournalFileMetadata {
-    std::string security;
+    std::string security{};
     std::uint32_t attributes{};
     std::int64_t creationTime{};
     bool operator==(const WindowsJournalFileMetadata&) const = default;
 };
 
 struct WindowsJournalFileSnapshot {
-    WindowsJournalFileIdentity identity;
-    std::vector<std::byte> bytes;
-    std::optional<WindowsJournalFileMetadata> metadata;
+    WindowsJournalFileIdentity identity{};
+    std::vector<std::byte> bytes{};
+    std::optional<WindowsJournalFileMetadata> metadata{};
 };
 
 #ifdef FO4IDE_TEST_HOOKS

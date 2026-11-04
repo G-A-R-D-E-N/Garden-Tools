@@ -9,8 +9,8 @@
 namespace fo4ide::papyrus {
 
 struct SnapshotSource {
-    std::filesystem::path relativePath;
-    std::string text;
+    std::filesystem::path relativePath{};
+    std::string text{};
 };
 
 std::vector<SnapshotSource> snapshotPapyrusSources(std::intptr_t authorizedRoot,

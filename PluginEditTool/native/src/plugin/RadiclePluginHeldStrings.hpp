@@ -12,12 +12,12 @@
 namespace fo4ide::plugin::detail {
 class Ba2ReadRoot;
 struct HeldStringTable {
-    std::string filename;
-    std::string language;
-    fo4::env::StringSource source;
-    std::vector<std::byte> bytes;
-    fo4::localization::LocalizedStringTable table;
-    std::shared_ptr<const fo4::archive::Ba2ByteSource> lease;
+    std::string filename{};
+    std::string language{};
+    fo4::env::StringSource source{};
+    std::vector<std::byte> bytes{};
+    fo4::localization::LocalizedStringTable table{};
+    std::shared_ptr<const fo4::archive::Ba2ByteSource> lease{};
 };
 
 fo4::localization::LocalizedStringTable parseHeldStringTable(std::span<const std::byte> bytes,

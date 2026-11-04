@@ -11,13 +11,13 @@
 namespace fo4ide::plugin::detail {
 class Ba2ReadRoot;
 struct JournalPeerSnapshot {
-    std::shared_ptr<const fo4::archive::Ba2ByteSource> source;
+    std::shared_ptr<const fo4::archive::Ba2ByteSource> source{};
     std::uint64_t size{0};
-    std::string digest;
+    std::string digest{};
 };
 struct JournalPeerInput {
-    std::shared_ptr<const Ba2ReadRoot> root;
-    std::filesystem::path filename;
+    std::shared_ptr<const Ba2ReadRoot> root{};
+    std::filesystem::path filename{};
 };
 JournalPeerSnapshot snapshotJournalPeer(const std::shared_ptr<const Ba2ReadRoot>& root,
                                         const std::filesystem::path& filename,

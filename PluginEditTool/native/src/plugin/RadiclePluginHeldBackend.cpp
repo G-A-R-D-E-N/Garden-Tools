@@ -28,11 +28,11 @@ Result<std::shared_ptr<detail::HeldLocalizationGeneration>> RadiclePluginBackend
         std::vector<detail::HeldStringDirectoryInput> directories{{modRoot, "Strings"}};
         if (dataRoot) {
             config.approvedReadRoots.push_back({dataRoot->path(), dataRoot});
-            config.archiveDirectories.push_back({dataRoot->path(), {}});
+            config.archiveDirectories.push_back({dataRoot->path(), {}, {}});
         }
         if (!dataRoot || !dataRoot->sameRoot(*modRoot)) {
             config.approvedReadRoots.push_back({modRoot->path(), modRoot});
-            config.archiveDirectories.push_back({modRoot->path(), {}});
+            config.archiveDirectories.push_back({modRoot->path(), {}, {}});
             if (dataRoot) directories.push_back({dataRoot, "Strings"});
         }
         std::vector<std::string> names, languages{std::string(language)};

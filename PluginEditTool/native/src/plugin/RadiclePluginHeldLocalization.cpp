@@ -82,7 +82,7 @@ HeldLocalizationGeneration HeldLocalizationGeneration::capture(const JournalRead
     if (result.archives_->accountedIndexBytes() > remaining) throw std::runtime_error("localization working budget exceeded");
     remaining -= static_cast<std::size_t>(result.archives_->accountedIndexBytes());
     for (const auto& language : result.archives_->capturedLanguages(pluginFilename)) result.languages_.insert(language);
-    struct Request { std::string language; Source source; std::string path; };
+    struct Request { std::string language{}; Source source{}; std::string path{}; };
     std::vector<Request> requests;
     for (const auto& language : result.languages_) for (const auto source : {Source::normal, Source::dl, Source::il}) {
         const auto path = std::string("Strings/") + stem + '_' + language + '.' + std::string(fo4::env::string_source_extension(source));

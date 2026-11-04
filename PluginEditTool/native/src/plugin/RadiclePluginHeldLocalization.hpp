@@ -11,10 +11,10 @@ struct HeldStringDirectoryInput {
     std::filesystem::path relative;
 };
 struct HeldTableView {
-    const fo4::localization::LocalizedStringTable* table;
-    const std::vector<std::byte>* bytes;
-    std::filesystem::path path;
-    std::string archive;
+    const fo4::localization::LocalizedStringTable* table{};
+    const std::vector<std::byte>* bytes{};
+    std::filesystem::path path{};
+    std::string archive{};
 };
 
 class HeldLocalizationGeneration {
@@ -35,11 +35,11 @@ public:
     void verify() const;
 private:
     struct ArchiveTable {
-        std::string language;
-        fo4::env::StringSource source;
-        HeldArchivePayload payload;
-        fo4::localization::LocalizedStringTable table;
-        std::string entryPath;
+        std::string language{};
+        fo4::env::StringSource source{};
+        HeldArchivePayload payload{};
+        fo4::localization::LocalizedStringTable table{};
+        std::string entryPath{};
     };
     std::set<std::string> languages_;
     std::string pluginFilename_;

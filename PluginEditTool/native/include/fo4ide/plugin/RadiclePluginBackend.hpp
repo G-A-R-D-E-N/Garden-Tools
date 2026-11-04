@@ -59,25 +59,25 @@ Result<void> requirePluginUnchangedSince(const std::filesystem::path& path,
                                          std::filesystem::file_time_type loadedTime);
 
 struct LocalizedDirectorySnapshot {
-    std::filesystem::path directory;
-    std::map<std::string, std::vector<fo4::env::PluginStringTableSnapshot>> languages;
+    std::filesystem::path directory{};
+    std::map<std::string, std::vector<fo4::env::PluginStringTableSnapshot>> languages{};
     std::uint32_t maximum{0};
 };
 
 struct LocalizedStringAllocation {
 #if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
     std::shared_ptr<detail::HeldLocalizationGeneration> heldGeneration;
-    std::shared_ptr<const detail::Ba2ReadRoot> heldDataRoot;
+    std::shared_ptr<const detail::Ba2ReadRoot> heldDataRoot{};
 #endif
     std::string language;
     std::uint32_t nextId{1};
-    std::map<fo4::env::StringSource, fo4::localization::LocalizedStringTable> tables;
-    std::set<fo4::env::StringSource> touched;
-    std::map<fo4::env::StringSource, std::set<std::uint32_t>> allocatedIds;
-    std::vector<fo4::env::PluginStringTableSnapshot> sourceSnapshots;
-    std::map<std::string, std::vector<fo4::env::PluginStringTableSnapshot>> allocationSources;
+    std::map<fo4::env::StringSource, fo4::localization::LocalizedStringTable> tables{};
+    std::set<fo4::env::StringSource> touched{};
+    std::map<fo4::env::StringSource, std::set<std::uint32_t>> allocatedIds{};
+    std::vector<fo4::env::PluginStringTableSnapshot> sourceSnapshots{};
+    std::map<std::string, std::vector<fo4::env::PluginStringTableSnapshot>> allocationSources{};
     bool defaultDirectoryExists{false};
-    std::vector<LocalizedDirectorySnapshot> additionalSources;
+    std::vector<LocalizedDirectorySnapshot> additionalSources{};
 };
 
 using LocalizedReferenceKey = std::tuple<std::string, fo4::env::StringSource, std::filesystem::path>;
@@ -186,32 +186,32 @@ private:
     std::string recoveryPlugin_;
     std::optional<Error> testRecoveryGate(std::string_view operation, const nlohmann::json& arguments) const;
     struct StagedQuestFragments {
-        fo4::FormKey questKey;
-        std::filesystem::path sourcePath;
-        std::filesystem::path pexPath;
-        std::string source;
-        std::vector<std::uint8_t> pex;
-        std::optional<std::string> originalSource;
-        std::optional<std::string> originalPex;
+        fo4::FormKey questKey{};
+        std::filesystem::path sourcePath{};
+        std::filesystem::path pexPath{};
+        std::string source{};
+        std::vector<std::uint8_t> pex{};
+        std::optional<std::string> originalSource{};
+        std::optional<std::string> originalPex{};
     };
 
     struct StagedLocalizationFile {
-        std::filesystem::path path;
-        std::filesystem::path rootSelector;
-        std::vector<std::string> directories;
-        std::string filename;
-        std::string kind;
-        std::string language;
+        std::filesystem::path path{};
+        std::filesystem::path rootSelector{};
+        std::vector<std::string> directories{};
+        std::string filename{};
+        std::string kind{};
+        std::string language{};
         bool originalExists{false};
-        std::string originalHash;
+        std::string originalHash{};
         std::uint64_t originalSize{0};
-        std::vector<std::byte> finalBytes;
+        std::vector<std::byte> finalBytes{};
         bool verifyOnly{false};
     };
 
     struct StagedStringTable {
-        fo4::localization::LocalizedStringTable table;
-        StagedLocalizationFile file;
+        fo4::localization::LocalizedStringTable table{};
+        StagedLocalizationFile file{};
     };
 
     struct StagedLocalization {
@@ -219,18 +219,18 @@ private:
     };
 
     struct LoadedPlugin {
-        std::string name;
-        std::filesystem::path path;
-        std::string source;
+        std::string name{};
+        std::filesystem::path path{};
+        std::string source{};
         std::filesystem::file_time_type loadedTime{};
         bool trusted{false};
-        fo4::Plugin plugin;
+        fo4::Plugin plugin{};
         bool dirty{false};
-        std::optional<StagedLocalization> stagedLocalization;
-        std::unique_ptr<LocalizedStringAllocation> stagedAllocation;
-        std::set<std::string> stagedPluginLanguages;
-        LocalizedReferences stagedPluginStringIds;
-        std::optional<StagedQuestFragments> stagedQuestFragments;
+        std::optional<StagedLocalization> stagedLocalization{};
+        std::unique_ptr<LocalizedStringAllocation> stagedAllocation{};
+        std::set<std::string> stagedPluginLanguages{};
+        LocalizedReferences stagedPluginStringIds{};
+        std::optional<StagedQuestFragments> stagedQuestFragments{};
         std::unique_ptr<std::mutex> writeMutex = std::make_unique<std::mutex>();
         std::shared_ptr<const std::vector<std::byte>> diskBaseline = plugin.original_data;
     };

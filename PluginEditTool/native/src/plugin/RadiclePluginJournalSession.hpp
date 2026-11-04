@@ -28,14 +28,14 @@ void setWindowsJournalSessionHook(WindowsJournalSessionHook hook);
 #endif
 
 struct JournalInput {
-    std::string kind;
-    std::string name;
+    std::string kind{};
+    std::string name{};
     bool originalExists{false};
-    std::string originalHash;
+    std::string originalHash{};
     std::uint64_t originalSize{0};
-    std::vector<std::byte> finalBytes;
-    std::filesystem::path rootSelector;
-    std::vector<std::string> directories;
+    std::vector<std::byte> finalBytes{};
+    std::filesystem::path rootSelector{};
+    std::vector<std::string> directories{};
     bool verifyOnly{false};
 };
 
@@ -60,11 +60,11 @@ public:
 };
 
 struct JournalReadConfiguration {
-    std::vector<JournalApprovedReadRoot> approvedReadRoots;
-    std::vector<JournalArchiveReference> archiveDirectories;
-    std::vector<JournalArchiveReference> archiveProviderOrder;
-    std::vector<JournalPeerSnapshot> peers;
-    std::vector<JournalArchiveReference> readStringDirectories;
+    std::vector<JournalApprovedReadRoot> approvedReadRoots{};
+    std::vector<JournalArchiveReference> archiveDirectories{};
+    std::vector<JournalArchiveReference> archiveProviderOrder{};
+    std::vector<JournalPeerSnapshot> peers{};
+    std::vector<JournalArchiveReference> readStringDirectories{};
 };
 
 using JournalPrepareRecovery = std::function<void(const JournalManifest&, const std::vector<std::byte>&, JournalReadConfiguration&)>;

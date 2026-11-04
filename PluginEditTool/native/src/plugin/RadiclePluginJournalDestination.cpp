@@ -41,8 +41,8 @@ void setJournalDirectoryEnumerationHook(JournalDirectoryEnumerationHook hook) { 
 struct JournalDestination::Impl {
 #ifdef __linux__
     std::vector<int> directories;
-    std::vector<std::string> names;
-    std::string file;
+    std::vector<std::string> names{};
+    std::string file{};
     int original{-1};
     struct stat initial{};
 
