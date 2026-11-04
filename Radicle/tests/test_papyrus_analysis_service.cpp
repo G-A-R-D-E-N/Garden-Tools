@@ -3,11 +3,14 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <set>
 #include <string>
+#include <vector>
 
 using fo4::papyrus::AnalysisService;
 
@@ -562,6 +565,18 @@ TEST(PapyrusAnalysisService, CheckTextHintsDoNotFlagImportUsedThroughQualifiedCa
   EXPECT_TRUE(json["hints"].empty());
 }
 
+TEST(PapyrusAnalysisService, CheckTextHintsDoNotFlagImportUsedThroughUnqualifiedCall) {
+  ScratchRoot root;
+  root.write("Helper.psc", "ScriptName Helper\nFunction Help() global\nEndFunction\n");
+  const std::string text = "ScriptName A\nImport Helper\nFunction F()\n  Help()\nEndFunction\n";
+  const auto file = root.write("A.psc", text);
+
+  const auto json = nlohmann::json::parse(AnalysisService::checkTextJson(text, &file, 1));
+  EXPECT_TRUE(json["complete"].get<bool>());
+  EXPECT_EQ(json["errorCount"].get<int>(), 0);
+  EXPECT_TRUE(json["hints"].empty());
+}
+
 TEST(PapyrusAnalysisService, CheckTextHintsCountAssignmentAsUseAndNeverFlagParameters) {
   const std::string text = "ScriptName A\nFunction F(Int p)\n  Int n = 0\n  n = 2\nEndFunction\n";
 
@@ -595,18 +610,49 @@ TEST(PapyrusAnalysisService, ReferencesOfLocalStayInsideItsFunction) {
 
 TEST(PapyrusAnalysisService, ReferencesOfScriptNameReachOtherScriptFiles) {
   ScratchRoot root;
-  const auto file = root.write("Helper.psc", "ScriptName Helper\nFunction Help()\nEndFunction\n");
-  root.write("User.psc", "ScriptName User\nFunction F()\n  Helper h = None\nEndFunction\n");
-  const std::string text = "ScriptName Helper\nFunction Help()\nEndFunction\n";
+  const std::string text =
+      "ScriptName Helper\nStruct MyStruct\n  Int Left\nEndStruct\nFunction Help()\nEndFunction\n";
+  const auto file = root.write("Helper.psc", text);
+  const std::string user =
+      "ScriptName User\nFunction F()\n  helper h = None\n  Helper:MyStruct s = None\n"
+      "  ; Helper in a comment\n  Debug.Trace(\"Helper\")\nEndFunction\n";
+  root.write("User.psc", user);
   const auto offset = static_cast<int>(text.find("Helper") + 1);
 
   const auto json = nlohmann::json::parse(AnalysisService::referencesJson(text, &file, offset));
   EXPECT_EQ(json["declaration"]["kind"].get<std::string>(), "Script");
-  bool inUser = false;
+  std::vector<int> userStarts;
   for (const auto& reference : json["references"]) {
-    if (reference["file"].get<std::string>().ends_with("User.psc")) inUser = true;
+    if (reference["file"].get<std::string>().ends_with("User.psc")) {
+      userStarts.push_back(reference["start"].get<int>());
+    }
   }
-  EXPECT_TRUE(inUser);
+  EXPECT_EQ(json["references"].size(), 3u);
+  ASSERT_EQ(userStarts.size(), 2u);
+  EXPECT_TRUE(std::find(userStarts.begin(), userStarts.end(),
+                        static_cast<int>(user.find("helper h"))) != userStarts.end());
+  EXPECT_TRUE(std::find(userStarts.begin(), userStarts.end(),
+                        static_cast<int>(user.find("Helper:MyStruct"))) != userStarts.end());
+}
+
+TEST(PapyrusAnalysisService, ReferencesWithForwardSlashBufferPathDoNotDuplicateTheDiskCopy) {
+  ScratchRoot root;
+  const std::string text = "ScriptName Helper\nFunction Help()\nEndFunction\n";
+  const auto file = root.write("Helper.psc", text);
+  root.write("User.psc", "ScriptName User\nFunction F()\n  Helper h = None\nEndFunction\n");
+  std::string forward = file;
+  std::replace(forward.begin(), forward.end(), '\\', '/');
+  const std::string imports = root.path();
+  const auto offset = static_cast<int>(text.find("Helper") + 1);
+
+  const auto references = nlohmann::json::parse(
+      AnalysisService::referencesJson(text, &forward, offset, &imports));
+  EXPECT_EQ(references["references"].size(), 2u);
+
+  const auto edits = nlohmann::json::parse(
+      AnalysisService::renameJson(text, &forward, offset, "Helper2", &imports));
+  EXPECT_TRUE(edits["ok"].get<bool>());
+  EXPECT_EQ(edits["edits"].size(), 2u);
 }
 
 TEST(PapyrusAnalysisService, RenameRefusesKeywordIllegalNameAndLocalCollision) {
@@ -642,20 +688,52 @@ TEST(PapyrusAnalysisService, RenameLocalEditsOnlyItsOwnFunction) {
 
 TEST(PapyrusAnalysisService, RenameScriptRenamesItsFileAndEditsReferencingScripts) {
   ScratchRoot root;
-  const auto file = root.write("Helper.psc", "ScriptName Helper\nFunction Help()\nEndFunction\n");
-  root.write("User.psc", "ScriptName User\nFunction F()\n  Helper h = None\nEndFunction\n");
-  const std::string text = "ScriptName Helper\nFunction Help()\nEndFunction\n";
+  const std::string text =
+      "ScriptName Helper\nStruct MyStruct\n  Int Left\nEndStruct\nFunction Help()\nEndFunction\n";
+  const auto file = root.write("Helper.psc", text);
+  const std::string user =
+      "ScriptName User\nFunction F()\n  helper h = None\n  Helper:MyStruct s = None\n"
+      "  ; Helper in a comment\n  Debug.Trace(\"Helper\")\nEndFunction\n";
+  root.write("User.psc", user);
   const auto offset = static_cast<int>(text.find("Helper") + 1);
 
   const auto json =
       nlohmann::json::parse(AnalysisService::renameJson(text, &file, offset, "Helper2"));
   EXPECT_TRUE(json["ok"].get<bool>());
   EXPECT_TRUE(json["fileRename"]["to"].get<std::string>().ends_with("Helper2.psc"));
-  bool editedUser = false;
+
+  int declarations = 0;
+  std::map<int, int> userEdits;
   for (const auto& edit : json["edits"]) {
-    if (edit["file"].get<std::string>().ends_with("User.psc")) editedUser = true;
+    EXPECT_EQ(edit["newText"].get<std::string>(), "Helper2");
+    const auto editFile = edit["file"].get<std::string>();
+    const auto start = edit["start"].get<int>();
+    if (editFile == file && start == static_cast<int>(text.find("Helper"))) ++declarations;
+    if (editFile.ends_with("User.psc")) userEdits[start] = edit["length"].get<int>();
   }
-  EXPECT_TRUE(editedUser);
+  EXPECT_EQ(json["edits"].size(), 3u);
+  EXPECT_EQ(declarations, 1);
+  ASSERT_EQ(userEdits.size(), 2u);
+  EXPECT_EQ(userEdits.at(static_cast<int>(user.find("helper h"))), 6);
+  EXPECT_EQ(userEdits.at(static_cast<int>(user.find("Helper:MyStruct"))), 6);
+}
+
+TEST(PapyrusAnalysisService, RenameRefusesLocalThatWouldShadowAPropertyUsedInItsFunction) {
+  const std::string text =
+      "ScriptName A\nInt Property Speed Auto\nFunction F()\n  Int n = 1\n  Int m = Speed\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("Int n = 1") + 4);
+  const auto refused =
+      nlohmann::json::parse(AnalysisService::renameJson(text, nullptr, offset, "Speed"));
+  EXPECT_FALSE(refused["ok"].get<bool>());
+  EXPECT_NE(refused["reason"].get<std::string>().find("shadow"), std::string::npos);
+
+  const std::string member =
+      "ScriptName A\nInt Property Speed Auto\nFunction F()\n  Int n = 1\n  Int m = n.Speed\n"
+      "EndFunction\n";
+  const auto memberOffset = static_cast<int>(member.find("Int n = 1") + 4);
+  const auto allowed =
+      nlohmann::json::parse(AnalysisService::renameJson(member, nullptr, memberOffset, "Speed"));
+  EXPECT_TRUE(allowed["ok"].get<bool>());
 }
 
 TEST(PapyrusAnalysisService, RenameRefusesBaseScriptOutsideTheProject) {

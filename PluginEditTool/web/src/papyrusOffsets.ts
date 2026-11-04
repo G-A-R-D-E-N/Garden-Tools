@@ -15,8 +15,14 @@ export function utf8ToUtf16Index(text: string, offset: number): number {
   return index;
 }
 
+export function editorIndex(text: string, offset: number): number {
+  const index = utf8ToUtf16Index(text, offset);
+  return index - (text.slice(0, index).match(/\r\n/g)?.length ?? 0);
+}
+
 export function applyByteEdits(text: string, edits: Pick<PapyrusRenameEdit, 'start' | 'length' | 'newText'>[]): string {
   return edits
+    .filter((edit, i) => edits.findIndex(other => other.start === edit.start) === i)
     .map(edit => ({
       from: utf8ToUtf16Index(text, edit.start),
       to: utf8ToUtf16Index(text, edit.start + edit.length),

@@ -59,15 +59,23 @@ std::string fullPath(const std::string& path) {
     return error ? path : absolute.string();
 }
 
+std::string canonicalPath(const std::string& path) {
+    std::error_code error;
+    const auto absolute = std::filesystem::absolute(path, error);
+    auto text = (error ? std::filesystem::path(path) : absolute).lexically_normal().generic_string();
+    while (text.size() > 1 && text.back() == '/') text.pop_back();
+    return text;
+}
+
 bool sameFile(const std::optional<std::string>& a, const std::optional<std::string>& b) {
     if (!a || !b) return !a && !b;
-    return iequals(fullPath(*a), fullPath(*b));
+    return iequals(canonicalPath(*a), canonicalPath(*b));
 }
 
 bool underBaseRoot(const std::string& file, const std::vector<std::filesystem::path>& baseImports) {
-    const std::filesystem::path target(fullPath(file));
+    const std::filesystem::path target(canonicalPath(file));
     for (const auto& root : baseImports) {
-        const auto relative = target.lexically_relative(fullPath(root.string()));
+        const auto relative = target.lexically_relative(canonicalPath(root.string()));
         if (!relative.empty() && relative.begin()->string() != "..") return true;
     }
     return false;
@@ -168,10 +176,15 @@ bool importedHere(ScriptIndex& index, const Script& script, int offset, const Sy
 }
 
 bool namesTarget(ScriptIndex& index, const Script& script, const std::optional<std::string>& file,
-                 int offset, const Symbol& target, bool& declaration) {
+                 std::string_view text, int offset, const Symbol& target, bool& declaration) {
     declaration = false;
     const auto found = Symbols::findDefinition(index, script, offset);
     if (!found) return importedHere(index, script, offset, target);
+    if (target.kind == SymbolKind::Script && found->kind == SymbolKind::Struct) {
+        const auto end = static_cast<std::size_t>(offset) + bareName(target.name).size();
+        return sameFile(found->file, target.file) && end < text.size() &&
+               (text[end] == ':' || text[end] == '#');
+    }
     if (found->kind != target.kind || !sameFile(found->file, target.file)) return false;
     if (target.kind != SymbolKind::Script && found->nameSpan.start != target.nameSpan.start) {
         return false;
@@ -187,7 +200,7 @@ void collectHits(ScriptIndex& index, const Script& script, const std::optional<s
     const auto word = bareName(target.name);
     for (const int start : wordOccurrences(text, word, from, to)) {
         bool declaration = false;
-        if (!namesTarget(index, script, file, start, target, declaration)) continue;
+        if (!namesTarget(index, script, file, text, start, target, declaration)) continue;
         Hit hit;
         hit.file = file;
         hit.start = start;
@@ -223,6 +236,17 @@ void collectOtherScripts(ScriptIndex& index, const std::optional<std::string>& b
     }
 }
 
+void dropRepeats(std::vector<Hit>& hits) {
+    std::vector<Hit> unique;
+    for (auto& hit : hits) {
+        const bool seen = std::any_of(unique.begin(), unique.end(), [&hit](const Hit& kept) {
+            return kept.start == hit.start && sameFile(kept.file, hit.file);
+        });
+        if (!seen) unique.push_back(std::move(hit));
+    }
+    hits = std::move(unique);
+}
+
 std::vector<Hit> findHits(ScriptIndex& index, const Script& script,
                           const std::optional<std::string>& file, const std::string& text,
                           const Symbol& target, const std::vector<std::filesystem::path>& baseImports) {
@@ -230,24 +254,37 @@ std::vector<Hit> findHits(ScriptIndex& index, const Script& script,
     if (target.kind == SymbolKind::Script) {
         collectHits(index, script, file, text, 0, static_cast<int>(text.size()), target, hits);
         collectOtherScripts(index, file, target, baseImports, hits);
-        return hits;
-    }
-    if (const auto body = bodyOf(script, target.nameSpan.start)) {
+    } else if (const auto body = bodyOf(script, target.nameSpan.start)) {
         collectHits(index, script, file, text, body->start, body->end(), target, hits);
     }
+    dropRepeats(hits);
     return hits;
 }
 
-bool collides(ScriptIndex& index, const Script& script, const std::string& text, const Span& body,
-              const Symbol& target, const std::string& newName) {
+bool afterDot(const std::string& text, int start) {
+    if (start <= 0) return false;
+    const auto before = text.find_last_not_of(" \t", static_cast<std::size_t>(start) - 1);
+    return before != std::string::npos && text[before] == '.';
+}
+
+std::optional<std::string> collision(ScriptIndex& index, const Script& script, const std::string& text,
+                                     const Span& body, const Symbol& target, const std::string& newName) {
     for (const int start : wordOccurrences(text, newName, body.start, body.end())) {
         const auto found = Symbols::findDefinition(index, script, start);
-        if (found && (found->kind == SymbolKind::Local || found->kind == SymbolKind::Parameter) &&
+        if (!found) continue;
+        if ((found->kind == SymbolKind::Local || found->kind == SymbolKind::Parameter) &&
             found->nameSpan.start != target.nameSpan.start) {
-            return true;
+            return "'" + newName + "' is already a local or parameter in this function.";
+        }
+        const bool member = found->kind == SymbolKind::Property ||
+                            found->kind == SymbolKind::Variable ||
+                            found->kind == SymbolKind::Function || found->kind == SymbolKind::Script;
+        if (member && !afterDot(text, start)) {
+            return "'" + newName +
+                   "' would shadow a property, variable, function or script name used in this function.";
         }
     }
-    return false;
+    return std::nullopt;
 }
 
 nlohmann::json fileJson(const std::optional<std::string>& file) {
@@ -333,8 +370,8 @@ std::string AnalysisService::renameJson(const std::string& text, const std::stri
             return refused("A script named '" + newName + "' already exists.");
         }
     } else if (const auto body = bodyOf(script, target->nameSpan.start)) {
-        if (collides(index, script, text, *body, *target, newName)) {
-            return refused("'" + newName + "' is already a local or parameter in this function.");
+        if (const auto reason = collision(index, script, text, *body, *target, newName)) {
+            return refused(*reason);
         }
     }
 

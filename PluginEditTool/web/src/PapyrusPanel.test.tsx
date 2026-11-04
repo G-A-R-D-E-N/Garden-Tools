@@ -514,4 +514,103 @@ describe('Papyrus find references, rename and workspace symbols', () => {
     await waitFor(() => expect(editor().value).toBe(texts[SCRIPT_B]));
     await waitFor(() => expect(editor().selectionStart).toBe(4));
   });
+
+  it('a rename whose text changed while Rename was pending applies nothing and keeps the typed text', async () => {
+    rename.mockImplementation(async () => {
+      fireEvent.change(editor(), { target: { value: 'typed while renaming' } });
+      return JSON.stringify({ ok: true, edits: [{ file: SCRIPT_A, start: 0, length: 3, newText: 'Zed' }], fileRename: null });
+    });
+    dialogs.prompt.mockResolvedValue('Zed');
+    render(<PapyrusPanel onClose={() => {}} />);
+    await openScript(SCRIPT_A);
+    editor().setSelectionRange(0, 0);
+
+    fireEvent.keyDown(editor(), { key: 'F2' });
+    await waitFor(() => expect(screen.getByText(/Rename not applied/)).toBeTruthy());
+    expect(editor().value).toBe('typed while renaming');
+    expect(writeScript).not.toHaveBeenCalled();
+  });
+
+  it('a rename that lists the same edit twice applies it once', async () => {
+    rename.mockResolvedValue(JSON.stringify({
+      ok: true,
+      edits: [
+        { file: SCRIPT_A, start: 0, length: 3, newText: 'Zed' },
+        { file: SCRIPT_A, start: 0, length: 3, newText: 'Zed' },
+      ],
+      fileRename: null,
+    }));
+    dialogs.prompt.mockResolvedValue('Zed');
+    render(<PapyrusPanel onClose={() => {}} />);
+    await openScript(SCRIPT_A);
+    editor().setSelectionRange(0, 0);
+
+    fireEvent.keyDown(editor(), { key: 'F2' });
+    await waitFor(() => expect(editor().value).toBe('Zeddefghijk'));
+  });
+
+  it('typing clears the references list, because its offsets belong to the text that was searched', async () => {
+    references.mockResolvedValue(JSON.stringify({
+      declaration: declaredAt(SCRIPT_A),
+      references: [{ file: SCRIPT_A, line: 1, column: 3, start: 2, length: 4, isDeclaration: false }],
+    }));
+    render(<PapyrusPanel onClose={() => {}} />);
+    await openScript(SCRIPT_A);
+    fireEvent.keyDown(editor(), { key: 'F12', shiftKey: true });
+    await screen.findByText(/REFERENCES to/);
+
+    fireEvent.change(editor(), { target: { value: 'abcdefghijkl' } });
+    expect(screen.queryByText(/REFERENCES to/)).toBeNull();
+  });
+
+  it('a references reply that arrives after an edit is dropped instead of listing stale offsets', async () => {
+    let answer: (json: string) => void = () => {};
+    references.mockImplementationOnce(() => new Promise<string>(resolve => { answer = resolve; }));
+    render(<PapyrusPanel onClose={() => {}} />);
+    await openScript(SCRIPT_A);
+    fireEvent.keyDown(editor(), { key: 'F12', shiftKey: true });
+    await waitFor(() => expect(references).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(editor(), { target: { value: 'abcdefghijkl' } });
+    answer(JSON.stringify({
+      declaration: declaredAt(SCRIPT_A),
+      references: [{ file: SCRIPT_A, line: 1, column: 3, start: 2, length: 4, isDeclaration: false }],
+    }));
+    await settle();
+    expect(screen.queryByText(/REFERENCES to/)).toBeNull();
+  });
+
+  it('a workspace hit in the open file selects its line when the buffer has unsaved edits', async () => {
+    workspaceSymbols.mockResolvedValue(JSON.stringify({
+      truncated: false,
+      results: [{ name: 'Target', kind: 'Function', signature: 'Function Target()', container: null, file: SCRIPT_A, line: 2, column: 1, start: 4, length: 6 }],
+    }));
+    render(<PapyrusPanel onClose={() => {}} />);
+    await openScript(SCRIPT_A);
+    fireEvent.change(editor(), { target: { value: 'abcdefghijk\nxyz' } });
+
+    fireEvent.change(screen.getByPlaceholderText(/Find a symbol/), { target: { value: 'Targ' } });
+    fireEvent.click((await screen.findByText('Target')).closest('button')!);
+    await waitFor(() => expect(editor().selectionStart).toBe(12));
+    expect(editor().selectionEnd).toBe(15);
+  });
+
+  it('a reference in an open CRLF file selects the same characters the search reported', async () => {
+    const crlf = 'C:\\scripts\\d.psc';
+    readScript.mockImplementation(async path => (path === crlf ? 'Alpha\r\nBeta Gamma' : texts[path] ?? 'ERR: missing'));
+    references.mockResolvedValue(JSON.stringify({
+      declaration: declaredAt(crlf),
+      references: [{ file: crlf, line: 2, column: 6, start: 11, length: 5, isDeclaration: false }],
+    }));
+    render(<PapyrusPanel onClose={() => {}} />);
+    fireEvent.change(sourceInput(), { target: { value: crlf } });
+    fireEvent.click(screen.getByRole('button', { name: 'Open in editor' }));
+    await waitFor(() => expect(editor().value).toBe('Alpha\nBeta Gamma'));
+
+    editor().setSelectionRange(11, 11);
+    fireEvent.keyDown(editor(), { key: 'F12', shiftKey: true });
+    fireEvent.click((await screen.findByText('d.psc:2:6')).closest('button')!);
+    await waitFor(() => expect(editor().selectionStart).toBe(11));
+    expect(editor().selectionEnd).toBe(16);
+  });
 });

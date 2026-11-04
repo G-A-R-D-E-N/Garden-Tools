@@ -15,14 +15,14 @@ import {
 import { useDialogs } from './useDialogs';
 import PapyrusLocations, { type LocationRow } from './PapyrusLocations';
 import { usePapyrusWorkspaceSearch } from './usePapyrusWorkspaceSearch';
-import { applyByteEdits, byteOffset, samePath, utf8ToUtf16Index } from './papyrusOffsets';
+import { applyByteEdits, byteOffset, editorIndex, samePath } from './papyrusOffsets';
 import './PapyrusPanel.css';
 
 type Mode = 'decompile' | 'compile' | 'lookup' | 'analyze';
 type LookupKind = 'function' | 'script';
 type CompletionView = { items: PapyrusCompletionItem[]; caret: number; replaceLength: number; active: number };
 type LiveCheck = PapyrusCheckResult & { text: string };
-type References = { name: string; rows: LocationRow[] };
+type References = { name: string; text: string; rows: LocationRow[] };
 
 
 type Engine = 'auto' | 'builtin' | 'creationkit';
@@ -82,6 +82,8 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   const checkRevision = useRef(0);
   const completionSeq = useRef(0);
   const signatureSeq = useRef(0);
+  const referencesSeq = useRef(0);
+  const dropReferences = () => { referencesSeq.current++; setRefs(null); };
 
   const papyrus = getPapyrus();
   const unavailable = !papyrus;
@@ -129,6 +131,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     })) return;
     const text = await papyrus.ReadScript(path.trim());
     if (text.startsWith('ERR:')) { appendLog('✗ open -- ' + text.slice(4)); return; }
+    dropReferences();
     setBuffer(text); setBufferPath(path.trim()); setDirty(false); setSymbolInfo(null);
     appendLog('• opened ' + baseName(path));
   }, [papyrus, dirty, bufferPath, askConfirm]);
@@ -213,17 +216,21 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   };
 
 
-  const revealRange = (start: number, length: number) => {
+  const revealSpan = (from: number, to: number) => {
     const el = editorRef.current;
     if (!el) return;
-    const from = utf8ToUtf16Index(buffer, start);
     el.focus();
-    el.setSelectionRange(from, utf8ToUtf16Index(buffer, start + Math.max(length, 0)));
-
-
-    const line = buffer.slice(0, from).split('\n').length;
-    el.scrollTop = Math.max(0, (line - 4) * EDITOR_LINE_HEIGHT);
-    if (gutterRef.current) gutterRef.current.scrollTop = el.scrollTop;
+    el.setSelectionRange(from, to);
+    const top = Math.max(0, (el.value.slice(0, from).split('\n').length - 4) * EDITOR_LINE_HEIGHT);
+    el.scrollTop = top;
+    if (gutterRef.current) gutterRef.current.scrollTop = top;
+  };
+  const revealRange = (start: number, length: number, origin = buffer) =>
+    revealSpan(editorIndex(origin, start), editorIndex(origin, start + Math.max(length, 0)));
+  const revealLine = (line: number) => {
+    const lines = (editorRef.current?.value ?? '').split('\n');
+    const from = lines.slice(0, Math.max(line - 1, 0)).reduce((sum, text) => sum + text.length + 1, 0);
+    revealSpan(from, from + (lines[line - 1] ?? '').length);
   };
 
 
@@ -232,7 +239,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     if (!papyrus || !el) return null;
     let symbol: PapyrusSymbolResult;
     try {
-      const json = await papyrus.SymbolAt(buffer, bufferPath, byteOffset(el.value, el.selectionStart), imports);
+      const json = await papyrus.SymbolAt(el.value, bufferPath, byteOffset(el.value, el.selectionStart), imports);
       symbol = JSON.parse(json) as PapyrusSymbolResult;
     } catch (e) {
       symbol = { resolved: false, error: e instanceof Error ? e.message : String(e) };
@@ -249,37 +256,37 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     })) return;
     const text = await papyrus.ReadScript(file);
     if (text.startsWith('ERR:')) { appendLog('✗ open -- ' + text.slice(4)); return; }
+    dropReferences();
     setBuffer(text); setBufferPath(file); setDirty(false); setSource(file);
     appendLog('• followed ' + name + ' -> ' + baseName(file));
-    const from = utf8ToUtf16Index(text, start);
-    const to = utf8ToUtf16Index(text, start + length);
-
-    setTimeout(() => {
-      const el = editorRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(from, to);
-      el.scrollTop = Math.max(0, (text.slice(0, from).split('\n').length - 4) * EDITOR_LINE_HEIGHT);
-      if (gutterRef.current) gutterRef.current.scrollTop = el.scrollTop;
-    }, 0);
+    const from = editorIndex(text, start);
+    const to = editorIndex(text, start + length);
+    setTimeout(() => revealSpan(from, to), 0);
   };
 
   const goToDefinition = async (symbol: PapyrusSymbolResult | null) => {
     if (!symbol?.resolved) return;
-    if (symbol.sameFile) { revealRange(symbol.start ?? 0, symbol.length ?? 0); return; }
+    if (symbol.sameFile) { revealRange(symbol.start ?? 0, symbol.length ?? 0, editorRef.current?.value ?? buffer); return; }
     if (!symbol.file) return;
     await openFileAt(symbol.file, symbol.start ?? 0, symbol.length ?? 0, symbol.name ?? '');
   };
 
-  const jumpTo = async (file: string | null, start: number, length: number, name: string) => {
-    if (!file || (bufferPath && samePath(file, bufferPath))) { revealRange(start, length); return; }
-    await openFileAt(file, start, length, name);
+  const jumpTo = async (row: LocationRow, name: string, origin: string | null) => {
+    if (!row.file || (bufferPath && samePath(row.file, bufferPath))) {
+      if (origin === null) revealLine(row.line);
+      else revealRange(row.start, row.length, origin);
+      return;
+    }
+    await openFileAt(row.file, row.start, row.length, name);
   };
 
   const findReferences = async () => {
     const el = editorRef.current;
     if (!papyrus || !el) return;
-    const reply = JSON.parse(await papyrus.References(el.value, bufferPath, byteOffset(el.value, el.selectionStart), imports)) as PapyrusReferencesResult;
+    const seq = ++referencesSeq.current;
+    const text = el.value;
+    const reply = JSON.parse(await papyrus.References(text, bufferPath, byteOffset(text, el.selectionStart), imports)) as PapyrusReferencesResult;
+    if (seq !== referencesSeq.current) return;
     if (!reply.declaration || !reply.references) {
       setRefs(null);
       setNote(reply.error ?? (reply.reason === 'unsupported'
@@ -290,12 +297,14 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     setNote('');
     setRefs({
       name: reply.declaration.name,
+      text,
       rows: reply.references.map((hit, i) => ({
         key: String(i),
         title: `${hit.file ? baseName(hit.file) : 'this buffer'}:${hit.line}:${hit.column}`,
         detail: hit.isDeclaration ? 'declaration' : 'reference',
         where: hit.file ?? 'this buffer',
         file: hit.file,
+        line: hit.line,
         start: hit.start,
         length: hit.length,
       })),
@@ -313,6 +322,10 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     if (!newName) return;
     const text = el.value;
     const reply = JSON.parse(await papyrus.Rename(text, bufferPath, byteOffset(text, el.selectionStart), newName, imports)) as PapyrusRenameResult;
+    if (editorRef.current?.value !== text) {
+      setNote('Rename not applied: the text changed while it was being checked. Run it again.');
+      return;
+    }
     if (!reply.ok || !reply.edits) {
       setNote('Rename refused: ' + (reply.reason ?? reply.error ?? 'no result'));
       return;
@@ -336,7 +349,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
       const err = source.startsWith('ERR:') ? source.slice(4) : (await papyrus.WriteScript(file, applyByteEdits(source, edits))).replace(/^ERR:/, '');
       if (err) problems.push(`${baseName(file)}: ${err}`);
     }
-    setRefs(null);
+    dropReferences();
     const moved = reply.fileRename
       ? ` Rename ${baseName(reply.fileRename.from)} to ${baseName(reply.fileRename.to)} yourself; the panel does not rename files.`
       : '';
@@ -368,6 +381,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     const start = completion.caret - completion.replaceLength;
     const at = start + item.insertText.length;
     closeCompletion();
+    dropReferences();
     setBuffer(buffer.slice(0, start) + item.insertText + buffer.slice(completion.caret));
     setDirty(true);
     setTimeout(() => el.setSelectionRange(at, at), 0);
@@ -386,6 +400,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
 
   const onEditorInput = (el: HTMLTextAreaElement) => {
     const typed = el.value.charAt(el.selectionStart - 1);
+    dropReferences();
     setBuffer(el.value);
     setDirty(true);
     if (typed === '.' || (completion && /\w/.test(typed))) void requestCompletion(el, typed === '.');
@@ -418,6 +433,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
       const el = e.currentTarget;
       const { selectionStart: s, selectionEnd: t } = el;
       const next = buffer.slice(0, s) + '\t' + buffer.slice(t);
+      dropReferences();
       setBuffer(next); setDirty(true);
       requestAnimationFrame(() => el.setSelectionRange(s + 1, s + 1));
     }
@@ -440,6 +456,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     detail: `${sym.kind}  ${sym.signature}${sym.container ? '  in ' + sym.container : ''}`,
     where: `${sym.file ? baseName(sym.file) : ''}:${sym.line}`,
     file: sym.file,
+    line: sym.line,
     start: sym.start,
     length: sym.length,
   }));
@@ -577,7 +594,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
                        placeholder="Find a symbol in any script (Ctrl+T)" />
                 {wsQuery.trim() && (workspace.error
                   ? <div className="papyrus-log-row err">{workspace.error}</div>
-                  : <PapyrusLocations rows={wsRows} empty="No symbols match." onPick={row => void jumpTo(row.file, row.start, row.length, row.title)} />)}
+                  : <PapyrusLocations rows={wsRows} empty="No symbols match." onPick={row => void jumpTo(row, row.title, dirty ? null : buffer)} />)}
 
                 <div className="papyrus-outline-head">
                   <span><ListTree size={13} /> OUTLINE{symbols.length ? ` (${symbols.length})` : ''}</span>
@@ -777,7 +794,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
                     <span>REFERENCES to {refs.name} ({refs.rows.length})</span>
                     <button className="papyrus-copy" onClick={() => setRefs(null)}>Close</button>
                   </div>
-                  <PapyrusLocations rows={refs.rows} empty="No references." onPick={row => void jumpTo(row.file, row.start, row.length, refs.name)} />
+                  <PapyrusLocations rows={refs.rows} empty="No references." onPick={row => void jumpTo(row, refs.name, refs.text)} />
                 </div>
               )}
               <div className="papyrus-log-head">

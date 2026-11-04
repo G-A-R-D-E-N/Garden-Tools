@@ -4,6 +4,7 @@ export interface LocationRow {
   detail: string;
   where: string;
   file: string | null;
+  line: number;
   start: number;
   length: number;
 }
