@@ -13,6 +13,8 @@ class AnalysisService {
 public:
     static constexpr int k_maxReportedFiles = 200;
     static constexpr int k_maxCompletions = 200;
+    static constexpr int k_defaultWorkspaceLimit = 100;
+    static constexpr int k_maxWorkspaceLimit = 500;
 
     static int lineColumnToOffset(std::string_view text, int line, int column);
 
@@ -44,6 +46,18 @@ public:
     static std::string checkTextJson(const std::string& text, const std::string* filePath,
                                      int revision, const std::string* imports = nullptr,
                                      const std::vector<std::filesystem::path>& baseImports = {});
+
+    static std::string referencesJson(const std::string& text, const std::string* filePath,
+                                      int offset, const std::string* imports = nullptr,
+                                      const std::vector<std::filesystem::path>& baseImports = {});
+
+    static std::string renameJson(const std::string& text, const std::string* filePath, int offset,
+                                  const std::string& newName, const std::string* imports = nullptr,
+                                  const std::vector<std::filesystem::path>& baseImports = {});
+
+    static std::string workspaceSymbolsJson(const std::string& query, int limit,
+                                            const std::string* imports = nullptr,
+                                            const std::vector<std::filesystem::path>& baseImports = {});
 
     static ScriptIndex buildIndex(const std::string& sourceFile, const std::string* imports,
                                   const std::vector<std::filesystem::path>& baseImports);

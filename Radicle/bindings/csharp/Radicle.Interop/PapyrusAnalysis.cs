@@ -131,6 +131,53 @@ public static unsafe class PapyrusAnalysis
         return Call.TakeText(json, size);
     }
 
+    public static string ReferencesJson(ReadOnlySpan<byte> text, string? filePath, int offset, string? imports = null,
+        IEnumerable<string>? baseImports = null)
+    {
+        using var strings = new NativeStrings();
+        var roots = strings.AddAll(baseImports);
+        byte* empty = stackalloc byte[1];
+        byte* json = null;
+        nuint size = 0;
+        fixed (byte* pointer = text)
+        fixed (IntPtr* bases = roots)
+        {
+            Call.Check(RadicleNative.PapyrusReferencesJson(pointer == null ? empty : pointer, (nuint)text.Length, filePath, offset,
+                imports, bases, (nuint)roots.Length, &json, &size));
+        }
+        return Call.TakeText(json, size);
+    }
+
+    public static string RenameJson(ReadOnlySpan<byte> text, string? filePath, int offset, string newName, string? imports = null,
+        IEnumerable<string>? baseImports = null)
+    {
+        using var strings = new NativeStrings();
+        var roots = strings.AddAll(baseImports);
+        byte* empty = stackalloc byte[1];
+        byte* json = null;
+        nuint size = 0;
+        fixed (byte* pointer = text)
+        fixed (IntPtr* bases = roots)
+        {
+            Call.Check(RadicleNative.PapyrusRenameJson(pointer == null ? empty : pointer, (nuint)text.Length, filePath, offset,
+                newName, imports, bases, (nuint)roots.Length, &json, &size));
+        }
+        return Call.TakeText(json, size);
+    }
+
+    public static string WorkspaceSymbolsJson(string query, int limit, string? imports = null, IEnumerable<string>? baseImports = null)
+    {
+        using var strings = new NativeStrings();
+        var roots = strings.AddAll(baseImports);
+        byte* json = null;
+        nuint size = 0;
+        fixed (IntPtr* bases = roots)
+        {
+            Call.Check(RadicleNative.PapyrusWorkspaceSymbolsJson(query, limit, imports, bases, (nuint)roots.Length, &json, &size));
+        }
+        return Call.TakeText(json, size);
+    }
+
     public static string CompilePath(string sourcePath, string? outputPath = null, string? imports = null, bool release = false,
         bool noDebugInfo = false, string? flagFile = null, IEnumerable<string>? baseImports = null)
     {

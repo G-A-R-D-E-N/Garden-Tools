@@ -533,3 +533,184 @@ TEST(PapyrusAnalysisService, SignatureHelpIsInactiveInsideString) {
       nlohmann::json::parse(AnalysisService::signatureHelpJson(text, nullptr, offset));
   EXPECT_FALSE(json["active"].get<bool>());
 }
+
+TEST(PapyrusAnalysisService, CheckTextHintsFlagUnusedImportAndLocalWithoutErrors) {
+  ScratchRoot root;
+  root.write("Helper.psc", "ScriptName Helper\nFunction Help()\nEndFunction\n");
+  const std::string text =
+      "ScriptName A\nImport Helper\nFunction F()\n  Int unused = 1\nEndFunction\n";
+  const auto file = root.write("A.psc", text);
+
+  const auto json = nlohmann::json::parse(AnalysisService::checkTextJson(text, &file, 1));
+  EXPECT_TRUE(json["complete"].get<bool>());
+  EXPECT_EQ(json["errorCount"].get<int>(), 0);
+  ASSERT_EQ(json["hints"].size(), 2u);
+  EXPECT_EQ(json["hints"][0]["code"].get<std::string>(), "PAPH001");
+  EXPECT_EQ(json["hints"][1]["code"].get<std::string>(), "PAPH002");
+  EXPECT_EQ(json["hints"][1]["severity"].get<std::string>(), "hint");
+}
+
+TEST(PapyrusAnalysisService, CheckTextHintsDoNotFlagImportUsedThroughQualifiedCall) {
+  ScratchRoot root;
+  root.write("Helper.psc", "ScriptName Helper\nFunction Help()\nEndFunction\n");
+  const std::string text =
+      "ScriptName A\nImport Helper\nFunction F()\n  Helper.Help()\nEndFunction\n";
+  const auto file = root.write("A.psc", text);
+
+  const auto json = nlohmann::json::parse(AnalysisService::checkTextJson(text, &file, 1));
+  EXPECT_TRUE(json["complete"].get<bool>());
+  EXPECT_TRUE(json["hints"].empty());
+}
+
+TEST(PapyrusAnalysisService, CheckTextHintsCountAssignmentAsUseAndNeverFlagParameters) {
+  const std::string text = "ScriptName A\nFunction F(Int p)\n  Int n = 0\n  n = 2\nEndFunction\n";
+
+  const auto json = nlohmann::json::parse(AnalysisService::checkTextJson(text, nullptr, 1));
+  EXPECT_TRUE(json["complete"].get<bool>());
+  EXPECT_TRUE(json["hints"].empty());
+}
+
+TEST(PapyrusAnalysisService, CheckTextWithIncompleteBaseWithholdsHints) {
+  const std::string text =
+      "ScriptName A extends NotOnAnyRoot\nFunction F()\n  Int unused = 1\nEndFunction\n";
+
+  const auto json = nlohmann::json::parse(AnalysisService::checkTextJson(text, nullptr, 1));
+  EXPECT_FALSE(json["complete"].get<bool>());
+  EXPECT_TRUE(json["hints"].empty());
+}
+
+TEST(PapyrusAnalysisService, ReferencesOfLocalStayInsideItsFunction) {
+  const std::string text =
+      "ScriptName A\nFunction F()\n  Int n = 1\n  Int m = n\nEndFunction\n"
+      "Function G()\n  Int n = 2\n  Int k = n\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("Int n = 1") + 4);
+
+  const auto json = nlohmann::json::parse(AnalysisService::referencesJson(text, nullptr, offset));
+  EXPECT_EQ(json["declaration"]["kind"].get<std::string>(), "Local");
+  ASSERT_EQ(json["references"].size(), 2u);
+  EXPECT_EQ(json["references"][0]["line"].get<int>(), 3);
+  EXPECT_EQ(json["references"][1]["line"].get<int>(), 4);
+  EXPECT_TRUE(json["references"][0]["isDeclaration"].get<bool>());
+}
+
+TEST(PapyrusAnalysisService, ReferencesOfScriptNameReachOtherScriptFiles) {
+  ScratchRoot root;
+  const auto file = root.write("Helper.psc", "ScriptName Helper\nFunction Help()\nEndFunction\n");
+  root.write("User.psc", "ScriptName User\nFunction F()\n  Helper h = None\nEndFunction\n");
+  const std::string text = "ScriptName Helper\nFunction Help()\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("Helper") + 1);
+
+  const auto json = nlohmann::json::parse(AnalysisService::referencesJson(text, &file, offset));
+  EXPECT_EQ(json["declaration"]["kind"].get<std::string>(), "Script");
+  bool inUser = false;
+  for (const auto& reference : json["references"]) {
+    if (reference["file"].get<std::string>().ends_with("User.psc")) inUser = true;
+  }
+  EXPECT_TRUE(inUser);
+}
+
+TEST(PapyrusAnalysisService, RenameRefusesKeywordIllegalNameAndLocalCollision) {
+  const std::string text = "ScriptName A\nFunction F()\n  Int n = 1\n  Int m = 2\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("Int n = 1") + 4);
+  const auto refused = [&](const std::string& name) {
+    return nlohmann::json::parse(AnalysisService::renameJson(text, nullptr, offset, name));
+  };
+
+  EXPECT_FALSE(refused("Int")["ok"].get<bool>());
+  EXPECT_NE(refused("Int")["reason"].get<std::string>().find("keyword"), std::string::npos);
+  EXPECT_NE(refused("9bad")["reason"].get<std::string>().find("identifier"), std::string::npos);
+  EXPECT_NE(refused("m")["reason"].get<std::string>().find("already"), std::string::npos);
+}
+
+TEST(PapyrusAnalysisService, RenameLocalEditsOnlyItsOwnFunction) {
+  const std::string text =
+      "ScriptName A\nFunction F()\n  Int n = 1\n  Int m = n\nEndFunction\n"
+      "Function G()\n  Int n = 2\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("Int n = 1") + 4);
+  const auto gStart = static_cast<int>(text.find("Function G()"));
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::renameJson(text, nullptr, offset, "total"));
+  EXPECT_TRUE(json["ok"].get<bool>());
+  ASSERT_EQ(json["edits"].size(), 2u);
+  for (const auto& edit : json["edits"]) {
+    EXPECT_LT(edit["start"].get<int>(), gStart);
+    EXPECT_EQ(edit["newText"].get<std::string>(), "total");
+  }
+  EXPECT_TRUE(json["fileRename"].is_null());
+}
+
+TEST(PapyrusAnalysisService, RenameScriptRenamesItsFileAndEditsReferencingScripts) {
+  ScratchRoot root;
+  const auto file = root.write("Helper.psc", "ScriptName Helper\nFunction Help()\nEndFunction\n");
+  root.write("User.psc", "ScriptName User\nFunction F()\n  Helper h = None\nEndFunction\n");
+  const std::string text = "ScriptName Helper\nFunction Help()\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("Helper") + 1);
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::renameJson(text, &file, offset, "Helper2"));
+  EXPECT_TRUE(json["ok"].get<bool>());
+  EXPECT_TRUE(json["fileRename"]["to"].get<std::string>().ends_with("Helper2.psc"));
+  bool editedUser = false;
+  for (const auto& edit : json["edits"]) {
+    if (edit["file"].get<std::string>().ends_with("User.psc")) editedUser = true;
+  }
+  EXPECT_TRUE(editedUser);
+}
+
+TEST(PapyrusAnalysisService, RenameRefusesBaseScriptOutsideTheProject) {
+  ScratchRoot base;
+  base.write("Base.psc", "ScriptName Base\n");
+  ScratchRoot project;
+  const auto file = project.write("A.psc", "ScriptName A extends Base\n");
+  const std::string text = "ScriptName A extends Base\n";
+  const auto offset = static_cast<int>(text.find("Base") + 1);
+  const std::vector<std::filesystem::path> bases{base.path()};
+
+  const auto json = nlohmann::json::parse(
+      AnalysisService::renameJson(text, &file, offset, "Other", nullptr, bases));
+  EXPECT_FALSE(json["ok"].get<bool>());
+  EXPECT_NE(json["reason"].get<std::string>().find("base script"), std::string::npos);
+}
+
+TEST(PapyrusAnalysisService, WorkspaceSymbolsRanksExactBeforePrefix) {
+  ScratchRoot root;
+  root.write("Alpha.psc",
+             "ScriptName Alpha\nFunction GetActorValue()\nEndFunction\nFunction GetActor()\n"
+             "EndFunction\nFunction ActorGet()\nEndFunction\n");
+  const std::string imports = root.path();
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::workspaceSymbolsJson("getactor", 100, &imports));
+  ASSERT_EQ(json["results"].size(), 2u);
+  EXPECT_EQ(json["results"][0]["name"].get<std::string>(), "GetActor");
+  EXPECT_EQ(json["results"][1]["name"].get<std::string>(), "GetActorValue");
+  EXPECT_FALSE(json["truncated"].get<bool>());
+}
+
+TEST(PapyrusAnalysisService, WorkspaceSymbolsMatchInitialsAtWordStarts) {
+  ScratchRoot root;
+  root.write("Alpha.psc",
+             "ScriptName Alpha\nFunction GetActorValue()\nEndFunction\nFunction ActorGet()\n"
+             "EndFunction\n");
+  const std::string imports = root.path();
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::workspaceSymbolsJson("gav", 100, &imports));
+  ASSERT_EQ(json["results"].size(), 1u);
+  EXPECT_EQ(json["results"][0]["name"].get<std::string>(), "GetActorValue");
+}
+
+TEST(PapyrusAnalysisService, WorkspaceSymbolsReportsTruncationAtLimit) {
+  ScratchRoot root;
+  root.write("Alpha.psc",
+             "ScriptName Alpha\nFunction GetActorValue()\nEndFunction\nFunction GetActor()\n"
+             "EndFunction\n");
+  const std::string imports = root.path();
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::workspaceSymbolsJson("getactor", 1, &imports));
+  EXPECT_TRUE(json["truncated"].get<bool>());
+  ASSERT_EQ(json["results"].size(), 1u);
+  EXPECT_EQ(json["results"][0]["name"].get<std::string>(), "GetActor");
+}
