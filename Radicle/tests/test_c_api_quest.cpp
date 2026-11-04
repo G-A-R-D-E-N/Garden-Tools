@@ -601,7 +601,7 @@ TEST(CApiQuest, AbiVersionMatchesTheHeader) {
   EXPECT_GE(RADICLE_ABI_VERSION, 66u);
 }
 
-TEST(CApiQuest, AbiVersionIsOneHundredSix) {
-  EXPECT_EQ(radicle_abi_version(), 106u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, 106u);
+TEST(CApiQuest, AbiVersionIsOneHundredEight) {
+  EXPECT_EQ(radicle_abi_version(), 108u);
+  EXPECT_EQ(RADICLE_ABI_VERSION, 108u);
 }
