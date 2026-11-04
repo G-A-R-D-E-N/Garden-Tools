@@ -140,7 +140,6 @@ std::vector<std::byte> infoCopySourceBytes() {
     fo4::test::end_record(out, quest);
     const auto questChildren = beginGroupRaw(
         out, 0x00000800u, fo4::GroupType::cell_visible_distant_children);
-    const auto dialTop = fo4::test::begin_group(out, "DIAL", 0);
     const auto dial = fo4::test::begin_record(out, "DIAL", 0, 0x00000801u, 131);
     fo4::test::end_record(out, dial);
     const auto topic = beginGroupRaw(out, 0x00000801u, fo4::GroupType::topic_children);
@@ -148,7 +147,6 @@ std::vector<std::byte> infoCopySourceBytes() {
     fo4::test::write_subrecord(out, "EDID", std::string_view{"BackendInfo\0", 12});
     fo4::test::end_record(out, info);
     endGroupRaw(out, topic);
-    fo4::test::end_group(out, dialTop);
     endGroupRaw(out, questChildren);
     fo4::test::end_group(out, questTop);
     return out.bytes;
@@ -162,12 +160,10 @@ std::vector<std::byte> infoCopyTargetBytes() {
     fo4::test::end_record(out, quest);
     const auto questChildren = beginGroupRaw(
         out, 0x00000800u, fo4::GroupType::cell_visible_distant_children);
-    const auto dialTop = fo4::test::begin_group(out, "DIAL", 0);
     const auto dial = fo4::test::begin_record(out, "DIAL", 0, 0x00000801u, 131);
     fo4::test::end_record(out, dial);
     const auto topic = beginGroupRaw(out, 0x00000801u, fo4::GroupType::topic_children);
     endGroupRaw(out, topic);
-    fo4::test::end_group(out, dialTop);
     endGroupRaw(out, questChildren);
     fo4::test::end_group(out, questTop);
     return out.bytes;

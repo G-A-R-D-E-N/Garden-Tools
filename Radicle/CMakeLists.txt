@@ -191,6 +191,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
+  src/forms/dialogue_authoring.cpp
   src/forms/copy_as_new.cpp
   src/forms/copy_as_wrapper.cpp
   src/forms/placed_reference_edit.cpp
@@ -749,6 +750,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_copy_as_new.cpp
     tests/test_copy_as_wrapper.cpp
     tests/test_info_copy_new.cpp
+    tests/test_dialogue_authoring.cpp
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
