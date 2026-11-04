@@ -360,7 +360,7 @@ TEST(PapyrusAnalysisService, SignatureHelpCountsCommasToActiveParameter) {
   EXPECT_TRUE(json["active"].get<bool>());
   EXPECT_EQ(json["activeParameter"].get<int>(), 2);
   EXPECT_EQ(json["signatures"][0]["label"].get<std::string>(),
-            "Function Pick(Int first, Int second, Int third)");
+            "Function Pick(int first, int second, int third)");
   EXPECT_EQ(json["signatures"][0]["parameters"].size(), 3u);
 }
 
@@ -520,7 +520,7 @@ TEST(PapyrusAnalysisService, SignatureHelpSkipsEscapedQuoteInsideString) {
   EXPECT_TRUE(json["active"].get<bool>());
   EXPECT_EQ(json["activeParameter"].get<int>(), 1);
   EXPECT_EQ(json["signatures"][0]["label"].get<std::string>(),
-            "Function Pick(String first, Int second)");
+            "Function Pick(string first, int second)");
 }
 
 TEST(PapyrusAnalysisService, SignatureHelpIsInactiveInsideString) {
