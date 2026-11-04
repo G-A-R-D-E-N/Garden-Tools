@@ -471,6 +471,7 @@ TEST_CASE("Staged string edits save as loose files and keep untouched ids byte-i
     writeStrings(root);
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root);
+    backend.testSetJournalRoot(root / "journal");
     const auto path = root / "Strings" / "Patch_en.STRINGS";
     const auto original = fo4::localization::read_string_table_file(path, StringTableKind::strings);
 
@@ -655,7 +656,7 @@ TEST_CASE("DiscardPlugin on a clean plugin drops its staged string edits (regres
     CHECK_FALSE(page.contains("pending"));
 }
 
-TEST_CASE("Saving string tables into the backend Data folder is refused and leaves the file unchanged") {
+TEST_CASE("Editing and saving string tables in the backend Data folder is refused and leaves the file unchanged") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto data = root / "Data";
@@ -663,7 +664,10 @@ TEST_CASE("Saving string tables into the backend Data folder is refused and leav
     fo4ide::plugin::RadiclePluginBackend backend;
     backend.setDataDirectory(data);
     loadPlugin(backend, data);
-    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"})).has_value());
+
+    const auto edit = backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"}));
+    REQUIRE_FALSE(edit.has_value());
+    CHECK(edit.error().type == "StringSavePathNotAllowed");
 
     const auto refused = backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""}));
     REQUIRE_FALSE(refused.has_value());
@@ -679,6 +683,7 @@ TEST_CASE("English string text outside Windows-1252 is refused, and Windows-1252
     writeStrings(root);
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root);
+    backend.testSetJournalRoot(root / "journal");
 
     const auto refused = backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "\xCE\xA9 mega"}));
     REQUIRE_FALSE(refused.has_value());
@@ -720,6 +725,7 @@ TEST_CASE("Import merge keeps explicit ids below the next free id and exports ro
     writeStrings(root);
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root);
+    backend.testSetJournalRoot(root / "journal");
 
     const std::string listing = R"({"rows":[{"id":7,"text":"Seven"},{"id":10,"text":"Apple tart"}]})";
     REQUIRE(backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", listing, "merge"})).has_value());

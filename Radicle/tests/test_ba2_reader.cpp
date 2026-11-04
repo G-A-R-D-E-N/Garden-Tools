@@ -116,7 +116,7 @@ TEST_F(Ba2ReaderTest, IndexesGeneralArchiveAndExtractsOnDemand) {
 TEST_F(Ba2ReaderTest, SnapshotHashesBoundedPayloadAndRejectsSourceMutation) {
   Ba2GeneralArchive archive;
   archive.entries.push_back(general("Meshes\\Weapons\\Gun.nif", "gun-bytes"));
-  archive.entries.push_back(general("Strings\\Small.txt", "x", true));
+  archive.entries.push_back(general("Strings\\Small.txt", std::string(16, 'x'), true));
   const auto archive_bytes = fo4::archive::write_ba2_general(archive);
   auto source = std::make_shared<MutableBa2Source>(archive_bytes);
   auto snapshot = Ba2Snapshot::open(source);
@@ -144,7 +144,7 @@ TEST_F(Ba2ReaderTest, SnapshotHashesBoundedPayloadAndRejectsSourceMutation) {
   const auto batch = snapshot.extract_many(indices, 64);
   ASSERT_EQ(batch.size(), 2u);
   EXPECT_EQ(batch[0].bytes, payload.bytes);
-  EXPECT_EQ(batch[1].size, 1u);
+  EXPECT_EQ(batch[1].size, 16u);
   EXPECT_THROW(static_cast<void>(snapshot.extract_many(indices, 10)), Ba2Error);
   // Detects: a multi-table batch must perform a constant number of whole-source hashes, independent of table count.
   auto counted = std::make_shared<MutableBa2Source>(archive_bytes);

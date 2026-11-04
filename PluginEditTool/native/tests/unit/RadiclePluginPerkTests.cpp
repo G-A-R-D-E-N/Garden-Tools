@@ -334,6 +334,7 @@ TEST_CASE("Native CreateRecord writes localized PERK text as string IDs past the
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, masterPath, patchPath);
+    backend.testSetJournalRoot(root / "journal");
     const auto formKey = createPerk(backend, nlohmann::json{
         {"editorId", "LocalPerk"}, {"full", "New name"}, {"desc", "New description"}
     });

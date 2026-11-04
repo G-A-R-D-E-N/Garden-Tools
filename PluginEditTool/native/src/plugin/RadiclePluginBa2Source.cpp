@@ -206,7 +206,7 @@ std::vector<std::string> Ba2ReadRoot::list(const std::filesystem::path& relative
     dirs.verify();
     for (const auto& name : components(relativeDirectory)) dirs.append(name);
     Handle scan(dirs.held.back()->fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-    std::unique_ptr<DIR, decltype(&::closedir)> stream(::fdopendir(scan.fd), ::closedir);
+    std::unique_ptr<DIR, int (*)(DIR*)> stream(::fdopendir(scan.fd), ::closedir);
     if (!stream) throw std::runtime_error("cannot enumerate BA2 source directory");
     scan.fd = -1;
     struct stat before{}, after{};

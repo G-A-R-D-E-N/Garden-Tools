@@ -169,7 +169,7 @@ void writeStringTable(const std::filesystem::path& path,
 TEST_CASE("Windows Papyrus snapshots accept ordinary case-insensitive root spelling") {
     const auto root = tempRoot(); Cleanup cleanup{root};
     std::filesystem::create_directories(root / "base");
-    { std::ofstream out(root / "base" / "Quest.psc"); out << "Scriptname Quest\n"; }
+    { std::ofstream out(root / "base" / "Quest.psc", std::ios::binary); out << "Scriptname Quest\n"; }
     const auto handle = ::CreateFileW((root / "BASE").c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
         FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
@@ -193,7 +193,7 @@ TEST_CASE("Windows authorized Papyrus root remains tied to its opened directory"
             const auto outside = root / "outside";
             std::filesystem::create_directories(imports);
             std::filesystem::create_directories(outside);
-            { std::ofstream out(imports / "Original.psc"); out << "Scriptname Original\n"; }
+            { std::ofstream out(imports / "Original.psc", std::ios::binary); out << "Scriptname Original\n"; }
             { std::ofstream out(outside / "Outside.psc"); out << "Scriptname Outside\n"; }
             const auto handle = ::CreateFileW(imports.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
@@ -536,6 +536,7 @@ TEST_CASE("Native CreateRecord QUST stages localized title text and persists its
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPatch(backend, path);
+    backend.testSetJournalRoot(root / "journal");
     const auto created = parseResult(backend.invokeBackend(
         "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
             {"editorId", "CoLocal"}, {"name", "Localized title"}}})));

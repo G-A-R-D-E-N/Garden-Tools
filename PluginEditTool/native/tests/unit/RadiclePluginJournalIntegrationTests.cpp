@@ -830,12 +830,14 @@ TEST_CASE("Journal save sweeps orphaned authority sidecars without a manifest") 
     const auto root = tempRoot(); Cleanup cleanup{root};
     fo4ide::plugin::RadiclePluginBackend backend; backend.testSetJournalRoot(root / "journal");
     stageQuestFragment(backend, root);
-    std::filesystem::create_directories(root / "journal");
-    std::filesystem::permissions(root / "journal", std::filesystem::perms::owner_all);
     std::vector<std::filesystem::path> orphans;
-    for (char digit = '0'; digit <= '7'; ++digit) {
-        orphans.push_back(root / "journal" / (std::string(31, '0') + digit + ".authority"));
-        writeBytes(orphans.back(), bytes("orphan"));
+    {
+        JournalRoot journal(root / "journal");
+        for (char digit = '0'; digit <= '7'; ++digit) {
+            const auto name = std::string(31, '0') + digit + ".authority";
+            journal.writeFile(name, bytes("orphan"));
+            orphans.push_back(root / "journal" / name);
+        }
     }
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     for (const auto& orphan : orphans) CHECK_FALSE(std::filesystem::exists(orphan));

@@ -500,6 +500,7 @@ TEST_CASE("Native SetQuestObjectives stages localized NNAM text in STRINGS until
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    backend.testSetJournalRoot(root / "journal");
     REQUIRE(backend.invoke(
         "strings.SetString",
         nlohmann::json::array({"Patch.esp", "en", "STRINGS", 100, "Edited before"})).has_value());
@@ -574,6 +575,7 @@ TEST_CASE("Native localized objective staging failure after map insertion publis
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    backend.testSetJournalRoot(root / "journal");
     REQUIRE(backend.invoke(
         "strings.SetString",
         nlohmann::json::array({"Patch.esp", "en", "STRINGS", 100, "Pending"})).has_value());
@@ -616,6 +618,7 @@ TEST_CASE("Native SetQuestObjectives combines with a pending localized log sidec
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    backend.testSetJournalRoot(root / "journal");
     REQUIRE(backend.invokeBackend(
         "SetQuestStages",
         nlohmann::json::array({

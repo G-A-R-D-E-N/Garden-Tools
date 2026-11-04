@@ -335,6 +335,7 @@ TEST_CASE("Localized CNAM stages sidecars until SavePlugin") {
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadEnvironment(backend, {{"Patch.esp", path}});
+    backend.testSetJournalRoot(root / "journal");
 
     const auto staged = backend.invokeBackend(
         "SetQuestStages",
@@ -385,6 +386,7 @@ TEST_CASE("Repeated localized CNAM edits accumulate in staged sidecars until Sav
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadEnvironment(backend, {{"Patch.esp", path}});
+    backend.testSetJournalRoot(root / "journal");
 
     const auto first = backend.invokeBackend(
         "SetQuestStages",
