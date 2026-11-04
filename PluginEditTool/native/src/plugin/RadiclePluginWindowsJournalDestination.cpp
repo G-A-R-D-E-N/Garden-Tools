@@ -330,7 +330,7 @@ JournalDestination::JournalDestination(const std::filesystem::path& root, const 
             next = openChild(parent, names[i], true);
         }
         if (!next) {
-            if (captureOnly && i >= rootCount) throw JournalDirectoryAbsent("journal source directory is absent");
+            if (i >= rootCount && (captureOnly || !createDirectories)) throw JournalDirectoryAbsent("journal directory is absent");
             throw std::runtime_error("destination directory is absent");
         }
         requireSafe(next.get(), true, i + 1 < rootCount);

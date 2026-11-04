@@ -115,6 +115,35 @@ TEST_CASE("Windows JournalSession preflights later conflicts before changing any
 #endif
 }
 
+TEST_CASE("Windows JournalSession creates a missing Strings directory for a pending table and rolls it forward") {
+#if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
+    namespace fs = std::filesystem;
+    const auto root = makeSplitRoot(); Cleanup cleanup{root}; makeSplitData(root / "data");
+    writeSplitFile(root / "data" / "Patch.esp", "old-plugin");
+    fs::create_directory(root / "data" / "reference");
+    const auto roots = sessionRoots(root);
+    const auto table = splitBytes("new-dialogue");
+    JournalInput dialogue{"dlstrings", "en", false, "", 0, std::vector<std::byte>(table.begin(), table.end())};
+    dialogue.rootSelector = root / "data"; dialogue.directories = {"Strings"};
+    const std::vector<JournalSourceSet> sources{{"strings", root / "data", {"Strings"}, {}, false}};
+    SessionHookReset hooks;
+    sessionPreparedReached = false;
+    {
+        JournalSession session(root / "records");
+        setWindowsJournalSessionHook(stopSessionPrepared);
+        CHECK_THROWS_AS(session.publish(roots, {sessionInputs().front(), dialogue}, sources), JournalRecoveryRequired);
+        setWindowsJournalSessionHook(nullptr);
+    }
+    REQUIRE(sessionPreparedReached);
+    REQUIRE(fs::is_directory(root / "data" / "Strings"));
+    CHECK(splitSecurity(root / "data" / "Strings") == splitSecurity(root / "data" / "reference"));
+    { JournalSession recovered(root / "records"); CHECK_NOTHROW(recovered.recover({roots})); }
+    CHECK(readSplitFile(root / "data" / "Strings" / "Patch_en.DLSTRINGS") == std::vector<std::byte>(table.begin(), table.end()));
+    const auto newPluginBytes = splitBytes("new-plugin");
+    CHECK(readSplitFile(root / "data" / "Patch.esp") == std::vector<std::byte>(newPluginBytes.begin(), newPluginBytes.end()));
+#endif
+}
+
 TEST_CASE("Windows multi-file recovery worker", "[.windows-session-worker]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     const auto root = std::filesystem::path(splitEnvironment(L"FO4IDE_SPLIT_ROOT"));
@@ -232,7 +261,7 @@ TEST_CASE("Windows JournalSession recovers staged receipts exposure and plugin-l
             CHECK((extension == ".lock" || (phase == 10 && extension == ".retained")));
         }
         CHECK(readSplitFile(root / "data" / "Patch.esp") == std::vector<std::byte>(splitBytes("new-plugin").begin(), splitBytes("new-plugin").end()));
-        CHECK(readSplitFile(root / "data" / "Patch_en.STRINGS") == std::vector<std::byte>(splitBytes("new-table").begin(), splitBytes("new-table").end()));
+    CHECK(readSplitFile(root / "data" / "Patch_en.STRINGS") == std::vector<std::byte>(splitBytes("new-table").begin(), splitBytes("new-table").end()));
         CHECK(readSplitFile(root / "data" / "Patch_en.DLSTRINGS") == std::vector<std::byte>(splitBytes("new-dialogue").begin(), splitBytes("new-dialogue").end()));
         const auto dlstrings = splitSecurity(root / "data" / "Patch_en.DLSTRINGS");
         const auto withoutInheritedFlag = [](std::wstring text) {

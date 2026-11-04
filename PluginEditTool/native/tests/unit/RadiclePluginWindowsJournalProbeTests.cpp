@@ -428,6 +428,8 @@ TEST_CASE("Windows destination never creates an absent authorized root or absent
     const auto identity = fo4ide::plugin::detail::JournalDestination::captureRoot(root / "data");
     CHECK_THROWS_AS(fo4ide::plugin::detail::JournalDestination::listDirectory(root / "data", {"absent", "child"}, identity), fo4ide::plugin::detail::JournalDirectoryAbsent);
     CHECK_FALSE(fs::exists(root / "data" / "absent"));
+    CHECK_THROWS_AS(fo4ide::plugin::detail::JournalDestination(root / "data", {"absent", "child"}, "destination", false), fo4ide::plugin::detail::JournalDirectoryAbsent);
+    CHECK_FALSE(fs::exists(root / "data" / "absent"));
 #endif
 }
 

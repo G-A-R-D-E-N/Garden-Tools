@@ -444,8 +444,13 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
     }
 #if defined(_WIN32)
     WindowsJournalDirectory windowsJournal(root_.nativeHandle());
-    if (std::any_of(targets.begin(), targets.end(), [](const auto& target) { return !target; }))
-        throw std::runtime_error("journal destination directory is absent");
+    for (std::size_t index = 0; index < targets.size(); ++index) {
+        if (targets[index]) continue;
+        const auto& entry = manifest.files[index];
+        if (entry.kind != "strings" && entry.kind != "dlstrings" && entry.kind != "ilstrings")
+            throw std::runtime_error("journal destination directory is absent");
+        targets[index] = destination(entry, roots, paths[index], true);
+    }
     const auto authority = WindowsJournalSessionState::authorize(windowsJournal, document, manifest, paths, targets);
     if (windowsHook) windowsHook(WindowsJournalSessionStep::preflightComplete, 0, {}, {});
 #endif
