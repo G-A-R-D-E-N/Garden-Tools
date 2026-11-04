@@ -185,6 +185,20 @@ radicle_status radicle_plugin_create_dialogue_info(radicle_plugin* plugin, radic
   });
 }
 
+radicle_status radicle_plugin_update_dialogue_info(radicle_plugin* plugin, radicle_form_key info,
+                                                   const radicle_dialogue_info_spec* spec) {
+  clear_error();
+  const auto info_key = to_form_key(info);
+  if (plugin == nullptr || spec == nullptr || !info_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid INFO key and spec are required");
+  }
+  return guarded("unknown exception while updating a dialogue INFO", [&] {
+    fo4::forms::DialogueInfoSpec native;
+    if (const auto status = native_info(*spec, native); status != RADICLE_STATUS_OK) return status;
+    return status_result(fo4::forms::update_dialogue_info(plugin->value, *info_key, native));
+  });
+}
+
 radicle_status radicle_plugin_remove_dialogue_info(radicle_plugin* plugin, radicle_form_key info) {
   clear_error();
   const auto info_key = to_form_key(info);

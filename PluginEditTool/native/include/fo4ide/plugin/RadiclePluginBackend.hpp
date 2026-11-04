@@ -327,6 +327,14 @@ private:
     Result<nlohmann::json> getQuestObjectives(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getQuestStages(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getQuestAliases(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> createDialogueBranch(const nlohmann::json& arguments);
+    Result<nlohmann::json> createDialogueTopic(const nlohmann::json& arguments);
+    Result<nlohmann::json> setDialogueBranchStart(const nlohmann::json& arguments);
+    Result<nlohmann::json> createInfo(const nlohmann::json& arguments);
+    Result<nlohmann::json> setInfo(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeInfo(const nlohmann::json& arguments);
+    Result<nlohmann::json> getDialogue(const nlohmann::json& arguments) const;
+    std::optional<fo4::RawFormId> resolveDialogueEditorId(const fo4::Plugin& target, std::string_view text) const;
     // Resolves a list value (FormKey text or EditorID) to a FormKey against the
     // loaded plugins, mirroring WriteService.ResolveFk.
     std::optional<fo4::FormKey> resolveListValue(std::string_view value) const;
