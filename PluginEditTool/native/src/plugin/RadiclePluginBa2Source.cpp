@@ -16,18 +16,33 @@
 #include <unistd.h>
 #endif
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <winternl.h>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#endif
+
 namespace fo4ide::plugin::detail {
 #ifdef FO4IDE_TEST_HOOKS
 namespace { std::atomic<Ba2ReadHook> readHook{nullptr}; }
 void setBa2ReadHook(Ba2ReadHook hook) { readHook.store(hook); }
 #endif
 namespace {
-#ifdef __linux__
+#if defined(__linux__) || defined(_WIN32)
 class ReadDirectoryAbsent : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
+#endif
 
+#ifdef __linux__
 struct Handle {
     int fd;
     Handle(int parent, const char* name, int flags) : fd(::openat(parent, name, flags)) {
@@ -136,12 +151,213 @@ private:
     Handle file_;
     struct stat initial_{};
 };
+#elif defined(_WIN32)
+struct Handle {
+    HANDLE handle;
+    explicit Handle(HANDLE value) : handle(value) {}
+    ~Handle() { ::CloseHandle(handle); }
+    Handle(const Handle&) = delete;
+    Handle& operator=(const Handle&) = delete;
+};
+
+HANDLE openChild(HANDLE parent, std::wstring name, ACCESS_MASK access, ULONG options) {
+    UNICODE_STRING component{};
+    component.Length = static_cast<USHORT>(name.size() * sizeof(wchar_t));
+    component.MaximumLength = component.Length;
+    component.Buffer = name.data();
+    OBJECT_ATTRIBUTES attributes{};
+    attributes.Length = sizeof(attributes);
+    attributes.RootDirectory = parent;
+    attributes.ObjectName = &component;
+    attributes.Attributes = OBJ_CASE_INSENSITIVE;
+    HANDLE handle = nullptr;
+    IO_STATUS_BLOCK ioStatus{};
+    const NTSTATUS status = NtCreateFile(&handle, access | FILE_READ_ATTRIBUTES | SYNCHRONIZE, &attributes, &ioStatus,
+                                         nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_OPEN,
+                                         options | FILE_SYNCHRONOUS_IO_NONALERT, nullptr, 0);
+    if (status < 0) throw std::system_error(static_cast<int>(RtlNtStatusToDosError(status)), std::system_category(), "cannot open BA2 read source");
+    return handle;
+}
+
+HANDLE openBase(const std::filesystem::path& base) {
+    const HANDLE handle = ::CreateFileW(base.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(), "cannot open BA2 read root");
+    return handle;
+}
+
+struct Identity {
+    std::uint64_t volume{};
+    std::array<std::byte, 16> file{};
+    bool operator==(const Identity&) const = default;
+};
+
+struct Snapshot {
+    Identity identity{};
+    std::int64_t size{};
+    std::int64_t written{};
+    std::int64_t changed{};
+    DWORD attributes{};
+    DWORD links{};
+};
+
+Snapshot inspect(HANDLE handle) {
+    FILE_ID_INFO id{};
+    FILE_BASIC_INFO basic{};
+    FILE_STANDARD_INFO standard{};
+    if (!::GetFileInformationByHandleEx(handle, FileIdInfo, &id, sizeof(id)) ||
+        !::GetFileInformationByHandleEx(handle, FileBasicInfo, &basic, sizeof(basic)) ||
+        !::GetFileInformationByHandleEx(handle, FileStandardInfo, &standard, sizeof(standard)))
+        throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(), "cannot inspect BA2 read source");
+    Snapshot result{};
+    result.identity.volume = id.VolumeSerialNumber;
+    std::memcpy(result.identity.file.data(), id.FileId.Identifier, sizeof(id.FileId.Identifier));
+    result.size = standard.EndOfFile.QuadPart;
+    result.written = basic.LastWriteTime.QuadPart;
+    result.changed = basic.ChangeTime.QuadPart;
+    result.attributes = basic.FileAttributes;
+    result.links = standard.NumberOfLinks;
+    return result;
+}
+
+bool identical(const Snapshot& a, const Snapshot& b) {
+    return a.identity == b.identity && a.size == b.size && a.written == b.written && a.changed == b.changed;
+}
+
+bool regularFile(const Snapshot& s) {
+    return (s.attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0 && s.links == 1;
+}
+
+bool plainDirectory(const Snapshot& s) {
+    return (s.attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY;
+}
+
+std::vector<std::wstring> components(const std::filesystem::path& path) {
+    std::vector<std::wstring> result;
+    for (const auto& part : path) {
+        auto name = part.wstring();
+        if (name.empty() || name == L"." || name == L".." || name.size() > 255 ||
+            name.find_first_of(L"/\\:") != name.npos || name.find(L'\0') != name.npos || result.size() == 128)
+            throw std::runtime_error("invalid BA2 source path");
+        result.push_back(std::move(name));
+    }
+    return result;
+}
+
+struct Directories {
+    std::filesystem::path base{};
+    std::vector<std::shared_ptr<Handle>> held{};
+    std::vector<std::wstring> names{};
+    void verify() const {
+        for (const auto& directory : held) {
+            if (!plainDirectory(inspect(directory->handle))) throw std::runtime_error("unsafe BA2 read directory");
+        }
+    }
+    void append(const std::wstring& name) {
+        if (held.size() >= 129) throw std::runtime_error("BA2 source path too deep");
+        std::shared_ptr<Handle> next;
+        try { next = std::make_shared<Handle>(openChild(held.back()->handle, name, FILE_LIST_DIRECTORY, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT)); }
+        catch (const std::system_error& error) {
+            if (error.code().value() != ERROR_FILE_NOT_FOUND && error.code().value() != ERROR_PATH_NOT_FOUND) throw;
+            verify();
+            throw ReadDirectoryAbsent("BA2 read directory is absent");
+        }
+        names.push_back(name);
+        held.push_back(std::move(next));
+        verify();
+    }
+};
+
+std::string utf8Name(std::wstring_view wide) {
+    const auto size = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+    if (size <= 0 || wide.find(L'\0') != wide.npos) throw std::runtime_error("BA2 source directory entry name is invalid");
+    std::string result(static_cast<std::size_t>(size), '\0');
+    if (::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), static_cast<int>(wide.size()), result.data(), size, nullptr, nullptr) != size)
+        throw std::runtime_error("BA2 source directory entry name is invalid");
+    return result;
+}
+
+std::wstring finalPath(HANDLE handle) {
+    std::wstring path(MAX_PATH, L'\0');
+    for (;;) {
+        const auto length = ::GetFinalPathNameByHandleW(handle, path.data(), static_cast<DWORD>(path.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+        if (length == 0) throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(), "cannot resolve BA2 read directory");
+        if (length < path.size()) return std::wstring(path.data(), length);
+        path.resize(length);
+    }
+}
+
+std::vector<std::string> listDirectory(const Directories& dirs, std::size_t maxEntries) {
+    const HANDLE directory = dirs.held.back()->handle;
+    const auto before = inspect(directory);
+    if (!plainDirectory(before)) throw std::runtime_error("unsafe BA2 read directory");
+    const auto path = finalPath(directory);
+    std::vector<std::string> names;
+    for (const auto& entry : std::filesystem::directory_iterator(path)) {
+        const auto name = entry.path().filename().wstring();
+        if (name == L"." || name == L"..") continue;
+        if (names.size() == maxEntries) throw std::runtime_error("BA2 source directory entry limit exceeded");
+        names.push_back(utf8Name(name));
+    }
+    const auto after = inspect(directory);
+    const Handle resolved(openBase(path));
+    const auto reopened = inspect(resolved.handle);
+    if (!identical(before, after) || !plainDirectory(after) || reopened.identity != before.identity || !plainDirectory(reopened))
+        throw std::runtime_error("BA2 source directory changed during enumeration");
+    dirs.verify();
+    std::sort(names.begin(), names.end());
+    if (std::adjacent_find(names.begin(), names.end()) != names.end()) throw std::runtime_error("BA2 source directory returned duplicate entries");
+    return names;
+}
+
+class Source final : public fo4::archive::Ba2ByteSource {
+public:
+    Source(Directories dirs, std::wstring name, std::uint64_t maxBytes)
+        : dirs_(std::move(dirs)), name_(std::move(name)),
+          file_(openChild(dirs_.held.back()->handle, name_, FILE_READ_DATA, FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT)) {
+        initial_ = inspect(file_.handle);
+        if (!regularFile(initial_) || initial_.size < 0 || static_cast<std::uint64_t>(initial_.size) > maxBytes)
+            throw std::runtime_error("unsafe or oversized BA2 source");
+        verify();
+    }
+    std::uint64_t size() const noexcept override { return static_cast<std::uint64_t>(initial_.size); }
+    void read(std::uint64_t offset, std::span<std::byte> out) const override {
+        if (offset > size() || out.size() > size() - offset)
+            throw std::runtime_error("BA2 read outside source");
+#ifdef FO4IDE_TEST_HOOKS
+        if (const auto hook = readHook.load()) hook(offset, out.size(), size());
+#endif
+        verify();
+        while (!out.empty()) {
+            const auto count = static_cast<DWORD>(std::min<std::size_t>(out.size(), 1024 * 1024));
+            OVERLAPPED position{};
+            position.Offset = static_cast<DWORD>(offset);
+            position.OffsetHigh = static_cast<DWORD>(offset >> 32);
+            DWORD got = 0;
+            if (!::ReadFile(file_.handle, out.data(), count, &got, &position) || got == 0)
+                throw std::runtime_error("BA2 source read failed");
+            out = out.subspan(static_cast<std::size_t>(got));
+            offset += got;
+        }
+        verify();
+    }
+private:
+    void verify() const {
+        dirs_.verify();
+        const auto current = inspect(file_.handle);
+        if (!identical(initial_, current) || !regularFile(current)) throw std::runtime_error("BA2 source changed");
+    }
+    Directories dirs_;
+    std::wstring name_;
+    Handle file_;
+    Snapshot initial_{};
+};
 #endif
 }
 
 struct Ba2ReadRoot::Impl {
     std::filesystem::path root;
-#ifdef __linux__
+#if defined(__linux__) || defined(_WIN32)
     Directories directories;
 #endif
 };
@@ -153,6 +369,16 @@ Ba2ReadRoot Ba2ReadRoot::authorize(const std::filesystem::path& root) {
     auto impl = std::make_shared<Impl>();
     impl->root = root;
     impl->directories.held.push_back(std::make_shared<Handle>(AT_FDCWD, "/", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
+    impl->directories.verify();
+    for (const auto& name : names) impl->directories.append(name);
+    return Ba2ReadRoot(std::move(impl));
+#elif defined(_WIN32)
+    if (!root.is_absolute() || root != root.lexically_normal()) throw std::runtime_error("BA2 read root must be normalized and absolute");
+    const auto names = components(root.relative_path());
+    auto impl = std::make_shared<Impl>();
+    impl->root = root;
+    impl->directories.base = root.root_path();
+    impl->directories.held.push_back(std::make_shared<Handle>(openBase(impl->directories.base)));
     impl->directories.verify();
     for (const auto& name : names) impl->directories.append(name);
     return Ba2ReadRoot(std::move(impl));
@@ -175,6 +401,14 @@ bool Ba2ReadRoot::sameRoot(const Ba2ReadRoot& other) const {
     impl_->directories.verify();
     other.impl_->directories.verify();
     return first.st_dev == second.st_dev && first.st_ino == second.st_ino;
+#elif defined(_WIN32)
+    impl_->directories.verify();
+    other.impl_->directories.verify();
+    const auto first = inspect(impl_->directories.held.back()->handle);
+    const auto second = inspect(other.impl_->directories.held.back()->handle);
+    impl_->directories.verify();
+    other.impl_->directories.verify();
+    return first.identity == second.identity;
 #else
     (void)other;
     throw std::runtime_error("held BA2 read sources require Linux");
@@ -183,7 +417,7 @@ bool Ba2ReadRoot::sameRoot(const Ba2ReadRoot& other) const {
 
 std::shared_ptr<const fo4::archive::Ba2ByteSource> Ba2ReadRoot::open(
     const std::filesystem::path& relative, std::uint64_t maxBytes) const {
-#ifdef __linux__
+#if defined(__linux__) || defined(_WIN32)
     if (!impl_ || relative.is_absolute()) throw std::runtime_error("invalid BA2 read authority");
     auto names = components(relative);
     if (names.empty()) throw std::runtime_error("missing BA2 source filename");
@@ -234,6 +468,12 @@ std::vector<std::string> Ba2ReadRoot::list(const std::filesystem::path& relative
     if (std::adjacent_find(names.begin(), names.end()) != names.end())
         throw std::runtime_error("BA2 source directory returned duplicate entries");
     return names;
+#elif defined(_WIN32)
+    if (!impl_ || relativeDirectory.is_absolute()) throw std::runtime_error("invalid BA2 read authority");
+    auto dirs = impl_->directories;
+    dirs.verify();
+    for (const auto& name : components(relativeDirectory)) dirs.append(name);
+    return listDirectory(dirs, maxEntries);
 #else
     (void)relativeDirectory;
     (void)maxEntries;
@@ -243,7 +483,7 @@ std::vector<std::string> Ba2ReadRoot::list(const std::filesystem::path& relative
 
 std::optional<std::vector<std::string>> Ba2ReadRoot::listOptional(const std::filesystem::path& relativeDirectory,
                                                                    std::size_t maxEntries) const {
-#ifdef __linux__
+#if defined(__linux__) || defined(_WIN32)
     try { return list(relativeDirectory, maxEntries); }
     catch (const ReadDirectoryAbsent&) { return std::nullopt; }
 #else

@@ -186,3 +186,169 @@ TEST_CASE_METHOD(Ba2ReadSourceTest, "UnprivilegedReaderCanReadRootOwnedProtected
 }
 }
 #endif
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#include <array>
+#include <cstddef>
+#include <cstdlib>
+#include <exception>
+#include <fstream>
+#include <string>
+#include <vector>
+#include "../helpers/TempRoot.hpp"
+
+namespace {
+using fo4ide::plugin::detail::Ba2ReadRoot;
+struct Ba2ReadSourceTest {
+    fo4ide_test::TempRoot temp{"ba2-source"};
+    std::filesystem::path path = temp.path();
+    Ba2ReadSourceTest() {
+        std::filesystem::create_directory(path / "data");
+        std::ofstream(path / "data/archive.ba2") << "original";
+    }
+    ~Ba2ReadSourceTest() {
+        ::SetFileAttributesW((path / "data/archive.ba2").c_str(), FILE_ATTRIBUTE_NORMAL);
+        ::RemoveDirectoryW((path / "alias").c_str());
+        std::error_code error;
+        std::filesystem::remove_all(path, error);
+    }
+};
+
+void makeJunction(const std::filesystem::path& link, const std::filesystem::path& target) {
+    const auto command = "mklink /J \"" + link.string() + "\" \"" + target.string() + "\"";
+    REQUIRE(std::system(command.c_str()) == 0);
+}
+
+// Invariant, detects: a hard-linked BA2, or a traversal, stream-suffix or drive-relative name, opened as a held source.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows refuses held reads through hard links and unsafe names", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    std::filesystem::create_hard_link(path / "data/archive.ba2", path / "hard.ba2");
+    REQUIRE_THROWS_AS(root.open("data/archive.ba2", 8), std::exception);
+    std::filesystem::remove(path / "hard.ba2");
+    REQUIRE_NOTHROW(root.open("data/archive.ba2", 8));
+    REQUIRE_THROWS_AS(root.open("data/../data/archive.ba2", 8), std::exception);
+    REQUIRE_THROWS_AS(root.open("data/archive.ba2:stream", 8), std::exception);
+    REQUIRE_THROWS_AS(root.open("C:archive.ba2", 8), std::exception);
+}
+
+// Invariant, detects: another process overwriting or deleting a BA2 while a held source reads it, or a held source reading or opening past its authorized size.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows refuses writers and deleters of a held BA2", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    auto source = root.open("data/archive.ba2", 8);
+    REQUIRE_THROWS_AS(root.open("data/archive.ba2", 7), std::exception);
+    std::ofstream writer(path / "data/archive.ba2");
+    CHECK_FALSE(writer.is_open());
+    CHECK_FALSE(::DeleteFileW((path / "data/archive.ba2").c_str()));
+    std::array<std::byte, 8> bytes{};
+    REQUIRE_NOTHROW(source->read(0, bytes));
+    REQUIRE(std::string(reinterpret_cast<char*>(bytes.data()), bytes.size()) == "original");
+    REQUIRE_THROWS_AS(source->read(1, bytes), std::exception);
+}
+
+// Invariant, detects: an authorized folder renamed away under a live root, so later reads reach a different folder.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows refuses renaming a held authorized directory until the root is released", "[ba2][held-source]") {
+    {
+        auto root = Ba2ReadRoot::authorize(path / "data");
+        std::error_code error;
+        std::filesystem::rename(path / "data", path / "old", error);
+        CHECK(static_cast<bool>(error));
+    }
+    std::filesystem::rename(path / "data", path / "old");
+}
+
+// Invariant, detects: a held source that keeps reading after an outside process changes the file's timestamps.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows read fails after a held BA2 timestamp changes", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    auto source = root.open("data/archive.ba2", 8);
+    std::array<std::byte, 8> bytes{};
+    REQUIRE_NOTHROW(source->read(0, bytes));
+    const HANDLE file = ::CreateFileW((path / "data/archive.ba2").c_str(), FILE_WRITE_ATTRIBUTES,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+    REQUIRE(file != INVALID_HANDLE_VALUE);
+    SYSTEMTIME moment{};
+    moment.wYear = 2001;
+    moment.wMonth = 1;
+    moment.wDay = 1;
+    FILETIME written{};
+    REQUIRE(::SystemTimeToFileTime(&moment, &written));
+    const BOOL changed = ::SetFileTime(file, nullptr, nullptr, &written);
+    ::CloseHandle(file);
+    REQUIRE(changed);
+    REQUIRE_THROWS_AS(source->read(0, bytes), std::exception);
+}
+
+// Invariant, detects: two roots at different depths compared as the same root.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows sameRoot separates a directory from its parent", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path / "data");
+    auto again = Ba2ReadRoot::authorize(path / "data");
+    auto parent = Ba2ReadRoot::authorize(path);
+    CHECK(root.sameRoot(again));
+    CHECK_FALSE(root.sameRoot(parent));
+}
+
+// Invariant, detects: a directory junction on the authorized path followed by authorize, open or list, and a listing reused between calls so an added or removed entry is missed.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows refuses reparse point directories in authorize open and list and tracks entries between calls", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    REQUIRE(root.list("data", 2) == std::vector<std::string>{"archive.ba2"});
+    std::ofstream(path / "data/added.ba2") << "added";
+    REQUIRE(root.list("data", 3) == std::vector<std::string>{"added.ba2", "archive.ba2"});
+    std::filesystem::remove(path / "data/archive.ba2");
+    REQUIRE(root.list("data", 2) == std::vector<std::string>{"added.ba2"});
+    makeJunction(path / "alias", path / "data");
+    REQUIRE_THROWS_AS(Ba2ReadRoot::authorize(path / "alias"), std::exception);
+    REQUIRE_THROWS_AS(root.open("alias/added.ba2", 8), std::exception);
+    REQUIRE_THROWS_AS(root.list("alias", 8), std::exception);
+}
+
+// Invariant, detects: unsorted names, dropped directory or symlink entries, or an entry bound that is not enforced.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows directory listing sorts names, keeps every entry type and enforces the entry bound", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    std::ofstream(path / "data/B.ba2") << "b";
+    std::ofstream(path / "data/a.ba2") << "a";
+    std::filesystem::create_directory(path / "data/meshes");
+    if (::CreateSymbolicLinkW((path / "data/alias.ba2").c_str(), L"missing.ba2", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) == 0) {
+        if (::GetLastError() == ERROR_PRIVILEGE_NOT_HELD) SKIP("creating file symlinks requires Developer Mode or SeCreateSymbolicLinkPrivilege");
+        FAIL("cannot create file symlink");
+    }
+    REQUIRE(root.list("data", 5) == std::vector<std::string>{"B.ba2", "a.ba2", "alias.ba2", "archive.ba2", "meshes"});
+    REQUIRE_THROWS_AS(root.list("data", 4), std::exception);
+    REQUIRE_THROWS_AS(root.open("data/alias.ba2", 8), std::exception);
+}
+
+// Invariant, detects: an absent directory reported as a hard error, or a present one reported as absent.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows optional listing reports an absent directory as nullopt", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    CHECK_FALSE(root.listOptional("Strings", 8).has_value());
+    const auto present = root.listOptional("data", 8);
+    REQUIRE(present.has_value());
+    REQUIRE(*present == std::vector<std::string>{"archive.ba2"});
+}
+
+// Invariant, detects: a reparse point or a file in directory position reported as an absent directory.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows optional listing still throws for a reparse point child or a file in directory position", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    makeJunction(path / "alias", path / "data");
+    REQUIRE_THROWS_AS(root.listOptional("alias", 8), std::exception);
+    REQUIRE_THROWS_AS(root.listOptional("data/archive.ba2", 8), std::exception);
+}
+
+// Invariant, detects: UTF-16 names returned in another encoding, or unpaired surrogates silently replaced.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows directory listing returns non-ASCII names as UTF-8 and refuses lone surrogates", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    std::ofstream(path / "data" / std::wstring(L"caf\x00E9-\x0416-\xD83D\xDE00.ba2")) << "u";
+    const auto listed = root.list("data", 3);
+    REQUIRE(listed == std::vector<std::string>{"archive.ba2", "caf\xC3\xA9-\xD0\x96-\xF0\x9F\x98\x80.ba2"});
+    const auto utf8 = std::u8string(reinterpret_cast<const char8_t*>(listed[1].data()), listed[1].size());
+    REQUIRE_NOTHROW(root.open(std::filesystem::path("data") / std::filesystem::path(utf8), 8));
+    std::ofstream bad(path / "data" / std::wstring(L"bad\xD800.ba2"));
+    REQUIRE(bad.is_open());
+    bad.close();
+    REQUIRE_THROWS_AS(root.list("data", 3), std::exception);
+}
+}
+#endif
