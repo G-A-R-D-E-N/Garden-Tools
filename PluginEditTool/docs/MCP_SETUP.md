@@ -131,7 +131,7 @@ six hex digits, a colon and the plugin that owns the record.
 
 #### create_record payloads
 
-`type` is the signature and `payload` is an object. These nineteen types have a verified layout. A payload
+`type` is the signature and `payload` is an object. These twenty types have a verified layout. A payload
 that does not fit is rejected with `InvalidRecordCreationPayload`, and the message names the field.
 `editorId` may be written `editor_id`.
 
@@ -149,6 +149,7 @@ that does not fit is rejected with `InvalidRecordCreationPayload`, and the messa
 | `GLOB` | `editorId` (non-empty), `type` (`short`, `long`, `float` or `boolean`) | none. The type is the required `FNAM` byte the schema has no default for; `FLTV` is created as a zero `f32`. |
 | `PROJ`, `EXPL`, `HAZD` | none | `editorId`, `name`, `bounds` (six integers), and the type's own numbers and form-key links, for example `speed`, `range` and `explosionType` on `PROJ`; `force`, `damage` and `innerRadius` on `EXPL`; `radius`, `lifetime` and `spell` on `HAZD` |
 | `PERK` | `editorId` (non-empty; `editor_id` accepted) | `full` and `desc` (inline text in a non-localized plugin; in a localized plugin they become new string IDs in the staged string tables, so call `strings_save` to persist them; `language` picks the table language, default `en`), `trait` (0 or 1, default 0), `level` (0-255, default 0), `ranks` (0-255, default 1), `playable` (0 or 1, default 1), `conditions` (the `set_conditions` array; the root condition list), `nextPerk` (a PERK FormKey), `sound` (an SNDR FormKey), `swf` (text, the FNAM), `effects` (an array in the `set_perk_effects` shape; `quest` must be a loaded QUST, `ability` a loaded SPEL, and the typed parameter form and actor value a loaded record of the type the effect expects) |
+| `PACK` | `editorId` (non-empty; `editor_id` accepted), `location` (an object: `type` is `reference`, `cell`, `near_package_start`, `near_editor_location` or `near_self`; `form` is a FormKey and is required for `reference` and `cell` and refused for the others) | `location.radius` (signed 32-bit, default 0), `speed` (`walk`, `jog`, `run` or `fast_walk`, default `jog`), `preferPreferredPath`, `useSoftRadius` and `ignoreMarkerOrientation` (booleans, default false). Builds a Travel procedure with a Location input and three Bool inputs. |
 
 Any other signature is refused (`RecordCreationRequiresSchema`) unless the payload contains
 `"schema": true`. The record is then built from the schema's defaults, with an optional `editorId`, and
