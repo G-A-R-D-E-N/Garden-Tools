@@ -17,6 +17,9 @@ namespace fo4::papyrus {
 using fo4::pex::PexFile;
 using fo4::pex::PexFunction;
 using fo4::pex::PexObject;
+using fo4::pex::PexProperty;
+using fo4::pex::PexStruct;
+using fo4::pex::PexStructMember;
 using fo4::pex::PexValue;
 using decompiler_detail::BodyState;
 using decompiler_detail::iequals;
@@ -31,6 +34,84 @@ std::string cap(std::string s) {
     if (s.empty()) return s;
     s[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
     return s;
+}
+
+constexpr std::string_view kEventNames[] = {
+    "AffinityEvent", "AO_DeleteMarkerEvent", "AutonomyDisallowed", "CGShockWaveAnimEvent",
+    "CheckpointInitializeLocation", "CompanionAffinityEvent", "CompanionChange", "CrowdEvent",
+    "CustomMessage", "CZLiftStateChanged", "DN017RocketFireDisintegrate", "DN133SpeakerSet",
+    "FinishedFiring", "flee", "hide", "LegendaryMagicEffectEvent", "Loitering",
+    "LorenzoTelekinesisEvent", "MakeAggressive", "MQFactionKickOut", "MS17Investigate", "Off", "On",
+    "OnAction", "OnActivate", "OnAliasInit", "OnAliasReset", "OnAliasShutdown", "OnAnimationEvent",
+    "OnAnimationEventUnregistered", "OnBegin", "OnBeginState", "OnCellAttach", "OnCellDetach",
+    "OnCellLoad", "OnChange", "OnClose", "OnCombatStateChanged", "OnCommandModeCompleteCommand",
+    "OnCommandModeEnter", "OnCommandModeExit", "OnCommandModeGiveCommand", "OnCompanionDismiss",
+    "OnConsciousnessStateChanged", "OnContainerChanged", "OnCripple", "OnDeath", "OnDeferredKill",
+    "OnDestructionStageChanged", "OnDifficultyChanged", "OnDistanceGreaterThan",
+    "OnDistanceLessThan", "OnDying", "OnEffectFinish", "OnEffectStart", "OnEnd", "onEndState",
+    "OnEnterBleedout", "OnEnterSneaking", "OnEntryRun", "OnEquipped", "OnEscortWaitStart",
+    "OnEscortWaitStop", "OnExitFurniture", "OnGainLOS", "OnGetUp", "OnGrab", "OnHit",
+    "OnHolotapeChatter", "OnHolotapePlay", "OnInit", "OnItemAdded", "OnItemEquipped",
+    "OnItemRemoved", "OnItemUnequipped", "OnKill", "OnLoad", "OnLocationChange",
+    "OnLocationCleared", "OnLocationLoaded", "OnLockStateChanged", "OnLooksMenuEvent", "OnLostLOS",
+    "OnMagicEffectApply", "OnMenuItemRun", "OnMenuOpenCloseEvent", "OnOpen", "OnPackageChange",
+    "OnPackageEnd", "OnPackageStart", "OnPartialCripple", "OnPhaseBegin", "OnPhaseEnd",
+    "OnPickpocketFailed", "OnPipboyRadioDetection", "OnPlayerCreateRobot", "OnPlayerDialogueTarget",
+    "OnPlayerEnterVertibird", "OnPlayerFallLongDistance", "OnPlayerFireWeapon",
+    "OnPlayerHealTeammate", "OnPlayerLoadGame", "OnPlayerModArmorWeapon", "OnPlayerModRobot",
+    "OnPlayerSleepStart", "OnPlayerSleepStop", "OnPlayerSwimming", "OnPlayerTeleport",
+    "OnPlayerUseWorkBench", "OnPlayerWaitStart", "OnPlayerWaitStop", "OnPowerOff", "OnPowerOn",
+    "OnQuestInit", "OnQuestShutdown", "OnRaceSwitchComplete", "OnRadiationDamage", "OnRead",
+    "OnRelease", "OnReset", "OnSell", "OnSit", "OnSpeechChallengeAvailable", "OnSpellCast",
+    "OnStageSet", "OnStart", "OnStoryActivateActor", "OnStoryActorAttach", "OnStoryAddToPlayer",
+    "OnStoryArrest", "OnStoryAssaultActor", "OnStoryAttractionObject", "OnStoryBribeNPC",
+    "OnStoryCastMagic", "OnStoryChangeLocation", "OnStoryClearLocation", "OnStoryCraftItem",
+    "OnStoryCrimeGold", "OnStoryCure", "OnStoryDialogue", "OnStoryDiscoverDeadBody",
+    "OnStoryEscapeJail", "OnStoryFlatterNPC", "OnStoryHackTerminal", "OnStoryHello",
+    "OnStoryIncreaseLevel", "OnStoryInfection", "OnStoryIntimidateNPC", "OnStoryIronSights",
+    "OnStoryJail", "OnStoryKillActor", "OnStoryLocationLoaded", "OnStoryMineExplosion",
+    "OnStoryNewVoicePower", "OnStoryPayFine", "OnStoryPickLock", "OnStoryPickPocket",
+    "OnStoryPlayerGetsFavor", "OnStoryRelationshipChange", "OnStoryRemoveFromPlayer",
+    "OnStoryScript", "OnStoryServedTime", "OnStoryTrespass", "OnTimer", "OnTimerGameTime",
+    "OnTrackedStatsEvent", "OnTranslationAlmostComplete", "OnTranslationComplete",
+    "OnTranslationFailed", "OnTrapHitStart", "OnTrapHitStop", "OnTriggerEnter", "OnTriggerLeave",
+    "OnTutorialEvent", "OnUnequipped", "OnUnload", "OnWeaponAway", "OnWorkshopMode",
+    "OnWorkshopNPCTransfer", "OnWorkshopObjectDestroyed", "OnWorkshopObjectGrabbed",
+    "OnWorkshopObjectMoved", "OnWorkshopObjectPlaced", "OnWorkshopObjectRepaired",
+    "PossibleMurderEvent", "PrydwenDestructionDone", "RECheckForCleanup", "RemoteEnable",
+    "ResetTargetDummy", "safe", "StartDamage", "TeleportDone", "Toggle",
+    "WorkshopActorAssignedToWork", "WorkshopActorUnassigned", "WorkshopAddActor",
+    "WorkshopDailyUpdate", "WorkshopEnterMenu", "WorkshopInitializeLocation", "WorkshopObjectBuilt",
+    "WorkshopObjectDestroyed", "WorkshopObjectDestructionStageChanged", "WorkshopObjectMoved",
+    "WorkshopObjectPowerStageChanged", "WorkshopObjectRepaired", "WorkshopPlayerOwnershipChanged",
+};
+
+bool isKnownEventName(std::string_view name) {
+    for (const auto event : kEventNames) {
+        if (iequals(name, event)) return true;
+    }
+    return false;
+}
+
+std::vector<const PexStructMember*> orderedMembers(const PexFile& pex, const std::string& objectName,
+                                                   const PexStruct& st) {
+    std::vector<const PexStructMember*> out;
+    std::vector<bool> used(st.members.size(), false);
+    for (const auto& order : pex.structOrders) {
+        if (!iequals(order.objectName, objectName) || !iequals(order.orderName, st.name)) continue;
+        for (const auto& name : order.memberNames) {
+            for (std::size_t i = 0; i < st.members.size(); ++i) {
+                if (used[i] || !iequals(st.members[i].name, name)) continue;
+                used[i] = true;
+                out.push_back(&st.members[i]);
+            }
+        }
+        break;
+    }
+    for (std::size_t i = 0; i < st.members.size(); ++i) {
+        if (!used[i]) out.push_back(&st.members[i]);
+    }
+    return out;
 }
 
 }  // namespace
@@ -75,7 +156,8 @@ std::string Decompiler::toSource(const PexFile& pex) {
 
         for (const auto& st : obj.structs) {
             sb << "Struct " << st.name << "\n";
-            for (const auto& m : st.members) {
+            for (const auto* mp : orderedMembers(pex, obj.name, st)) {
+                const auto& m = *mp;
                 sb << "\t" << m.type << " " << m.name;
                 if (m.defaultValue && !m.defaultValue->isNone()) sb << " = " << m.defaultValue->toString();
                 if (m.isConst) sb << " Const";
@@ -87,7 +169,7 @@ std::string Decompiler::toSource(const PexFile& pex) {
             sb << "\n";
         }
 
-        for (const auto& p : obj.properties) {
+        const auto emitProperty = [&](const PexProperty& p) {
             if (p.isAutoVar()) {
                 std::optional<PexValue> backingDefault;
                 bool backingConst = false;
@@ -118,6 +200,28 @@ std::string Decompiler::toSource(const PexFile& pex) {
                 sb << "EndProperty\n";
             }
             sb << "\n";
+        };
+
+        std::vector<bool> emitted(obj.properties.size(), false);
+        const auto emitNamed = [&](const std::string& name) {
+            for (std::size_t i = 0; i < obj.properties.size(); ++i) {
+                if (emitted[i] || !iequals(obj.properties[i].name, name)) continue;
+                emitted[i] = true;
+                emitProperty(obj.properties[i]);
+            }
+        };
+        for (const auto& group : pex.propertyGroups) {
+            if (!iequals(group.objectName, obj.name)) continue;
+            const bool named = !group.groupName.empty();
+            if (named) {
+                sb << "Group " << group.groupName << flags(group.userFlags, {}) << "\n";
+                if (!group.docString.empty()) sb << "{ " << group.docString << " }\n";
+            }
+            for (const auto& name : group.propertyNames) emitNamed(name);
+            if (named) sb << "EndGroup\n\n";
+        }
+        for (std::size_t i = 0; i < obj.properties.size(); ++i) {
+            if (!emitted[i]) emitProperty(obj.properties[i]);
         }
 
         bool anyVar = false;
@@ -170,9 +274,8 @@ void Decompiler::emitFunction(std::ostringstream& sb, const PexObject& obj,
     };
 
     const bool isRemote = !nameOverride && startsWith(fn.name, "::remote_");
-    const bool isEvent =
-        !nameOverride && iequals(fn.returnType, "None") &&
-        (isRemote || startsWith(fn.name, "On"));
+    const bool isEvent = !nameOverride && iequals(fn.returnType, "None") &&
+                         (isRemote || isKnownEventName(fn.name));
 
     std::vector<std::string> paramStrs;
     for (const auto& p : fn.params) paramStrs.push_back(p.type + " " + p.name);
@@ -215,9 +318,6 @@ void Decompiler::emitFunction(std::ostringstream& sb, const PexObject& obj,
     std::string body;
     try {
         body = decompileBody(obj, fn, std::string(indent) + "\t", true);
-        if (body.find("::") != std::string::npos) {
-            body = decompileBody(obj, fn, std::string(indent) + "\t", false);
-        }
     } catch (const std::exception& ex) {
         body = std::string(indent) + "\t; [decompile failed: " + ex.what() +
                "; assembly follows]\n" + asmBody(fn, std::string(indent) + "\t");
@@ -248,7 +348,13 @@ std::string Decompiler::decompileBody(const PexObject& obj, const PexFunction& f
     s.stmt.resize(fn.instructions.size());
     s.jumps.resize(fn.instructions.size());
     translateInstructions(s);
-    return reconstructStatements(s);
+    std::string body = reconstructStatements(s);
+    if (!s.leftTemp.empty()) {
+        body = s.indent + "; [decompile warning: compiler temporary " + s.leftTemp +
+               " is read before it is assigned; decompiled as " + BodyState::san(s.leftTemp) +
+               "]\n" + body;
+    }
+    return body;
 }
 
 std::string Decompiler::disassemble(const PexFile& pex) {

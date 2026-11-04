@@ -68,6 +68,7 @@ enum class DiagnosticCode {
     CannotEmit,
     UnknownCallTarget,
     NonConstantInitializer,
+    ArrayLengthLimit,
 };
 
 constexpr std::string_view codeString(DiagnosticCode code) {
@@ -100,6 +101,7 @@ constexpr std::string_view codeString(DiagnosticCode code) {
         case DiagnosticCode::CannotEmit: return "PAP0050";
         case DiagnosticCode::UnknownCallTarget: return "PAP0051";
         case DiagnosticCode::NonConstantInitializer: return "PAP0052";
+        case DiagnosticCode::ArrayLengthLimit: return "PAP0053";
     }
     return "PAP????";
 }

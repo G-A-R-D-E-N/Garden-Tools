@@ -26,7 +26,8 @@ private:
         std::vector<Diagnostic> diagnostics;
         std::optional<Type> returnType;
 
-        void report(DiagnosticCode code, std::string message, const Span& span);
+        void report(DiagnosticCode code, std::string message, const Span& span,
+                    Severity severity = Severity::Error);
     };
 
     void checkCallable(State& state, const CallableDecl& callable);
