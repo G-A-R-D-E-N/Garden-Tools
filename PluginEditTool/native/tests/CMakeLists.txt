@@ -224,6 +224,7 @@ add_executable(
     unit/RadiclePluginProjFlagsTests.cpp
     unit/RadiclePluginProjExplHazdLimitsTests.cpp
     unit/RadiclePluginQuestAuthoringTests.cpp
+    unit/RadiclePluginQuestLocalizedCnamTests.cpp
     unit/RadiclePluginQuestLocalizationTests.cpp
     unit/RadiclePluginQuestReadbackTests.cpp
     unit/RadiclePluginQuestEventDataTests.cpp
