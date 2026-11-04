@@ -37,18 +37,13 @@ std::string cap(std::string s) {
 }
 
 constexpr std::string_view kEventNames[] = {
-    "AffinityEvent", "AO_DeleteMarkerEvent", "AutonomyDisallowed", "CGShockWaveAnimEvent",
-    "CheckpointInitializeLocation", "CompanionAffinityEvent", "CompanionChange", "CrowdEvent",
-    "CustomMessage", "CZLiftStateChanged", "DN017RocketFireDisintegrate", "DN133SpeakerSet",
-    "FinishedFiring", "flee", "hide", "LegendaryMagicEffectEvent", "Loitering",
-    "LorenzoTelekinesisEvent", "MakeAggressive", "MQFactionKickOut", "MS17Investigate", "Off", "On",
     "OnAction", "OnActivate", "OnAliasInit", "OnAliasReset", "OnAliasShutdown", "OnAnimationEvent",
     "OnAnimationEventUnregistered", "OnBegin", "OnBeginState", "OnCellAttach", "OnCellDetach",
     "OnCellLoad", "OnChange", "OnClose", "OnCombatStateChanged", "OnCommandModeCompleteCommand",
     "OnCommandModeEnter", "OnCommandModeExit", "OnCommandModeGiveCommand", "OnCompanionDismiss",
     "OnConsciousnessStateChanged", "OnContainerChanged", "OnCripple", "OnDeath", "OnDeferredKill",
     "OnDestructionStageChanged", "OnDifficultyChanged", "OnDistanceGreaterThan",
-    "OnDistanceLessThan", "OnDying", "OnEffectFinish", "OnEffectStart", "OnEnd", "onEndState",
+    "OnDistanceLessThan", "OnDying", "OnEffectFinish", "OnEffectStart", "OnEnd", "OnEndState",
     "OnEnterBleedout", "OnEnterSneaking", "OnEntryRun", "OnEquipped", "OnEscortWaitStart",
     "OnEscortWaitStop", "OnExitFurniture", "OnGainLOS", "OnGetUp", "OnGrab", "OnHit",
     "OnHolotapeChatter", "OnHolotapePlay", "OnInit", "OnItemAdded", "OnItemEquipped",
@@ -75,15 +70,9 @@ constexpr std::string_view kEventNames[] = {
     "OnStoryScript", "OnStoryServedTime", "OnStoryTrespass", "OnTimer", "OnTimerGameTime",
     "OnTrackedStatsEvent", "OnTranslationAlmostComplete", "OnTranslationComplete",
     "OnTranslationFailed", "OnTrapHitStart", "OnTrapHitStop", "OnTriggerEnter", "OnTriggerLeave",
-    "OnTutorialEvent", "OnUnequipped", "OnUnload", "OnWeaponAway", "OnWorkshopMode",
-    "OnWorkshopNPCTransfer", "OnWorkshopObjectDestroyed", "OnWorkshopObjectGrabbed",
-    "OnWorkshopObjectMoved", "OnWorkshopObjectPlaced", "OnWorkshopObjectRepaired",
-    "PossibleMurderEvent", "PrydwenDestructionDone", "RECheckForCleanup", "RemoteEnable",
-    "ResetTargetDummy", "safe", "StartDamage", "TeleportDone", "Toggle",
-    "WorkshopActorAssignedToWork", "WorkshopActorUnassigned", "WorkshopAddActor",
-    "WorkshopDailyUpdate", "WorkshopEnterMenu", "WorkshopInitializeLocation", "WorkshopObjectBuilt",
-    "WorkshopObjectDestroyed", "WorkshopObjectDestructionStageChanged", "WorkshopObjectMoved",
-    "WorkshopObjectPowerStageChanged", "WorkshopObjectRepaired", "WorkshopPlayerOwnershipChanged",
+    "OnTutorialEvent", "OnUnequipped", "OnUnload", "OnWorkshopMode", "OnWorkshopNPCTransfer",
+    "OnWorkshopObjectDestroyed", "OnWorkshopObjectGrabbed", "OnWorkshopObjectMoved",
+    "OnWorkshopObjectPlaced", "OnWorkshopObjectRepaired",
 };
 
 bool isKnownEventName(std::string_view name) {
@@ -274,7 +263,7 @@ void Decompiler::emitFunction(std::ostringstream& sb, const PexObject& obj,
     };
 
     const bool isRemote = !nameOverride && startsWith(fn.name, "::remote_");
-    const bool isEvent = !nameOverride && iequals(fn.returnType, "None") &&
+    const bool isEvent = !nameOverride && !fn.isGlobal && iequals(fn.returnType, "None") &&
                          (isRemote || isKnownEventName(fn.name));
 
     std::vector<std::string> paramStrs;

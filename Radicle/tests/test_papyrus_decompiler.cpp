@@ -555,22 +555,25 @@ TEST(PapyrusDecompiler, OnPrefixAloneDoesNotMakeAFunctionAnEvent) {
             "EndFunction\n");
 }
 
-TEST(PapyrusDecompiler, KnownEventNamesAreEventsWithAndWithoutDebugInfo) {
-  // Invariant: the event decision does not depend on whether the PEX carries debug function records.
-  const auto build = [](bool withDebugInfo) {
-    auto file = scriptWith(makeFunction("OnInit", {}, {}, {step("return", {PexValue{}})}));
-    for (const std::string name : {"OnActivate", "OnHit", "OnCellAttach", "OnlyOnce"}) {
+TEST(PapyrusDecompiler, KnownEventNamesAreEventsWhateverTheDebugFunctionTypes) {
+  // Invariant: event detection reads only name, return type and global flag, so absent, consistent or conflicting debug records cannot change it.
+  const std::vector<std::string> names{"OnInit", "OnActivate", "OnHit", "OnCellAttach", "OnlyOnce"};
+  const auto build = [&](const std::vector<std::uint8_t>* debugTypes) {
+    auto file = scriptWith(makeFunction(names[0], {}, {}, {step("return", {PexValue{}})}));
+    for (std::size_t i = 1; i < names.size(); ++i) {
       file.objects[0].states[0].functions.push_back(
-          makeFunction(name, {}, {}, {step("return", {PexValue{}})}));
+          makeFunction(names[i], {}, {}, {step("return", {PexValue{}})}));
     }
-    if (withDebugInfo) {
+    if (debugTypes != nullptr) {
       file.hasDebugInfo = true;
-      for (const std::string name : {"OnInit", "OnActivate", "OnHit", "OnCellAttach", "OnlyOnce"}) {
-        file.debugFunctions.push_back(PexDebugFunction{"Probe", "", name, 0, {}});
+      for (std::size_t i = 0; i < names.size(); ++i) {
+        file.debugFunctions.push_back(PexDebugFunction{"Probe", "", names[i], (*debugTypes)[i], {}});
       }
     }
     return file;
   };
+  const std::vector<std::uint8_t> consistent{0, 0, 0, 0, 0};
+  const std::vector<std::uint8_t> conflicting{2, 250, 1, 0, 2};
   const std::string expected =
       "ScriptName Probe extends ScriptObject\n\n"
       "Event OnInit()\n"
@@ -592,8 +595,39 @@ TEST(PapyrusDecompiler, KnownEventNamesAreEventsWithAndWithoutDebugInfo) {
       "Function OnlyOnce()\n"
       "\tReturn\n"
       "EndFunction\n";
-  EXPECT_EQ(Decompiler::toSource(build(false)), expected);
-  EXPECT_EQ(Decompiler::toSource(build(true)), expected);
+  EXPECT_EQ(Decompiler::toSource(build(nullptr)), expected);
+  EXPECT_EQ(Decompiler::toSource(build(&consistent)), expected);
+  EXPECT_EQ(Decompiler::toSource(build(&conflicting)), expected);
+}
+
+TEST(PapyrusDecompiler, ScriptLocalNameThatIsNotAnEngineEventStaysAFunction) {
+  // Invariant: a None-returning function named like a script-local event (flee) is a Function, because only the engine event table makes an Event.
+  const auto fn = makeFunction("flee", {}, {}, {step("return", {PexValue{}})});
+  EXPECT_EQ(Decompiler::toSource(scriptWith(fn)),
+            "ScriptName Probe extends ScriptObject\n\n"
+            "Function flee()\n"
+            "\tReturn\n"
+            "EndFunction\n");
+}
+
+TEST(PapyrusDecompiler, GlobalNativeFunctionsStayFunctionsEvenWithAnEventName) {
+  // Invariant: a global function is never an Event, even when its name is in the event table (OnLoad) or it returns None (Hide).
+  PexFunction hide;
+  hide.name = "Hide";
+  hide.isGlobal = true;
+  hide.isNative = true;
+  hide.params = {{"asName", "string"}};
+  PexFunction onLoad;
+  onLoad.name = "OnLoad";
+  onLoad.isGlobal = true;
+  onLoad.isNative = true;
+  auto file = scriptWith(hide);
+  file.objects[0].states[0].functions.push_back(onLoad);
+  EXPECT_EQ(Decompiler::toSource(file),
+            "ScriptName Probe extends ScriptObject\n\n"
+            "Function Hide(string asName) Global Native\n"
+            "\n"
+            "Function OnLoad() Global Native\n");
 }
 
 TEST(PapyrusDecompiler, TempReadBeforeItsAssignmentIsFlaggedInTheDecompile) {
