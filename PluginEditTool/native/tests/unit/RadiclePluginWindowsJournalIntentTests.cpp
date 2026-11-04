@@ -642,6 +642,12 @@ TEST_CASE("Windows private intent inspection binds a separate ordinary ACL desti
             output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
             REQUIRE(output.good());
         }
+        if (file == "stage" && !originalExists) {
+            ACL empty{};
+            REQUIRE(::InitializeAcl(&empty, sizeof(empty), ACL_REVISION));
+            REQUIRE(::SetNamedSecurityInfoW(const_cast<wchar_t*>((dataRoot.path / file).c_str()), SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION, nullptr, nullptr, &empty, nullptr) == ERROR_SUCCESS);
+        }
         Handle actual{::CreateFileW((dataRoot.path / file).c_str(), GENERIC_READ | READ_CONTROL,
             FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr)};
         REQUIRE(actual.value != INVALID_HANDLE_VALUE);

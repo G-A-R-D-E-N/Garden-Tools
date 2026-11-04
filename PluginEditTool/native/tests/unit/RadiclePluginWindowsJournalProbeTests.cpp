@@ -158,10 +158,10 @@ TEST_CASE("Windows split-store recovery survives process interruption and preser
         WindowsJournalDirectory journal(records.nativeHandle());
         if (original) writeSplitFile(root / "data" / "destination", "original");
         writeSplitFile(root / "data" / "stage", "updated");
+        if (!original) resetToInheritedDacl(root / "data" / "stage");
         REQUIRE(::SetFileAttributesW((root / "data" / "stage").c_str(), original ? FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_ARCHIVE : FILE_ATTRIBUTE_ARCHIVE));
         const auto stageId = splitIdentity(root / "data" / "stage");
         const auto stageAcl = splitSecurity(root / "data" / "stage");
-        if (!original) WARN("absent stage acl " << std::filesystem::path(stageAcl).string());
         const auto stageAttributes = ::GetFileAttributesW((root / "data" / "stage").c_str());
         WindowsJournalFileIdentity originalId;
         std::wstring originalAcl;
@@ -392,10 +392,9 @@ TEST_CASE("Windows destination creates nested missing journal directories throug
         CHECK_FALSE(destination.read(1).has_value());
     }
     CHECK(fs::is_directory(root / "data" / "alpha" / "beta" / "gamma"));
-    WARN("alpha acl " << std::filesystem::path(splitSecurity(root / "data" / "alpha")).string() << " data acl " <<
-        std::filesystem::path(splitSecurity(root / "data")).string());
-    CHECK(splitSecurity(root / "data" / "alpha").find(L"ID;") != std::wstring::npos);
-    CHECK(splitSecurity(root / "data" / "alpha" / "beta").find(L"ID;") != std::wstring::npos);
+    CHECK(splitSecurity(root / "data" / "alpha").find(L"D:P") == std::wstring::npos);
+    CHECK(splitSecurity(root / "data" / "alpha" / "beta").find(L"D:P") == std::wstring::npos);
+    CHECK(splitSecurity(root / "data" / "alpha").find(L"OICI") != std::wstring::npos);
     CHECK_FALSE(fs::exists(root / "data" / "alpha" / "beta" / "gamma" / "destination"));
 #endif
 }

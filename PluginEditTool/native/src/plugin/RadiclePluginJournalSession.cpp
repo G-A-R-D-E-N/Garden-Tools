@@ -43,7 +43,7 @@ bool journalSuffix(std::string_view name, std::string_view suffix) {
 
 std::unique_ptr<JournalDestination> destination(const JournalManifestEntry& entry,
                                                 const JournalRoots& roots,
-                                                const std::filesystem::path& resolved) {
+                                                const std::filesystem::path& resolved, bool create = false) {
     if (!entry.rootSelector.empty()) {
         const auto& approved = approvedJournalRoot(entry, roots);
         auto directories = entry.directories;
@@ -57,7 +57,7 @@ std::unique_ptr<JournalDestination> destination(const JournalManifestEntry& entr
             }
         }
         return std::make_unique<JournalDestination>(approved.path, directories,
-            fo4::io::utf8(resolved.filename()), false, approved.identity);
+            fo4::io::utf8(resolved.filename()), create, approved.identity);
     }
     if (entry.kind == "psc" || entry.kind == "pex") {
         const auto& base = entry.kind == "psc" ? roots.scriptSourceDirectory : roots.scriptCompiledDirectory;
@@ -252,6 +252,7 @@ void validateReadStringSources(const JournalManifest& manifest, const JournalRoo
             const auto& entry = manifest.files[j];
             if (entry.kind != "strings" && entry.kind != "dlstrings" && entry.kind != "ilstrings") continue;
             if (!sameJournalIdentity(directory, targets[j].parent_path())) continue;
+            if (!expected[i].exists && !entry.originalExists && !entry.verifyOnly) expected[i].exists = current[i].exists;
             const auto isTarget = [&](const JournalReadStringFile& file) {
                 return sameJournalIdentity(directory / fo4::io::from_utf8(file.filename), targets[j]);
             };
@@ -274,10 +275,20 @@ void validateSourceSets(const JournalManifest& manifest, const JournalRoots& roo
     for (const auto& source : manifest.sources) {
         JournalManifestEntry selector; selector.rootSelector = source.rootSelector;
         const auto& approved = approvedJournalRoot(selector, roots);
+        auto directory = approved.path;
+        for (const auto& part : source.directories) directory /= fo4::io::from_utf8(part);
+        const auto createsDirectory = [&] {
+            for (std::size_t index = 0; index < targets.size(); ++index) {
+                const auto& entry = manifest.files[index];
+                if (!entry.originalExists && !entry.verifyOnly && targets[index].parent_path() == directory &&
+                    (entry.kind == "strings" || entry.kind == "dlstrings" || entry.kind == "ilstrings")) return true;
+            }
+            return false;
+        };
         std::vector<std::string> names;
         try { names = JournalDestination::listDirectory(approved.path, source.directories, approved.identity); }
         catch (const JournalDirectoryAbsent&) { if (!source.exists) continue; throw; }
-        if (!source.exists) throw std::runtime_error("journal source directory appeared");
+        if (!source.exists && !createsDirectory()) throw std::runtime_error("journal source directory appeared");
         if (source.kind == "archive-empty") {
             for (auto name : names) {
                 std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -286,8 +297,6 @@ void validateSourceSets(const JournalManifest& manifest, const JournalRoots& roo
             continue;
         }
         std::erase_if(names, [&](const auto& name) { return !isJournalStringName(name, manifest.plugin); });
-        auto directory = approved.path;
-        for (const auto& part : source.directories) directory /= fo4::io::from_utf8(part);
         for (std::size_t index = 0; index < targets.size(); ++index) {
             const auto& entry = manifest.files[index];
             if (entry.originalExists || entry.verifyOnly || targets[index].parent_path() != directory ||
@@ -418,8 +427,15 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
     std::vector<std::unique_ptr<JournalDestination>> targets;
     targets.reserve(files.size());
     for (std::size_t index = 0; index < files.size(); ++index) {
-        auto target = destination(manifest.files[index], roots, paths[index]);
         const auto& entry = manifest.files[index];
+        std::unique_ptr<JournalDestination> target;
+        try {
+            target = destination(entry, roots, paths[index]);
+        } catch (const JournalDirectoryAbsent&) {
+            if (entry.originalExists || entry.verifyOnly || entry.rootSelector.empty()) throw;
+            targets.push_back(nullptr);
+            continue;
+        }
         const auto current = target->read(static_cast<std::size_t>(entry.originalSize));
         if (!matches(current, entry.originalExists, entry.originalSize, entry.originalHash)) {
             throw std::runtime_error("journal destination changed since it was staged");
@@ -428,6 +444,8 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
     }
 #if defined(_WIN32)
     WindowsJournalDirectory windowsJournal(root_.nativeHandle());
+    if (std::any_of(targets.begin(), targets.end(), [](const auto& target) { return !target; }))
+        throw std::runtime_error("journal destination directory is absent");
     const auto authority = WindowsJournalSessionState::authorize(windowsJournal, document, manifest, paths, targets);
     if (windowsHook) windowsHook(WindowsJournalSessionStep::preflightComplete, 0, {}, {});
 #endif
@@ -586,7 +604,11 @@ void JournalSession::replay(std::string_view manifestName, const JournalRoots& r
     for (std::size_t index = 0; index < manifest.files.size(); ++index) {
         const auto& entry = manifest.files[index];
         static_cast<void>(payload(root_, entry));
+#if defined(_WIN32)
         auto target = destination(entry, roots, paths[index]);
+#else
+        auto target = destination(entry, roots, paths[index], !entry.verifyOnly && !entry.originalExists);
+#endif
 #if !defined(_WIN32)
         const auto current = target->read(static_cast<std::size_t>(std::max(entry.originalSize, entry.finalSize)));
         if (entry.verifyOnly) {
@@ -627,7 +649,6 @@ void JournalSession::replay(std::string_view manifestName, const JournalRoots& r
     }
     WindowsJournalSessionState::cleanup(windowsJournal, document, manifest, paths, targets, windowsHook, revalidate);
 #else
-    std::random_device random;
 #ifdef FO4IDE_TEST_HOOKS
     std::size_t committed = 0;
 #endif
@@ -636,8 +657,7 @@ void JournalSession::replay(std::string_view manifestName, const JournalRoots& r
             const auto& entry = manifest.files[index];
             if ((entry.kind == "plugin") != plugin || !needsWrite[index]) continue;
             const auto bytesToWrite = payload(root_, entry);
-            const auto stage = manifest.transaction + "_" + std::to_string(index) + "_" +
-                std::to_string(random()) + "_" + std::to_string(random()) + ".stage";
+            const auto stage = manifest.transaction + "_" + std::to_string(index) + ".stage";
             targets[index]->replace(entry.originalExists, entry.originalHash, entry.originalSize, bytesToWrite, stage);
 #ifdef FO4IDE_TEST_HOOKS
             ++committed;

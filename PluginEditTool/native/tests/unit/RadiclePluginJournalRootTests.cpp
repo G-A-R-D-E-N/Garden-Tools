@@ -178,9 +178,10 @@ TEST_CASE("JournalRoot creates a private held root and refuses unsafe ancestors"
     CHECK_THROWS(JournalRoot(unsafe / "journal"));
     CHECK_FALSE(std::filesystem::exists(unsafe / "journal"));
     const auto reparse = base / "alias";
-    std::filesystem::create_directory_symlink(base / "safe", reparse);
+    std::filesystem::create_directories(base / "real");
+    std::filesystem::create_directory_symlink(base / "real", reparse);
     CHECK_THROWS(JournalRoot(reparse / "journal"));
-    CHECK_FALSE(std::filesystem::exists(base / "safe" / "journal"));
+    CHECK_FALSE(std::filesystem::exists(base / "real" / "journal"));
 #endif
 }
 

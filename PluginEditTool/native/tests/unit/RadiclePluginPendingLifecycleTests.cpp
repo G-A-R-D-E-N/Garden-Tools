@@ -277,7 +277,7 @@ TEST_CASE("Backend recovers a fragment journal before environment loading") {
         {{"name", "Patch.esp"}, {"path", path.string()}, {"source", sourceName}, {"resolved", true}}})}}; };
     CHECK(backend.invoke("environment.LoadMo2", environment("Data", pluginPath)).has_value());
     std::error_code ec; std::filesystem::create_directory_symlink(root, root / "alias", ec);
-    if (!ec) CHECK(backend.invoke("environment.LoadMo2", environment("Test", root / "alias" / "Patch.esp")).has_value());
+    if (!ec) { const auto aliased = backend.invoke("environment.LoadMo2", environment("Test", root / "alias" / "Patch.esp")); REQUIRE_FALSE(aliased.has_value()); CHECK(aliased.error().type == "JournalRecoveryProfileInvalid"); }
     CHECK(readBytes(pluginPath) == original); CHECK(readBytes(scriptPath) == scriptBefore);
     const auto loaded = backend.invoke("environment.LoadMo2", environment("Test", pluginPath));
     REQUIRE(loaded.has_value()); CHECK(loaded->at("loadedPlugins") == 1);

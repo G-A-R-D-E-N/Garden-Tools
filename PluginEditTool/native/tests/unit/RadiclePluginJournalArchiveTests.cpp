@@ -226,8 +226,8 @@ TEST_CASE("Held localization generation combines loose and archive tables") {
     const auto mod = root / "Mod", data = root / "Data";
     using Kind = fo4::localization::StringTableKind;
     auto plugin = fo4::read_plugin(fo4::test::make_tes4_plugin(fo4::RecordFlags::localized, 1.0f, {}), mod / "Patch.esp");
-    const std::array ids{fo4::LocalizedRowId{fo4::Signature::from_string("FULL"), 800}};
-    REQUIRE(fo4::create_record_with_localized_rows(plugin, fo4::Signature::from_string("QUST"), "Existing", ids).status == fo4::RecordCreateStatus::created);
+    const std::array ids{fo4::LocalizedRowId{fo4::Signature::from_string("DESC"), 800}};
+    REQUIRE(fo4::create_record_with_localized_rows(plugin, fo4::Signature::from_string("BOOK"), "Existing", ids).status == fo4::RecordCreateStatus::created);
     write(mod / "Patch.esp", fo4::write_plugin(plugin, mod / "Patch.esp"));
     const auto table = [](std::uint32_t id) { return fo4::localization::write_string_table({Kind::strings, {{id, {std::byte{'X'}}}}}); };
     write(mod / "Strings" / "Patch_en.STRINGS", table(17));

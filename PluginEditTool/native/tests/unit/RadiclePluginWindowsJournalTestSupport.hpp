@@ -100,6 +100,12 @@ void setSplitCreation(const std::filesystem::path& path, std::int64_t value) {
     FILETIME creation{time.LowPart, time.HighPart};
     REQUIRE(::SetFileTime(file.value, &creation, nullptr, nullptr));
 }
+void resetToInheritedDacl(const std::filesystem::path& path) {
+    ACL empty{};
+    REQUIRE(::InitializeAcl(&empty, sizeof(empty), ACL_REVISION));
+    REQUIRE(::SetNamedSecurityInfoW(const_cast<wchar_t*>(path.c_str()), SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION, nullptr, nullptr, &empty, nullptr) == ERROR_SUCCESS);
+}
 std::wstring splitSecurity(const std::filesystem::path& path) {
     PSECURITY_DESCRIPTOR security = nullptr;
     REQUIRE(::GetNamedSecurityInfoW(path.c_str(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION,

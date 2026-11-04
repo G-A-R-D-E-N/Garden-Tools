@@ -165,8 +165,8 @@ JournalDestination::JournalDestination(const std::filesystem::path& root,
             throw std::system_error(errno, std::generic_category(), "create destination directory");
         }
         const int fd = ::openat(parent, name.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-        if (fd < 0 && errno == ENOENT && captureOnly && index >= rootComponents)
-            throw JournalDirectoryAbsent("journal source directory is absent");
+        if (fd < 0 && errno == ENOENT && index >= rootComponents && (captureOnly || !createDirectories))
+            throw JournalDirectoryAbsent("journal directory is absent");
         if (fd < 0) throw std::system_error(errno, std::generic_category(), "open destination directory");
         impl_->directories.push_back(fd);
         impl_->names.push_back(name);
@@ -315,6 +315,11 @@ void JournalDestination::replace(bool originalExists, std::string_view originalH
     verifyOriginal();
     const std::string stage(stageName);
     const int directory = impl_->directories.back();
+    struct stat leftover{};
+    if (::fstatat(directory, stage.c_str(), &leftover, AT_SYMLINK_NOFOLLOW) == 0 && S_ISREG(leftover.st_mode) &&
+        leftover.st_uid == ::geteuid() && ::unlinkat(directory, stage.c_str(), 0) != 0) {
+        throw std::system_error(errno, std::generic_category(), "remove stale destination stage");
+    }
     int fd = ::openat(directory, stage.c_str(), O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (fd < 0) throw std::system_error(errno, std::generic_category(), "create destination stage");
     bool published = false;

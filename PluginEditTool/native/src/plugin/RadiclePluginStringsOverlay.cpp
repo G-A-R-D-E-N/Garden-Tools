@@ -260,7 +260,7 @@ Result<RadiclePluginBackend::StagedStringTable> RadiclePluginBackend::prepareAll
     }
     if (found == allocation.sourceSnapshots.end()) {
 #if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
-        if (!allocation.heldGeneration || !allocation.defaultDirectoryExists)
+        if (!allocation.heldGeneration)
 #endif
             return std::unexpected(Error{"LocalizedAllocationSnapshotUnsupported", "localized allocation requires a verified loose destination snapshot"});
     } else {
