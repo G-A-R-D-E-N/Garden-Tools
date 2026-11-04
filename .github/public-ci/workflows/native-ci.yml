@@ -15,7 +15,7 @@ concurrency:
 env:
   CCACHE_NOHASHDIR: "1"
   CMAKE_BUILD_PARALLEL_LEVEL: "4"
-  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|[A-Za-z0-9_]*Real\.|NavmeshCorpus\.Fallout4FixturesBoundaryCountsAndNvppSize|PexCorpus\.EveryDataDirArchivePexRoundTripsByteIdentically|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.CorpusDecodeSweepWhenPresent|BehaviorReal\.|DialogueReal\.|DialogueWriterReal\.|BehaviorWriterReal\.|ClimateWeatherReal\.|ConditionScopesReal\.|NavmeshReal\.|NavmeshWriterReal\.|NifCorpus\.|QuestStructureReal\.|SoundWriterReal\.|VegetationReal\.|VmadWriterOfficial\.|Official normal and AutoWeapon sounds'
+  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|[A-Za-z0-9_]*Real\.|NavmeshCorpus\.Fallout4FixturesBoundaryCountsAndNvppSize|PexCorpus\.EveryDataDirArchivePexRoundTripsByteIdentically|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.CorpusDecodeSweepWhenPresent|BehaviorReal\.|DialogueReal\.|DialogueWriterReal\.|BehaviorWriterReal\.|ClimateWeatherReal\.|ConditionScopesReal\.|NavmeshReal\.|NavmeshWriterReal\.|NifCorpus\.|ShapeOpsCorpus\.|QuestStructureReal\.|SoundWriterReal\.|VegetationReal\.|VmadWriterOfficial\.|Official normal and AutoWeapon sounds'
 
 jobs:
   # PluginEditTool/native builds Radicle as a subproject, so one build covers
