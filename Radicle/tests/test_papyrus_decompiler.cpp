@@ -486,11 +486,11 @@ TEST(PapyrusDecompiler, PropertyGroupsAreEmittedAsGroupBlocksInOriginalOrder) {
   const std::string text = Decompiler::toSource(*original);
   SCOPED_TRACE("decompiled source:\n" + text);
 
-  const auto loose = text.find("int Property Loose");
+  const auto loose = text.find("Int Property Loose");
   const auto group = text.find("Group Stats\n");
-  const auto doc = text.find("{ Stat block }");
-  const auto health = text.find("int Property Health");
-  const auto mana = text.find("int Property Mana");
+  const auto doc = text.find("{  Stat block  }");
+  const auto health = text.find("Int Property Health");
+  const auto mana = text.find("Int Property Mana");
   const auto end = text.find("EndGroup\n");
   ASSERT_TRUE(loose != std::string::npos && group != std::string::npos && doc != std::string::npos);
   ASSERT_TRUE(health != std::string::npos && mana != std::string::npos && end != std::string::npos);
