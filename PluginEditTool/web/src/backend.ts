@@ -298,6 +298,12 @@ export interface PapyrusHost {
 
   SymbolAt(text: string, path: string, offset: number, imports: string): Promise<string>;
 
+  Complete(text: string, path: string, offset: number, imports: string): Promise<string>;
+
+  SignatureHelp(text: string, path: string, offset: number, imports: string): Promise<string>;
+
+  CheckText(text: string, path: string, revision: number, imports: string): Promise<string>;
+
   ReadScript(path: string): Promise<string>;
 
   WriteScript(path: string, text: string): Promise<string>;
@@ -354,6 +360,50 @@ export interface PapyrusSymbolResult {
   column?: number;
   start?: number;
   length?: number;
+  error?: string;
+}
+
+
+export interface PapyrusCompletionItem {
+  label: string;
+  kind: string;
+  detail: string;
+  insertText: string;
+  documentation: string | null;
+}
+
+export interface PapyrusCompletionResult {
+  context?: string;
+  replaceStart?: number;
+  replaceLength?: number;
+  items?: PapyrusCompletionItem[];
+  error?: string;
+}
+
+export interface PapyrusSignatureParameter {
+  label: string;
+  documentation: string | null;
+}
+
+export interface PapyrusSignature {
+  label: string;
+  documentation: string | null;
+  parameters: PapyrusSignatureParameter[];
+}
+
+export interface PapyrusSignatureResult {
+  active: boolean;
+  signatures?: PapyrusSignature[];
+  activeSignature?: number;
+  activeParameter?: number;
+  error?: string;
+}
+
+export interface PapyrusCheckResult {
+  revision?: number;
+  complete?: boolean;
+  errorCount?: number;
+  diagnostics?: PapyrusDiagnostic[];
   error?: string;
 }
 

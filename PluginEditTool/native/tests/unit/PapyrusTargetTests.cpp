@@ -10,6 +10,7 @@
 
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
+#include <fo4/papyrus/analysis_service.hpp>
 
 #include "../helpers/GraphTestSupport.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
@@ -395,6 +396,74 @@ TEST_CASE("PapyrusTarget SymbolAt returns the symbol JSON contract") {
     const auto json = nlohmann::json::parse(result->get<std::string>());
     CHECK(json.contains("resolved"));
     CHECK(json.at("name") == "Ping");
+}
+
+TEST_CASE("PapyrusTarget Complete, SignatureHelp and CheckText answer an unsaved buffer from base roots") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto base = root / "base";
+    touch(base / "Parent.psc",
+          "ScriptName Parent\nInt Property Health Auto\nFunction DoStuff()\nEndFunction\n"
+          "Function Pick(Int first, Int second, Int third)\nEndFunction\n");
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+    const auto roots = fixture.locator.papyrusBaseImports();
+    const auto imports = base.string();
+    const auto hasLabel = [](const nlohmann::json& reply, const std::string& label) {
+        for (const auto& item : reply.at("items")) {
+            if (item.at("label").get<std::string>() == label) return true;
+        }
+        return false;
+    };
+    const auto hasCode = [](const nlohmann::json& reply, const std::string& code) {
+        for (const auto& diagnostic : reply.at("diagnostics")) {
+            if (diagnostic.at("code").get<std::string>() == code) return true;
+        }
+        return false;
+    };
+
+    const std::string completeText =
+        "ScriptName Child extends Parent\nParent Property Link Auto\nFunction F()\n  Link.\nEndFunction\n";
+    const auto completeOffset = static_cast<int>(completeText.find("Link.") + 5);
+    auto complete = target.invoke("Complete",
+                                  nlohmann::json::array({completeText, "", completeOffset, imports}));
+    REQUIRE(complete.has_value());
+    REQUIRE(complete->is_string());
+    CHECK(complete->get<std::string>() ==
+          fo4::papyrus::AnalysisService::completionJson(completeText, nullptr, completeOffset,
+                                                        &imports, roots));
+    const auto completed = nlohmann::json::parse(complete->get<std::string>());
+    CHECK(hasLabel(completed, "DoStuff"));
+    CHECK(hasLabel(completed, "Health"));
+
+    const std::string signatureText =
+        "ScriptName Child extends Parent\nFunction F()\n  Pick(1, 2, \nEndFunction\n";
+    const auto signatureOffset = static_cast<int>(signatureText.find("Pick(1, 2, ") + 11);
+    auto signature = target.invoke("SignatureHelp",
+                                   nlohmann::json::array({signatureText, "", signatureOffset, imports}));
+    REQUIRE(signature.has_value());
+    REQUIRE(signature->is_string());
+    CHECK(signature->get<std::string>() ==
+          fo4::papyrus::AnalysisService::signatureHelpJson(signatureText, nullptr, signatureOffset,
+                                                           &imports, roots));
+    const auto help = nlohmann::json::parse(signature->get<std::string>());
+    CHECK(help.at("active").get<bool>());
+    CHECK(help.at("activeParameter").get<int>() == 2);
+
+    const std::string checkBuffer =
+        "ScriptName Child extends Parent\nFunction F()\n    int n = nope\nEndFunction\n";
+    auto check = target.invoke("CheckText", nlohmann::json::array({checkBuffer, "", 7, imports}));
+    REQUIRE(check.has_value());
+    REQUIRE(check->is_string());
+    CHECK(check->get<std::string>() ==
+          fo4::papyrus::AnalysisService::checkTextJson(checkBuffer, nullptr, 7, &imports, roots));
+    const auto checked = nlohmann::json::parse(check->get<std::string>());
+    CHECK(checked.at("revision").get<int>() == 7);
+    CHECK(checked.at("complete").get<bool>());
+    CHECK(hasCode(checked, "PAP0030"));
 }
 
 TEST_CASE("PapyrusTarget ReadScript and WriteScript round-trip with guards") {

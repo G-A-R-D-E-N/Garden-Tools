@@ -55,6 +55,39 @@ RADICLE_API radicle_status radicle_papyrus_symbol_at_json(const uint8_t* text,
                                                           uint8_t** out_text,
                                                           size_t* out_size);
 
+/* Invariant: text is the unsaved buffer and offset must lie inside it, else INVALID_ARGUMENT. Requires radicle_free_bytes. */
+RADICLE_API radicle_status radicle_papyrus_completion_json(const uint8_t* text,
+                                                           size_t size,
+                                                           const char* file_path,
+                                                           int32_t offset,
+                                                           const char* imports,
+                                                           const char* const* base_imports,
+                                                           size_t base_count,
+                                                           uint8_t** out_text,
+                                                           size_t* out_size);
+
+/* Invariant: text is the unsaved buffer and offset must lie inside it, else INVALID_ARGUMENT. Requires radicle_free_bytes. */
+RADICLE_API radicle_status radicle_papyrus_signature_help_json(const uint8_t* text,
+                                                               size_t size,
+                                                               const char* file_path,
+                                                               int32_t offset,
+                                                               const char* imports,
+                                                               const char* const* base_imports,
+                                                               size_t base_count,
+                                                               uint8_t** out_text,
+                                                               size_t* out_size);
+
+/* Invariant: text is the unsaved buffer and revision is echoed unchanged. Requires radicle_free_bytes. */
+RADICLE_API radicle_status radicle_papyrus_check_text_json(const uint8_t* text,
+                                                           size_t size,
+                                                           const char* file_path,
+                                                           int32_t revision,
+                                                           const char* imports,
+                                                           const char* const* base_imports,
+                                                           size_t base_count,
+                                                           uint8_t** out_text,
+                                                           size_t* out_size);
+
 /* Invariant: a NULL or empty output_path writes to the source's folder; a nonzero release drops DebugOnly and BetaOnly code. Requires radicle_free_bytes. */
 RADICLE_API radicle_status radicle_papyrus_compile_path(const char* source,
                                                         const char* output_path,

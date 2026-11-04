@@ -280,6 +280,48 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
             return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
         }
     }
+    if (method == "Complete") {
+        try {
+            const auto text = stringArgument(args, 0);
+            const auto path = stringArgument(args, 1);
+            const auto offset = intNumberArgument(args, 2, 0);
+            const auto imports = stringArgument(args, 3);
+            const std::string* pathPtr = isWhitespace(path) ? nullptr : &path;
+            const std::string* importsPtr = isWhitespace(imports) ? nullptr : &imports;
+            return nlohmann::json(fo4::papyrus::AnalysisService::completionJson(
+                text, pathPtr, offset, importsPtr, locator_.papyrusBaseImports()));
+        } catch (const std::exception& ex) {
+            return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
+        }
+    }
+    if (method == "SignatureHelp") {
+        try {
+            const auto text = stringArgument(args, 0);
+            const auto path = stringArgument(args, 1);
+            const auto offset = intNumberArgument(args, 2, 0);
+            const auto imports = stringArgument(args, 3);
+            const std::string* pathPtr = isWhitespace(path) ? nullptr : &path;
+            const std::string* importsPtr = isWhitespace(imports) ? nullptr : &imports;
+            return nlohmann::json(fo4::papyrus::AnalysisService::signatureHelpJson(
+                text, pathPtr, offset, importsPtr, locator_.papyrusBaseImports()));
+        } catch (const std::exception& ex) {
+            return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
+        }
+    }
+    if (method == "CheckText") {
+        try {
+            const auto text = stringArgument(args, 0);
+            const auto path = stringArgument(args, 1);
+            const auto revision = intNumberArgument(args, 2, 0);
+            const auto imports = stringArgument(args, 3);
+            const std::string* pathPtr = isWhitespace(path) ? nullptr : &path;
+            const std::string* importsPtr = isWhitespace(imports) ? nullptr : &imports;
+            return nlohmann::json(fo4::papyrus::AnalysisService::checkTextJson(
+                text, pathPtr, revision, importsPtr, locator_.papyrusBaseImports()));
+        } catch (const std::exception& ex) {
+            return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
+        }
+    }
     if (method == "ReadScript") {
         const auto path = trim(stringArgument(args, 0));
         if (path.empty()) return nlohmann::json("ERR:No path.");

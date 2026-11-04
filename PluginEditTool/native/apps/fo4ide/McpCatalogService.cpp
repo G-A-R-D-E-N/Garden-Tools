@@ -6,6 +6,9 @@ namespace {
 const CatalogTool kTools[] = {
     {"script_analyze", "papyrus", "Analyze", "text:string,path:string?", "Editor query: analyze. Papyrus source operation."},
     {"script_symbol_at", "papyrus", "SymbolAt", "text:string,path:string?,offset:integer?,imports:string?", "Editor operation: symbol at. Papyrus source operation."},
+    {"script_complete", "papyrus", "Complete", "text:string,path:string?,offset:integer?,imports:string?", "Editor query: complete. Papyrus source operation."},
+    {"script_signature_help", "papyrus", "SignatureHelp", "text:string,path:string?,offset:integer?,imports:string?", "Editor query: signature help. Papyrus source operation."},
+    {"script_check_text", "papyrus", "CheckText", "text:string,path:string?,revision:integer?,imports:string?", "Editor query: check text. Papyrus source operation."},
     {"script_read_script", "papyrus", "ReadScript", "path:string", "Editor query: read script. Papyrus source operation."},
     {"script_write_script", "papyrus", "WriteScript", "path:string,text:string", "Editor operation: write script. Papyrus source operation."},
     {"strings_list_tables", "strings", "ListStringTables", "plugin:string,language:string?", "Editor query: list string tables. String-table operation."},
