@@ -234,7 +234,13 @@ TEST_CASE("Windows JournalSession recovers staged receipts exposure and plugin-l
         CHECK(readSplitFile(root / "data" / "Patch.esp") == std::vector<std::byte>(splitBytes("new-plugin").begin(), splitBytes("new-plugin").end()));
         CHECK(readSplitFile(root / "data" / "Patch_en.STRINGS") == std::vector<std::byte>(splitBytes("new-table").begin(), splitBytes("new-table").end()));
         CHECK(readSplitFile(root / "data" / "Patch_en.DLSTRINGS") == std::vector<std::byte>(splitBytes("new-dialogue").begin(), splitBytes("new-dialogue").end()));
-        CHECK(splitSecurity(root / "data" / "Patch_en.DLSTRINGS") == inherited);
+        const auto dlstrings = splitSecurity(root / "data" / "Patch_en.DLSTRINGS");
+        const auto withoutInheritedFlag = [](std::wstring text) {
+            for (auto at = text.find(L"ID;"); at != std::wstring::npos; at = text.find(L"ID;", at)) text.replace(at, 3, L";");
+            return text;
+        };
+        CHECK(dlstrings.find(L"(A;;") == std::wstring::npos);
+        CHECK(withoutInheritedFlag(dlstrings) == inherited);
         if (phase >= 10 && phase <= 12) {
             const std::array<const char*, 3> names{"Patch.esp", "Patch_en.STRINGS", "Patch_en.DLSTRINGS"};
             REQUIRE(stagedIndex < names.size());

@@ -199,23 +199,25 @@ TEST_CASE("Windows authorized Papyrus root remains tied to its opened directory"
                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                 FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
             REQUIRE(handle != INVALID_HANDLE_VALUE);
-            std::filesystem::rename(replaced, moved);
-            std::filesystem::create_directories(replaced);
-            if (junction) {
-                snapshotSwapDirectory = replaced; snapshotSwapTarget = outside; snapshotSwapSucceeded = false;
-                convertSnapshotDirectoryToJunction();
-                REQUIRE(snapshotSwapSucceeded);
+            if (replaceAncestor) {
+                CHECK_THROWS_AS(std::filesystem::rename(replaced, moved), std::filesystem::filesystem_error);
             } else {
-                const auto replacementImports = replaceAncestor ? replaced / "imports" : replaced;
-                std::filesystem::create_directories(replacementImports);
-                std::ofstream out(replacementImports / "Outside.psc"); out << "Scriptname Outside\n";
+                std::filesystem::rename(replaced, moved);
+                std::filesystem::create_directories(replaced);
+                if (junction) {
+                    snapshotSwapDirectory = replaced; snapshotSwapTarget = outside; snapshotSwapSucceeded = false;
+                    convertSnapshotDirectoryToJunction();
+                    REQUIRE(snapshotSwapSucceeded);
+                } else {
+                    std::ofstream out(replaced / "Outside.psc"); out << "Scriptname Outside\n";
+                }
             }
             const auto files = fo4ide::papyrus::snapshotPapyrusSources(reinterpret_cast<std::intptr_t>(handle), 100, 128, 256);
             ::CloseHandle(handle);
             REQUIRE(files.size() == 1);
             CHECK(files[0].relativePath == "Original.psc");
             CHECK(files[0].text == "Scriptname Original\n");
-            if (junction) CHECK(::RemoveDirectoryW(replaced.c_str()) != 0);
+            if (junction && !replaceAncestor) CHECK(::RemoveDirectoryW(replaced.c_str()) != 0);
         }
     }
 }
@@ -548,8 +550,8 @@ TEST_CASE("Native CreateRecord QUST stages localized title text and persists its
         if (row.at("id") == 301 && row.at("text") == "Localized title") stagedTitle = true;
     }
     CHECK(stagedTitle);
-    REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
 
     const auto disk = fo4::read_plugin_file(path);
     const auto* full = subrecordOf(disk, key, "FULL");

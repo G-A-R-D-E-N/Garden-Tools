@@ -132,15 +132,15 @@ TEST_CASE("Held archive provider order and payload generation stay coupled") {
     const auto data = root / "Data";
     const auto archiveBytes = [](std::byte value) {
         fo4::archive::Ba2GeneralEntry entry; entry.path = "Strings\\Patch_de.STRINGS";
-        entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk({value, value}));
+        entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(std::vector<std::byte>{value, value}));
         fo4::archive::Ba2GeneralArchive archive; archive.entries.push_back(std::move(entry));
         return fo4::archive::write_ba2_general(archive);
     };
     fo4::archive::Ba2GeneralArchive first;
     fo4::archive::Ba2GeneralEntry shared; shared.path = "Strings\\Patch_de.STRINGS";
-    shared.chunks.push_back(fo4::archive::make_stored_ba2_chunk({std::byte{'A'}, std::byte{'A'}}));
+    shared.chunks.push_back(fo4::archive::make_stored_ba2_chunk(std::vector<std::byte>{std::byte{'A'}, std::byte{'A'}}));
     fo4::archive::Ba2GeneralEntry unique; unique.path = "Strings\\Patch_fr.STRINGS";
-    unique.chunks.push_back(fo4::archive::make_stored_ba2_chunk({std::byte{'F'}, std::byte{'F'}}));
+    unique.chunks.push_back(fo4::archive::make_stored_ba2_chunk(std::vector<std::byte>{std::byte{'F'}, std::byte{'F'}}));
     first.entries.push_back(std::move(shared)); first.entries.push_back(std::move(unique));
     write(data / "First.ba2", fo4::archive::write_ba2_general(first));
     write(data / "Second.ba2", archiveBytes(std::byte{'B'}));
@@ -210,7 +210,7 @@ TEST_CASE("Held archive allocation refuses duplicate table names") {
     fo4::archive::Ba2GeneralArchive archive;
     for (const auto value : {std::byte{'A'}, std::byte{'B'}}) {
         fo4::archive::Ba2GeneralEntry entry; entry.path = "Strings\\Patch_de.STRINGS";
-        entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk({value})); archive.entries.push_back(std::move(entry));
+        entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(std::vector<std::byte>{value})); archive.entries.push_back(std::move(entry));
     }
     write(data / "Duplicate.ba2", fo4::archive::write_ba2_general(archive));
     auto lease = std::make_shared<Ba2ReadRoot>(Ba2ReadRoot::authorize(data));
@@ -381,7 +381,7 @@ TEST_CASE("Journal replay verifies the full held archive provider hash") {
     const std::vector<std::byte> oldTable{std::byte{1}}, newTable{std::byte{2}};
     fo4::archive::Ba2GeneralArchive archive;
     fo4::archive::Ba2GeneralEntry entry; entry.path = "Strings\\Patch_de.STRINGS";
-    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk({std::byte{3}, std::byte{4}}));
+    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(std::vector<std::byte>{std::byte{3}, std::byte{4}}));
     archive.entries.push_back(std::move(entry));
     const auto archiveBytes = fo4::archive::write_ba2_general(archive);
     const auto archivePath = data / "Provider.ba2";
@@ -514,7 +514,7 @@ TEST_CASE("Journal archive inventory rejects mismatched and duplicate read roots
     const auto before = fo4::test::make_tes4_plugin(0, 1.0f, {}), after = fo4::test::make_tes4_plugin(fo4::RecordFlags::localized, 1.0f, {});
     fo4::archive::Ba2GeneralArchive archive;
     fo4::archive::Ba2GeneralEntry entry; entry.path = "Strings\\Patch_de.STRINGS";
-    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk({std::byte{3}})); archive.entries.push_back(std::move(entry));
+    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(std::vector<std::byte>{std::byte{3}})); archive.entries.push_back(std::move(entry));
     const auto content = fo4::archive::write_ba2_general(archive);
     write(plugin, before); write(data / "Provider.ba2", content); write(other / "Provider.ba2", content);
     JournalRoots roots; roots.plugin = plugin; roots.pluginDirectoryIdentity = JournalDestination::captureRoot(plugin.parent_path());
@@ -600,7 +600,7 @@ TEST_CASE("Profile load recovers an archive-guarded transaction before plugin re
     const auto oldTable = fo4::localization::write_string_table({Kind::strings, {{10, {std::byte{'O'}}}}});
     const auto newTable = fo4::localization::write_string_table({Kind::strings, {{10, {std::byte{'N'}}}}});
     fo4::archive::Ba2GeneralArchive archive; fo4::archive::Ba2GeneralEntry entry; entry.path = "Strings\\Patch_de.STRINGS";
-    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk({std::byte{3}})); archive.entries.push_back(std::move(entry));
+    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(std::vector<std::byte>{std::byte{3}})); archive.entries.push_back(std::move(entry));
     const auto archiveBytes = fo4::archive::write_ba2_general(archive);
     write(plugin, before); write(strings / "Patch_en.STRINGS", oldTable); write(data / "Patch - Main.ba2", archiveBytes);
     JournalRoots roots; roots.plugin = plugin; roots.pluginDirectoryIdentity = JournalDestination::captureRoot(plugin.parent_path());

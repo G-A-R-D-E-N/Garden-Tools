@@ -665,6 +665,14 @@ TEST_CASE("Windows private intent inspection binds a separate ordinary ACL desti
                 inheritedWorldRead |= (ace->Header.AceFlags & INHERITED_ACE) && (mask & FILE_READ_DATA);
             }
         }
+        SECURITY_DESCRIPTOR_CONTROL control{}; DWORD revision = 0;
+        ::GetSecurityDescriptorControl(security, &control, &revision);
+        WARN(file << " security control " << static_cast<unsigned>(control));
+        for (DWORD i = 0; i < dacl->AceCount; ++i) {
+            void* entry = nullptr;
+            ::GetAce(dacl, i, &entry);
+            WARN(file << " ace " << i << " flags " << static_cast<unsigned>(static_cast<const ACE_HEADER*>(entry)->AceFlags));
+        }
         ::LocalFree(security);
         REQUIRE(inheritedWorldRead);
         REQUIRE((worldAllowed & (FILE_WRITE_DATA | FILE_APPEND_DATA | FILE_WRITE_EA | FILE_WRITE_ATTRIBUTES | DELETE | WRITE_DAC | WRITE_OWNER)) == 0);
