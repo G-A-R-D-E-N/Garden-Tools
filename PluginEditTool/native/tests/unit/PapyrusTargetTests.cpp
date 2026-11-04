@@ -532,8 +532,9 @@ TEST_CASE("PapyrusTarget References, Rename and WorkspaceSymbols answer a script
     auto symbols = target.invoke("WorkspaceSymbols", nlohmann::json::array({"help", 0, imports}));
     REQUIRE(symbols.has_value());
     REQUIRE(symbols->is_string());
+    const auto listing = nlohmann::json::parse(symbols->get<std::string>());
     bool helpListed = false;
-    for (const auto& symbol : nlohmann::json::parse(symbols->get<std::string>()).at("results")) {
+    for (const auto& symbol : listing.at("results")) {
         if (symbol.at("name").get<std::string>() == "Help" && symbol.at("file").is_string() &&
             symbol.at("file").get<std::string>().ends_with("Helper.psc")) {
             helpListed = true;
