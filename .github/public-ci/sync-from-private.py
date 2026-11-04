@@ -136,7 +136,7 @@ def is_due(target, source, states, held):
 
 
 def oldest_first(due, dates):
-    return sorted(due, key=lambda target: dates[target.head])
+    return sorted(due, key=lambda target: (target.number is not None, dates[target.head]))
 
 
 def stale_pr_branches(branches, open_numbers):
