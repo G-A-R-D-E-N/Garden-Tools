@@ -116,7 +116,7 @@ TravelPackageResult create_travel_package(Plugin& plugin,
   add("CITC", bytes({0, 0, 0, 0}));
   add("PNAM", zstring("Travel"));
   add("FNAM", bytes({1, 0, 0, 0}));
-  for (const std::uint8_t id : {1, 0xFF, 3, 5, 7, 0xFF, 0xFF, 0xFF}) add("PKC2", bytes({id}));
+  for (const std::uint8_t id : std::initializer_list<std::uint8_t>{1, 0xFF, 3, 5, 7, 0xFF, 0xFF, 0xFF}) add("PKC2", bytes({id}));
 
   const auto name = [&add](std::uint8_t id, std::string_view label) {
     add("UNAM", bytes({id}));
