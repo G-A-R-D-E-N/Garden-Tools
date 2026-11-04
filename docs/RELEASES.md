@@ -9,6 +9,13 @@ FO4IDE/Radicle release is built from, and tagged on, a `nomad/dev` commit.
 Nothing publishes automatically: `.github/workflows/release.yml` is a build-only lane with
 `permissions: contents: read`, so it cannot create tags or releases even by accident.
 
+## GitHub CI package (current)
+
+The GitHub CI job `fo4ide-package` (`.github/public-ci/workflows/native-ci.yml`) saves the zip
+`PluginEditTool/dist/FO4RecordEditor-<version>.zip` as the artifact `fo4ide-package` for 14 days.
+Releases are published from that artifact. `<version>` is the `package.ps1` default (build date)
+because CI passes no `-Version`. The Forgejo lane below is stale.
+
 ## Build lane
 
 1. Forgejo Actions -> `release` -> **Run workflow**, with `version` (e.g. `0.1.0-alpha.1`) and
