@@ -611,6 +611,14 @@ std::optional<Type> Resolver::resolveTypeName(ScriptIndex& index, const std::str
                 if (iequals(s.name, name)) return Type::structOf(level->name, s.name);
             }
         }
+        // Imported structs must be searched after the base chain so a local struct shadows them.
+        for (const auto& import : relativeTo->imports) {
+            const Script* imported = index.resolve(import.name);
+            if (!imported) continue;
+            for (const auto& s : imported->structs) {
+                if (iequals(s.name, name)) return Type::structOf(imported->name, s.name);
+            }
+        }
     }
 
     // '#' must split like ':' because decompiled sources spell a foreign struct as Script#Struct.
