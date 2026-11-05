@@ -27,6 +27,7 @@ REAL_CTEST = (" 86/501 Test #2355: Ba2RealData.ExtractsEveryVanillaEntry .......
               "The following tests FAILED:\n"
               "\t3720 - CApiRuntimeReal.ReplaysTheSevenProgramsDeterministically (Failed)\n"
               "Errors while running CTest\n")
+CALL_FAILED = subprocess.CalledProcessError(1, "gh", stderr="HTTP 502\n")
 
 
 def target(number=7, sha=SHA, base="nomad/dev", updated="2026-11-01T00:00:00Z", draft=False):
@@ -38,7 +39,7 @@ class FakeGitHub:
         self.files, self.states, self.conclusions, self.head = list(files), list(states), list(conclusions), head
         self.calls, self.posts = [], []
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         self.calls.append(args)
         if "-f" in args:
             self.posts.append(dict(args[i + 1].split("=", 1) for i, arg in enumerate(args[:-1]) if arg == "-f"))
@@ -92,6 +93,11 @@ class DueDecisionTest(ServiceTest):
 
     def test_pending_status_left_by_a_dead_run_is_due_again(self):
         self.gh.states = ["pending"]
+        self.gh.files = ["PluginEditTool/native/src/a.cpp"]
+        self.assertEqual(rds.plan(target()), "run")
+
+    def test_queued_status_does_not_count_as_done(self):
+        self.gh.states = ["pending queued (position 1 of 2)"]
         self.gh.files = ["PluginEditTool/native/src/a.cpp"]
         self.assertEqual(rds.plan(target()), "run")
 
@@ -160,10 +166,73 @@ class DraftTest(ServiceTest):
 
 
 class OrderTest(unittest.TestCase):
-    def test_dev_head_first_then_newest_updated_pr(self):
+    def test_dev_head_then_prs_into_dev_then_stacked_then_drafts_each_newest_first(self):
         targets = [target(1, updated="2026-11-01T01:00:00Z"), target(2, updated="2026-11-01T05:00:00Z"),
+                   target(3, updated="2026-11-01T09:00:00Z", base="work/stack"),
+                   target(4, updated="2026-11-01T07:00:00Z", draft=True),
                    rds.Target(rds.DEV_BRANCH, SHA, "2026-10-01T00:00:00Z", "")]
-        self.assertEqual([t.name for t in rds.order(targets)], [rds.DEV_BRANCH, "#2", "#1"])
+        self.assertEqual([t.name for t in rds.order(targets)], [rds.DEV_BRANCH, "#2", "#1", "#3", "#4"])
+
+
+class QueueTest(ServiceTest):
+    def test_queued_status_is_posted_only_when_the_position_changes(self):
+        statuses = {SHA: ("pending", "queued (position 1 of 2)"), NEW: (None, "")}
+        with mock.patch.object(rds, "latest_status", side_effect=statuses.__getitem__), \
+                mock.patch.object(rds, "post") as post:
+            rds.post_queue([target(1, sha=SHA), target(2, sha=NEW)])
+        post.assert_called_once_with(NEW, "pending", "queued (position 2 of 2)")
+
+    def test_run_pass_queues_every_due_head_and_refreshes_positions_after_each_job(self):
+        self.gh.files = ["Radicle/src/a.cpp"]
+        targets = [target(1, sha=SHA, updated="2026-11-01T01:00:00Z"),
+                   target(2, sha=NEW, updated="2026-11-01T05:00:00Z")]
+        with mock.patch.object(rds, "open_targets", return_value=targets), \
+                mock.patch.object(rds, "latest_status", return_value=(None, "")), \
+                mock.patch.object(rds, "post") as post, \
+                mock.patch.object(rds, "run_target") as run_target:
+            rds.run_pass()
+        self.assertEqual(post.call_args_list, [
+            mock.call(NEW, "pending", "queued (position 1 of 2)"),
+            mock.call(SHA, "pending", "queued (position 2 of 2)"),
+            mock.call(SHA, "pending", "queued (position 1 of 1)"),
+        ])
+        self.assertEqual(run_target.call_args_list, [mock.call(targets[1]), mock.call(targets[0])])
+
+
+class RetryTest(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.object(rds, "RETRY_DELAYS", (0, 0)))
+        self.run = self.enterContext(mock.patch.object(rds.subprocess, "run"))
+
+    def test_a_failed_read_is_retried_and_its_stderr_is_logged(self):
+        ok = subprocess.CompletedProcess([], 0, stdout="7\n", stderr="")
+        self.run.side_effect = [CALL_FAILED, CALL_FAILED, ok]
+        with self.assertLogs(level="WARNING") as logs:
+            self.assertEqual(rds.gh("api", "repos/x"), "7\n")
+        self.assertEqual(self.run.call_count, 3)
+        self.assertIn("HTTP 502", logs.output[0])
+
+    def test_a_read_gives_up_after_three_attempts(self):
+        self.run.side_effect = CALL_FAILED
+        with self.assertLogs(level="WARNING"), self.assertRaises(subprocess.CalledProcessError):
+            rds.gh("api", "repos/x")
+        self.assertEqual(self.run.call_count, 3)
+
+    def test_a_status_post_is_tried_at_most_twice(self):
+        self.run.side_effect = CALL_FAILED
+        with self.assertLogs(level="WARNING"), self.assertRaises(subprocess.CalledProcessError):
+            rds.post(SHA, "error", "superseded")
+        self.assertEqual(self.run.call_count, 2)
+
+    def test_public_sync_is_tried_once_and_its_warning_has_scrubbed_stderr(self):
+        self.run.side_effect = subprocess.CalledProcessError(
+            1, "gh", stderr="HTTP 403: Forbidden for Ricky (https://api.github.com/repos/x)\n")
+        with mock.patch.dict(os.environ, {"USERNAME": "Ricky"}), self.assertLogs(level="WARNING") as logs:
+            rds.request_public_sync()
+        self.assertEqual(self.run.call_count, 1)
+        self.assertIn("public CI sync not started: HTTP 403: Forbidden for", logs.output[-1])
+        self.assertNotIn("Ricky", logs.output[-1])
+        self.assertNotIn("https", logs.output[-1])
 
 
 class StatusTextTest(ServiceTest):
@@ -210,7 +279,7 @@ class WorkflowFileTest(ServiceTest):
         rds.REPO_DIR.mkdir(parents=True)
         calls = []
 
-        def fake_git(*args, cwd=None):
+        def fake_git(*args, **kwargs):
             calls.append(args)
             return "name: dev copy\n" if args[:1] == ("show",) else ""
 
@@ -226,7 +295,7 @@ class PublicSyncTest(ServiceTest):
         with mock.patch.object(rds, "gh") as gh:
             rds.request_public_sync()
         gh.assert_called_once_with("workflow", "run", "sync-from-private.yml", "--repo", "G-A-R-D-E-N/Garden-Tools",
-                                   "--ref", "main")
+                                   "--ref", "main", attempts=1)
 
     # Detects: a GitHub outage ending the sync thread, so private pushes wait hours for a delayed schedule.
     def test_a_failed_request_does_not_stop_the_loop(self):
@@ -239,7 +308,7 @@ class CheckoutTest(ServiceTest):
     def git_calls(self, parents):
         calls = []
 
-        def fake_git(*args, cwd=None):
+        def fake_git(*args, **kwargs):
             calls.append(args)
             return f"{'c' * 40} {parents}\n" if args[:1] == ("rev-list",) else ""
 

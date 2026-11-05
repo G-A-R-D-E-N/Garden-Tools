@@ -2939,7 +2939,7 @@ The build no longer runs `--check`, and `PluginEditTool/FO4RecordEditor.Tests/Sh
 
 ## ci/real-data-service/real_data_service.py:open_targets — which heads are checked, and in what order
 
-The service lists open PRs with `gh pr list` (number, head sha, base, `updatedAt`, `isDraft`) and adds the `nomad/dev` head as a push-style target. `order` puts `nomad/dev` first, then PRs by newest `updatedAt`, so active work gets a result soonest. Draft PRs are skipped before any API call and never get a status. Changed paths for a PR come from its files list; for `nomad/dev` they are the diff against its first parent, which matches a push. The Radicle, PluginEditTool, cmake, root CMakeLists, `.github/scripts` and workflow paths are checked against the list in `TOUCHES`, which mirrors the `pull_request` paths of `.github/workflows/native-real-data.yml`. The list is hand-kept: when that workflow's paths change, change `TOUCHES` in the same commit.
+The service lists open PRs with `gh pr list` (number, head sha, base, `updatedAt`, `isDraft`) and adds the `nomad/dev` head as a push-style target. `order` puts `nomad/dev` first, then non-draft PRs whose base is `nomad/dev`, then every other PR (stacked on another branch, or a draft), each group by newest `updatedAt`. A PR into `nomad/dev` therefore is not held behind a stack of child PRs that were pushed more recently. Draft PRs are skipped before any API call and never get a status. Changed paths for a PR come from its files list; for `nomad/dev` they are the diff against its first parent, which matches a push. The Radicle, PluginEditTool, cmake, root CMakeLists, `.github/scripts` and workflow paths are checked against the list in `TOUCHES`, which mirrors the `pull_request` paths of `.github/workflows/native-real-data.yml`. The list is hand-kept: when that workflow's paths change, change `TOUCHES` in the same commit.
 
 ## ci/real-data-service/real_data_service.py:prepare_checkout — merge ref and clean tree
 
@@ -2975,7 +2975,7 @@ The task `GardenRealDataService` runs `python -I -B <copy>\real_data_service.py 
 
 ## ci/real-data-service/test_real_data_service.py:DueDecisionTest — due and not-affected decisions
 
-`test_scope_path_without_status_is_due` detects a PR touching `Radicle/` with no status being skipped. `test_posted_status_is_done_without_listing_files` detects a head with a result being rebuilt on every two-minute pass. `test_pending_status_left_by_a_dead_run_is_due_again` detects a crashed run's `pending` status blocking its head forever. `test_untouched_paths_are_not_affected` detects a prefix match such as `Radiclexx/` counting as `Radicle/`. `test_root_cmakelists_matches_exactly_and_workflow_file_is_in_scope` detects a nested `CMakeLists.txt` triggering a build, or the workflow file itself being left out.
+`test_scope_path_without_status_is_due` detects a PR touching `Radicle/` with no status being skipped. `test_posted_status_is_done_without_listing_files` detects a head with a result being rebuilt on every two-minute pass. `test_pending_status_left_by_a_dead_run_is_due_again` detects a crashed run's `pending` status blocking its head forever. `test_untouched_paths_are_not_affected` detects a prefix match such as `Radiclexx/` counting as `Radicle/`. `test_root_cmakelists_matches_exactly_and_workflow_file_is_in_scope` detects a nested `CMakeLists.txt` triggering a build, or the workflow file itself being left out. `test_queued_status_does_not_count_as_done` detects a queued status posted at the start of a pass making its own head look finished and never run.
 
 ## ci/real-data-service/test_real_data_service.py:NotAffectedTest — out-of-scope PRs
 
@@ -3003,7 +3003,7 @@ The task `GardenRealDataService` runs `python -I -B <copy>\real_data_service.py 
 
 ## ci/real-data-service/real_data_service.py:plan — decision order per target
 
-Draft first (no API call), then done (any `real-data` status except `pending`), then earlier (a successful check-run named after `CHECK_RUN`: that job already passed on the earlier runner, so `run_pass` posts `success` "passed on the earlier runner" and no build runs), then run or not affected from the changed paths. Failed, cancelled and missing check-runs do not count as passed. `passed_earlier` reads all check-runs of the head through the commits API.
+Draft first (no API call), then done (any `real-data` status except `pending`; a `pending` "queued (position N of M)" from `post_queue` is still due), then earlier (a successful check-run named after `CHECK_RUN`: that job already passed on the earlier runner, so `run_pass` posts `success` "passed on the earlier runner" and no build runs), then run or not affected from the changed paths. Failed, cancelled and missing check-runs do not count as passed. `passed_earlier` reads all check-runs of the head through the commits API.
 
 ## ci/real-data-service/real_data_service.py:in_scope — what counts as touching
 
@@ -3033,9 +3033,9 @@ Failed names come only from the `The following tests FAILED:` section, not from 
 
 `test_draft_is_skipped_without_any_github_call` detects drafts costing API calls or builds. `test_run_pass_leaves_drafts_unstatused` detects a draft getting a status, which would block or mislead a merge decision.
 
-## ci/real-data-service/test_real_data_service.py:OrderTest — dev head first, then newest updated
+## ci/real-data-service/test_real_data_service.py:OrderTest — dev head, PRs into dev, stacked, drafts
 
-`test_dev_head_first_then_newest_updated_pr` detects active PRs queued behind old ones, and the dev head missing its place at the front.
+`test_dev_head_then_prs_into_dev_then_stacked_then_drafts_each_newest_first` detects a stacked child PR, pushed after a PR into `nomad/dev`, being run first and holding up the direct PR, and the dev head missing its place at the front.
 
 ## ci/real-data-service/test_real_data_service.py:WorkflowFileTest — which workflow runs
 
@@ -3071,3 +3071,31 @@ Save keeps one `.bak` per movie and never overwrites it. Save As can target any 
 ## ci/real-data-service/install_task.ps1 — the task restarts a stopped service
 
 On 2026-11-02 the service process ended after a run without logging why, and the logon-only trigger never started it again, so real-data and the public CI sync stopped for hours. The task now also fires every 15 minutes; `-MultipleInstances IgnoreNew` and the run lock keep a running service from being doubled. `ci/real-data-service/real_data_service.py` logs any fatal exception as "service stopped" before exiting, so the next stop leaves a reason.
+
+## ci/real-data-service/real_data_service.py:run_pass — plan the whole pass, then run due heads
+
+`run_pass` plans every target first. Earlier and not-affected heads get their `success` at once, and the due ones are collected in `order`. `post_queue` then marks each waiting head `pending` "queued (position N of M)", so a head shows its place from the start of the pass instead of nothing until its turn. Jobs run one at a time. After each job, `post_queue` is called for the heads still waiting, so their numbers count down. A head that moved during the pass is skipped by `prepare_checkout`, because the merge ref or `nomad/dev` head no longer matches; it stays due and is planned again on a later pass.
+
+## ci/real-data-service/real_data_service.py:post_queue — queued position text
+
+`post_queue` posts `pending` only when the newest `real-data` status of the head is not already that exact text, so an unchanged queue makes no writes. A head whose PR was closed or moved to a new commit while it waited keeps its last queued text on that commit; nothing clears it. The head is still due if it is listed again, for example after the commit lands on `nomad/dev`. A failed read or post is logged and does not stop the pass.
+
+## ci/real-data-service/real_data_service.py:run_command — retries of reads and status posts
+
+`run_command` runs `gh` or `git` and retries a failed call with `RETRY_DELAYS` (5 seconds, then 15) between tries. `gh` reads use `READ_ATTEMPTS` (3), and so do the two `git fetch` calls in `prepare_checkout` and `workflow_file`. Every failed attempt is logged with the command's subcommand and the scrubbed stderr, so a transient failure leaves a reason in `service.log`. Status posts use 2 attempts, because a status with the same state and description is idempotent. The public CI dispatch uses 1 attempt: a dispatch that went through but whose reply was lost would start a second sync. Other `git` calls (clone, clean, checkout, show) run once.
+
+## ci/real-data-service/real_data_service.py:failure_text — scrubbed stderr for logs
+
+`failure_text` takes the captured stderr of a failed call, or the exception text when there is none, joins it onto one line and passes it through `clean`. That removes the Windows user name, paths and URLs before the text reaches a log line. The 140-character cap of `clean` applies to log lines too.
+
+## ci/real-data-service/real_data_service.py:request_public_sync — stderr in the warning
+
+The "public CI sync not started" warning carries gh's reason through `failure_text`. The dispatch is not retried, so each failed 5-minute attempt logs one `attempt 1 of 1` line from `run_command` and then this warning.
+
+## ci/real-data-service/test_real_data_service.py:QueueTest — queued positions
+
+`test_queued_status_is_posted_only_when_the_position_changes` detects a queued status posted again on every pass, which is write churn, or a position that never updates. `test_run_pass_queues_every_due_head_and_refreshes_positions_after_each_job` detects a waiting head showing no status until its turn, and waiting heads keeping their pass-start numbers while earlier jobs finish.
+
+## ci/real-data-service/test_real_data_service.py:RetryTest — retries and scrubbed stderr
+
+`test_a_failed_read_is_retried_and_its_stderr_is_logged` detects one transient `gh api` failure ending a target's pass with no status and no reason logged. `test_a_read_gives_up_after_three_attempts` detects an unbounded retry loop. `test_a_status_post_is_tried_at_most_twice` detects a status POST retried without a limit. `test_public_sync_is_tried_once_and_its_warning_has_scrubbed_stderr` detects a dispatch retried, which could start a second sync, and a sync warning that drops gh's reason or leaks the user name or a URL.
