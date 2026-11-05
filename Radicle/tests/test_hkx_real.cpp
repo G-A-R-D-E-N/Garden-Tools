@@ -2,6 +2,7 @@
 #include "fo4/hkx/animation.hpp"
 #include "fo4/hkx/packfile.hpp"
 #include "fo4/hkx/skeleton.hpp"
+#include "fo4/hkx/summary.hpp"
 #include "hkx_animation_manifest.hpp"
 #include "hkx_seam_ratio.hpp"
 #include "real_data_build.hpp"
@@ -194,4 +195,53 @@ TEST(HkxAnimationRealData, MatchesTheBgsManifestForTheRadroachClip) {
   const std::string golden = without_carriage_returns(read_text_file(manifest_path));
   ASSERT_FALSE(golden.empty()) << "missing " << manifest_path.string();
   EXPECT_EQ(fo4::test::hkx::animation_manifest(animation), golden);
+}
+
+// Constraint: the summary must report the decoded skeleton and clip, not merely that an animation class object exists.
+TEST(HkxSummaryReal, SummarisesTheVanillaSkeletonAndTheRadroachClip) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  record_game_build(detect_game_build(dir));
+  const std::vector<std::string> plugins{"Fallout4.esm"};
+  const auto archives = fo4::archive::archive_load_order(dir, {}, plugins);
+  if (archives.empty()) {
+    GTEST_SKIP() << "no Fallout 4 archives found under FO4_DATA_DIR";
+  }
+  const auto assets = fo4::archive::AssetResolver::open(dir, archives);
+
+  const auto skeleton_location = assets.locate("meshes/actors/character/characterassets/skeleton.hkx");
+  if (!skeleton_location) {
+    GTEST_SKIP() << "no character skeleton in the installed archives";
+  }
+  const auto skeleton_bytes = assets.read(*skeleton_location);
+  fo4::hkx::HkxPackfile skeleton_packfile;
+  ASSERT_EQ(fo4::hkx::read_packfile(skeleton_bytes, skeleton_packfile), fo4::hkx::HkxStatus::Ok);
+  const auto skeleton_summary = fo4::hkx::read_summary(skeleton_packfile);
+  ASSERT_TRUE(skeleton_summary.has_skeleton);
+  EXPECT_EQ(skeleton_summary.bone_names.size(), 95u);
+  ASSERT_FALSE(skeleton_summary.bone_names.empty());
+  EXPECT_EQ(skeleton_summary.bone_names.front(), "Root");
+  ASSERT_FALSE(skeleton_summary.parent_indices.empty());
+  EXPECT_EQ(skeleton_summary.parent_indices.front(), -1);
+
+  // Requires a decoded clip, so a View (undecoded) animation class must not be reported as a clip.
+  const auto clip_location = assets.locate("meshes/actors/radroach/animations/turnleft90.hkx");
+  if (!clip_location) {
+    GTEST_SKIP() << "no animation archive in the installed data";
+  }
+  const auto clip_bytes = assets.read(*clip_location);
+  fo4::hkx::HkxPackfile clip_packfile;
+  ASSERT_EQ(fo4::hkx::read_packfile(clip_bytes, clip_packfile), fo4::hkx::HkxStatus::Ok);
+  const auto clip_summary = fo4::hkx::read_summary(clip_packfile);
+  ASSERT_EQ(clip_summary.clips.size(), 1U);
+  const auto& clip = clip_summary.clips.front();
+  EXPECT_EQ(clip.kind, fo4::hkx::HkxAnimationKind::Spline);
+  EXPECT_EQ(clip.class_name, "hkaSplineCompressedAnimation");
+  EXPECT_GT(clip.frame_count, 1U);
+  EXPECT_GT(clip.duration, 0.0f);
+  EXPECT_GT(clip.track_count, 0U);
+  ASSERT_FALSE(clip_summary.binding_skeletons.empty());
+  EXPECT_FALSE(clip_summary.binding_skeletons.front().empty());
 }
