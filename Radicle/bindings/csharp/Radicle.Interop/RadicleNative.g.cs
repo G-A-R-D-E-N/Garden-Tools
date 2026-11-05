@@ -1783,6 +1783,14 @@ public unsafe struct DialogueTopicSpec
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct SceneSpec
+{
+    public IntPtr EditorId;
+    public uint Flags;
+    public uint Index;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct DialogueResponseSpec
 {
     public IntPtr Text;
@@ -3878,6 +3886,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_dialogue_info")]
     public static extern Status PluginRemoveDialogueInfo(IntPtr plugin, FormKey info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_scene")]
+    public static extern Status PluginCreateScene(IntPtr plugin, FormKey quest, SceneSpec* spec, FormKey* out_key);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_list_read")]
     public static extern Status PluginListRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_rows, nuint* out_count);
