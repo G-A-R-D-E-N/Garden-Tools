@@ -500,7 +500,6 @@ struct QuestAliasEdit {
   Record* record{nullptr};
   Subrecord* vmad{nullptr};
   std::size_t tail_start{0};
-  std::int16_t version{0};
   std::int16_t object_format{0};
   bool has_extras{false};
   QuestVmadExtras extras;
@@ -536,7 +535,6 @@ std::optional<VmadStructureMutationStatus> load_quest_aliases(Plugin& plugin,
   edit.record = vmad.record;
   edit.vmad = vmad.vmad;
   edit.tail_start = vmad.leading_end;
-  edit.version = vmad.scripts.version;
   edit.object_format = vmad.scripts.object_format;
   if (vmad.scripts.trailing_bytes != 0) read_quest_alias_extras(edit);
   return std::nullopt;
@@ -806,7 +804,8 @@ VmadStructureMutationStatus add_quest_alias_script(Plugin& plugin, const FormKey
     open_quest_alias_extras(edit);
     std::vector<std::byte> entry;
     append_object(entry, RawFormId{0u}, alias_id, edit.object_format);
-    append_u16(entry, static_cast<std::uint16_t>(edit.version));
+    // Constraint: a new alias entry writes version 6 (CK constant, RVA 0x2a88300 in E:\RE-work\scratch\ck_research\writer_chain2.txt).
+    append_u16(entry, 6);
     append_u16(entry, static_cast<std::uint16_t>(edit.object_format));
     append_u16(entry, 1);
     entry.insert(entry.end(), script.begin(), script.end());

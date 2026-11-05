@@ -101,9 +101,11 @@ std::vector<std::byte> aliasScriptQuestWithAlias() {
     return out.bytes;
 }
 
-std::vector<std::byte> aliasScriptQuestBare() {
+std::vector<std::byte> aliasScriptQuestBare(std::uint16_t version = 6) {
     fo4::test::ByteWriter out;
-    aliasScriptLeading(out);
+    out.u16(version);
+    out.u16(2);
+    out.u16(0);
     out.u8(3);
     out.u16(0);
     out.u16(0);
@@ -117,7 +119,7 @@ std::vector<std::byte> aliasScriptEmptyVmad() {
     return out.bytes;
 }
 
-std::vector<std::byte> aliasScriptPatch() {
+std::vector<std::byte> aliasScriptPatch(std::uint16_t bareVersion = 6) {
     fo4::test::ByteWriter out;
     aliasScriptHeader(out, {"Base.esm"});
     const auto top = fo4::test::begin_group(out, "QUST", 0);
@@ -127,7 +129,7 @@ std::vector<std::byte> aliasScriptPatch() {
     fo4::test::end_record(out, quest);
     const auto bare = fo4::test::begin_record(out, "QUST", 0, 0x01000802u);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"Bare\0", 5});
-    fo4::test::write_subrecord(out, "VMAD", aliasScriptQuestBare());
+    fo4::test::write_subrecord(out, "VMAD", aliasScriptQuestBare(bareVersion));
     fo4::test::end_record(out, bare);
     const auto plain = fo4::test::begin_record(out, "QUST", 0, 0x01000803u);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"Plain\0", 6});
@@ -406,7 +408,7 @@ TEST_CASE("Native quest alias script inserts a middle script into an existing al
     CHECK(extras.fully_consumed);
 }
 
-TEST_CASE("Native quest alias script new entry carries the leading version, object format and a zero object word") {
+TEST_CASE("Native quest alias script new entry carries version 6, the object format and a zero object word") {
     const auto root = aliasScriptTempRoot();
     AliasScriptCleanup cleanup{root};
     const auto basePath = root / "Base.esm";
@@ -444,6 +446,46 @@ TEST_CASE("Native quest alias script new entry carries the leading version, obje
     CHECK(word(start + 2) == 4u);
     CHECK(word(start + 4) == 0u);
     CHECK(word(start + 6) == 0u);
+    CHECK(word(start + 8) == 6u);
+    CHECK(word(start + 10) == 2u);
+    CHECK(word(start + 12) == 1u);
+}
+
+TEST_CASE("Native quest alias script new entry writes version 6 under a leading version 5 VMAD") {
+    const auto root = aliasScriptTempRoot();
+    AliasScriptCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    aliasScriptWriteBytes(basePath, aliasScriptBase());
+    aliasScriptWriteBytes(patchPath, aliasScriptPatch(5));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    aliasScriptLoad(backend, basePath, patchPath);
+    const std::string key = "000802:Patch.esp";
+
+    REQUIRE(backend.addAliasScript(nlohmann::json::array({"Patch.esp", key, 4, "Only", 1, 0})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    auto reread = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(reread, fo4::FormKey::parse(key));
+    REQUIRE(record != nullptr);
+    const auto* sub = aliasScriptVmad(*record);
+    REQUIRE(sub != nullptr);
+    const auto scripts = fo4::read_vmad_scripts(sub->data);
+    REQUIRE(scripts.version == 5);
+    REQUIRE(scripts.object_format == 2);
+    REQUIRE(scripts.trailing_bytes > 0);
+    const auto extras = fo4::read_quest_vmad_extras(
+        std::span<const std::byte>(sub->data).subspan(sub->data.size() - scripts.trailing_bytes),
+        scripts.object_format);
+    REQUIRE(extras.aliases.size() == 1u);
+    CHECK(extras.aliases[0].alias_id == 4);
+    CHECK(extras.aliases[0].version == 6);
+    const auto start = sub->data.size() - scripts.trailing_bytes + extras.aliases[0].offset;
+    const auto word = [&](std::size_t at) {
+        return static_cast<unsigned>(std::to_integer<std::uint8_t>(sub->data[at])) |
+               (static_cast<unsigned>(std::to_integer<std::uint8_t>(sub->data[at + 1])) << 8);
+    };
     CHECK(word(start + 8) == 6u);
     CHECK(word(start + 10) == 2u);
     CHECK(word(start + 12) == 1u);
