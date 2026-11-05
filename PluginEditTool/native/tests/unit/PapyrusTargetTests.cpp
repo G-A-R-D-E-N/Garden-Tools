@@ -466,6 +466,83 @@ TEST_CASE("PapyrusTarget Complete, SignatureHelp and CheckText answer an unsaved
     CHECK(hasCode(checked, "PAP0030"));
 }
 
+TEST_CASE("PapyrusTarget References, Rename and WorkspaceSymbols answer a script tree and a rename writes no file") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto scripts = root / "scripts";
+    touch(scripts / "Helper.psc", "ScriptName Helper\nFunction Help()\nEndFunction\n");
+    touch(scripts / "User.psc", "ScriptName User\nFunction F()\n  Helper h = None\nEndFunction\n");
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+    const auto imports = scripts.string();
+    const auto helperPath = (scripts / "Helper.psc").string();
+    const std::string helperText = "ScriptName Helper\nFunction Help()\nEndFunction\n";
+    const auto helperOffset = static_cast<int>(helperText.find("Helper") + 1);
+    const auto userBefore = readBytes(scripts / "User.psc");
+    const auto entriesBefore = std::distance(std::filesystem::directory_iterator(scripts),
+                                             std::filesystem::directory_iterator{});
+
+    auto references = target.invoke("References",
+                                    nlohmann::json::array({helperText, helperPath, helperOffset, imports}));
+    REQUIRE(references.has_value());
+    REQUIRE(references->is_string());
+    const auto found = nlohmann::json::parse(references->get<std::string>());
+    CHECK(found.at("declaration").at("kind").get<std::string>() == "Script");
+    bool inUser = false;
+    for (const auto& hit : found.at("references")) {
+        if (hit.at("file").is_string() && hit.at("file").get<std::string>().ends_with("User.psc")) inUser = true;
+    }
+    CHECK(inUser);
+
+    auto renamed = target.invoke("Rename",
+                                 nlohmann::json::array({helperText, helperPath, helperOffset, "Helper2", imports}));
+    REQUIRE(renamed.has_value());
+    REQUIRE(renamed->is_string());
+    const auto renamePlan = nlohmann::json::parse(renamed->get<std::string>());
+    CHECK(renamePlan.at("ok").get<bool>());
+    CHECK(renamePlan.at("fileRename").at("to").get<std::string>().ends_with("Helper2.psc"));
+    CHECK(std::filesystem::is_regular_file(scripts / "Helper.psc"));
+    CHECK(!std::filesystem::exists(scripts / "Helper2.psc"));
+    CHECK(readBytes(scripts / "User.psc") == userBefore);
+    CHECK(std::distance(std::filesystem::directory_iterator(scripts), std::filesystem::directory_iterator{}) ==
+          entriesBefore);
+
+    const std::string keywordRename = "Int";
+    auto refused = target.invoke("Rename",
+                                 nlohmann::json::array({helperText, helperPath, helperOffset, keywordRename, imports}));
+    REQUIRE(refused.has_value());
+    CHECK(nlohmann::json::parse(refused->get<std::string>()).at("ok") == false);
+
+    const std::string localText = "ScriptName Counter\nFunction F()\n  Int n = 1\n  Int m = n\nEndFunction\n";
+    const auto localOffset = static_cast<int>(localText.find("Int n = 1") + 4);
+    auto localRefs = target.invoke("References", nlohmann::json::array({localText, "", localOffset, ""}));
+    REQUIRE(localRefs.has_value());
+    REQUIRE(localRefs->is_string());
+    CHECK(nlohmann::json::parse(localRefs->get<std::string>()).at("references").size() == 2);
+    auto localRename = target.invoke("Rename", nlohmann::json::array({localText, "", localOffset, "total", ""}));
+    REQUIRE(localRename.has_value());
+    REQUIRE(localRename->is_string());
+    const auto edited = nlohmann::json::parse(localRename->get<std::string>());
+    CHECK(edited.at("edits").size() == 2);
+    CHECK(edited.at("fileRename").is_null());
+
+    auto symbols = target.invoke("WorkspaceSymbols", nlohmann::json::array({"help", 0, imports}));
+    REQUIRE(symbols.has_value());
+    REQUIRE(symbols->is_string());
+    const auto listing = nlohmann::json::parse(symbols->get<std::string>());
+    bool helpListed = false;
+    for (const auto& symbol : listing.at("results")) {
+        if (symbol.at("name").get<std::string>() == "Help" && symbol.at("file").is_string() &&
+            symbol.at("file").get<std::string>().ends_with("Helper.psc")) {
+            helpListed = true;
+        }
+    }
+    CHECK(helpListed);
+}
+
 TEST_CASE("PapyrusTarget ReadScript and WriteScript round-trip with guards") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

@@ -88,6 +88,38 @@ RADICLE_API radicle_status radicle_papyrus_check_text_json(const uint8_t* text,
                                                            uint8_t** out_text,
                                                            size_t* out_size);
 
+/* Invariant: text is the unsaved buffer and offset must lie inside it, else INVALID_ARGUMENT. Requires radicle_free_bytes. */
+RADICLE_API radicle_status radicle_papyrus_references_json(const uint8_t* text,
+                                                           size_t size,
+                                                           const char* file_path,
+                                                           int32_t offset,
+                                                           const char* imports,
+                                                           const char* const* base_imports,
+                                                           size_t base_count,
+                                                           uint8_t** out_text,
+                                                           size_t* out_size);
+
+/* Invariant: new_name is required; a refused rename is a {"ok":false} JSON object with status OK and nothing is written. Requires radicle_free_bytes. */
+RADICLE_API radicle_status radicle_papyrus_rename_json(const uint8_t* text,
+                                                       size_t size,
+                                                       const char* file_path,
+                                                       int32_t offset,
+                                                       const char* new_name,
+                                                       const char* imports,
+                                                       const char* const* base_imports,
+                                                       size_t base_count,
+                                                       uint8_t** out_text,
+                                                       size_t* out_size);
+
+/* Invariant: query is required; a limit of zero or less uses the default and a larger limit is capped. Requires radicle_free_bytes. */
+RADICLE_API radicle_status radicle_papyrus_workspace_symbols_json(const char* query,
+                                                                  int32_t limit,
+                                                                  const char* imports,
+                                                                  const char* const* base_imports,
+                                                                  size_t base_count,
+                                                                  uint8_t** out_text,
+                                                                  size_t* out_size);
+
 /* Invariant: a NULL or empty output_path writes to the source's folder; a nonzero release drops DebugOnly and BetaOnly code. Requires radicle_free_bytes. */
 RADICLE_API radicle_status radicle_papyrus_compile_path(const char* source,
                                                         const char* output_path,

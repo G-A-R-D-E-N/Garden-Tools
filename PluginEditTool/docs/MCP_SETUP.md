@@ -5,11 +5,11 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **169 tools**: 70 hand-written tools and 99 catalog tools. The 70 are 20 for plugins and records,
+It advertises **172 tools**: 70 hand-written tools and 102 catalog tools. The 70 are 20 for plugins and records,
 29 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects, weapons and perks), 5 for MO2 profile
 and host state, 5 for Papyrus, and 11 for NIFs, materials, audio and BA2 archives (4 NIF, 2 material, 4 audio, 1
-archive). The 99 catalog tools are the editor parity set: 24 read-side (`McpCatalogRead.cpp`), 46 edit-side
-(`McpCatalogEdit.cpp`) and 29 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
+archive). The 102 catalog tools are the editor parity set: 24 read-side (`McpCatalogRead.cpp`), 46 edit-side
+(`McpCatalogEdit.cpp`) and 32 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
 blueprint graphs and `load_script`).
 
 The server is the native C++23 host that the desktop editor also runs on, and it needs no other
@@ -275,6 +275,9 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `script_complete` | `text`, [`path`], [`offset`], [`imports`] | no | Editor query: complete. Papyrus source operation. |
 | `script_signature_help` | `text`, [`path`], [`offset`], [`imports`] | no | Editor query: signature help. Papyrus source operation. |
 | `script_check_text` | `text`, [`path`], [`revision`], [`imports`] | no | Editor query: check text. Papyrus source operation. |
+| `script_references` | `text`, [`path`], [`offset`], [`imports`] | no | Editor query: references. Papyrus source operation; locals, parameters and script names only. |
+| `script_rename` | `text`, [`path`], [`offset`], `new_name`, [`imports`] | no | Editor query: rename, dry run. Papyrus source operation; returns the edit list and writes no files, the caller applies the edits. |
+| `script_workspace_symbols` | `query`, [`limit`], [`imports`] | no | Editor query: workspace symbols. Papyrus source operation. |
 | `script_read_script` | `path` | no | Editor query: read script. Papyrus source operation. |
 | `script_write_script` | `path`, `text` | files | Editor operation: write script. Papyrus source operation. |
 | `strings_list_tables` | `plugin`, [`language`] | no | Editor query: list string tables. String-table operation. |

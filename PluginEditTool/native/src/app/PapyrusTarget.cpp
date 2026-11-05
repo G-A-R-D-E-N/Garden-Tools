@@ -322,6 +322,47 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
             return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
         }
     }
+    if (method == "References") {
+        try {
+            const auto text = stringArgument(args, 0);
+            const auto path = stringArgument(args, 1);
+            const auto offset = intNumberArgument(args, 2, 0);
+            const auto imports = stringArgument(args, 3);
+            const std::string* pathPtr = isWhitespace(path) ? nullptr : &path;
+            const std::string* importsPtr = isWhitespace(imports) ? nullptr : &imports;
+            return nlohmann::json(fo4::papyrus::AnalysisService::referencesJson(
+                text, pathPtr, offset, importsPtr, locator_.papyrusBaseImports()));
+        } catch (const std::exception& ex) {
+            return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
+        }
+    }
+    if (method == "Rename") {
+        try {
+            const auto text = stringArgument(args, 0);
+            const auto path = stringArgument(args, 1);
+            const auto offset = intNumberArgument(args, 2, 0);
+            const auto newName = stringArgument(args, 3);
+            const auto imports = stringArgument(args, 4);
+            const std::string* pathPtr = isWhitespace(path) ? nullptr : &path;
+            const std::string* importsPtr = isWhitespace(imports) ? nullptr : &imports;
+            return nlohmann::json(fo4::papyrus::AnalysisService::renameJson(
+                text, pathPtr, offset, newName, importsPtr, locator_.papyrusBaseImports()));
+        } catch (const std::exception& ex) {
+            return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
+        }
+    }
+    if (method == "WorkspaceSymbols") {
+        try {
+            const auto query = stringArgument(args, 0);
+            const auto limit = intNumberArgument(args, 1, 0);
+            const auto imports = stringArgument(args, 2);
+            const std::string* importsPtr = isWhitespace(imports) ? nullptr : &imports;
+            return nlohmann::json(fo4::papyrus::AnalysisService::workspaceSymbolsJson(
+                query, limit, importsPtr, locator_.papyrusBaseImports()));
+        } catch (const std::exception& ex) {
+            return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
+        }
+    }
     if (method == "ReadScript") {
         const auto path = trim(stringArgument(args, 0));
         if (path.empty()) return nlohmann::json("ERR:No path.");
