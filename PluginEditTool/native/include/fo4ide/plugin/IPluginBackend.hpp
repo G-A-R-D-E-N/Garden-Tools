@@ -317,6 +317,7 @@ public:
     }
     virtual Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json&) {
         return std::unexpected(Error{"FragmentBackendUnavailable", "Scene phase fragment writes are unavailable"});
+    }
     // Constraint: quest alias script writes keep the in-memory plugin unchanged on refusal.
     virtual Result<nlohmann::json> addAliasScript(const nlohmann::json&) {
         return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script writes are unavailable"});
