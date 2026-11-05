@@ -19,16 +19,12 @@ namespace fo4 {
 namespace {
 
 constexpr Signature sig_dial = Signature::from_string("DIAL");
-constexpr Signature sig_info = Signature::from_string("INFO");
 constexpr Signature sig_dlbr = Signature::from_string("DLBR");
-constexpr Signature sig_qust = Signature::from_string("QUST");
-constexpr Signature sig_scen = Signature::from_string("SCEN");
 constexpr Signature sig_pnam = Signature::from_string("PNAM");
 constexpr Signature sig_qnam = Signature::from_string("QNAM");
 constexpr Signature sig_bnam = Signature::from_string("BNAM");
 constexpr Signature sig_tifc = Signature::from_string("TIFC");
 constexpr Signature sig_tnam = Signature::from_string("TNAM");
-constexpr Signature sig_snam = Signature::from_string("SNAM");
 constexpr Signature sig_enam = Signature::from_string("ENAM");
 constexpr Signature sig_inam = Signature::from_string("INAM");
 constexpr Signature sig_alid = Signature::from_string("ALID");
