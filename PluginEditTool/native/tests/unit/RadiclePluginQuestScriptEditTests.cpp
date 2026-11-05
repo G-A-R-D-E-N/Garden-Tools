@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <iterator>
 #include <optional>
 #include <stdexcept>
@@ -98,6 +99,8 @@ std::string lowerText(std::string text) {
     for (auto& ch : text) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     return text;
 }
+
+bool sameText(const std::string& a, const std::string& b) { return lowerText(a) == lowerText(b); }
 
 std::size_t countOf(const std::string& text, std::string_view needle) {
     std::size_t count = 0;
@@ -222,18 +225,23 @@ std::vector<Sample> questSamples(const Ba2Reader& reader, bool fragments) {
     return out;
 }
 
-std::optional<PexFile> loadPex(const Ba2Reader& reader, std::size_t index) {
+// Constraint: parsePex keeps namespaced objects; only loadPex applies the plain-identifier filter.
+std::optional<PexFile> parsePex(const Ba2Reader& reader, std::size_t index) {
     const auto raw = reader.extract(index);
     std::vector<std::uint8_t> bytes(raw.size());
     std::transform(raw.begin(), raw.end(), bytes.begin(), [](std::byte b) { return static_cast<std::uint8_t>(b); });
     try {
-        auto pex = PexFile::fromBytes(bytes);
-        // Constraint: namespaced objects (Hardcore:Fragments:...) are outside the plain-identifier name rule.
-        if (pex.objects.size() == 1 && pex.objects.front().name.find(':') != std::string::npos) return std::nullopt;
-        return pex;
+        return PexFile::fromBytes(bytes);
     } catch (const std::exception&) {
         return std::nullopt;
     }
+}
+
+std::optional<PexFile> loadPex(const Ba2Reader& reader, std::size_t index) {
+    auto pex = parsePex(reader, index);
+    // Constraint: namespaced objects (Hardcore:Fragments:...) are outside the plain-identifier name rule.
+    if (pex && pex->objects.size() == 1 && pex->objects.front().name.find(':') != std::string::npos) return std::nullopt;
+    return pex;
 }
 
 bool hasNamedState(const PexFile& pex) {
@@ -277,6 +285,44 @@ std::optional<SetStageEdit> uniqueQuestCall(const std::string& source) {
         }
     }
     return std::nullopt;
+}
+
+const std::string kNamespacedFragment =
+    "Scriptname Fragments:Quests:QF_Synth extends Quest\n"
+    "\n"
+    "Function Fragment_Stage_0010_Item_00()\n"
+    "    SetStage(10)\n"
+    "EndFunction\n";
+
+// Constraint: a namespaced fragment object is Fragments:Quests:QF_X in Misc.ba2 and <Namespace>:Fragments:Quests:QF_X in DLC archives.
+struct NamespacedSample {
+    std::size_t index{0};
+    std::string object;
+};
+
+std::vector<NamespacedSample> namespacedFragments(const Ba2Reader& reader, bool dlc) {
+    std::vector<NamespacedSample> out;
+    for (std::size_t i = 0; i < reader.entryCount(); ++i) {
+        auto path = lowerText(reader.entryPath(i));
+        std::replace(path.begin(), path.end(), '\\', '/');
+        if (!path.starts_with("scripts/") || !path.ends_with(".pex") || path.find("/fragments/quests/") == std::string::npos) continue;
+        const auto pex = parsePex(reader, i);
+        if (!pex || pex->objects.size() != 1) continue;
+        const auto& object = pex->objects.front().name;
+        const auto lower = lowerText(object);
+        const bool match = dlc ? lower.find(":fragments:quests:qf_") != std::string::npos : lower.starts_with("fragments:quests:qf_");
+        if (match) out.push_back(NamespacedSample{i, object});
+    }
+    return out;
+}
+
+// Constraint: the spread takes every step-th sample so the picks cover the whole archive rather than its first entries.
+std::vector<NamespacedSample> spread(const std::vector<NamespacedSample>& all, std::size_t count) {
+    std::vector<NamespacedSample> out;
+    if (all.empty()) return out;
+    const auto step = std::max<std::size_t>(1, all.size() / count);
+    for (std::size_t i = 0; i < all.size() && out.size() < count; i += step) out.push_back(all[i]);
+    return out;
 }
 
 }  // namespace
@@ -405,6 +451,105 @@ TEST_CASE("QuestScriptEdit.RefusesOutputInsideGameData") {
     CHECK(readBytes(s.plugin) == emptyPlugin());
     CHECK_FALSE(backend.testStagedQuestScript(kPluginName).has_value());
     CHECK_FALSE(fs::exists(s.data / "Scripts" / "QF_Synth.psc"));
+}
+
+TEST_CASE("QuestScriptEdit.GetQuestScriptResolvesNamespacedLooseImport") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeText(s.imports / "Fragments" / "Quests" / "QF_Synth.psc", kNamespacedFragment);
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+    for (const std::string name : {"Fragments:Quests:QF_Synth", "Fragments/Quests/QF_Synth", "Fragments\\Quests\\QF_Synth"}) {
+        INFO("name: " << name);
+        const auto result = backend.invokeBackend("GetQuestScript", Args::array({name, s.imports.string()}));
+        INFO("error: " << (result.has_value() ? std::string() : result.error().message));
+        REQUIRE(result.has_value());
+        CHECK((*result)["script"] == "Fragments:Quests:QF_Synth");
+        CHECK((*result)["origin"] == "imports_psc");
+        CHECK((*result)["archive"] == "");
+        CHECK((*result)["source"] == kNamespacedFragment);
+    }
+}
+
+TEST_CASE("QuestScriptEdit.RefusesMalformedScriptNames") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeText(s.imports / "Fragments" / "Quests" / "QF_Synth.psc", kNamespacedFragment);
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+    const std::string longSegment(50, 'a');
+    const std::vector<std::string> malformed{
+        "", "../QF_Synth", "Fragments/../QF_Synth", "Fragments::QF_Synth", ":QF_Synth", "Fragments:Quests:",
+        "A:B:C:D:E:F:G", "Fragments:Quests:1QF_Synth", "Fragments:Quests:QF Synth", "Fragments.Quests:QF_Synth",
+        longSegment + ":" + longSegment + ":" + longSegment + ":" + longSegment + ":" + longSegment + ":" + longSegment,
+    };
+    for (const auto& name : malformed) {
+        INFO("name: " << name);
+        const auto fetched = backend.invokeBackend("GetQuestScript", Args::array({name, s.imports.string()}));
+        REQUIRE_FALSE(fetched.has_value());
+        CHECK(fetched.error().type == "QuestScriptFailed");
+        const auto edited = editScript(backend, name, s.out, std::nullopt, std::nullopt, s.imports);
+        REQUIRE_FALSE(edited.has_value());
+        CHECK(edited.error().type == "QuestScriptFailed");
+    }
+    requireUnchanged(backend, s);
+}
+
+TEST_CASE("QuestScriptEdit.RefusesNamespaceStrippedScriptName") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeText(s.imports / "Fragments" / "Quests" / "QF_Synth.psc", kSynthFragment);
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    // Invariant: the source must declare the full namespaced ScriptName; a stripped QF_Synth is a different script.
+    const auto refused = editScript(backend, "Fragments:Quests:QF_Synth", s.out, kSynthFragment, std::nullopt, s.imports);
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "QuestScriptNameMismatch");
+    requireUnchanged(backend, s);
+}
+
+TEST_CASE("QuestScriptEdit.StagesNamespacedEditUnderNamespaceFolders") {
+    for (const std::string name : {"Fragments:Quests:QF_Synth", "Fragments/Quests/QF_Synth", "Fragments\\Quests\\QF_Synth"}) {
+        INFO("name: " << name);
+        const auto root = tempRoot();
+        Cleanup cleanup{root};
+        auto s = makeSandbox(root);
+        addStubData(s);
+        writeText(s.imports / "Fragments" / "Quests" / "QF_Synth.psc", kNamespacedFragment);
+        RadiclePluginBackend backend;
+        backend.setDataDirectory(s.data);
+        loadPatch(backend, s.plugin);
+
+        const auto result = editScript(backend, name, s.out, std::nullopt,
+                                       editsJson("SetStage(10)", "SetStage(20)"), s.imports);
+        INFO("error: " << (result.has_value() ? std::string() : result.error().message));
+        REQUIRE(result.has_value());
+        const auto sourcePath = lowerText(fs::path((*result)["source"].get<std::string>()).generic_string());
+        const auto pexPath = lowerText(fs::path((*result)["pex"].get<std::string>()).generic_string());
+        CHECK(sourcePath.ends_with("/fragments/quests/qf_synth.psc"));
+        CHECK(pexPath.ends_with("/fragments/quests/qf_synth.pex"));
+        CHECK(readBytes(s.plugin) == emptyPlugin());
+
+        const auto staged = backend.testStagedQuestScript(kPluginName);
+        REQUIRE(staged.has_value());
+        const auto pex = PexFile::fromBytes(staged->second);
+        REQUIRE(pex.objects.size() == 1);
+        CHECK(lowerText(pex.objects.front().name) == "fragments:quests:qf_synth");
+        const auto redecompiled = Decompiler::toSource(pex);
+        CHECK(redecompiled.find("[decompile failed:") == std::string::npos);
+        CHECK(countOf(redecompiled, "SetStage(20)") == 1);
+        CHECK(lowerText(redecompiled).find("fragments:quests:qf_synth") != std::string::npos);
+    }
 }
 
 // ---- Real vanilla: requires the Fallout 4 Data folder; these skip with a named reason when it is absent ----
@@ -593,4 +738,144 @@ TEST_CASE("QuestScriptReal.EditRefusalsLeavePluginUnchanged") {
     REQUIRE_FALSE(nonQuest.has_value());
     CHECK(nonQuest.error().type == "QuestScriptNotQuest");
     requireUnchanged(backend, s);
+}
+
+TEST_CASE("QuestScriptReal.NamespacedMiscFragmentsSpreadCompile") {
+    const auto data = vanillaDataDir();
+    if (!data) SKIP("Fallout 4 Data folder not found; set FO4_DATA_DIR to it");
+    const Ba2Reader reader = Ba2Reader::open(*data / "Fallout4 - Misc.ba2");
+    const auto all = namespacedFragments(reader, false);
+    const auto picked = spread(all, 60);
+    std::cout << "QuestScriptReal Misc namespaced fragments: available=" << all.size() << " picked=" << picked.size() << "\n";
+    REQUIRE(picked.size() >= 50);
+    ScriptIndex index;
+    REQUIRE(fo4ide::papyrus::addVanillaImports(index, *data, kImportFolders) == std::size(kImportFolders));
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(*data);
+
+    std::size_t ok = 0;
+    std::vector<std::string> failures;
+    for (const auto& sample : picked) {
+        const auto result = backend.invokeBackend("GetQuestScript", Args::array({sample.object}));
+        if (!result) {
+            failures.push_back(sample.object + ": fetch " + result.error().message);
+            continue;
+        }
+        const std::string source = (*result)["source"];
+        if ((*result)["origin"] != "vanilla_pex" || (*result)["archive"] != "Fallout4 - Misc.ba2" ||
+            !sameText((*result)["script"].get<std::string>(), sample.object)) {
+            failures.push_back(sample.object + ": wrong origin/archive/name");
+            continue;
+        }
+        if (source.find("[decompile failed:") != std::string::npos) {
+            failures.push_back(sample.object + ": decompile failed");
+            continue;
+        }
+        const auto error = compileError(index, source, sample.object);
+        if (error.empty()) ++ok;
+        else failures.push_back(sample.object + ": " + error);
+    }
+    std::cout << "QuestScriptReal Misc namespaced: attempted=" << picked.size() << " ok=" << ok
+              << " failed=" << failures.size() << "\n";
+    for (const auto& failure : failures) std::cout << "  failed " << failure << "\n";
+    CHECK(ok == picked.size());
+}
+
+TEST_CASE("QuestScriptReal.NamespacedDlcFragmentsCompile") {
+    const auto data = vanillaDataDir();
+    if (!data) SKIP("Fallout 4 Data folder not found; set FO4_DATA_DIR to it");
+    std::vector<NamespacedSample> picked;
+    for (const std::string archive : {"DLCRobot - Main.ba2", "DLCworkshop03 - Main.ba2"}) {
+        if (!fs::exists(*data / archive)) continue;
+        const Ba2Reader reader = Ba2Reader::open(*data / archive);
+        const auto chosen = spread(namespacedFragments(reader, true), 5);
+        std::cout << "QuestScriptReal DLC namespaced fragments from " << archive << ": picked=" << chosen.size() << "\n";
+        picked.insert(picked.end(), chosen.begin(), chosen.end());
+    }
+    REQUIRE(picked.size() >= 10);
+    ScriptIndex index;
+    REQUIRE(fo4ide::papyrus::addVanillaImports(index, *data, kImportFolders) == std::size(kImportFolders));
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(*data);
+
+    std::size_t ok = 0;
+    std::vector<std::string> failures;
+    for (const auto& sample : picked) {
+        const auto result = backend.invokeBackend("GetQuestScript", Args::array({sample.object}));
+        if (!result) {
+            failures.push_back(sample.object + ": fetch " + result.error().message);
+            continue;
+        }
+        const std::string source = (*result)["source"];
+        const std::string archive = (*result)["archive"];
+        if ((*result)["origin"] != "vanilla_pex" || !archive.starts_with("DLC") || !archive.ends_with(".ba2") ||
+            !sameText((*result)["script"].get<std::string>(), sample.object)) {
+            failures.push_back(sample.object + ": wrong origin/archive/name (" + archive + ")");
+            continue;
+        }
+        if (source.find("[decompile failed:") != std::string::npos) {
+            failures.push_back(sample.object + ": decompile failed");
+            continue;
+        }
+        const auto error = compileError(index, source, sample.object);
+        if (error.empty()) ++ok;
+        else failures.push_back(sample.object + ": " + error);
+    }
+    std::cout << "QuestScriptReal DLC namespaced: attempted=" << picked.size() << " ok=" << ok
+              << " failed=" << failures.size() << "\n";
+    for (const auto& failure : failures) std::cout << "  failed " << failure << "\n";
+    CHECK(ok == picked.size());
+}
+
+TEST_CASE("QuestScriptReal.EditFiveNamespacedFragmentsInFreshSandboxes") {
+    const auto data = vanillaDataDir();
+    if (!data) SKIP("Fallout 4 Data folder not found; set FO4_DATA_DIR to it");
+    const Ba2Reader reader = Ba2Reader::open(*data / "Fallout4 - Misc.ba2");
+    const auto candidates = namespacedFragments(reader, false);
+
+    std::size_t edited = 0;
+    std::size_t attempted = 0;
+    std::vector<std::string> notes;
+    for (const auto& sample : candidates) {
+        if (edited == 5) break;
+        // Constraint: each edit runs in a fresh sandbox and backend, since a second edit in one plugin is refused as already staged.
+        RadiclePluginBackend probe;
+        probe.setDataDirectory(*data);
+        const auto fetched = probe.invokeBackend("GetQuestScript", Args::array({sample.object}));
+        if (!fetched) continue;
+        const std::string source = (*fetched)["source"];
+        const auto edit = uniqueQuestCall(source);
+        if (!edit || source.find("[decompile failed:") != std::string::npos) continue;
+        ++attempted;
+
+        const auto root = tempRoot();
+        Cleanup cleanup{root};
+        auto s = makeSandbox(root);
+        RadiclePluginBackend backend;
+        backend.setDataDirectory(*data);
+        loadPatch(backend, s.plugin);
+        const auto result = editScript(backend, sample.object, s.out, std::nullopt,
+                                       editsJson(edit->find, edit->replace), std::nullopt);
+        if (!result) {
+            notes.push_back(sample.object + ": " + result.error().type + " " + result.error().message);
+            continue;
+        }
+        CHECK((*result)["origin"] == "vanilla_pex");
+        const auto staged = backend.testStagedQuestScript(kPluginName);
+        REQUIRE(staged.has_value());
+        const auto pex = PexFile::fromBytes(staged->second);
+        REQUIRE(pex.objects.size() == 1);
+        CHECK(sameText(pex.objects.front().name, sample.object));
+        const auto redecompiled = Decompiler::toSource(pex);
+        CHECK(redecompiled.find("[decompile failed:") == std::string::npos);
+        CHECK(countOf(redecompiled, edit->replace) == countOf(source, edit->replace) + 1);
+        CHECK(countOf(redecompiled, edit->find) == 0);
+        CHECK(lowerText(redecompiled).find(lowerText(sample.object)) != std::string::npos);
+        CHECK(readBytes(s.plugin) == emptyPlugin());
+        ++edited;
+    }
+    std::cout << "QuestScriptReal namespaced edits: attempted=" << attempted << " edited=" << edited
+              << " refused=" << notes.size() << "\n";
+    for (const auto& note : notes) std::cout << "  refused " << note << "\n";
+    CHECK(edited == 5);
 }
