@@ -444,7 +444,7 @@ TEST_CASE("Windows localized quest save publishes held sources with a Data direc
         "Patch.esp", quest, nlohmann::json::array({{{"index", 10}, {"logEntry", "Begin"}}}),
         localizedQuestContext(mod)})).has_value());
     const auto saved = backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"}));
-    REQUIRE(saved.has_value());
+    if (!saved.has_value()) FAIL("SavePlugin failed: " << saved.error().type << ": " << saved.error().message);
     const auto savedPlugin = fo4::read_plugin_file(plugin);
     const auto stages = fo4::forms::decode_quest_stages(savedPlugin, fo4::FormKey::parse(quest));
     REQUIRE(stages.stages.size() == 1u);

@@ -493,9 +493,51 @@ TEST_CASE("Native CreateRecord QUST writes title, flags, priority and type from 
     CHECK(std::to_integer<std::uint8_t>(dnam->data[8]) == 6);
 }
 
-// Detects: set_field on QUST\Flags, QUST\Priority, QUST\Type and QUST\Name must update a created quest and keep the values after save and reload.
-TEST_CASE("Native set_field edits quest flags, priority, type and title and keeps them after save") {
+// Invariant: a named flag selection must write exactly the schema's bits, and a name the schema does not list must be refused.
+TEST_CASE("Native CreateRecord QUST accepts schema flag names and refuses an unknown name") {
     const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin(0u));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, path);
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "CoNamed"}, {"name", "Named"},
+            {"flags", nlohmann::json::array({"Start Game Enabled", "Starts Enabled"})}}})));
+    const auto key = fo4::FormKey::parse(created.at("formKey").get<std::string>());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* named = subrecordOf(disk, key, "DNAM");
+    REQUIRE(named != nullptr);
+    REQUIRE(named->data.size() == 12u);
+    CHECK(std::to_integer<std::uint8_t>(named->data[0]) == 0x11);
+    CHECK(std::to_integer<std::uint8_t>(named->data[1]) == 0x00);
+
+    const auto refused = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "CoBad"},
+            {"flags", nlohmann::json::array({"Not A Real Flag"})}}}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "InvalidRecordCreationPayload");
+
+    const auto mapped = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "CoMap"},
+            {"flags", nlohmann::json{{"Start Game Enabled", false}, {"Run Once", true}}}}})));
+    const auto mapKey = fo4::FormKey::parse(mapped.at("formKey").get<std::string>());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto after = fo4::read_plugin_file(path);
+    const auto* bits = subrecordOf(after, mapKey, "DNAM");
+    REQUIRE(bits != nullptr);
+    REQUIRE(bits->data.size() == 12u);
+    CHECK(std::to_integer<std::uint8_t>(bits->data[0]) == 0x00);
+    CHECK(std::to_integer<std::uint8_t>(bits->data[1]) == 0x01);
+}
+
+// Detects: set_field on QUST\Flags, QUST\Priority, QUST\Type and QUST\Name must update a created quest and keep the values after save and reload.
+TEST_CASE("Native set_field edits quest flags, priority, type and title and keeps them after save") {    const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, emptyPlugin(0u));
