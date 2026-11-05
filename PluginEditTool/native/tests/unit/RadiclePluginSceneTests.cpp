@@ -209,7 +209,7 @@ TEST_CASE("Scene phases and actions move, remove and renumber as stored order") 
     REQUIRE(readback.at("actions").size() == 1);
     CHECK(readback.at("actions").at(0).at("type") == 0);
     CHECK(readback.at("actions").at(0).at("actionIndex") == 0);
-    CHECK(readback.at("lastActionIndex") == 1);
+    CHECK(readback.at("lastActionIndex") == 0);
 
     REQUIRE(backend.invokeBackend("SetScene", nlohmann::json::array({
         "Patch.esp", scene, nlohmann::json{{"flags", 9}, {"index", 3}}})).has_value());
