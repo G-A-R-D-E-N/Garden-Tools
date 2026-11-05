@@ -253,6 +253,24 @@ public:
 
     fo4ide::Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json& args) override {
         return recordTypedCall("RemoveScenePhaseFragment", args);
+    fo4ide::Result<nlohmann::json> addAliasScript(const nlohmann::json& args) override {
+        return recordTypedCall("AddAliasScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeAliasScript(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveAliasScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addAliasScriptProperty(const nlohmann::json& args) override {
+        return recordTypedCall("AddAliasScriptProperty", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeAliasScriptProperty(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveAliasScriptProperty", args);
+    }
+
+    fo4ide::Result<nlohmann::json> setAliasScriptValue(const nlohmann::json& args) override {
+        return recordTypedCall("SetAliasScriptValue", args);
     }
 
     fo4ide::Result<nlohmann::json> releaseMemory(const nlohmann::json& args) override {
@@ -718,7 +736,9 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
         "EditFactionEntries", "GetWeaponDamageTypes", "GetPerkEffects", "SetPerkEffects", "CreatePlacedObject",
         "CreateInteriorCell", "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound",
         "AddPackageProcedure", "RemovePackageProcedure",
-        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty", "ReleaseMemory",
+        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty", "AddAliasScript",
+        "RemoveAliasScript", "AddAliasScriptProperty", "RemoveAliasScriptProperty", "SetAliasScriptValue",
+        "ReleaseMemory",
         "SetInfoFragment", "AddInfoFragment", "RemoveInfoFragment",
         "SetScenePhaseFragment", "AddScenePhaseFragment", "RemoveScenePhaseFragment"};
     for (const auto& method : methods) {
@@ -759,6 +779,11 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.removeScript(args), "ScriptBackendUnavailable");
     unavailable(base.addScriptProperty(args), "ScriptBackendUnavailable");
     unavailable(base.removeScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.addAliasScript(args), "ScriptBackendUnavailable");
+    unavailable(base.removeAliasScript(args), "ScriptBackendUnavailable");
+    unavailable(base.addAliasScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.removeAliasScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.setAliasScriptValue(args), "ScriptBackendUnavailable");
     unavailable(base.getLeveledList(args), "LeveledListBackendUnavailable");
     unavailable(base.setLeveledListSettings(args), "LeveledListBackendUnavailable");
     unavailable(base.editLeveledListEntry(args), "LeveledListBackendUnavailable");

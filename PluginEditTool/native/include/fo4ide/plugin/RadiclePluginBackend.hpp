@@ -147,6 +147,11 @@ public:
     Result<nlohmann::json> setScenePhaseFragment(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScenePhaseFragment(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addAliasScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeAliasScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addAliasScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeAliasScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setAliasScriptValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addPackageProcedure(const nlohmann::json& arguments) override;

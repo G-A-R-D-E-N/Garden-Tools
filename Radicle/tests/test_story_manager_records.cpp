@@ -204,7 +204,10 @@ TEST(StoryManagerRecordsSynthetic, QuestListRowsReadAndRetargetEveryQuestNodeEnt
   EXPECT_EQ(quests->subrecord, fo4::Signature::from_string("NNAM"));
   EXPECT_EQ(quests->storage, fo4::schema::FormLinkListStorage::per_subrecord);
   EXPECT_FALSE(quests->nullable);
-  EXPECT_FALSE(quests->can_insert);
+  EXPECT_TRUE(quests->can_insert);
+  EXPECT_EQ(quests->predecessor_count, 10u);
+  EXPECT_EQ(quests->successor_count, 0u);
+  EXPECT_EQ(fo4::schema::k_generated_formlink_list_anchors[quests->first_anchor], fo4::Signature::from_string("QNAM"));
   const auto targets = fo4::schema::formlink_list_targets(*quests);
   ASSERT_EQ(targets.size(), 1u);
   EXPECT_EQ(targets[0], fo4::Signature::from_string("QUST"));

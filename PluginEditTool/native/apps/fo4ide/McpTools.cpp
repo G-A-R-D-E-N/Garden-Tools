@@ -219,6 +219,18 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"scene_form_key", "string"}, {"phase_index", "integer"}, {"phase_flag", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
     if (!add("remove_scene_phase_fragment", "Remove a scene phase script fragment in memory by phase_index and phase_flag (1 start, 2 completion). Call save_plugin to persist", "backend", "RemoveScenePhaseFragment",
              {{"plugin", "string"}, {"scene_form_key", "string"}, {"phase_index", "integer"}, {"phase_flag", "integer"}})) return false;
+    if (!add("add_alias_script", "Add a script to a QUST quest alias in memory, creating the alias entry (at its ascending alias_id position, with one script) when the quest has none for alias_id. script is the Papyrus script name; flags is the optional script flags byte and index the optional script-list position within the alias. Call save_plugin to persist", "backend", "AddAliasScript",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script", "string"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
+    if (!add("remove_alias_script", "Remove one script from a QUST quest alias in memory by script index. Removing the alias's last script removes the whole alias entry. Call save_plugin to persist", "backend", "RemoveAliasScript",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script_index", "integer"}})) return false;
+    if (!add("add_alias_script_property", "Add a property to a script of a QUST quest alias in memory. type is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); flags is the optional property flags byte and index the optional property-list position. Set its value afterwards with set_alias_script_value. Call save_plugin to persist", "backend", "AddAliasScriptProperty",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script_index", "integer"}, {"name", "string"}, {"type", "integer"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
+    if (!add("remove_alias_script_property", "Remove one property from a script of a QUST quest alias in memory by property index. Call save_plugin to persist", "backend", "RemoveAliasScriptProperty",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script_index", "integer"}, {"property_index", "integer"}})) return false;
+    if (!add("set_alias_script_value", "Set one VMAD script property value of a QUST quest alias in memory. kind selects the typed setter: object (value is a FormKey, alias optional), string, int, float or bool (value is text for int/float/bool). element selects an element of an array property and defaults to 0. Call save_plugin to persist", "backend", "SetAliasScriptValue",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script_index", "integer"},
+              {"property_index", "integer"}, {"kind", "string"}, {"value", "string", true},
+              {"alias", "integer", true}, {"element", "integer", true}})) return false;
     if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
              {{"form_key", "string"}})) return false;
     if (!add("get_perk_effects", "Get a PERK record's effects by FormKey from plugin's version (read-only). Each effect has type, rank, priority, quest and questStage, ability, or entryPoint and function, condition tabs and parameters (data is hex)", "backend", "GetPerkEffects",

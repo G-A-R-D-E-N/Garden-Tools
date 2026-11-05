@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include "../helpers/TempRoot.hpp"
 #include <catch2/generators/catch_generators.hpp>
 #include <fo4ide/plugin/ConditionCodec.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -29,7 +30,7 @@ TEST_CASE("quest stage and alias replacements carry opaque condition padding", "
     const bool alias = GENERATE(false, true);
     const auto scenario = GENERATE(0, 1, 2, 3, 4, 5);
     const auto root = std::filesystem::temp_directory_path() /
-        ("quest_opaque_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("quest_opaque_" + fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     const auto path = root / "Patch.esp";
@@ -137,7 +138,7 @@ TEST_CASE("quest stage and alias replacements carry opaque condition padding", "
 
 TEST_CASE("quest log entry CIS1 is stored as Windows-1252 and reads back as UTF-8", "[quest-opaque-condition]") {
     const auto root = std::filesystem::temp_directory_path() /
-        ("quest_cis_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("quest_cis_" + fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     const auto path = root / "Patch.esp";

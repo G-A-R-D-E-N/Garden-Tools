@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -19,9 +20,9 @@
 namespace {
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_master_override_" + std::to_string(id));
+           ("fo4ide_master_override_" + id);
 }
 
 struct Cleanup {

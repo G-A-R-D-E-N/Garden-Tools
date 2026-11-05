@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -26,7 +27,7 @@ void interruptBeforeJournalReplay(std::size_t committed) {
 // Detects: orphaned journal files must not cause unbounded recovery enumeration.
 TEST_CASE("Journal enumeration refuses excessive entries") {
 #ifdef __linux__
-    const auto root = std::filesystem::temp_directory_path() / ("journal_cap_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root = std::filesystem::temp_directory_path() / ("journal_cap_" + fo4ide_test::uniqueTempName());
     { fo4ide::plugin::detail::JournalRoot journal(root); for (std::size_t i = 0; i <= fo4ide::plugin::detail::kJournalMaxDirectoryEntries; ++i) journal.writeFile(std::string(32 - std::to_string(i).size(), '0') + std::to_string(i) + "_0.payload", {}); CHECK_THROWS(journal.listFiles()); }
     { fo4ide::plugin::detail::JournalSession session(root); CHECK_NOTHROW(session.recover({})); }
     { fo4ide::plugin::detail::JournalRoot journal(root); CHECK(journal.listFiles() == std::vector<std::string>{"global.lock"}); }
@@ -40,7 +41,7 @@ TEST_CASE("Journal verifies sibling tables without writing them") {
 #ifdef __linux__
     using namespace fo4ide::plugin::detail;
     const auto root = std::filesystem::temp_directory_path() /
-        ("fo4ide_journal_verify_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("fo4ide_journal_verify_" + fo4ide_test::uniqueTempName());
     std::filesystem::create_directories(root / "Strings");
     const auto plugin = root / "Patch.esp", sibling = root / "Strings" / "Patch_en.STRINGS";
     const std::vector<std::byte> oldPlugin{std::byte{1}}, newPlugin{std::byte{2}}, table{std::byte{3}};
@@ -78,9 +79,9 @@ TEST_CASE("Journal verifies sibling tables without writing them") {
 
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_pending_lifecycle_" + std::to_string(id));
+           ("fo4ide_pending_lifecycle_" + id);
 }
 
 struct Cleanup {

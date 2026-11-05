@@ -383,4 +383,25 @@ EndFunction");
 
         Check("A").Should().BeEmpty();
     }
+
+    [Fact]
+    public void A_literal_array_length_above_128_is_a_warning()
+    {
+        WriteWithHierarchy(@"
+    int[] items = new int[129]");
+
+        var diagnostics = Check("A");
+        diagnostics.Should().ContainSingle();
+        diagnostics[0].Code.Should().Be(PapyrusDiagnosticCodes.ArrayLengthLimit);
+        diagnostics[0].Severity.Should().Be(PapyrusSeverity.Warning);
+    }
+
+    [Fact]
+    public void A_literal_array_length_of_128_is_accepted()
+    {
+        WriteWithHierarchy(@"
+    int[] items = new int[128]");
+
+        Check("A").Should().BeEmpty();
+    }
 }

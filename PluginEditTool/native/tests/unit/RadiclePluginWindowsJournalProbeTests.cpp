@@ -1,4 +1,5 @@
 #include "RadiclePluginWindowsJournalTestSupport.hpp"
+#include "../helpers/TempRoot.hpp"
 #include <array>
 #include <chrono>
 #include <span>
@@ -58,7 +59,7 @@ void makeJunction(const std::filesystem::path& path, const std::filesystem::path
 TEST_CASE("Windows journal handle probe creates renames and deletes inside held directory") {
 #ifdef _WIN32
     namespace fs = std::filesystem;
-    const auto root = fs::temp_directory_path() / ("fo4ide_journal_probe_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root = fs::temp_directory_path() / ("fo4ide_journal_probe_" + fo4ide_test::uniqueTempName());
     REQUIRE(fs::create_directory(root));
     Cleanup cleanup{root};
     const auto parent = root / "parent", held = parent / "journal", moved = root / "moved", outside = root / "outside";
@@ -146,7 +147,7 @@ TEST_CASE("Windows split-store recovery worker", "[.split-store-worker]") {
     if (splitCrashPhase != -1) FAIL("split-store worker missed crash boundary");
 #endif
 }
-TEST_CASE("Windows split-store recovery survives process interruption and preserves file identity ACL and attributes") {
+TEST_CASE("Windows split-store recovery survives process interruption and preserves file identity ACL and attributes", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     for (const bool original : {true, false}) for (int phase = 0; phase <= 4; ++phase) {
         if (!original && phase == 1) continue;
@@ -205,7 +206,7 @@ TEST_CASE("Windows split-store recovery survives process interruption and preser
     }
 #endif
 }
-TEST_CASE("Windows split-store recovery rejects newcomers occupied backups manifest mismatch and deny-delete readers") {
+TEST_CASE("Windows split-store recovery rejects newcomers occupied backups manifest mismatch and deny-delete readers", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     const auto root = makeSplitRoot();
     Cleanup cleanup{root};

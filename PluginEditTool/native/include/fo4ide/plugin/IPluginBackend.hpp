@@ -317,6 +317,21 @@ public:
     }
     virtual Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json&) {
         return std::unexpected(Error{"FragmentBackendUnavailable", "Scene phase fragment writes are unavailable"});
+    // Constraint: quest alias script writes keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> addAliasScript(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeAliasScript(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> addAliasScriptProperty(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script property writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeAliasScriptProperty(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script property writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setAliasScriptValue(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script value writes are unavailable"});
     }
     virtual Result<nlohmann::json> getFaction(const nlohmann::json&) const {
         return std::unexpected(Error{"FactionBackendUnavailable", "Faction queries are unavailable"});

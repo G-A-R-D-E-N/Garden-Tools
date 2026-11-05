@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -93,9 +94,9 @@ void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>&
 }
 
 TEST_CASE("Native SetQuestStages preserves partial-form master fragments through save and reload") {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     const auto root = std::filesystem::temp_directory_path() /
-                      ("fo4ide_quest_partial_" + std::to_string(id));
+                      ("fo4ide_quest_partial_" + id);
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     const auto path = root / "Patch.esp";
@@ -156,9 +157,9 @@ TEST_CASE("Native SetQuestStages preserves partial-form master fragments through
 }
 
 TEST_CASE("Native full master override makes partial quest stages editable") {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     const auto root = std::filesystem::temp_directory_path() /
-                      ("fo4ide_quest_promote_" + std::to_string(id));
+                      ("fo4ide_quest_promote_" + id);
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     const auto masterPath = root / "Master.esm";
