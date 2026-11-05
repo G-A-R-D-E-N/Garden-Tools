@@ -273,6 +273,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/graph/conflict_kind.cpp
   src/graph/check_errors.cpp
   src/graph/check_errors_records.cpp
+  src/graph/check_dialogue.cpp
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
