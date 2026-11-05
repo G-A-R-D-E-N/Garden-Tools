@@ -465,3 +465,22 @@ TEST(PapyrusTypeChecker, AnObjectWhoseAncestryIsNotOnDiskIsNotRefused) {
 
     EXPECT_TRUE(f.check("A").empty());
 }
+
+// Invariant: a literal array length above the Creation Kit limit of 128 is reported once, as a warning.
+TEST(PapyrusTypeChecker, ALiteralArrayLengthAbove128IsAWarning) {
+    Fixture f;
+    f.writeWithHierarchy("\n    int[] items = new int[129]");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::ArrayLengthLimit);
+    EXPECT_TRUE(diagnostics[0].severity == fo4::papyrus::Severity::Warning);
+}
+
+// Invariant: a literal array length of exactly 128 is at the Creation Kit limit and is not reported.
+TEST(PapyrusTypeChecker, ALiteralArrayLengthOf128IsAccepted) {
+    Fixture f;
+    f.writeWithHierarchy("\n    int[] items = new int[128]");
+
+    EXPECT_TRUE(f.check("A").empty());
+}

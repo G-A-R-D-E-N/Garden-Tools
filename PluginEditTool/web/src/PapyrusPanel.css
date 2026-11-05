@@ -237,6 +237,7 @@
 }
 
 .papyrus-editor-wrap {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -364,3 +365,91 @@
 .papyrus-log-row.warn { color: #d7a55c; }
 .papyrus-problem-pos { flex: 0 0 auto; min-width: 54px; color: var(--text-muted, #888); }
 .papyrus-problem-code { flex: 0 0 auto; color: var(--text-muted, #777); }
+
+.papyrus-complete {
+  position: absolute;
+  left: 52px;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  max-width: 60%;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border-color, #3a3a3a);
+  background: #1e1e1e;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+}
+.papyrus-complete-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-color, #d4d4d4);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.papyrus-complete-row.active { background: rgba(255, 255, 255, 0.12); }
+.papyrus-complete-kind { flex: 0 0 auto; color: var(--text-muted, #888); font-size: 11px; }
+.papyrus-complete-detail {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted, #777);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.papyrus-signature strong { font-weight: 700; color: var(--text-color, #fff); }
+
+.papyrus-log-row.problem.hint { opacity: 0.55; color: var(--text-muted, #888); }
+
+.papyrus-ws-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+.papyrus-locations {
+  display: flex;
+  flex-direction: column;
+  max-height: 180px;
+  overflow: auto;
+  margin-bottom: 6px;
+  border: 1px solid var(--border-color, #3a3a3a);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+}
+.papyrus-location-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-color, #d4d4d4);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.papyrus-location-row:hover { background: rgba(255, 255, 255, 0.06); }
+.papyrus-location-title { flex: 0 0 auto; }
+.papyrus-location-detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted, #888);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.papyrus-location-where { margin-left: auto; flex: 0 0 auto; color: var(--text-muted, #777); font-size: 11px; }
+
+.papyrus-refs { display: flex; flex-direction: column; margin-bottom: 6px; }

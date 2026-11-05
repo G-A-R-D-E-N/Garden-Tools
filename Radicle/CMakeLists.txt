@@ -282,6 +282,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/environment/vegetation.cpp
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
+  src/environment/package_create.cpp
   src/environment/package_procedure.cpp
   src/environment/package_procedure_tree.cpp
   src/environment/dialogue.cpp
@@ -328,6 +329,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/papyrus/creation_kit_fidelity.cpp
   src/papyrus/compile_script.cpp
   src/papyrus/analysis_service.cpp
+  src/papyrus/completion.cpp
+  src/papyrus/references.cpp
+  src/papyrus/workspace_symbols.cpp
   src/f4se/binding_validator.cpp
   src/f4se/cpp_emitter.cpp
   src/f4se/cpp_scanner.cpp

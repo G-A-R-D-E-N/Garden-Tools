@@ -84,6 +84,7 @@ TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThr
   std::size_t decompiled = 0;
   std::size_t fallbacks = 0;
   std::size_t unhandled = 0;
+  std::size_t warnings = 0;
   std::vector<std::string> failures;
   for (const auto& file : files) {
     try {
@@ -96,6 +97,7 @@ TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThr
       }
       fallbacks += countOccurrences(source, "[decompile failed: ");
       unhandled += countOccurrences(source, "[unhandled ");
+      warnings += countOccurrences(source, "[decompile warning");
       ++decompiled;
     } catch (const std::exception& error) {
       failures.push_back(file.string() + ": " + error.what());
@@ -103,7 +105,9 @@ TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThr
   }
 
   std::cout << "[decompiler] decompiled " << decompiled << " of " << files.size() << " .pex files; "
-            << fallbacks << " decompile-failed fallbacks, " << unhandled << " unhandled instructions\n";
+            << fallbacks << " decompile-failed fallbacks, " << unhandled << " unhandled instructions, "
+            << warnings << " leftover-temporary warnings\n";
   for (const auto& failure : failures) ADD_FAILURE() << failure;
+  EXPECT_EQ(warnings, 0u);
   EXPECT_TRUE(failures.empty());
 }

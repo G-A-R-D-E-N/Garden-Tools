@@ -73,12 +73,12 @@ class PlanTest(unittest.TestCase):
                          [target.branch for target in targets])
         self.assertEqual("refs/pull/12/merge", targets[2].ref)
 
-    def test_the_oldest_pushed_head_goes_first(self):
+    def test_integration_branches_go_before_pull_requests_then_oldest_head_first(self):
         targets = sync.plan_targets([(1, sha(1), BASE, "nomad/dev"), (2, sha(2), BASE, "nomad/dev")],
                                     {"nomad/dev": DEV, "main": MAIN})
         dates = {DEV: "2026-10-03T00:00:00Z", MAIN: "2026-10-04T00:00:00Z",
                  sha(1): "2026-10-02T00:00:00Z", sha(2): "2026-10-01T00:00:00Z"}
-        self.assertEqual([sha(2), sha(1), DEV, MAIN],
+        self.assertEqual([DEV, MAIN, sha(2), sha(1)],
                          [target.head for target in sync.oldest_first(targets, dates)])
 
     def test_stale_pr_branches_name_only_closed_pull_requests(self):

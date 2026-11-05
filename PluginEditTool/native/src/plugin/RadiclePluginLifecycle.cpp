@@ -1,6 +1,7 @@
 #include "RadiclePluginLifecycleFields.hpp"
 #include "RadiclePluginSupport.hpp"
 
+#include <fo4/environment/package_procedure.hpp>
 #include <fo4/plugin/subrecord_authoring.hpp>
 #include <fo4/schema/preflight.hpp>
 #include <fo4/schema/record_constraints.hpp>
@@ -84,6 +85,103 @@ Result<std::string> qustLanguage(const nlohmann::json& payload) {
     return fo4::text::fold(language);
 }
 
+struct TravelLocationName {
+    std::string_view name;
+    fo4::env::PackageLocationType type;
+};
+
+constexpr TravelLocationName travelLocationNames[] = {
+    {"reference", fo4::env::PackageLocationType::near_reference},
+    {"cell", fo4::env::PackageLocationType::in_cell},
+    {"near_package_start", fo4::env::PackageLocationType::near_package_start},
+    {"near_editor_location", fo4::env::PackageLocationType::near_editor_location},
+    {"near_self", fo4::env::PackageLocationType::near_self},
+};
+
+struct TravelSpeedName {
+    std::string_view name;
+    std::uint8_t speed;
+};
+
+constexpr TravelSpeedName travelSpeedNames[] = {
+    {"walk", 0},
+    {"jog", 1},
+    {"run", 2},
+    {"fast_walk", 3},
+};
+
+Error travelStatusError(fo4::env::TravelPackageStatus status) {
+    return Error{
+        status == fo4::env::TravelPackageStatus::invalid_editor_id ? "InvalidEditorId" : "InvalidRecordCreationPayload",
+        fo4::env::travel_package_status_message(status)};
+}
+
+bool lifecycleBoolField(const nlohmann::json& object, const char* key, bool& value) {
+    const auto found = object.find(key);
+    if (found == object.end()) {
+        value = false;
+        return true;
+    }
+    if (!found->is_boolean()) return false;
+    value = found->get<bool>();
+    return true;
+}
+
+Result<fo4::env::TravelPackageOptions> travelPackageOptionsFromPayload(const nlohmann::json& payload) {
+    const auto location = payload.find("location");
+    if (location == payload.end() || !location->is_object()) {
+        return std::unexpected(Error{"InvalidRecordCreationPayload", "PACK creation requires a location object"});
+    }
+    fo4::env::TravelPackageOptions options;
+    bool valid = true;
+    const auto typeName = optionalStringField(*location, "type", valid);
+    bool known = false;
+    for (const auto& entry : travelLocationNames) {
+        if (typeName && *typeName == entry.name) {
+            options.location_type = entry.type;
+            known = true;
+        }
+    }
+    if (!valid || !known) return std::unexpected(travelStatusError(fo4::env::TravelPackageStatus::location_unsupported));
+
+    const auto form = optionalStringField(*location, "form", valid);
+    if (!valid) {
+        return std::unexpected(Error{"InvalidRecordCreationPayload", "PACK location form must be a FormKey string or null"});
+    }
+    if (form.has_value()) {
+        try {
+            options.location_form = fo4::FormKey::parse(*form);
+        } catch (const std::exception& error) {
+            return std::unexpected(Error{"InvalidFormKey", error.what()});
+        }
+    }
+    if (!lifecycleSignedField(*location, "radius", std::int32_t{0}, options.radius)) {
+        return std::unexpected(Error{"InvalidRecordCreationPayload", "PACK location radius must fit a signed 32-bit integer"});
+    }
+
+    const auto speed = optionalStringField(payload, "speed", valid);
+    if (!valid) return std::unexpected(travelStatusError(fo4::env::TravelPackageStatus::speed_invalid));
+    if (speed.has_value()) {
+        bool found = false;
+        for (const auto& entry : travelSpeedNames) {
+            if (*speed == entry.name) {
+                options.preferred_speed = entry.speed;
+                found = true;
+            }
+        }
+        if (!found) return std::unexpected(travelStatusError(fo4::env::TravelPackageStatus::speed_invalid));
+    }
+
+    if (!lifecycleBoolField(payload, "preferPreferredPath", options.prefer_preferred_path) ||
+        !lifecycleBoolField(payload, "useSoftRadius", options.use_soft_radius) ||
+        !lifecycleBoolField(payload, "ignoreMarkerOrientation", options.ignore_marker_orientation)) {
+        return std::unexpected(Error{
+            "InvalidRecordCreationPayload",
+            "PACK preferPreferredPath, useSoftRadius and ignoreMarkerOrientation must be booleans"});
+    }
+    return options;
+}
+
 }  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& arguments) {
@@ -107,7 +205,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         signatureText != "EYES" && signatureText != "FACT" &&
         signatureText != "HAZD" && signatureText != "LVLI" &&
         signatureText != "LVLN" && signatureText != "LVSP" &&
-        signatureText != "PERK" && signatureText != "PROJ" && signatureText != "RACE") {
+        signatureText != "PACK" && signatureText != "PERK" && signatureText != "PROJ" && signatureText != "RACE") {
         return std::unexpected(Error{
             "RecordCreationRequiresSchema",
             "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
@@ -450,6 +548,23 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 });
             }
             key = fo4::forms::create_armor_addon(mutated, creation);
+        } else if (signatureText == "PACK") {
+            const auto* editor = editorIdPayloadField(*payload);
+            if (editor == nullptr || !editor->is_string() ||
+                editor->get_ref<const std::string&>().empty()) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    "PACK creation requires a non-empty string editorId"});
+            }
+            const auto editorId = support::encodeEditorId(editor->get_ref<const std::string&>());
+            if (!editorId) return std::unexpected(editorId.error());
+            const auto options = travelPackageOptionsFromPayload(*payload);
+            if (!options) return std::unexpected(options.error());
+            const auto created = fo4::env::create_travel_package(mutated, *editorId, *options);
+            if (created.status != fo4::env::TravelPackageStatus::created) {
+                return std::unexpected(travelStatusError(created.status));
+            }
+            key = created.key;
         } else if (generatedLayoutCreationSupported(signatureText)) {
             if (signatureText == "QUST" && mutated.header.tes4_flags.is_localized()) {
                 const auto name = payload->find("name");
@@ -520,6 +635,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             : signatureText == "LVSP"             ? "LeveledSpellCreateFailed"
             : (signatureText == "LVLI" || signatureText == "LVLN") ? "LeveledListCreateFailed"
             : signatureText == "FACT"             ? "FactionCreateFailed"
+            : signatureText == "PACK"             ? "PackageCreateFailed"
                                                   : "ProjExplHazdCreateFailed";
         return std::unexpected(Error{code, error.what()});
     } catch (const std::exception& error) {
