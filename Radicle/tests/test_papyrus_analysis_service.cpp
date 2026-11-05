@@ -6,11 +6,18 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 
 using fo4::papyrus::AnalysisService;
 
 namespace {
+
+std::set<std::string> labelsOf(const nlohmann::json& reply) {
+  std::set<std::string> labels;
+  for (const auto& item : reply["items"]) labels.insert(item["label"].get<std::string>());
+  return labels;
+}
 
 class ScratchRoot {
 public:
@@ -246,4 +253,283 @@ TEST(PapyrusAnalysisService, SymbolAtWorksWithoutPath) {
   const auto json = nlohmann::json::parse(AnalysisService::symbolAtJson(text, nullptr, offset));
   EXPECT_TRUE(json["resolved"].get<bool>());
   EXPECT_TRUE(json["sameFile"].get<bool>());
+}
+
+TEST(PapyrusAnalysisService, CompletionAfterDotListsMembersUpExtendsChain) {
+  ScratchRoot root;
+  root.write("Parent.psc",
+             "ScriptName Parent\nInt Property Health Auto\nFunction DoStuff()\nEndFunction\n");
+  const std::string text =
+      "ScriptName Child extends Parent\nParent Property Link Auto\n"
+      "Function F()\n  Link.\nEndFunction\n";
+  const auto file = root.write("Child.psc", text);
+  const auto offset = static_cast<int>(text.find("Link.") + 5);
+
+  const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, &file, offset));
+  EXPECT_EQ(json["context"].get<std::string>(), "member");
+  EXPECT_EQ(json["replaceLength"].get<int>(), 0);
+  const auto labels = labelsOf(json);
+  EXPECT_TRUE(labels.contains("DoStuff"));
+  EXPECT_TRUE(labels.contains("Health"));
+}
+
+TEST(PapyrusAnalysisService, CompletionAfterDotOnStructListsItsFields) {
+  const std::string text =
+      "ScriptName A\nStruct Pair\n  Int Left\n  Int Right\nEndStruct\nFunction F()\n  Pair myPair\n"
+      "  myPair.\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("myPair.") + 7);
+
+  const auto labels = labelsOf(
+      nlohmann::json::parse(AnalysisService::completionJson(text, nullptr, offset)));
+  EXPECT_TRUE(labels.contains("Left"));
+  EXPECT_TRUE(labels.contains("Right"));
+  EXPECT_FALSE(labels.contains("Find"));
+}
+
+TEST(PapyrusAnalysisService, CompletionAfterDotOnArrayListsBuiltIns) {
+  const std::string text = "ScriptName A\nFunction F()\n  Int[] values\n  values.\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("values.") + 7);
+
+  const auto labels = labelsOf(
+      nlohmann::json::parse(AnalysisService::completionJson(text, nullptr, offset)));
+  EXPECT_TRUE(labels.contains("Find"));
+  EXPECT_TRUE(labels.contains("Add"));
+  EXPECT_TRUE(labels.contains("Length"));
+}
+
+TEST(PapyrusAnalysisService, CompletionAfterUnfinishedScriptNameDotOffersOnlyGlobals) {
+  ScratchRoot root;
+  root.write("Parent.psc",
+             "ScriptName Parent\nFunction Make() global\nEndFunction\nFunction DoStuff()\n"
+             "EndFunction\n");
+  const std::string text = "ScriptName Child\nFunction F()\n  Parent.\nEndFunction\n";
+  const auto file = root.write("Child.psc", text);
+  const auto offset = static_cast<int>(text.find("Parent.") + 7);
+
+  const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, &file, offset));
+  const auto labels = labelsOf(json);
+  EXPECT_TRUE(labels.contains("Make"));
+  EXPECT_FALSE(labels.contains("DoStuff"));
+}
+
+TEST(PapyrusAnalysisService, CompletionAfterExtendsOffersScriptNames) {
+  ScratchRoot root;
+  root.write("Parent.psc", "ScriptName Parent\n");
+  const std::string text = "ScriptName Child extends \nFunction F()\nEndFunction\n";
+  const auto file = root.write("Child.psc", text);
+  const auto offset = static_cast<int>(text.find("extends ") + 8);
+
+  const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, &file, offset));
+  EXPECT_EQ(json["context"].get<std::string>(), "extends");
+  EXPECT_TRUE(labelsOf(json).contains("Parent"));
+}
+
+TEST(PapyrusAnalysisService, CompletionInGeneralScopeListsParametersAndLocalsBeforeCaret) {
+  const std::string text =
+      "ScriptName A\nFunction F(Int count)\n  Int total = 0\n  \nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("  \nEndFunction") + 2);
+
+  const auto labels = labelsOf(
+      nlohmann::json::parse(AnalysisService::completionJson(text, nullptr, offset)));
+  EXPECT_TRUE(labels.contains("count"));
+  EXPECT_TRUE(labels.contains("total"));
+}
+
+TEST(PapyrusAnalysisService, CompletionMatchesTypedPrefixCaseInsensitively) {
+  const std::string text =
+      "ScriptName A\nInt Property Health Auto\nFunction DoStuff()\nEndFunction\n"
+      "Function F()\n  hEa\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("hEa") + 3);
+
+  const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, nullptr, offset));
+  EXPECT_EQ(json["replaceStart"].get<int>(), offset - 3);
+  EXPECT_EQ(json["replaceLength"].get<int>(), 3);
+  const auto labels = labelsOf(json);
+  EXPECT_TRUE(labels.contains("Health"));
+  EXPECT_FALSE(labels.contains("DoStuff"));
+}
+
+TEST(PapyrusAnalysisService, SignatureHelpCountsCommasToActiveParameter) {
+  const std::string text =
+      "ScriptName A\nFunction Pick(Int first, Int second, Int third)\nEndFunction\n"
+      "Function F()\n  Pick(1, 2, \nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("Pick(1, 2, ") + 11);
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::signatureHelpJson(text, nullptr, offset));
+  EXPECT_TRUE(json["active"].get<bool>());
+  EXPECT_EQ(json["activeParameter"].get<int>(), 2);
+  EXPECT_EQ(json["signatures"][0]["label"].get<std::string>(),
+            "Function Pick(int first, int second, int third)");
+  EXPECT_EQ(json["signatures"][0]["parameters"].size(), 3u);
+}
+
+TEST(PapyrusAnalysisService, SignatureHelpIsInactiveOutsideAnyCall) {
+  const std::string text = "ScriptName A\nFunction F()\n  Int n = 1\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("n = 1"));
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::signatureHelpJson(text, nullptr, offset));
+  EXPECT_FALSE(json["active"].get<bool>());
+}
+
+TEST(PapyrusAnalysisService, CheckTextReportsNameErrorFromUnsavedBuffer) {
+  ScratchRoot root;
+  const auto file = root.write("A.psc", "ScriptName A\nFunction F()\nEndFunction\n");
+  const std::string buffer = "ScriptName A\nFunction F()\n    int n = nope\nEndFunction\n";
+
+  const auto json = nlohmann::json::parse(AnalysisService::checkTextJson(buffer, &file, 7));
+  EXPECT_EQ(json["revision"].get<int>(), 7);
+  EXPECT_TRUE(json["complete"].get<bool>());
+  EXPECT_EQ(json["errorCount"].get<int>(), 1);
+  EXPECT_EQ(json["diagnostics"][0]["code"].get<std::string>(), "PAP0030");
+}
+
+TEST(PapyrusAnalysisService, CheckTextEchoesRevisionOnCleanBuffer) {
+  const auto json = nlohmann::json::parse(
+      AnalysisService::checkTextJson("ScriptName A\nFunction F()\nEndFunction\n", nullptr, 42));
+  EXPECT_EQ(json["revision"].get<int>(), 42);
+  EXPECT_TRUE(json["complete"].get<bool>());
+  EXPECT_EQ(json["errorCount"].get<int>(), 0);
+}
+
+TEST(PapyrusAnalysisService, CheckTextWithMissingBaseIsIncompleteNotClean) {
+  ScratchRoot root;
+  const std::string text =
+      "ScriptName A extends NotOnAnyRoot\nFunction F()\n    Inherited()\nEndFunction\n";
+  const auto file = root.write("A.psc", text);
+
+  const auto json = nlohmann::json::parse(AnalysisService::checkTextJson(text, &file, 1));
+  EXPECT_FALSE(json["complete"].get<bool>());
+  EXPECT_EQ(json["errorCount"].get<int>(), 0);
+}
+
+TEST(PapyrusAnalysisService, CheckTextWithSyntaxErrorIsIncompleteAndSkipsNames) {
+  const auto json = nlohmann::json::parse(AnalysisService::checkTextJson(
+      "ScriptName A\nFunction F(\nEndFunction\n", nullptr, 3));
+  EXPECT_FALSE(json["complete"].get<bool>());
+  EXPECT_GT(json["errorCount"].get<int>(), 0);
+  EXPECT_EQ(json["diagnostics"][0]["severity"].get<std::string>(), "error");
+}
+
+TEST(PapyrusAnalysisService, CompletionInsideCommentOrStringOffersNothing) {
+  const std::string head = "ScriptName A\nFunction F()\n";
+  for (const std::string line :
+       {"  ; Foo.", "  ;/ Foo. /;", "  { Foo. }", "  Debug.Trace(\"Foo.\")"}) {
+    const std::string text = head + line + "\nEndFunction\n";
+    const auto offset = static_cast<int>(text.find("Foo.") + 4);
+
+    const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, nullptr, offset));
+    EXPECT_EQ(json["context"].get<std::string>(), "none") << line;
+    EXPECT_TRUE(json["items"].empty()) << line;
+  }
+}
+
+TEST(PapyrusAnalysisService, CompletionAfterExtendsCompletesNamespacedScriptName) {
+  ScratchRoot root;
+  root.write("Fragments/Quests/QF_X.psc", "ScriptName QF_X\n");
+  const std::string text = "ScriptName Child extends Fragments:Qu\nFunction F()\nEndFunction\n";
+  const auto file = root.write("Child.psc", text);
+  const auto offset = static_cast<int>(text.find("Fragments:Qu") + 12);
+
+  const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, &file, offset));
+  EXPECT_EQ(json["context"].get<std::string>(), "extends");
+  EXPECT_EQ(json["replaceStart"].get<int>(), offset - 12);
+  EXPECT_EQ(json["replaceLength"].get<int>(), 12);
+  EXPECT_TRUE(labelsOf(json).contains("Fragments:Quests:QF_X"));
+}
+
+TEST(PapyrusAnalysisService, CompletionAfterAsOffersPrimitiveTypesAndScriptNames) {
+  ScratchRoot root;
+  root.write("Parent.psc", "ScriptName Parent\n");
+  const std::string text = "ScriptName Child\nFunction F()\n  Form f = None as \nEndFunction\n";
+  const auto file = root.write("Child.psc", text);
+  const auto offset = static_cast<int>(text.find("None as ") + 8);
+
+  const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, &file, offset));
+  const auto labels = labelsOf(json);
+  EXPECT_TRUE(labels.contains("Int"));
+  EXPECT_TRUE(labels.contains("Float"));
+  EXPECT_TRUE(labels.contains("Bool"));
+  EXPECT_TRUE(labels.contains("String"));
+  EXPECT_TRUE(labels.contains("Parent"));
+}
+
+TEST(PapyrusAnalysisService, CompletionAfterNewOffersInheritedStructsByOwnerName) {
+  ScratchRoot root;
+  root.write("Parent.psc", "ScriptName Parent\nStruct Pair\n  Int Left\nEndStruct\n");
+  const std::string text =
+      "ScriptName Child extends Parent\nFunction F()\n  Int[] items = new \nEndFunction\n";
+  const auto file = root.write("Child.psc", text);
+  const auto offset = static_cast<int>(text.find("new ") + 4);
+
+  const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, &file, offset));
+  EXPECT_EQ(json["context"].get<std::string>(), "new");
+  EXPECT_TRUE(labelsOf(json).contains("Parent:Pair"));
+}
+
+TEST(PapyrusAnalysisService, CompletionInGeneralScopeOffersScriptNames) {
+  ScratchRoot root;
+  root.write("Parent.psc", "ScriptName Parent\n");
+  const std::string text = "ScriptName Child extends Parent\nFunction F()\n  Par\nEndFunction\n";
+  const auto file = root.write("Child.psc", text);
+  const auto offset = static_cast<int>(text.find("Par\n") + 3);
+
+  const auto json = nlohmann::json::parse(AnalysisService::completionJson(text, &file, offset));
+  EXPECT_EQ(json["replaceLength"].get<int>(), 3);
+  EXPECT_TRUE(labelsOf(json).contains("Parent"));
+}
+
+TEST(PapyrusAnalysisService, CompletionOnForeignObjectOffersOnlyFunctionsAndProperties) {
+  ScratchRoot root;
+  root.write("Parent.psc",
+             "ScriptName Parent\nInt CachedCount\nInt Property Health Auto\nFunction DoStuff()\n"
+             "EndFunction\nEvent OnInit()\nEndEvent\n");
+  const std::string text =
+      "ScriptName Child\nParent Property Link Auto\nFunction F()\n  Link.\nEndFunction\n";
+  const auto file = root.write("Child.psc", text);
+  const auto offset = static_cast<int>(text.find("Link.") + 5);
+
+  const auto labels = labelsOf(
+      nlohmann::json::parse(AnalysisService::completionJson(text, &file, offset)));
+  EXPECT_TRUE(labels.contains("DoStuff"));
+  EXPECT_TRUE(labels.contains("Health"));
+  EXPECT_FALSE(labels.contains("CachedCount"));
+  EXPECT_FALSE(labels.contains("OnInit"));
+}
+
+TEST(PapyrusAnalysisService, CompletionOnSelfOffersScriptVariablesAndEvents) {
+  const std::string text =
+      "ScriptName A\nInt CachedCount\nEvent OnInit()\nEndEvent\nFunction F()\n  self.\nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("self.") + 5);
+
+  const auto labels = labelsOf(
+      nlohmann::json::parse(AnalysisService::completionJson(text, nullptr, offset)));
+  EXPECT_TRUE(labels.contains("CachedCount"));
+  EXPECT_TRUE(labels.contains("OnInit"));
+}
+
+TEST(PapyrusAnalysisService, SignatureHelpSkipsEscapedQuoteInsideString) {
+  const std::string text =
+      "ScriptName A\nFunction Pick(String first, Int second)\nEndFunction\n"
+      "Function F()\n  Pick(\"a\\\"(\", \nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("\", \n") + 3);
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::signatureHelpJson(text, nullptr, offset));
+  EXPECT_TRUE(json["active"].get<bool>());
+  EXPECT_EQ(json["activeParameter"].get<int>(), 1);
+  EXPECT_EQ(json["signatures"][0]["label"].get<std::string>(),
+            "Function Pick(string first, int second)");
+}
+
+TEST(PapyrusAnalysisService, SignatureHelpIsInactiveInsideString) {
+  const std::string text =
+      "ScriptName A\nFunction Pick(String first, Int second)\nEndFunction\n"
+      "Function F()\n  Pick(\"a, \nEndFunction\n";
+  const auto offset = static_cast<int>(text.find("\"a, ") + 4);
+
+  const auto json =
+      nlohmann::json::parse(AnalysisService::signatureHelpJson(text, nullptr, offset));
+  EXPECT_FALSE(json["active"].get<bool>());
 }

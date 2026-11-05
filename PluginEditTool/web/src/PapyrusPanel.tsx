@@ -7,12 +7,17 @@ import {
   ScrollText, X, FileCode2, Hammer, BookOpen, Play, FolderOpen, CheckCircle2, AlertTriangle,
   XCircle, Stethoscope, Save, ListTree, Crosshair,
 } from 'lucide-react';
-import { getPapyrus, type PapyrusAnalyzeResult, type PapyrusSymbolResult } from './backend';
+import {
+  getPapyrus, type PapyrusAnalyzeResult, type PapyrusCheckResult, type PapyrusCompletionItem, type PapyrusCompletionResult,
+  type PapyrusDiagnostic, type PapyrusSignature, type PapyrusSignatureResult, type PapyrusSymbolResult,
+} from './backend';
 import { useDialogs } from './useDialogs';
 import './PapyrusPanel.css';
 
 type Mode = 'decompile' | 'compile' | 'lookup' | 'analyze';
 type LookupKind = 'function' | 'script';
+type CompletionView = { items: PapyrusCompletionItem[]; caret: number; replaceLength: number; active: number };
+type LiveCheck = PapyrusCheckResult & { text: string };
 
 
 type Engine = 'auto' | 'builtin' | 'creationkit';
@@ -60,8 +65,14 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   const [analysis, setAnalysis] = useState<PapyrusAnalyzeResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [symbolInfo, setSymbolInfo] = useState<PapyrusSymbolResult | null>(null);
+  const [liveCheck, setLiveCheck] = useState<LiveCheck | null>(null);
+  const [completion, setCompletion] = useState<CompletionView | null>(null);
+  const [signature, setSignature] = useState<PapyrusSignatureResult | null>(null);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
+  const checkRevision = useRef(0);
+  const completionSeq = useRef(0);
+  const signatureSeq = useRef(0);
 
   const papyrus = getPapyrus();
   const unavailable = !papyrus;
@@ -163,6 +174,25 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [buffer, bufferPath, mode, papyrus]);
 
+  useEffect(() => {
+    if (mode !== 'analyze' || !papyrus) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const revision = ++checkRevision.current;
+      if (!buffer.trim()) { setLiveCheck(null); return; }
+      const reply = (check: PapyrusCheckResult) => {
+        if (!cancelled && revision === checkRevision.current) setLiveCheck({ ...check, text: buffer });
+      };
+      try {
+        const check = JSON.parse(await papyrus.CheckText(buffer, bufferPath, revision, imports)) as PapyrusCheckResult;
+        if (check.revision === revision) reply(check);
+      } catch (e) {
+        reply({ error: e instanceof Error ? e.message : String(e) });
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [buffer, bufferPath, mode, papyrus, imports]);
+
   const saveEditor = async () => {
     if (!papyrus || !bufferPath) return;
     const err = await papyrus.WriteScript(bufferPath, buffer);
@@ -227,8 +257,72 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
     }, 0);
   };
 
+  const closeCompletion = () => { completionSeq.current++; setCompletion(null); };
+  const hideSignature = () => { signatureSeq.current++; setSignature(null); };
+
+  const requestCompletion = async (el: HTMLTextAreaElement, memberOnly: boolean) => {
+    if (!papyrus) return;
+    const seq = ++completionSeq.current;
+    const caret = el.selectionStart;
+    try {
+      const reply = JSON.parse(await papyrus.Complete(el.value, bufferPath, byteOffset(el.value, caret), imports)) as PapyrusCompletionResult;
+      if (seq !== completionSeq.current) return;
+      const items = reply.context === 'none' || (memberOnly && reply.context !== 'member') ? [] : reply.items ?? [];
+      setCompletion(items.length
+        ? { items, caret, replaceLength: reply.replaceLength ?? 0, active: 0 }
+        : null);
+    } catch {
+      if (seq === completionSeq.current) setCompletion(null);
+    }
+  };
+
+  const acceptCompletion = (item: PapyrusCompletionItem) => {
+    const el = editorRef.current;
+    if (!el || !completion) return;
+    const start = completion.caret - completion.replaceLength;
+    const at = start + item.insertText.length;
+    closeCompletion();
+    setBuffer(buffer.slice(0, start) + item.insertText + buffer.slice(completion.caret));
+    setDirty(true);
+    setTimeout(() => el.setSelectionRange(at, at), 0);
+  };
+
+  const requestSignature = async (el: HTMLTextAreaElement) => {
+    if (!papyrus) return;
+    const seq = ++signatureSeq.current;
+    try {
+      const reply = JSON.parse(await papyrus.SignatureHelp(el.value, bufferPath, byteOffset(el.value, el.selectionStart), imports)) as PapyrusSignatureResult;
+      if (seq === signatureSeq.current) setSignature(reply.active && reply.signatures?.length ? reply : null);
+    } catch {
+      if (seq === signatureSeq.current) setSignature(null);
+    }
+  };
+
+  const onEditorInput = (el: HTMLTextAreaElement) => {
+    const typed = el.value.charAt(el.selectionStart - 1);
+    setBuffer(el.value);
+    setDirty(true);
+    if (typed === '.' || (completion && /\w/.test(typed))) void requestCompletion(el, typed === '.');
+    else closeCompletion();
+    if (typed === '(' || typed === ',') void requestSignature(el);
+    else if (typed === ')') hideSignature();
+  };
+
   const onEditorKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void saveEditor(); return; }
+    if (e.key === 'Escape') hideSignature();
+    if (completion) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const count = completion.items.length;
+        setCompletion({ ...completion, active: (completion.active + (e.key === 'ArrowDown' ? 1 : count - 1)) % count });
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptCompletion(completion.items[completion.active]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeCompletion(); return; }
+    }
+    if (e.ctrlKey && e.key === ' ') { e.preventDefault(); void requestCompletion(e.currentTarget, false); return; }
+    if (e.key.startsWith('Arrow')) hideSignature();
 
     if (e.key === 'F12') { e.preventDefault(); void resolveAtCaret().then(goToDefinition); return; }
     if (e.key === 'Tab') {
@@ -243,14 +337,20 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   };
 
   const onEditorClick = (e: ReactMouseEvent<HTMLTextAreaElement>) => {
+    closeCompletion();
+    hideSignature();
     if (e.ctrlKey || e.metaKey) void resolveAtCaret().then(goToDefinition);
     else void resolveAtCaret();
   };
 
-  const diagnostics = analysis?.diagnostics ?? [];
+  const diagnostics = mergeDiagnostics(analysis?.diagnostics ?? [], liveCheck?.diagnostics ?? []);
   const symbols = analysis?.symbols ?? [];
   const errorLines = new Set(diagnostics.filter(d => d.severity === 'error').map(d => d.line));
+  const errorTotal = diagnostics.filter(d => d.severity === 'error').length;
   const lineCount = Math.max(1, buffer.split('\n').length);
+  const checking = buffer.trim() !== '' && liveCheck?.text !== buffer;
+  const liveSkipped = liveCheck && !liveCheck.complete && !liveCheck.diagnostics?.length && !liveCheck.error;
+  const activeSignature = signature ? signature.signatures?.[signature.activeSignature ?? 0] : undefined;
 
   const runLookup = async () => {
     if (!papyrus) return;
@@ -488,11 +588,11 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
                   {bufferPath ? baseName(bufferPath) : 'untitled'}{dirty ? ' •' : ''}
                   {analysis?.script ? ` -- ${analysis.script}${analysis.extends ? ' extends ' + analysis.extends : ''}` : ''}
                 </span>
-                <span className={`papyrus-status ${(analysis?.errorCount ?? 0) > 0 ? 'err' : 'ok'}`}>
+                <span className={`papyrus-status ${errorTotal > 0 ? 'err' : 'ok'}`}>
                   {analysis?.error ? 'parser error'
                     : !buffer.trim() ? ''
-                    : (analysis?.errorCount ?? 0) > 0 ? `${analysis!.errorCount} syntax error${analysis!.errorCount === 1 ? '' : 's'}`
-                    : 'no syntax errors'}
+                    : errorTotal > 0 ? `${errorTotal} error${errorTotal === 1 ? '' : 's'}`
+                    : 'no errors'}
                 </span>
               </div>
 
@@ -508,14 +608,35 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
                   spellCheck={false}
                   value={buffer}
                   placeholder={'Open a .psc, or drag one in, or just start typing.\n\nSyntax errors, the outline and go-to-definition update as you type.\nCtrl+click or F12 follows a symbol; Ctrl+S saves.'}
-                  onChange={e => { setBuffer(e.target.value); setDirty(true); }}
+                  onChange={e => onEditorInput(e.target)}
+                  onBlur={closeCompletion}
                   onKeyDown={onEditorKeyDown}
                   onClick={onEditorClick}
                   onScroll={(e: ReactUIEvent<HTMLTextAreaElement>) => {
                     if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop;
                   }}
                 />
+                {completion && (
+                  <div className="papyrus-complete" role="listbox">
+                    {completion.items.map((item, i) => (
+                      <button key={i} role="option" aria-selected={i === completion.active}
+                              className={`papyrus-complete-row ${i === completion.active ? 'active' : ''}`}
+                              onMouseDown={e => { e.preventDefault(); acceptCompletion(item); }}>
+                        <span className="papyrus-complete-label">{item.label}</span>
+                        <span className="papyrus-complete-kind">{item.kind}</span>
+                        <span className="papyrus-complete-detail">{item.detail}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {activeSignature && (
+                <div className="papyrus-symbol papyrus-signature">
+                  <span className="papyrus-symbol-sig">{signatureLabel(activeSignature, signature?.activeParameter ?? 0)}</span>
+                  {activeSignature.documentation && <span className="papyrus-symbol-doc">{activeSignature.documentation.trim()}</span>}
+                </div>
+              )}
 
               {symbolInfo && (
                 <div className={`papyrus-symbol ${symbolInfo.resolved ? '' : 'unresolved'}`}>
@@ -542,13 +663,17 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
               )}
 
               <div className="papyrus-log-head">
-                <span>PROBLEMS ({diagnostics.length})</span>
-                <span className="papyrus-hint">syntax only -- this does not type-check, so a clean result is not proof it compiles</span>
+                <span>PROBLEMS ({diagnostics.length}){checking && <span className="papyrus-outline-busy"> checking…</span>}</span>
+                <span className="papyrus-hint">{liveCheck?.complete
+                  ? 'names and types are checked as you type -- a clean result is not proof it compiles'
+                  : 'syntax only -- this does not type-check, so a clean result is not proof it compiles'}</span>
               </div>
               <div className="papyrus-log-body">
+                {liveCheck?.error && <div className="papyrus-log-row err">{liveCheck.error}</div>}
+                {liveSkipped && <div className="papyrus-hint">Name and type checks were skipped: a script this one refers to is not on the import roots.</div>}
                 {analysis?.error ? <div className="papyrus-log-row err">{analysis.error}</div>
                   : diagnostics.length === 0
-                    ? <div className="papyrus-log-empty">{buffer.trim() ? 'No syntax errors.' : 'Nothing to check yet.'}</div>
+                    ? <div className="papyrus-log-empty">{buffer.trim() ? 'No errors.' : 'Nothing to check yet.'}</div>
                     : diagnostics.map((d, i) => (
                       <button key={i} className={`papyrus-log-row problem ${d.severity === 'error' ? 'err' : 'warn'}`}
                               onClick={() => revealRange(d.start, d.length)}>
@@ -595,6 +720,35 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
 
 
 
+
+// Radicle offsets are UTF-8 byte offsets, so a UTF-16 caret must be converted before it is sent.
+function byteOffset(text: string, caret: number): number {
+  return new TextEncoder().encode(text.slice(0, caret)).length;
+}
+
+function mergeDiagnostics(a: PapyrusDiagnostic[], b: PapyrusDiagnostic[]): PapyrusDiagnostic[] {
+  const seen = new Set<string>();
+  return [...a, ...b].filter(d => {
+    const key = `${d.code}:${d.start}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function signatureLabel(sig: PapyrusSignature, active: number): ReactNode {
+  let from = sig.label.indexOf('(') + 1;
+  for (let i = 0; i <= active && i < sig.parameters.length; i++) {
+    const param = sig.parameters[i].label;
+    const at = sig.label.indexOf(param, from);
+    if (at < 0) break;
+    if (i === active) {
+      return <>{sig.label.slice(0, at)}<strong>{param}</strong>{sig.label.slice(at + param.length)}</>;
+    }
+    from = at + param.length;
+  }
+  return sig.label;
+}
 
 function isLookupError(text: string): boolean {
   if (!text) return false;

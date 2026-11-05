@@ -80,6 +80,57 @@ public static unsafe class PapyrusAnalysis
         return Call.TakeText(json, size);
     }
 
+    public static string CompletionJson(ReadOnlySpan<byte> text, string? filePath, int offset, string? imports = null,
+        IEnumerable<string>? baseImports = null)
+    {
+        using var strings = new NativeStrings();
+        var roots = strings.AddAll(baseImports);
+        byte* empty = stackalloc byte[1];
+        byte* json = null;
+        nuint size = 0;
+        fixed (byte* pointer = text)
+        fixed (IntPtr* bases = roots)
+        {
+            Call.Check(RadicleNative.PapyrusCompletionJson(pointer == null ? empty : pointer, (nuint)text.Length, filePath, offset,
+                imports, bases, (nuint)roots.Length, &json, &size));
+        }
+        return Call.TakeText(json, size);
+    }
+
+    public static string SignatureHelpJson(ReadOnlySpan<byte> text, string? filePath, int offset, string? imports = null,
+        IEnumerable<string>? baseImports = null)
+    {
+        using var strings = new NativeStrings();
+        var roots = strings.AddAll(baseImports);
+        byte* empty = stackalloc byte[1];
+        byte* json = null;
+        nuint size = 0;
+        fixed (byte* pointer = text)
+        fixed (IntPtr* bases = roots)
+        {
+            Call.Check(RadicleNative.PapyrusSignatureHelpJson(pointer == null ? empty : pointer, (nuint)text.Length, filePath, offset,
+                imports, bases, (nuint)roots.Length, &json, &size));
+        }
+        return Call.TakeText(json, size);
+    }
+
+    public static string CheckTextJson(ReadOnlySpan<byte> text, string? filePath, int revision, string? imports = null,
+        IEnumerable<string>? baseImports = null)
+    {
+        using var strings = new NativeStrings();
+        var roots = strings.AddAll(baseImports);
+        byte* empty = stackalloc byte[1];
+        byte* json = null;
+        nuint size = 0;
+        fixed (byte* pointer = text)
+        fixed (IntPtr* bases = roots)
+        {
+            Call.Check(RadicleNative.PapyrusCheckTextJson(pointer == null ? empty : pointer, (nuint)text.Length, filePath, revision,
+                imports, bases, (nuint)roots.Length, &json, &size));
+        }
+        return Call.TakeText(json, size);
+    }
+
     public static string CompilePath(string sourcePath, string? outputPath = null, string? imports = null, bool release = false,
         bool noDebugInfo = false, string? flagFile = null, IEnumerable<string>? baseImports = null)
     {

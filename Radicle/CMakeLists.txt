@@ -328,6 +328,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/papyrus/creation_kit_fidelity.cpp
   src/papyrus/compile_script.cpp
   src/papyrus/analysis_service.cpp
+  src/papyrus/completion.cpp
   src/f4se/binding_validator.cpp
   src/f4se/cpp_emitter.cpp
   src/f4se/cpp_scanner.cpp

@@ -219,6 +219,117 @@ radicle_status radicle_papyrus_symbol_at_json(const uint8_t* text,
   });
 }
 
+radicle_status radicle_papyrus_completion_json(const uint8_t* text,
+                                               size_t size,
+                                               const char* file_path,
+                                               int32_t offset,
+                                               const char* imports,
+                                               const char* const* base_imports,
+                                               size_t base_count,
+                                               uint8_t** out_text,
+                                               size_t* out_size) {
+  clear_error();
+  if (!out_text || !out_size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_text and out_size are required");
+  }
+  *out_text = nullptr;
+  *out_size = 0;
+  if (!text) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "text is required");
+  }
+  if (offset < 0 || static_cast<size_t>(offset) > size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "offset is outside the text");
+  }
+
+  return guarded([&] {
+    std::vector<std::filesystem::path> roots;
+    const radicle_status status = base_roots(base_imports, base_count, roots);
+    if (status != RADICLE_STATUS_OK) {
+      return status;
+    }
+    const std::string buffer(reinterpret_cast<const char*>(text), size);
+    const std::string path_text = file_path ? file_path : "";
+    const std::string imports_text = imports ? imports : "";
+    return copy_bytes(AnalysisService::completionJson(buffer, file_path ? &path_text : nullptr,
+                                                      offset, imports ? &imports_text : nullptr,
+                                                      roots),
+                      out_text, out_size);
+  });
+}
+
+radicle_status radicle_papyrus_signature_help_json(const uint8_t* text,
+                                                   size_t size,
+                                                   const char* file_path,
+                                                   int32_t offset,
+                                                   const char* imports,
+                                                   const char* const* base_imports,
+                                                   size_t base_count,
+                                                   uint8_t** out_text,
+                                                   size_t* out_size) {
+  clear_error();
+  if (!out_text || !out_size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_text and out_size are required");
+  }
+  *out_text = nullptr;
+  *out_size = 0;
+  if (!text) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "text is required");
+  }
+  if (offset < 0 || static_cast<size_t>(offset) > size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "offset is outside the text");
+  }
+
+  return guarded([&] {
+    std::vector<std::filesystem::path> roots;
+    const radicle_status status = base_roots(base_imports, base_count, roots);
+    if (status != RADICLE_STATUS_OK) {
+      return status;
+    }
+    const std::string buffer(reinterpret_cast<const char*>(text), size);
+    const std::string path_text = file_path ? file_path : "";
+    const std::string imports_text = imports ? imports : "";
+    return copy_bytes(
+        AnalysisService::signatureHelpJson(buffer, file_path ? &path_text : nullptr, offset,
+                                           imports ? &imports_text : nullptr, roots),
+        out_text, out_size);
+  });
+}
+
+radicle_status radicle_papyrus_check_text_json(const uint8_t* text,
+                                               size_t size,
+                                               const char* file_path,
+                                               int32_t revision,
+                                               const char* imports,
+                                               const char* const* base_imports,
+                                               size_t base_count,
+                                               uint8_t** out_text,
+                                               size_t* out_size) {
+  clear_error();
+  if (!out_text || !out_size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_text and out_size are required");
+  }
+  *out_text = nullptr;
+  *out_size = 0;
+  if (!text) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "text is required");
+  }
+
+  return guarded([&] {
+    std::vector<std::filesystem::path> roots;
+    const radicle_status status = base_roots(base_imports, base_count, roots);
+    if (status != RADICLE_STATUS_OK) {
+      return status;
+    }
+    const std::string buffer(reinterpret_cast<const char*>(text), size);
+    const std::string path_text = file_path ? file_path : "";
+    const std::string imports_text = imports ? imports : "";
+    return copy_bytes(AnalysisService::checkTextJson(buffer, file_path ? &path_text : nullptr,
+                                                     revision, imports ? &imports_text : nullptr,
+                                                     roots),
+                      out_text, out_size);
+  });
+}
+
 radicle_status radicle_papyrus_compile_path(const char* source,
                                             const char* output_path,
                                             const char* imports,
