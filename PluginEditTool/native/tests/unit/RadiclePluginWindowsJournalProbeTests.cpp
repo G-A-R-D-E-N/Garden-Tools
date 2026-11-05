@@ -147,7 +147,7 @@ TEST_CASE("Windows split-store recovery worker", "[.split-store-worker]") {
     if (splitCrashPhase != -1) FAIL("split-store worker missed crash boundary");
 #endif
 }
-TEST_CASE("Windows split-store recovery survives process interruption and preserves file identity ACL and attributes") {
+TEST_CASE("Windows split-store recovery survives process interruption and preserves file identity ACL and attributes", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     for (const bool original : {true, false}) for (int phase = 0; phase <= 4; ++phase) {
         if (!original && phase == 1) continue;
@@ -206,7 +206,7 @@ TEST_CASE("Windows split-store recovery survives process interruption and preser
     }
 #endif
 }
-TEST_CASE("Windows split-store recovery rejects newcomers occupied backups manifest mismatch and deny-delete readers") {
+TEST_CASE("Windows split-store recovery rejects newcomers occupied backups manifest mismatch and deny-delete readers", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     const auto root = makeSplitRoot();
     Cleanup cleanup{root};

@@ -352,7 +352,7 @@ TEST_CASE("Windows persisted intent worker", "[.intent-worker]") {
 }
 
 // Detects: each interrupted publication boundary must roll forward safely after restart.
-TEST_CASE("Windows persisted replacement recovers in a fresh process after every publication boundary") {
+TEST_CASE("Windows persisted replacement recovers in a fresh process after every publication boundary", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
     for (int phase = 0; phase < 7; ++phase) {
@@ -390,7 +390,7 @@ TEST_CASE("Windows persisted replacement recovers in a fresh process after every
 }
 
 // Detects: conflicting newcomers and backups must survive recovery without overwrite.
-TEST_CASE("Windows persisted replacement preserves newcomers and backup conflicts after restart") {
+TEST_CASE("Windows persisted replacement preserves newcomers and backup conflicts after restart", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
     const auto root = std::filesystem::current_path() / ".probe" / ("intent_restart_conflict_" + fo4ide_test::uniqueTempName());
@@ -469,7 +469,7 @@ TEST_CASE("Windows absent-original worker", "[.intent-absent-worker]") {
 }
 
 // Detects: every absent-original publication boundary must recover exactly once after restart.
-TEST_CASE("Windows absent original publishes without overwrite and resumes after process interruption") {
+TEST_CASE("Windows absent original publishes without overwrite and resumes after process interruption", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
     for (const auto phase : {0, 1, 4, 5, 6}) {
@@ -502,7 +502,7 @@ TEST_CASE("Windows absent original publishes without overwrite and resumes after
 }
 
 // Detects: absent-original persistence must reject conflicts and preserve unexpected destination bytes.
-TEST_CASE("Windows absent original retains unexpected destination and refuses backup collisions") {
+TEST_CASE("Windows absent original retains unexpected destination and refuses backup collisions", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
     const auto root = std::filesystem::current_path() / ".probe" / ("intent_absent_conflict_" +
