@@ -162,7 +162,7 @@ std::optional<SceneLayout> scanLayout(const fo4::Record& record) {
             while (close < subs.size() && subs[close].signature != anam) ++close;
             if (close == subs.size() || !marker(subs[close])) return std::nullopt;
             std::size_t headerEnd = close;
-            std::size_t nextHeader = i + 1;
+            std::size_t nextHeader = 0;
             for (std::size_t at = i + 1; at < close; ++at) {
                 bool matched = false;
                 for (; nextHeader < k_actionHeader.size(); ++nextHeader) {
