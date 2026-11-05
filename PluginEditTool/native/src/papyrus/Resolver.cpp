@@ -586,7 +586,8 @@ std::optional<Type> Resolver::resolveTypeName(ScriptIndex& index, const std::str
         }
     }
 
-    const auto split = name.find_last_of(':');
+    // '#' must split like ':' because decompiled sources spell a foreign struct as Script#Struct.
+    const auto split = name.find_last_of(":#");
     if (split != std::string::npos && split > 0) {
         const auto ownerName = name.substr(0, split);
         const auto structName = name.substr(split + 1);

@@ -747,3 +747,19 @@ TEST_CASE("CodeGen a debug only call is dropped only when asked for") {
     REQUIRE(stripped.pex != nullptr);
     CHECK(listing(function(stripped.pex->objects[0], "Go")).empty());
 }
+
+TEST_CASE("CodeGen a Script#Struct[] parameter resolves to the struct of the imported script") {
+    Fixture f;
+    f.writeWithScriptObject();
+    f.write("Holder", "Scriptname Holder\nStruct Memory\n    int fId = 0\nEndStruct\n");
+    f.write("Consumer",
+            "Scriptname Consumer\nFunction Take(Holder#Memory[] akItems)\nEndFunction\n"
+            "Function Go()\n    Holder#Memory[] items = new Holder#Memory[2]\n    Take(items)\n"
+            "EndFunction\n");
+    const auto result = f.compile("Consumer");
+    std::string joined;
+    for (const auto& d : result.diagnostics) joined += d.toString() + " | ";
+    INFO("diagnostics: " << joined);
+    CHECK(joined.empty());
+    CHECK(result.success);
+}
