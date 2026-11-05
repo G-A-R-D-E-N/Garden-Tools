@@ -3074,11 +3074,19 @@ On 2026-11-02 the service process ended after a run without logging why, and the
 
 ## ci/real-data-service/real_data_service.py:run_pass — plan the whole pass, then run due heads
 
-`run_pass` plans every target first. Earlier and not-affected heads get their `success` at once, and the due ones are collected in `order`. `post_queue` then marks each waiting head `pending` "queued (position N of M)", so a head shows its place from the start of the pass instead of nothing until its turn. Jobs run one at a time. After each job, `post_queue` is called for the heads still waiting, so their numbers count down. A head that moved during the pass is skipped by `prepare_checkout`, because the merge ref or `nomad/dev` head no longer matches; it stays due and is planned again on a later pass.
+`run_pass` plans every target first. Earlier and not-affected heads get their `success` at once, and the due ones are collected in `order`. `clear_stale_queue` then clears queued labels on heads that are no longer due, and `post_queue` marks each waiting head `pending` "queued (position N of M)", so a head shows its place from the start of the pass instead of nothing until its turn. Jobs run one at a time. After each job, `post_queue` is called for the heads still waiting, so their numbers count down. A head that moved during the pass is skipped by `prepare_checkout`, because the merge ref or `nomad/dev` head no longer matches; it stays due and is planned again on a later pass.
 
 ## ci/real-data-service/real_data_service.py:post_queue — queued position text
 
-`post_queue` posts `pending` only when the newest `real-data` status of the head is not already that exact text, so an unchanged queue makes no writes. A head whose PR was closed or moved to a new commit while it waited keeps its last queued text on that commit; nothing clears it. The head is still due if it is listed again, for example after the commit lands on `nomad/dev`. A failed read or post is logged and does not stop the pass.
+`post_queue` posts `pending` only when the newest `real-data` status of the head is not already that exact text, so an unchanged queue makes no writes. Every head it is given is added to the set of heads the service queued, which is saved to `C:\ci\real-data\queued.json` (`QUEUED`) so a restart keeps it. A failed read or post is logged and does not stop the pass.
+
+## ci/real-data-service/real_data_service.py:clear_stale_queue — queued labels that no longer apply
+
+`clear_stale_queue` runs at the start of a real pass, after planning and before the queue is posted. For each head the service queued earlier (`queued` from `load_queued`) that is not a non-draft open PR head or the `nomad/dev` head of this pass (the `live` set in `run_pass`), it reads the newest `real-data` status. If that status is `pending` with text starting "queued", the head gets `error` "superseded". This covers a PR that got a new commit, was closed or merged, or became a draft. The head is then forgotten. A current non-draft head is never touched, even when it is not due this pass, for example after a transient `plan` failure; otherwise a superseded label would make it `done` and it would never run. `plan` treats an `error` "superseded" status as due again, so a draft that is marked ready again on the same commit runs. A head whose status moved on (a result, or a running job) is forgotten without a write. Only heads in the queued set are read, so no history is scanned and labels the service did not post are never changed. A failed read keeps the head in the set for the next pass. Dry runs skip this step, so they neither post nor rewrite `queued.json`.
+
+## ci/real-data-service/real_data_service.py:load_queued — the queued set survives a restart
+
+`load_queued` reads the JSON list in `queued.json`. A missing or unreadable file gives an empty set, so the worst case after damage is labels that are not cleared, never a failed pass. `save_queued` writes the sorted list after each queue post and each clear. Heads queued by a service process before this file existed are not in the set and are cleared by hand.
 
 ## ci/real-data-service/real_data_service.py:run_command — retries of reads and status posts
 
@@ -3088,6 +3096,10 @@ On 2026-11-02 the service process ended after a run without logging why, and the
 
 `failure_text` takes the captured stderr of a failed call, or the exception text when there is none, joins it onto one line and passes it through `clean`. That removes the Windows user name, paths and URLs before the text reaches a log line. The 140-character cap of `clean` applies to log lines too.
 
+## ci/real-data-service/real_data_service.py:main — a clean exit is not a stopped service
+
+The `__main__` block logs "service stopped" only for exceptions. `SystemExit` is re-raised first, because `main` ends with `sys.exit` when a dry run or `--once` finishes normally. Before this, every such exit logged an ERROR traceback.
+
 ## ci/real-data-service/real_data_service.py:request_public_sync — stderr in the warning
 
 The "public CI sync not started" warning carries gh's reason through `failure_text`. The dispatch is not retried, so each failed 5-minute attempt logs one `attempt 1 of 1` line from `run_command` and then this warning.
@@ -3095,6 +3107,14 @@ The "public CI sync not started" warning carries gh's reason through `failure_te
 ## ci/real-data-service/test_real_data_service.py:QueueTest — queued positions
 
 `test_queued_status_is_posted_only_when_the_position_changes` detects a queued status posted again on every pass, which is write churn, or a position that never updates. `test_run_pass_queues_every_due_head_and_refreshes_positions_after_each_job` detects a waiting head showing no status until its turn, and waiting heads keeping their pass-start numbers while earlier jobs finish.
+
+## ci/real-data-service/test_real_data_service.py:MainExitTest — a clean dry-run exit
+
+`test_a_clean_dry_run_exit_is_not_logged_as_a_stopped_service` runs the real `__main__` block with `--dry-run` and a fake `gh`, and fails if any ERROR is logged or the exit code is not 0. It detects a normal exit logged as "service stopped" with a traceback. Writes are made to fail during the run, so a dry run that writes to the live folder fails the test instead.
+
+## ci/real-data-service/test_real_data_service.py:QueueTest — stale queued labels and the queue file
+
+`test_queued_head_that_is_no_longer_due_is_marked_superseded` detects a PR that got a new commit, was closed, or became a draft keeping its "queued" label on the old commit. `test_a_current_non_draft_head_is_never_marked_superseded` detects a live head that is not due this pass (for example after a transient `plan` failure) being marked superseded and never run. `test_superseded_head_that_is_back_in_the_pr_is_due_again` detects a draft marked ready again on the same commit never running. `test_a_status_the_service_did_not_queue_is_never_touched` detects the service clearing a label it did not post, or scanning history for one. `test_a_tracked_head_whose_status_moved_on_is_forgotten_without_a_write` detects a head whose job already ran being overwritten. `test_tracked_heads_are_written_to_the_queue_file` detects a restart losing the set of queued heads. `test_run_pass_clears_a_stale_queued_head_before_queueing_the_current_one` detects the clear step missing from the pass. `test_dry_run_neither_posts_nor_rewrites_the_queue_file` detects a dry run changing the live service's labels or file.
 
 ## ci/real-data-service/test_real_data_service.py:RetryTest — retries and scrubbed stderr
 

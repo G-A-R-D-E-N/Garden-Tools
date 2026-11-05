@@ -1,9 +1,13 @@
+import io
+import json
 import os
+import runpy
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -11,6 +15,7 @@ import real_data_service as rds
 
 SHA = "a" * 40
 NEW = "b" * 40
+OLD = "f" * 40
 CTEST_PASS = "  1/498 Test #1: CheckErrorsReal.Full ..........   Passed    1.00 sec\n100% tests passed, 0 tests failed out of 498\n"
 CTEST_FAIL = ("  1/498 Test #1: CheckErrorsReal.Full ..........   Passed    1.00 sec\n"
               "  2/498 Test #2: QuestRuntimeReal.Thing ........***Failed    0.20 sec\n"
@@ -76,7 +81,7 @@ class ServiceTest(unittest.TestCase):
     def setUp(self):
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.enterContext(mock.patch.multiple(rds, ROOT=tmp, LOCK=tmp / "run.lock", LOG_DIR=tmp / "logs",
-                                              REPO_DIR=tmp / "repo"))
+                                              REPO_DIR=tmp / "repo", QUEUED=tmp / "queued.json"))
         self.gh = FakeGitHub()
         self.enterContext(mock.patch.object(rds, "gh", self.gh))
 
@@ -93,6 +98,11 @@ class DueDecisionTest(ServiceTest):
 
     def test_pending_status_left_by_a_dead_run_is_due_again(self):
         self.gh.states = ["pending"]
+        self.gh.files = ["PluginEditTool/native/src/a.cpp"]
+        self.assertEqual(rds.plan(target()), "run")
+
+    def test_superseded_head_that_is_back_in_the_pr_is_due_again(self):
+        self.gh.states = ["error superseded"]
         self.gh.files = ["PluginEditTool/native/src/a.cpp"]
         self.assertEqual(rds.plan(target()), "run")
 
@@ -179,8 +189,69 @@ class QueueTest(ServiceTest):
         statuses = {SHA: ("pending", "queued (position 1 of 2)"), NEW: (None, "")}
         with mock.patch.object(rds, "latest_status", side_effect=statuses.__getitem__), \
                 mock.patch.object(rds, "post") as post:
-            rds.post_queue([target(1, sha=SHA), target(2, sha=NEW)])
+            rds.post_queue([target(1, sha=SHA), target(2, sha=NEW)], set())
         post.assert_called_once_with(NEW, "pending", "queued (position 2 of 2)")
+
+    def test_tracked_heads_are_written_to_the_queue_file(self):
+        with mock.patch.object(rds, "latest_status", return_value=(None, "")), mock.patch.object(rds, "post"):
+            rds.post_queue([target(1, sha=SHA)], set())
+        self.assertEqual(rds.load_queued(), {SHA})
+
+    def test_queued_head_that_is_no_longer_due_is_marked_superseded(self):
+        statuses = {OLD: ("pending", "queued (position 2 of 2)"), NEW: ("pending", "queued (position 1 of 1)")}
+        queued = {OLD, NEW}
+        with mock.patch.object(rds, "latest_status", side_effect=statuses.__getitem__), \
+                mock.patch.object(rds, "post") as post:
+            rds.clear_stale_queue({NEW}, queued)
+        post.assert_called_once_with(OLD, "error", "superseded")
+        self.assertEqual(queued, {NEW})
+        self.assertEqual(rds.load_queued(), {NEW})
+
+    def test_a_current_non_draft_head_is_never_marked_superseded(self):
+        queued = {NEW}
+        with mock.patch.object(rds, "latest_status", return_value=("pending", "queued (position 1 of 1)")), \
+                mock.patch.object(rds, "post") as post:
+            rds.clear_stale_queue({NEW}, queued)
+        post.assert_not_called()
+        self.assertEqual(queued, {NEW})
+
+    def test_a_status_the_service_did_not_queue_is_never_touched(self):
+        with mock.patch.object(rds, "latest_status", return_value=("pending", "queued (position 1 of 1)")), \
+                mock.patch.object(rds, "post") as post:
+            rds.clear_stale_queue(set(), set())
+        post.assert_not_called()
+
+    def test_a_tracked_head_whose_status_moved_on_is_forgotten_without_a_write(self):
+        queued = {OLD}
+        with mock.patch.object(rds, "latest_status", return_value=("error", "superseded")), \
+                mock.patch.object(rds, "post") as post:
+            rds.clear_stale_queue(set(), queued)
+        post.assert_not_called()
+        self.assertEqual(queued, set())
+
+    def test_run_pass_clears_a_stale_queued_head_before_queueing_the_current_one(self):
+        rds.QUEUED.write_text(json.dumps([OLD]), encoding="utf-8")
+        self.gh.files = ["Radicle/src/a.cpp"]
+        statuses = {OLD: ("pending", "queued (position 1 of 1)"), NEW: (None, "")}
+        with mock.patch.object(rds, "open_targets", return_value=[target(2, sha=NEW)]), \
+                mock.patch.object(rds, "latest_status", side_effect=statuses.__getitem__), \
+                mock.patch.object(rds, "post") as post, \
+                mock.patch.object(rds, "run_target"):
+            rds.run_pass()
+        self.assertEqual(post.call_args_list, [
+            mock.call(OLD, "error", "superseded"),
+            mock.call(NEW, "pending", "queued (position 1 of 1)"),
+        ])
+
+    def test_dry_run_neither_posts_nor_rewrites_the_queue_file(self):
+        rds.QUEUED.write_text(json.dumps([OLD]), encoding="utf-8")
+        self.enterContext(redirect_stdout(io.StringIO()))
+        with mock.patch.object(rds, "open_targets", return_value=[target(2, sha=NEW)]), \
+                mock.patch.object(rds, "latest_status", return_value=("pending", "queued (position 1 of 1)")), \
+                mock.patch.object(rds, "post") as post:
+            rds.run_pass(dry_run=True)
+        post.assert_not_called()
+        self.assertEqual(rds.load_queued(), {OLD})
 
     def test_run_pass_queues_every_due_head_and_refreshes_positions_after_each_job(self):
         self.gh.files = ["Radicle/src/a.cpp"]
@@ -197,6 +268,30 @@ class QueueTest(ServiceTest):
             mock.call(SHA, "pending", "queued (position 1 of 1)"),
         ])
         self.assertEqual(run_target.call_args_list, [mock.call(targets[1]), mock.call(targets[0])])
+
+
+def dry_run_github(cmd, **kwargs):
+    text = " ".join(cmd)
+    if "pr list" in text:
+        out = "[]"
+    elif "/git/ref/" in text:
+        out = SHA + "\n"
+    elif "/compare/" in text or "/statuses" in text or "/check-runs" in text:
+        out = ""
+    else:
+        out = json.dumps({"commit": {"committer": {"date": "2026-11-01T00:00:00Z"}}, "parents": [{"sha": NEW}]})
+    return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
+
+
+class MainExitTest(ServiceTest):
+    def test_a_clean_dry_run_exit_is_not_logged_as_a_stopped_service(self):
+        self.enterContext(mock.patch.object(sys, "argv", ["real_data_service.py", "--dry-run"]))
+        self.enterContext(mock.patch.object(subprocess, "run", side_effect=dry_run_github))
+        self.enterContext(mock.patch.object(Path, "write_text", side_effect=AssertionError("dry run wrote a file")))
+        self.enterContext(redirect_stdout(io.StringIO()))
+        with self.assertNoLogs(level="ERROR"), self.assertRaises(SystemExit) as exit_:
+            runpy.run_path(str(Path(rds.__file__)), run_name="__main__")
+        self.assertEqual(exit_.exception.code, 0)
 
 
 class RetryTest(unittest.TestCase):

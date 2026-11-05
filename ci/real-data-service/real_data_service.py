@@ -32,6 +32,7 @@ ROOT = Path(r"C:\ci\real-data")
 REPO_DIR = ROOT / "repo"
 LOG_DIR = ROOT / "logs"
 LOCK = ROOT / "run.lock"
+QUEUED = ROOT / "queued.json"
 RUNNER_ENV = Path(r"C:\tools\github-runner\fo4-data\.env")
 RUNNER_KEYS = ("FO4_DATA_DIR", "CMAKE_BUILD_PARALLEL_LEVEL", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA",
                "TEMP", "TMP")
@@ -162,8 +163,8 @@ def touches(paths):
 def plan(t):
     if t.draft:
         return "draft"
-    state, _ = latest_status(t.sha)
-    if state not in (None, "pending"):
+    state, description = latest_status(t.sha)
+    if state not in (None, "pending") and (state, description) != ("error", "superseded"):
         return "done"
     if passed_earlier(t.sha):
         return "earlier"
@@ -187,14 +188,39 @@ def post(sha, state, description):
        "-f", f"context={CONTEXT}", "-f", f"description={clean(description)}", attempts=2)
 
 
-def post_queue(targets):
+def load_queued():
+    try:
+        return set(json.loads(QUEUED.read_text(encoding="utf-8")))
+    except (FileNotFoundError, ValueError):
+        return set()
+
+
+def save_queued(queued):
+    QUEUED.write_text(json.dumps(sorted(queued)), encoding="utf-8")
+
+
+def post_queue(targets, queued):
     for position, t in enumerate(targets, 1):
         text = f"queued (position {position} of {len(targets)})"
+        queued.add(t.sha)
         try:
             if latest_status(t.sha) != ("pending", text):
                 post(t.sha, "pending", text)
         except Exception:
             logging.exception("%s: queued status not posted", t.name)
+    save_queued(queued)
+
+
+def clear_stale_queue(live, queued):
+    for sha in sorted(queued - live):
+        try:
+            state, description = latest_status(sha)
+            if state == "pending" and description.startswith("queued"):
+                post(sha, "error", "superseded")
+            queued.discard(sha)
+        except Exception:
+            logging.exception("%s: queued status not cleared", sha[:12])
+    save_queued(queued)
 
 
 def failed_names(text):
@@ -359,7 +385,9 @@ def run_pass(dry_run=False):
     counts = Counter()
     try:
         due = []
-        for t in order(open_targets()):
+        queued = load_queued()
+        targets = order(open_targets())
+        for t in targets:
             try:
                 action = plan(t)
                 counts[action] += 1
@@ -375,13 +403,15 @@ def run_pass(dry_run=False):
                     due.append(t)
             except Exception:
                 logging.exception("%s: failed for this target", t.name)
-        post_queue(due)
+        if not dry_run:
+            clear_stale_queue({t.sha for t in targets if not t.draft}, queued)
+            post_queue(due, queued)
         for index, t in enumerate(due):
             try:
                 run_target(t)
             except Exception:
                 logging.exception("%s: failed for this target", t.name)
-            post_queue(due[index + 1:])
+            post_queue(due[index + 1:], queued)
     finally:
         if not dry_run:
             release_lock()
@@ -434,6 +464,8 @@ def main(argv=None):
 if __name__ == "__main__":
     try:
         sys.exit(main())
+    except SystemExit:
+        raise
     except BaseException:
         logging.exception("service stopped")
         raise
