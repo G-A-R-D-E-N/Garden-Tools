@@ -399,8 +399,9 @@ TEST_F(DialogueWriterCApi, SceneActorAndActionAuthoringStatusesMapAndSurviveRelo
   EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, rkey(0x8FF), 0, "Ghost"), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, scene, 1, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, quest, 0, "Outside"), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 0), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 0), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, scene, 0), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 0), RADICLE_STATUS_OK);
 
   size_t count = 0;
   EXPECT_EQ(radicle_plugin_scene_group_count(plugin, scene, RADICLE_SCENE_PART_ACTOR, &count), RADICLE_STATUS_OK);
