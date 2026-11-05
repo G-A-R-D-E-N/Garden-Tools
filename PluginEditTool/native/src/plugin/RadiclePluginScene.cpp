@@ -1,5 +1,6 @@
 #include "RadiclePluginSupport.hpp"
 #include "RadiclePluginQuestInternal.hpp"
+#include "RadiclePluginSceneFields.hpp"
 
 #include <fo4ide/plugin/ConditionCodec.hpp>
 
@@ -207,37 +208,8 @@ std::optional<Error> applyActionLink(fo4::Plugin& plugin, const fo4::FormKey& sc
     return linkFailure(fo4::set_scene_action_formlink(plugin, scene, index, path, target), path);
 }
 
-struct PayloadField {
-    const char* key;
-    const char* path;
-    bool link;
-};
-
-constexpr PayloadField k_payloadFields[] = {
-    {"topic", "SCEN\\Action\\Topic", true},
-    {"dialogueSubtype", "SCEN\\Action\\DialogueSubtype", true},
-    {"animArchType", "SCEN\\Action\\AnimArchType", true},
-    {"audioOutputOverride", "SCEN\\Action\\AudioOutputOverride", true},
-    {"startSceneTopic", "SCEN\\Action\\StartSceneTopic", true},
-    {"playSound", "SCEN\\Action\\PlaySound", true},
-    {"playerPositiveResponse", "SCEN\\Action\\PlayerPositiveResponse", true},
-    {"playerNegativeResponse", "SCEN\\Action\\PlayerNegativeResponse", true},
-    {"playerNeutralResponse", "SCEN\\Action\\PlayerNeutralResponse", true},
-    {"playerQuestionResponse", "SCEN\\Action\\PlayerQuestionResponse", true},
-    {"npcPositiveResponse", "SCEN\\Action\\NpcPositiveResponse", true},
-    {"npcNegativeResponse", "SCEN\\Action\\NpcNegativeResponse", true},
-    {"npcNeutralResponse", "SCEN\\Action\\NpcNeutralResponse", true},
-    {"npcQuestionResponse", "SCEN\\Action\\NpcQuestionResponse", true},
-    {"loopingMax", "SCEN\\Action\\LoopingMax", false},
-    {"loopingMin", "SCEN\\Action\\LoopingMin", false},
-    {"cameraFovOnPlayerCamera", "SCEN\\Action\\CameraFovOnPlayerCamera", false},
-    {"cameraRateOfChange", "SCEN\\Action\\CameraRateOfChange", false},
-    {"emotionType", "SCEN\\Action\\EmotionType", false},
-    {"emotionValue", "SCEN\\Action\\EmotionValue", false},
-    {"timerMax", "SCEN\\Action\\TimerMax", false},
-    {"timerMin", "SCEN\\Action\\TimerMin", false},
-    {"dialogueTargetActor", "SCEN\\Action\\DialogueTargetActor", false},
-};
+using scenefields::k_payloadFields;
+using scenefields::PayloadField;
 
 const PayloadField* payloadField(std::string_view key) {
     for (const auto& field : k_payloadFields) {

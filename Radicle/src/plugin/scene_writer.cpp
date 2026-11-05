@@ -1,6 +1,6 @@
 #include "fo4/plugin/scene_writer.hpp"
 
-#include "../environment/scene_layout.hpp"
+#include "fo4/environment/scene_layout.hpp"
 #include "record_edit.hpp"
 #include "scene_writer_internal.hpp"
 
@@ -510,6 +510,18 @@ FormLinkFieldMutationStatus set_scene_action_formlink(Plugin& plugin,
   } catch (const schema::ScalarError& error) {
     throw schema::FormLinkFieldError(error.what());
   }
+}
+
+// Requires: one row per SCEN action payload member the writer accepts, so a caller's key table can be checked against it.
+std::vector<ScenePayloadPath> scene_action_payload_paths() {
+  std::vector<ScenePayloadPath> rows;
+  for (const auto& entry : k_links) {
+    if (entry.scope == Scope::action_payload) rows.push_back({entry.path, true});
+  }
+  for (const auto& entry : k_scalars) {
+    if (entry.scope == Scope::action_payload) rows.push_back({entry.path, false});
+  }
+  return rows;
 }
 
 std::optional<std::size_t> scene_group_count(const Plugin& plugin, const FormKey& scene, ScenePart part) {

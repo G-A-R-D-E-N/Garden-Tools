@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -11,9 +12,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/scene_writer.hpp>
 #include <fo4/signature.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include "../../src/plugin/RadiclePluginSceneFields.hpp"
 #include "plugin_bytes.hpp"
 
 namespace {
@@ -340,4 +343,27 @@ TEST_CASE("Scene phases carry start and completion conditions through the scoped
     fo4ide::plugin::RadiclePluginBackend restarted;
     loadPatch(restarted, root / "Patch.esp");
     CHECK(sceneOf(restarted, scene) == readback);
+}
+
+// Detects: a Radicle writer payload row renamed or reclassified, which must keep the PET key table in step.
+TEST_CASE("Scene action payload keys still name rows of the Radicle scene writer table") {
+    const auto writerRows = fo4::scene_action_payload_paths();
+    REQUIRE(!writerRows.empty());
+    std::vector<std::string> writerPaths;
+    for (const auto& row : writerRows) writerPaths.emplace_back(row.path);
+
+    for (const auto& field : fo4ide::plugin::scenefields::k_payloadFields) {
+        const auto found = std::find(writerPaths.begin(), writerPaths.end(), std::string(field.path));
+        REQUIRE(found != writerPaths.end());
+        CHECK(writerRows[static_cast<std::size_t>(found - writerPaths.begin())].link == field.link);
+    }
+
+    for (const auto& row : writerRows) {
+        if (row.link) continue;
+        bool named = false;
+        for (const auto& field : fo4ide::plugin::scenefields::k_payloadFields) {
+            if (std::string(field.path) == row.path) named = true;
+        }
+        CHECK(named);
+    }
 }

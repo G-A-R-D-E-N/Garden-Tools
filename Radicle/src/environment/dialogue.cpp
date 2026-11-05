@@ -1,7 +1,7 @@
 #include "fo4/environment/dialogue.hpp"
 
 #include "record_reader.hpp"
-#include "scene_layout.hpp"
+#include "fo4/environment/scene_layout.hpp"
 
 #include <algorithm>
 

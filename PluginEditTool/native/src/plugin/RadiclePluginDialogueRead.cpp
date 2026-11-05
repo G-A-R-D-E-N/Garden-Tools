@@ -1,14 +1,12 @@
 #include "RadiclePluginSupport.hpp"
 #include "RadiclePluginQuestInternal.hpp"
 #include "RadiclePluginFragmentSupport.hpp"
-
-#include <fo4ide/plugin/ConditionCodec.hpp>
+#include "RadiclePluginReadJson.hpp"
 
 #include <fo4/forms/dialogue.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/ctda.hpp>
 #include <fo4/signature.hpp>
-#include <fo4/text/encoding.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -37,38 +35,13 @@ constexpr auto k_trda = fo4::Signature::from_string("TRDA");
 constexpr auto k_nam1 = fo4::Signature::from_string("NAM1");
 constexpr auto k_nam2 = fo4::Signature::from_string("NAM2");
 
-template <class T>
-T readAt(const std::vector<std::byte>& payload, std::size_t offset) {
-    T value{};
-    if (offset + sizeof(T) <= payload.size()) std::memcpy(&value, payload.data() + offset, sizeof(T));
-    return value;
-}
+using namespace readjson;
 
 std::vector<std::byte> payloadOf(const fo4::Record& record, fo4::Signature signature) {
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature == signature) return subrecord.data;
     }
     return {};
-}
-
-std::string cp1252Text(const std::vector<std::byte>& payload) {
-    std::string_view bytes(reinterpret_cast<const char*>(payload.data()), payload.size());
-    if (!bytes.empty() && bytes.back() == '\0') bytes.remove_suffix(1);
-    return fo4::text::windows1252_to_utf8(bytes);
-}
-
-void putText(nlohmann::json& object, const char* key, const fo4::Plugin& plugin,
-             const std::vector<std::byte>& payload) {
-    if (plugin.header.tes4_flags.is_localized() && payload.size() == 4) {
-        object[std::string(key) + "Id"] = readAt<std::uint32_t>(payload, 0);
-        return;
-    }
-    object[key] = cp1252Text(payload);
-}
-
-nlohmann::json linkJson(const fo4::Plugin& plugin, std::uint32_t raw) {
-    if (raw == 0 || raw == 0xFFFFFFFFu) return nullptr;
-    return fo4::resolve_plugin_link(fo4::RawFormId{raw}, fo4::plugin_form_id_context(plugin)).to_string();
 }
 
 bool isGroupOf(const fo4::GroupHeader& header, fo4::GroupType type, std::uint32_t label) {
@@ -86,14 +59,6 @@ const fo4::Group* questChildrenOf(const fo4::Plugin& plugin, fo4::RawFormId ques
         }
     }
     return nullptr;
-}
-
-nlohmann::json conditionsJson(const fo4::Plugin& plugin, const fo4::Record& record) {
-    nlohmann::json conditions = nlohmann::json::array();
-    for (const auto& condition : fo4::read_ctda_conditions(record)) {
-        conditions.push_back(describeCondition(condition, plugin));
-    }
-    return conditions;
 }
 
 nlohmann::json responsesOf(const fo4::Plugin& plugin, const fo4::Record& info) {
@@ -143,7 +108,7 @@ nlohmann::json infoJson(const fo4::Plugin& plugin, const fo4::Record& info) {
         {"resetTimeEncoded", resetEncoded},
         {"previous", linkJson(plugin, readAt<std::uint32_t>(payloadOf(info, k_pnam), 0))},
         {"responses", responsesOf(plugin, info)},
-        {"conditions", conditionsJson(plugin, info)},
+        {"conditions", conditionsJson(plugin, fo4::read_ctda_conditions(info))},
         {"fragments", fragmentsOf(info)},
     };
 }
