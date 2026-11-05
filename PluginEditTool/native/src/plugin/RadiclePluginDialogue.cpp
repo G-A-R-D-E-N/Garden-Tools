@@ -195,10 +195,15 @@ std::optional<Error> parseInfoPatch(const nlohmann::json& object, const fo4::Plu
     if (jsonObjectPresent(object, "responses")) {
         const auto& responses = object.at("responses");
         if (!responses.is_array()) return Error{"InvalidDialogueArgument", "responses must be an array"};
+        if (responses.size() > 255) {
+            return Error{"InvalidDialogueArgument", "responses holds more than 255 entries"};
+        }
         std::vector<DialogueResponseSpec> parsed;
-        for (const auto& element : responses) {
+        for (std::size_t index = 0; index < responses.size(); ++index) {
+            const auto& element = responses.at(index);
             DialogueResponseSpec response;
             if (auto error = parseResponseSpec(element, target, response)) return error;
+            if (!jsonObjectPresent(element, "number")) response.number = static_cast<std::uint8_t>(index + 1);
             parsed.push_back(std::move(response));
         }
         out.responses = std::move(parsed);
