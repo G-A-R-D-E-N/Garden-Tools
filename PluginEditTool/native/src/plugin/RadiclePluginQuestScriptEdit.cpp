@@ -8,6 +8,7 @@
 #include <fo4ide/papyrus/VanillaScriptSources.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +18,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -154,46 +156,79 @@ std::string decompilePex(const std::vector<std::uint8_t>& bytes, std::string_vie
 struct ScriptSource {
     std::string text;
     std::string origin;
-    std::string archive;  // Constraint: empty unless the source is a vanilla PEX.
+    std::string archive;  // Constraint: empty unless the source is a vanilla PEX; "loose" for a Data\Scripts file.
 };
 
-// Constraint: Fallout4 - Misc.ba2 is searched first and its errors propagate; other *.ba2 are scanned in name order, skipping unreadable ones.
-std::optional<std::pair<std::string, std::vector<std::uint8_t>>> findVanillaPex(const fs::path& dataDirectory,
-                                                                                 const std::string& canonical) {
+struct VanillaPex {
+    std::string archive;
+    std::vector<std::uint8_t> bytes;
+};
+
+// Constraint: archives named for a non-script asset kind are skipped; Misc, Main, DLC and CC archives are always searched.
+bool holdsNoScripts(std::string_view archiveName) {
+    const auto lower = support::asciiLower(archiveName);
+    constexpr std::array<std::string_view, 8> kNonScriptKinds{" - textures", " - meshes", " - sounds", " - voices",
+                                                              " - materials", " - shaders", " - interface", " - animations"};
+    return std::any_of(kNonScriptKinds.begin(), kNonScriptKinds.end(),
+                       [&](std::string_view kind) { return lower.find(kind) != std::string::npos; });
+}
+
+std::string normalizedArchivePath(std::string path) {
+    auto normalized = support::asciiLower(path);
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    return normalized;
+}
+
+// Invariant: a loose Data\Scripts file overrides every archive; otherwise the last archive in load order holding the script wins.
+// Constraint: Fallout4 - Misc.ba2 is opened first and its errors propagate; other unreadable archives are skipped and recorded in notes.
+std::optional<VanillaPex> findVanillaPex(const fs::path& dataDirectory, const std::string& canonical,
+                                         std::vector<std::string>& notes) {
+    std::error_code ec;
+    const auto loose = namespacedFile(dataDirectory / "Scripts", canonical, ".pex");
+    if (fs::is_regular_file(loose, ec)) return VanillaPex{"loose", toBytes(readBoundedFile(loose, kPexLimit))};
+
     const auto wanted = archiveEntryFor(canonical);
     std::vector<fs::path> archives{dataDirectory / std::string(kMiscArchive)};
     std::vector<fs::path> others;
-    std::error_code ec;
     for (const auto& entry : fs::directory_iterator(dataDirectory, ec)) {
         if (!entry.is_regular_file(ec)) continue;
         const auto name = entry.path().filename().string();
-        if (support::asciiLower(entry.path().extension().string()) != ".ba2" || name == kMiscArchive) continue;
+        if (support::asciiLower(entry.path().extension().string()) != ".ba2" || name == kMiscArchive ||
+            holdsNoScripts(name)) continue;
         others.push_back(entry.path());
     }
-    std::sort(others.begin(), others.end());
+    std::sort(others.begin(), others.end(), [](const fs::path& a, const fs::path& b) {
+        return support::asciiLower(a.filename().string()) < support::asciiLower(b.filename().string());
+    });
     archives.insert(archives.end(), others.begin(), others.end());
 
+    // Invariant: each archive is opened once per call and records only the index of its script entry, so nothing is extracted yet.
+    std::vector<std::optional<std::size_t>> hits(archives.size());
     for (std::size_t n = 0; n < archives.size(); ++n) {
-        std::optional<std::vector<std::uint8_t>> bytes;
         if (!fs::is_regular_file(archives[n], ec)) continue;
         try {
             const auto reader = fo4ide::archive::Ba2Reader::open(archives[n]);
-            for (std::size_t i = 0; i < reader.entryCount() && !bytes; ++i) {
-                auto path = support::asciiLower(reader.entryPath(i));
-                std::replace(path.begin(), path.end(), '\\', '/');
-                if (path != wanted) continue;
-                const auto raw = reader.extract(i);
-                std::vector<std::uint8_t> copy(raw.size());
-                std::transform(raw.begin(), raw.end(), copy.begin(),
-                               [](std::byte b) { return static_cast<std::uint8_t>(b); });
-                bytes = std::move(copy);
+            for (std::size_t i = 0; i < reader.entryCount(); ++i) {
+                if (normalizedArchivePath(reader.entryPath(i)) != wanted) continue;
+                hits[n] = i;
+                break;
             }
-        } catch (const std::exception&) {
+        } catch (const std::exception& error) {
             if (n == 0) throw;
+            notes.push_back("skipped unreadable archive " + archives[n].filename().string() + ": " + error.what());
         }
-        if (bytes) return std::make_pair(archives[n].filename().string(), std::move(*bytes));
     }
-    return std::nullopt;
+
+    std::optional<std::size_t> winner;
+    for (std::size_t n = 0; n < hits.size(); ++n) {
+        if (hits[n]) winner = n;
+    }
+    if (!winner) return std::nullopt;
+    const auto reader = fo4ide::archive::Ba2Reader::open(archives[*winner]);
+    const auto raw = reader.extract(*hits[*winner]);
+    std::vector<std::uint8_t> copy(raw.size());
+    std::transform(raw.begin(), raw.end(), copy.begin(), [](std::byte b) { return static_cast<std::uint8_t>(b); });
+    return VanillaPex{archives[*winner].filename().string(), std::move(copy)};
 }
 
 // Constraint: an import file must resolve inside the imports root, so a junction or symlink under it cannot read another folder.
@@ -205,7 +240,8 @@ void requireInsideImports(const fs::path& file, const fs::path& imports) {
 
 std::optional<ScriptSource> loadQuestScriptSource(const fs::path& dataDirectory,
                                                   const std::optional<fs::path>& imports,
-                                                  const std::string& canonical) {
+                                                  const std::string& canonical,
+                                                  std::vector<std::string>& notes) {
     std::error_code ec;
     if (imports) {
         const auto psc = namespacedFile(*imports, canonical, ".psc");
@@ -221,9 +257,9 @@ std::optional<ScriptSource> loadQuestScriptSource(const fs::path& dataDirectory,
         }
     }
     if (dataDirectory.empty()) return std::nullopt;
-    auto found = findVanillaPex(dataDirectory, canonical);
+    auto found = findVanillaPex(dataDirectory, canonical, notes);
     if (!found) return std::nullopt;
-    return ScriptSource{decompilePex(found->second, canonical), "vanilla_pex", found->first};
+    return ScriptSource{decompilePex(found->bytes, canonical), "vanilla_pex", found->archive};
 }
 
 struct TextEdit {
@@ -302,12 +338,17 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestScript(const nlohmann::json
             if (!imports) imports = questinternal::allowedVanillaFragmentImports(requested, dataDirectory_);
             if (!imports) return failure("QuestScriptFailed", "import directory is outside trusted writable roots");
         }
-        const auto source = loadQuestScriptSource(dataDirectory_, imports, *name);
-        if (!source) return failure("QuestScriptNotFound", "no source for " + *name + " in imports or a vanilla BA2 under Data");
+        std::vector<std::string> notes;
+        const auto source = loadQuestScriptSource(dataDirectory_, imports, *name, notes);
+        if (!source) {
+            std::string message = "no source for " + *name + " in imports or a vanilla BA2 under Data";
+            for (const auto& note : notes) message += "; " + note;
+            return failure("QuestScriptNotFound", message);
+        }
         const auto parsed = fo4ide::papyrus::Parser::parse(source->text, *name + ".psc");
         return nlohmann::json{{"script", *name}, {"origin", source->origin}, {"archive", source->archive},
                               {"source", source->text}, {"extends", parsed.extends.value_or("")},
-                              {"parses", !parsed.hasErrors()}};
+                              {"parses", !parsed.hasErrors()}, {"notes", notes}};
     } catch (const std::exception& error) {
         return failure("QuestScriptFailed", error.what());
     }
@@ -393,7 +434,8 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
             text = *originalSource;
             origin = "output_psc";
         } else {
-            auto source = loadQuestScriptSource(dataDirectory_, imports, *name);
+            std::vector<std::string> notes;
+            auto source = loadQuestScriptSource(dataDirectory_, imports, *name, notes);
             if (!source) return failure("QuestScriptNotFound", "no source for " + *name + " in imports or a vanilla BA2 under Data");
             text = std::move(source->text);
             origin = std::move(source->origin);
