@@ -195,23 +195,34 @@ std::vector<fo4::CtdaCondition> conditionsIn(const fo4::Record& record, std::siz
     }
 }
 
+const fo4::Subrecord* firstOfIn(const fo4::Record& record, std::size_t begin, std::size_t end,
+                                fo4::Signature signature) {
+    for (std::size_t at = begin; at < end && at < record.subrecords.size(); ++at) {
+        if (record.subrecords[at].signature == signature) return &record.subrecords[at];
+    }
+    return nullptr;
+}
+
 nlohmann::json phaseJson(const fo4::Plugin& plugin, const fo4::Record& record, std::size_t index,
                          const PhaseSpan& span) {
-    const auto name = firstOf(record, fo4::Signature::from_string("NAM0"));
     nlohmann::json phase{{"index", index}};
-    if (name != nullptr) {
+    if (const auto* name = firstOfIn(record, span.open + 1, span.close,
+                                     fo4::Signature::from_string("NAM0")); name != nullptr) {
         putText(phase, "name", plugin, *name);
     }
-    if (const auto* subrecord = firstOf(record, fo4::Signature::from_string("WNAM")); subrecord != nullptr &&
-        sized(*subrecord, 4)) {
+    if (const auto* subrecord = firstOfIn(record, span.open + 1, span.close,
+                                         fo4::Signature::from_string("WNAM"));
+        subrecord != nullptr && sized(*subrecord, 4)) {
         phase["editorWidth"] = readAt<std::uint32_t>(subrecord->data, 0);
     }
-    if (const auto* subrecord = firstOf(record, fo4::Signature::from_string("FNAM")); subrecord != nullptr &&
-        sized(*subrecord, 2)) {
+    if (const auto* subrecord = firstOfIn(record, span.open + 1, span.close,
+                                         fo4::Signature::from_string("FNAM"));
+        subrecord != nullptr && sized(*subrecord, 2)) {
         phase["flags"] = readAt<std::uint16_t>(subrecord->data, 0);
     }
-    if (const auto* subrecord = firstOf(record, fo4::Signature::from_string("SCQS")); subrecord != nullptr &&
-        sized(*subrecord, 4)) {
+    if (const auto* subrecord = firstOfIn(record, span.open + 1, span.close,
+                                         fo4::Signature::from_string("SCQS"));
+        subrecord != nullptr && sized(*subrecord, 4)) {
         phase["questStageOnStart"] = readAt<std::int16_t>(subrecord->data, 0);
         phase["questStageOnCompletion"] = readAt<std::int16_t>(subrecord->data, 2);
     }
@@ -442,8 +453,9 @@ nlohmann::json sceneJson(const fo4::Plugin& plugin, const fo4::Record& record) {
                        {"phases", nlohmann::json::array()},
                        {"actors", nlohmann::json::array()},
                        {"actions", nlohmann::json::array()}};
-    if (const auto* flags = firstOf(record, fo4::Signature::from_string("FNAM")); flags != nullptr &&
-        sized(*flags, 4) && !record.subrecords.empty() && layout->firstGroup > 0) {
+    if (const auto* flags = firstOfIn(record, 0, layout->firstGroup,
+                                      fo4::Signature::from_string("FNAM"));
+        flags != nullptr && sized(*flags, 4)) {
         out["flags"] = readAt<std::uint32_t>(flags->data, 0);
     }
     for (std::size_t index = 0; index < layout->phases.size(); ++index) {

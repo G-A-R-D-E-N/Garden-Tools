@@ -12,6 +12,7 @@
 #include <fo4/text/encoding.hpp>
 
 #include <cstdint>
+#include <format>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -30,7 +31,7 @@ constexpr auto k_scen = fo4::Signature::from_string("SCEN");
 std::string scalarText(std::uint16_t value) { return std::to_string(static_cast<std::uint32_t>(value)); }
 std::string scalarText(std::uint32_t value) { return std::to_string(value); }
 std::string scalarText(std::int32_t value) { return std::to_string(value); }
-std::string scalarText(float value) { return std::to_string(value); }
+std::string scalarText(float value) { return std::format("{:.9g}", value); }
 
 std::optional<Error> requireObject(const nlohmann::json& value, std::string_view label) {
     if (value.is_object()) return std::nullopt;
@@ -122,7 +123,7 @@ std::optional<Error> sceneAuthorFailure(SceneAuthorStatus status, std::string_vi
     case SceneAuthorStatus::structure_invalid:
         return Error{"SceneStructureInvalid", "Scene structure does not allow this edit: " + std::string(subject)};
     case SceneAuthorStatus::ok:
-        break;
+        return std::nullopt;
     }
     return Error{"SceneAuthorFailed", "Scene authoring failed for " + std::string(subject)};
 }
@@ -265,7 +266,7 @@ std::optional<Error> applyPayloadField(fo4::Plugin& plugin, const fo4::FormKey& 
     }
     if (value.is_number_float()) {
         const auto raw = value.get<double>();
-        return applyScalar(plugin, scene, field.path, index, std::to_string(static_cast<float>(raw)));
+        return applyScalar(plugin, scene, field.path, index, scalarText(static_cast<float>(raw)));
     }
     return Error{"InvalidSceneArgument", std::string(key) + " must be a number"};
 }
