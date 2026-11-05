@@ -641,3 +641,81 @@ TEST(VmadFragments, ScenePhaseIndicesFollowTheGivenOrderOrRefuse) {
                                       std::vector<std::uint32_t>{1, 0}),
             VmadStructureMutationStatus::record_missing);
 }
+
+TEST(VmadFragments, InfoExtrasReadEachFragmentEntryAndItsFlagBits) {
+  auto plugin = read_plugin(fixture::plugin_bytes(
+                                vmad_bytes(flagged_tail(0x03, {{7, "Fragment_0"}, {8, "Fragment_1"}})),
+                                "INFO"),
+                            "Vmad.esp");
+  const auto data = fixture::subrecord(plugin).data;
+  const auto scripts = read_vmad_scripts(data);
+  const auto extras = read_info_vmad_extras(
+      std::span<const std::byte>(data).subspan(data.size() - scripts.trailing_bytes),
+      scripts.object_format);
+  EXPECT_FALSE(extras.unsupported);
+  EXPECT_TRUE(extras.fully_consumed);
+  EXPECT_EQ(extras.version, 3);
+  EXPECT_EQ(extras.flags, 0x03u);
+  ASSERT_EQ(extras.fragments.size(), 2u);
+  EXPECT_EQ(extras.fragments[0].unknown, 7);
+  EXPECT_EQ(extras.fragments[0].script, "PF_Test");
+  EXPECT_EQ(extras.fragments[0].function, "Fragment_0");
+  EXPECT_EQ(extras.fragments[1].unknown, 8);
+  EXPECT_EQ(extras.fragments[1].function, "Fragment_1");
+
+  auto single = read_plugin(fixture::plugin_bytes(
+                                vmad_bytes(flagged_tail(0x01, {{0, "Fragment_0"}})), "INFO"),
+                            "Vmad.esp");
+  const auto single_data = fixture::subrecord(single).data;
+  const auto single_scripts = read_vmad_scripts(single_data);
+  const auto one = read_info_vmad_extras(
+      std::span<const std::byte>(single_data).subspan(single_data.size() - single_scripts.trailing_bytes),
+      single_scripts.object_format);
+  EXPECT_EQ(one.flags, 0x01u);
+  ASSERT_EQ(one.fragments.size(), 1u);
+  EXPECT_EQ(one.fragments[0].function, "Fragment_0");
+}
+
+TEST(VmadFragments, BootstrapAddsTheFragmentSectionOnceSoTheFirstBindingCanLand) {
+  auto info = read_plugin(fixture::plugin_bytes_without_vmad("INFO"), "Vmad.esp");
+  EXPECT_EQ(bootstrap_vmad_fragment_section(info, fixture::key()),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(bootstrap_vmad_fragment_section(info, fixture::key()),
+            VmadStructureMutationStatus::already_present);
+  const auto data = fixture::subrecord(info).data;
+  const auto scripts = read_vmad_scripts(data);
+  const auto extras = read_info_vmad_extras(
+      std::span<const std::byte>(data).subspan(data.size() - scripts.trailing_bytes),
+      scripts.object_format);
+  EXPECT_FALSE(extras.unsupported);
+  EXPECT_TRUE(extras.fully_consumed);
+  EXPECT_EQ(extras.flags, 0u);
+  EXPECT_TRUE(extras.fragments.empty());
+  EXPECT_EQ(add_vmad_fragment(info, fixture::key(), 0, "PF_Test", "Fragment_0"),
+            VmadStructureMutationStatus::updated);
+  const auto saved = saved_vmad(info);
+  EXPECT_TRUE(vmad_coverage(saved, sig_info).complete());
+  const auto saved_scripts = read_vmad_scripts(saved);
+  const auto saved_extras = read_info_vmad_extras(
+      std::span<const std::byte>(saved).subspan(saved.size() - saved_scripts.trailing_bytes),
+      saved_scripts.object_format);
+  EXPECT_EQ(saved_extras.flags, 0x01u);
+  ASSERT_EQ(saved_extras.fragments.size(), 1u);
+  EXPECT_EQ(saved_extras.fragments[0].function, "Fragment_0");
+
+  auto scene = read_plugin(fixture::plugin_bytes_without_vmad("SCEN"), "Vmad.esp");
+  EXPECT_EQ(bootstrap_vmad_fragment_section(scene, fixture::key()),
+            VmadStructureMutationStatus::updated);
+  const auto scene_data = fixture::subrecord(scene).data;
+  const auto scene_scripts = read_vmad_scripts(scene_data);
+  const auto scene_extras = read_scene_vmad_extras(
+      std::span<const std::byte>(scene_data).subspan(scene_data.size() - scene_scripts.trailing_bytes),
+      scene_scripts.object_format);
+  EXPECT_FALSE(scene_extras.unsupported);
+  EXPECT_TRUE(scene_extras.fully_consumed);
+  EXPECT_TRUE(scene_extras.phases.empty());
+
+  auto misc = read_plugin(fixture::plugin_bytes_without_vmad("MISC"), "Vmad.esp");
+  EXPECT_EQ(bootstrap_vmad_fragment_section(misc, fixture::key()),
+            VmadStructureMutationStatus::not_authorable);
+}

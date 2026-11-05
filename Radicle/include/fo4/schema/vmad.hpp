@@ -184,4 +184,25 @@ struct SceneVmadExtras {
 SceneVmadExtras read_scene_vmad_extras(std::span<const std::byte> data,
                                        std::int16_t object_format);
 
+struct InfoVmadFragment {
+  std::uint8_t unknown{0};
+  std::string script;
+  std::string function;
+  std::size_t offset{0};
+  std::size_t end{0};
+};
+
+struct InfoVmadExtras {
+  std::int8_t version{3};
+  std::uint8_t flags{0};
+  std::vector<InfoVmadFragment> fragments;
+  bool unsupported{false};
+  std::string unsupported_reason;
+  bool fully_consumed{false};
+};
+
+// The extras span must begin after the leading script list.
+InfoVmadExtras read_info_vmad_extras(std::span<const std::byte> data,
+                                     std::int16_t object_format);
+
 }  // namespace fo4

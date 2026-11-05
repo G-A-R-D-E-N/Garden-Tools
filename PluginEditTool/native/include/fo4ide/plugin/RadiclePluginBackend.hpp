@@ -348,6 +348,12 @@ private:
     Result<nlohmann::json> addSceneAction(const nlohmann::json& arguments);
     Result<nlohmann::json> removeSceneAction(const nlohmann::json& arguments);
     Result<nlohmann::json> moveSceneAction(const nlohmann::json& arguments);
+    Result<nlohmann::json> setInfoFragment(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeInfoFragment(const nlohmann::json& arguments);
+    Result<nlohmann::json> setScenePhaseFragment(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json& arguments);
+    Result<nlohmann::json> createDialogueTopicBulk(const nlohmann::json& arguments);
+    Result<nlohmann::json> getVoicePath(const nlohmann::json& arguments) const;
     std::optional<fo4::RawFormId> resolveDialogueEditorId(const fo4::Plugin& target, std::string_view text) const;
     // Resolves a list value (FormKey text or EditorID) to a FormKey against the
     // loaded plugins, mirroring WriteService.ResolveFk.

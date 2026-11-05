@@ -237,6 +237,12 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "AddSceneAction") return addSceneAction(arguments);
     if (method == "RemoveSceneAction") return removeSceneAction(arguments);
     if (method == "MoveSceneAction") return moveSceneAction(arguments);
+    if (method == "SetInfoFragment") return setInfoFragment(arguments);
+    if (method == "RemoveInfoFragment") return removeInfoFragment(arguments);
+    if (method == "SetScenePhaseFragment") return setScenePhaseFragment(arguments);
+    if (method == "RemoveScenePhaseFragment") return removeScenePhaseFragment(arguments);
+    if (method == "CreateDialogueTopicBulk") return createDialogueTopicBulk(arguments);
+    if (method == "GetVoicePath") return getVoicePath(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "CopyElementToSelected") return copyElementToSelected(arguments);
