@@ -1,4 +1,5 @@
 #include <bit>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -86,9 +87,9 @@ std::vector<std::uint8_t> minimalBgem(bool trailing = false, std::uint32_t tileF
 }
 
 std::filesystem::path tempFile(std::string_view suffix) {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-        ("fo4ide_material_" + std::to_string(id) + std::string(suffix));
+        ("fo4ide_material_" + id + std::string(suffix));
 }
 
 void writeFile(const std::filesystem::path& path, const std::vector<std::uint8_t>& bytes) {

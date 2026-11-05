@@ -11,6 +11,8 @@ namespace fo4ide::plugin::detail {
 
 enum class WindowsJournalFileInformationClass : int { ExtendedAttributes = 7, Rename = 10 };
 
+constexpr NTSTATUS kWindowsDeletePendingStatus = static_cast<NTSTATUS>(0xC0000056L);
+
 extern "C" NTSYSAPI NTSTATUS NTAPI NtQueryInformationFile(
     HANDLE file, PIO_STATUS_BLOCK status, PVOID information, ULONG length, WindowsJournalFileInformationClass infoClass);
 

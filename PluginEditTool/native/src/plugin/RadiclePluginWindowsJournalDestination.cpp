@@ -14,7 +14,10 @@
 #include <array>
 #include <cstring>
 #include <limits>
+#include <sstream>
+#include <string>
 #include <system_error>
+#include <vector>
 
 namespace fo4ide::plugin::detail {
 namespace {
@@ -27,6 +30,18 @@ using Handle = std::unique_ptr<void, HandleCloser>;
 using LocalMemory = std::unique_ptr<void, decltype(&::LocalFree)>;
 [[noreturn]] void fail(const char* operation) {
     throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(), operation);
+}
+// Requires: a refusal names the object it is about, so the operator can find the folder to fix.
+std::string describeHandle(HANDLE handle) {
+    std::vector<wchar_t> wide(32768);
+    const auto length = ::GetFinalPathNameByHandleW(handle, wide.data(), static_cast<DWORD>(wide.size()),
+                                                    FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    if (length == 0 || length >= wide.size()) return {};
+    const auto size = ::WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(length), nullptr, 0, nullptr, nullptr);
+    if (size <= 0) return {};
+    std::string text(static_cast<std::size_t>(size), '\0');
+    ::WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(length), text.data(), size, nullptr, nullptr);
+    return text;
 }
 struct Identity {
     std::uint64_t volume{};
@@ -104,7 +119,7 @@ void requireSafe(HANDLE handle, bool directory, bool ancestor = false) {
     if (!::GetFileInformationByHandle(handle, &info) || ::GetFileType(handle) != FILE_TYPE_DISK ||
         (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ||
         ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) != directory || (!directory && info.nNumberOfLinks != 1))
-        throw std::runtime_error("destination is not a safe regular object");
+        throw std::runtime_error("destination is not a safe regular object" + describeHandle(handle));
     auto userStorage = currentUser();
     const auto user = reinterpret_cast<TOKEN_USER*>(userStorage.data())->User.Sid;
     PSID owner = nullptr;
@@ -117,7 +132,7 @@ void requireSafe(HANDLE handle, bool directory, bool ancestor = false) {
     ACL_SIZE_INFORMATION acl{};
     if (!owner || !trusted(owner, user, ancestor) || !dacl || !::IsValidAcl(dacl) ||
         !::GetAclInformation(dacl, &acl, sizeof(acl), AclSizeInformation))
-        throw std::runtime_error("destination ACL is not trusted");
+        throw std::runtime_error("destination ACL is not trusted" + describeHandle(handle));
     const ACCESS_MASK mutation = FILE_WRITE_EA | FILE_WRITE_ATTRIBUTES | FILE_DELETE_CHILD | DELETE | WRITE_DAC | WRITE_OWNER |
         (ancestor ? 0 : FILE_WRITE_DATA | FILE_APPEND_DATA);
     GENERIC_MAPPING mapping{FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS};
@@ -126,16 +141,16 @@ void requireSafe(HANDLE handle, bool directory, bool ancestor = false) {
         if (!::GetAce(dacl, i, &entry)) fail("read destination ACE");
         const auto header = static_cast<const ACE_HEADER*>(entry);
         if (header->AceType == ACCESS_DENIED_ACE_TYPE) continue;
-        if (header->AceType != ACCESS_ALLOWED_ACE_TYPE) throw std::runtime_error("unsupported destination ACE");
+        if (header->AceType != ACCESS_ALLOWED_ACE_TYPE) throw std::runtime_error("unsupported destination ACE" + describeHandle(handle));
         const auto ace = static_cast<const ACCESS_ALLOWED_ACE*>(entry);
         auto mask = ace->Mask;
         ::MapGenericMask(&mask, &mapping);
         if (!(header->AceFlags & INHERIT_ONLY_ACE) && (mask & mutation) &&
             !trusted(const_cast<DWORD*>(&ace->SidStart), user, ancestor))
-            throw std::runtime_error("destination permits untrusted mutation");
+            throw std::runtime_error("destination permits untrusted mutation" + describeHandle(handle));
     }
 }
-Handle openChild(HANDLE parent, const std::wstring& name, bool directory, ACCESS_MASK extraAccess = 0) {
+Handle openChild(HANDLE parent, const std::wstring& name, bool directory, ACCESS_MASK extraAccess = 0, bool absentIfDeletePending = false) {
     UNICODE_STRING component{};
     component.Length = static_cast<USHORT>(name.size() * sizeof(wchar_t));
     component.MaximumLength = component.Length;
@@ -152,9 +167,13 @@ Handle openChild(HANDLE parent, const std::wstring& name, bool directory, ACCESS
         FILE_ATTRIBUTE_NORMAL, directory ? FILE_SHARE_READ | FILE_SHARE_WRITE : FILE_SHARE_READ, FILE_OPEN,
         FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | (directory ? FILE_DIRECTORY_FILE : FILE_NON_DIRECTORY_FILE), nullptr, 0);
     if (status < 0) {
+        if (absentIfDeletePending && status == kWindowsDeletePendingStatus) return {};
         const auto error = ::RtlNtStatusToDosError(status);
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) return {};
-        throw std::system_error(static_cast<int>(error), std::system_category(), "open destination component");
+        std::ostringstream text;
+        text << "open destination component " << narrowName(name) << " NTSTATUS 0x" << std::hex << std::uppercase
+             << static_cast<unsigned long>(status);
+        throw std::system_error(static_cast<int>(error), std::system_category(), text.str());
     }
     return Handle(raw);
 }
@@ -314,7 +333,14 @@ JournalDestination::JournalDestination(const std::filesystem::path& root, const 
     if (driveHandle.get() == INVALID_HANDLE_VALUE) fail("open destination drive");
     chain.identities.push_back(identity(driveHandle.get()));
     chain.handles.push_back(std::move(driveHandle));
-    requireSafe(chain.handles.back().get(), true, true);
+    const auto rootText = narrowName(root.native());
+    const auto requireSafeAt = [&](HANDLE handle, bool directory, bool ancestor) {
+        try { requireSafe(handle, directory, ancestor); }
+        catch (const std::exception& error) {
+            throw std::runtime_error(std::string(error.what()) + " [destination " + rootText + "]");
+        }
+    };
+    requireSafeAt(chain.handles.back().get(), true, true);
     for (std::size_t i = 0; i < names.size(); ++i) {
         const auto parent = chain.handles.back().get();
         auto next = openChild(parent, names[i], true);
@@ -333,7 +359,7 @@ JournalDestination::JournalDestination(const std::filesystem::path& root, const 
             if (i >= rootCount && (captureOnly || !createDirectories)) throw JournalDirectoryAbsent("journal directory is absent");
             throw std::runtime_error("destination directory is absent");
         }
-        requireSafe(next.get(), true, i + 1 < rootCount);
+        requireSafeAt(next.get(), true, i + 1 < rootCount);
         chain.identities.push_back(identity(next.get()));
         chain.handles.push_back(std::move(next));
         if (i + 1 == rootCount && expectedRoot) {
@@ -446,7 +472,7 @@ WindowsJournalReplacementArtifacts JournalDestination::replacementArtifacts(cons
     std::array<Handle, 3> files{
         openChild(parent, wideName(request.destination), false),
         openChild(parent, wideName(request.staged), false),
-        openChild(parent, wideName(request.backup), false)};
+        openChild(parent, wideName(request.backup), false, 0, true)};
     std::array<std::optional<WindowsJournalFileSnapshot>*, 3> outputs{&result.destination, &result.staged, &result.backup};
     const std::array<std::uint64_t, 3> bounds{std::max(originalSize, finalSize), finalSize, originalSize};
     for (std::size_t i = 0; i < files.size(); ++i) {

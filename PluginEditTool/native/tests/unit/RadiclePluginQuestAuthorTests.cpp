@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <barrier>
 #include <cstdint>
@@ -65,8 +66,8 @@ void convertSnapshotDirectoryToJunction() {
 #endif
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_quest_author_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    return std::filesystem::temp_directory_path() / ("fo4ide_quest_author_" + id);
 }
 
 struct Cleanup {
@@ -493,6 +494,93 @@ TEST_CASE("Native CreateRecord QUST writes title, flags, priority and type from 
     CHECK(std::to_integer<std::uint8_t>(dnam->data[8]) == 6);
 }
 
+// Invariant: a named flag selection must write exactly the schema's bits, and a name the schema does not list must be refused.
+TEST_CASE("Native CreateRecord QUST accepts schema flag names and refuses an unknown name") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin(0u));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, path);
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "CoNamed"}, {"name", "Named"},
+            {"flags", nlohmann::json::array({"Start Game Enabled", "Starts Enabled"})}}})));
+    const auto key = fo4::FormKey::parse(created.at("formKey").get<std::string>());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* named = subrecordOf(disk, key, "DNAM");
+    REQUIRE(named != nullptr);
+    REQUIRE(named->data.size() == 12u);
+    CHECK(std::to_integer<std::uint8_t>(named->data[0]) == 0x11);
+    CHECK(std::to_integer<std::uint8_t>(named->data[1]) == 0x00);
+
+    const auto refused = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "CoBad"},
+            {"flags", nlohmann::json::array({"Not A Real Flag"})}}}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "InvalidRecordCreationPayload");
+
+    const auto mapped = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "CoMap"},
+            {"flags", nlohmann::json{{"Start Game Enabled", false}, {"Run Once", true}}}}})));
+    const auto mapKey = fo4::FormKey::parse(mapped.at("formKey").get<std::string>());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto after = fo4::read_plugin_file(path);
+    const auto* bits = subrecordOf(after, mapKey, "DNAM");
+    REQUIRE(bits != nullptr);
+    REQUIRE(bits->data.size() == 12u);
+    CHECK(std::to_integer<std::uint8_t>(bits->data[0]) == 0x00);
+    CHECK(std::to_integer<std::uint8_t>(bits->data[1]) == 0x01);
+}
+
+// Invariant: a story manager node must be creatable, keep a setting whose subrecord the schema leaves optional, and hold the quest attached to it.
+TEST_CASE("Native CreateRecord SMQN creates a story manager node and attaches a quest") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin(0u));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, path);
+    const auto quest = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "SmQuest"}, {"name", "SmQuest"}}})));
+    const auto questKey = quest.at("formKey").get<std::string>();
+    const auto node = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "SMQN", nlohmann::json{
+            {"editorId", "SmNode"}, {"schema", true}}}));
+    if (!node.has_value()) FAIL("SMQN create failed: " << node.error().type << ": " << node.error().message);
+    const auto nodeText = parseResult(node).at("formKey").get<std::string>();
+    const auto nodeKey = fo4::FormKey::parse(nodeText);
+
+    // Invariant: XNAM is optional in the SMQN authoring schema, so this also covers creating an absent subrecord.
+    const auto settings = backend.invokeBackend(
+        "SetField", nlohmann::json::array({"Patch.esp", nodeText, "SMQN\\MaxConcurrentQuests", "2"}));
+    if (!settings.has_value()) FAIL("SMQN setting failed: " << settings.error().type << ": " << settings.error().message);
+    const auto link = backend.invokeBackend(
+        "InsertFormLinkListElement", nlohmann::json::array({"Patch.esp", nodeText, "SMQN\\Quests", 0, questKey}));
+    if (!link.has_value()) FAIL("SMQN quest link failed: " << link.error().type << ": " << link.error().message);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK(zstringOf(subrecordOf(disk, nodeKey, "EDID")) == "SmNode");
+    const auto* limit = subrecordOf(disk, nodeKey, "XNAM");
+    REQUIRE(limit != nullptr);
+    REQUIRE_FALSE(limit->data.empty());
+    CHECK(std::to_integer<std::uint8_t>(limit->data[0]) == 2);
+    const auto* quests = subrecordOf(disk, nodeKey, "NNAM");
+    REQUIRE(quests != nullptr);
+    const auto linked = std::to_integer<std::uint32_t>(quests->data[0]) |
+                        (std::to_integer<std::uint32_t>(quests->data[1]) << 8) |
+                        (std::to_integer<std::uint32_t>(quests->data[2]) << 16) |
+                        (std::to_integer<std::uint32_t>(quests->data[3]) << 24);
+    CHECK(linked != 0u);
+}
+
 // Detects: set_field on QUST\Flags, QUST\Priority, QUST\Type and QUST\Name must update a created quest and keep the values after save and reload.
 TEST_CASE("Native set_field edits quest flags, priority, type and title and keeps them after save") {
     const auto root = tempRoot();
@@ -742,6 +830,10 @@ TEST_CASE("Native quest stage startUp bit round-trips and preserves unrelated fl
     CHECK(read["stages"][0]["flags"] == 0xA7);
     CHECK(read["stages"][1]["startUp"] == false);
     CHECK(read["stages"][1]["flags"] == 0xA5);
+    CHECK(read["stages"][0]["flagNames"] == nlohmann::json::array({"RunOnStart", "RunOnStop"}));
+    CHECK(read["stages"][0]["unknownFlagBits"] == 0xA1);
+    CHECK(read["stages"][1]["flagNames"] == nlohmann::json::array({"RunOnStop"}));
+    CHECK(read["stages"][1]["unknownFlagBits"] == 0xA1);
 
     const auto update = nlohmann::json::array({
         {{"index", 10}, {"startUp", false}},
@@ -763,4 +855,43 @@ TEST_CASE("Native quest stage startUp bit round-trips and preserves unrelated fl
     CHECK(invalid.error().type == "InvalidQuestStagePayload");
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(readBytes(path) == beforeInvalid);
+}
+
+// Detects: GetQuestStages and GetQuestObjectives must name the known flag bits and report the unnamed remainder, leaving the raw flags unchanged.
+TEST_CASE("Native quest readback names known stage and objective flag bits and reports the unknown remainder") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin(0u));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, path);
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "FlagNameQuest"}, {"name", "Flag name test"}}})));
+    const auto questKey = created.at("formKey").get<std::string>();
+    REQUIRE(backend.invokeBackend("SetQuestStages", nlohmann::json::array({"Patch.esp", questKey,
+        nlohmann::json::array({{{"index", 10}, {"flags", 0x0F}}, {{"index", 20}, {"flags", 0}}})})).has_value());
+    REQUIRE(backend.invokeBackend("SetQuestObjectives", nlohmann::json::array({"Patch.esp", questKey,
+        nlohmann::json::array({{{"index", 10}, {"flags", 0x80000003u}, {"displayText", "Go"},
+                                {"targets", nlohmann::json::array()}}})})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    auto stages = parseResult(backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", questKey})));
+    REQUIRE(stages.at("stages").size() == 2u);
+    CHECK(stages["stages"][0]["flags"] == 0x0F);
+    CHECK(stages["stages"][0]["flagNames"] == nlohmann::json::array(
+        {"RunOnStart", "RunOnStop", "KeepInstanceDataFromHereOn"}));
+    CHECK(stages["stages"][0]["unknownFlagBits"] == 0x01);
+    CHECK(stages["stages"][1]["flagNames"] == nlohmann::json::array());
+    CHECK(stages["stages"][1]["unknownFlagBits"] == 0);
+
+    auto objectives = parseResult(backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", questKey})));
+    REQUIRE(objectives.at("objectives").size() == 1u);
+    CHECK(objectives["objectives"][0]["flags"] == 0x80000003u);
+    CHECK(objectives["objectives"][0]["flagNames"] == nlohmann::json::array(
+        {"ORedWithPrevious", "NoStatsTracking"}));
+    CHECK(objectives["objectives"][0]["unknownFlagBits"] == 0x80000000u);
 }

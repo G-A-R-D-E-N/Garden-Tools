@@ -60,10 +60,26 @@ void visitChildExpressions(const Node* node, const auto& visitor) {
     }
 }
 
+constexpr unsigned long long kCreationKitMaxArrayLength = 128;
+
+bool literalArrayLengthOverLimit(const Expression* size) {
+    const auto* literal = dynamic_cast<const LiteralExpression*>(size);
+    if (!literal || literal->kind != LiteralKind::Int) return false;
+    try {
+        const auto& text = literal->text;
+        const bool hex = text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X');
+        const auto value = hex ? std::stoull(text.substr(2), nullptr, 16) : std::stoull(text);
+        return value > kCreationKitMaxArrayLength;
+    } catch (...) {
+        return true;
+    }
+}
+
 }  // namespace
 
-void TypeChecker::State::report(DiagnosticCode code, std::string message, const Span& span) {
-    diagnostics.push_back(Diagnostic{code, Severity::Error, std::move(message), span, file});
+void TypeChecker::State::report(DiagnosticCode code, std::string message, const Span& span,
+                                Severity severity) {
+    diagnostics.push_back(Diagnostic{code, severity, std::move(message), span, file});
 }
 
 std::vector<Diagnostic> TypeChecker::check(const Resolution& resolution) {
@@ -253,6 +269,17 @@ void TypeChecker::checkExpression(State& state, const Node* expression) {
             const auto* index = static_cast<const IndexExpression*>(expression);
             checkExpression(state, index->target.get());
             checkExpression(state, index->index.get());
+            return;
+        }
+
+        case NodeKind::NewArrayExpression: {
+            const auto* newArray = static_cast<const NewArrayExpression*>(expression);
+            checkExpression(state, newArray->size.get());
+            if (literalArrayLengthOverLimit(newArray->size.get())) {
+                state.report(DiagnosticCode::ArrayLengthLimit,
+                             "A literal array length above 128 is over the Creation Kit limit.",
+                             newArray->span, Severity::Warning);
+            }
             return;
         }
 

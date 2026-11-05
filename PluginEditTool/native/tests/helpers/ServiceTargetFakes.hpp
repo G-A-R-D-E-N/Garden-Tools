@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include "TempRoot.hpp"
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -12,8 +13,8 @@
 namespace fo4ide::app::test {
 
 inline std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_service_test_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    return std::filesystem::temp_directory_path() / ("fo4ide_service_test_" + id);
 }
 
 struct Cleanup {

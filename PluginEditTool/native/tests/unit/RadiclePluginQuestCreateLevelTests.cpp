@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -67,8 +68,8 @@ std::uint32_t createLevel(const std::filesystem::path& path) {
 }
 
 TEST_CASE("Native SetQuestAliases keeps and writes the None Create Reference Level") {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    const auto root = std::filesystem::temp_directory_path() / ("fo4ide_quest_level_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    const auto root = std::filesystem::temp_directory_path() / ("fo4ide_quest_level_" + id);
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     const auto path = root / "Patch.esp";
