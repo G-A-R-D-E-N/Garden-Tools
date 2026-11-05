@@ -82,4 +82,10 @@ ScalarMutationStatus set_scene_action_name(Plugin& plugin,
                                            std::size_t index,
                                            std::string_view name);
 
+// Constraint: an absent member must be inserted at its canonical position and must read back in its scope, or the plugin is left unchanged.
+ScalarMutationStatus ensure_scene_member(Plugin& plugin,
+                                         const FormKey& scene,
+                                         std::string_view path,
+                                         std::size_t group_index);
+
 }

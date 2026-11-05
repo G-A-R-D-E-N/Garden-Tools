@@ -32,6 +32,7 @@ const CatalogTool kTools[] = {
     {"get_geometry_batch", "cell", "GetGeometryBatch", "rel_model_paths_json:string", "Editor query: get geometry batch. Same RPC the desktop editor uses."},
     {"search_cells", "cell", "SearchCells", "query:string,limit:integer?", "Editor query: search cells. Placed-reference or cell operation."},
     {"get_geometry_batch_progress", "cell", "GetGeometryBatchProgress", "", "Editor query: get geometry batch progress. Same RPC the desktop editor uses."},
+    {"get_scene", "backend", "GetScene", "plugin:string,scene_form_key:string", "Get a scene: flags, parent quest, template scene, index, phases with start and completion conditions, actors, actions with payload links, and the INFO response texts of dialogue topics the actions reference. Reads the in-memory plugin."},
 };
 
 }

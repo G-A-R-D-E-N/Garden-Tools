@@ -10,6 +10,7 @@
 #include "fo4/schema/scalar.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
@@ -65,6 +66,7 @@ const ScalarEntry k_scalars[] = {
     {"SCEN\\Flags", Scope::head, s("FNAM"), 0, ScalarStorage::u32, 4, k_any_action},
     {"SCEN\\LastActionIndex", Scope::tail, s("INAM"), 0, ScalarStorage::u32, 4, k_any_action},
     {"SCEN\\FovOverride", Scope::tail, s("CRIS"), 0, ScalarStorage::f32, 4, k_any_action},
+    {"SCEN\\Index", Scope::tail, s("XNAM"), 0, ScalarStorage::u32, 4, k_any_action},
     {"SCEN\\ParentQuestStageOnBegin", Scope::tail, s("SCQS"), 0, ScalarStorage::i16, 4, k_any_action},
     {"SCEN\\ParentQuestStageOnEnd", Scope::tail, s("SCQS"), 2, ScalarStorage::i16, 4, k_any_action},
     {"SCEN\\Phase\\EditorWidth", Scope::phase, s("WNAM"), 0, ScalarStorage::u32, 4, k_any_action},
@@ -342,6 +344,90 @@ FormLinkFieldMutationStatus write_link(Plugin& plugin,
   return FormLinkFieldMutationStatus::updated;
 }
 
+const std::array k_head_order{s("EDID"), s("VMAD"), s("FNAM")};
+const std::array k_phase_order{s("NAM0"), s("WNAM"), s("FNAM"), s("SCQS")};
+const std::array k_action_header_order{s("NAM0"), s("ALID"), s("INAM"), s("FNAM"), s("SNAM"), s("ENAM")};
+const std::array k_timer_order{s("SNAM"), s("SCQS"), s("TNAM")};
+const std::array k_tail_order{s("PNAM"), s("INAM"), s("VNAM"), s("CNAM"), s("ACTV"), s("CRIS"), s("KSIZ"),
+                              s("KWDA"), s("CTDA"), s("SCQS"), s("NNAM"), s("TNAM"), s("XNAM")};
+
+std::span<const Signature> canonical_order(Scope scope) {
+  switch (scope) {
+    case Scope::head: return k_head_order;
+    case Scope::phase: return k_phase_order;
+    case Scope::action: return k_action_header_order;
+    case Scope::action_payload: return k_timer_order;
+    case Scope::tail: return k_tail_order;
+    case Scope::actor: break;
+  }
+  return {};
+}
+
+std::optional<std::size_t> rank_of(std::span<const Signature> order, Signature tag) {
+  const auto found = std::find(order.begin(), order.end(), tag);
+  if (found == order.end()) return std::nullopt;
+  return static_cast<std::size_t>(found - order.begin());
+}
+
+std::size_t canonical_anchor(const Record& record, Range range, Scope scope, Signature tag) {
+  const auto order = canonical_order(scope);
+  const auto self = rank_of(order, tag);
+  if (self) {
+    for (std::size_t at = range.begin; at < range.end; ++at) {
+      const auto rank = rank_of(order, record.subrecords[at].signature);
+      if (rank && *rank > *self) return at;
+    }
+  }
+  return range.end;
+}
+
+struct MemberShape {
+  Scope scope;
+  Signature subrecord;
+  std::size_t size;
+  std::uint16_t action_types;
+};
+
+MemberShape member_shape(std::string_view path) {
+  for (const auto& entry : k_scalars) {
+    if (entry.path == path) return {entry.scope, entry.subrecord, entry.payload_size, entry.action_types};
+  }
+  for (const auto& entry : k_links) {
+    if (entry.path == path) return {entry.scope, entry.subrecord, sizeof(std::uint32_t), entry.action_types};
+  }
+  throw schema::ScalarError("unknown scene field path: " + std::string(path));
+}
+
+std::vector<std::byte> new_member_payload(const Record& record,
+                                          const env::detail::SceneLayout& layout,
+                                          std::size_t group,
+                                          const MemberShape& shape) {
+  if (shape.subrecord == s("ALID") || shape.subrecord == s("DTGT")) return i32_payload(-1);
+  if (shape.subrecord == s("SCQS")) return std::vector<std::byte>(shape.size, std::byte{0xFF});
+  if (shape.scope == Scope::action && shape.subrecord == s("INAM")) {
+    return u32_payload(detail::action_index_base(record, layout) + static_cast<std::uint32_t>(group));
+  }
+  return std::vector<std::byte>(shape.size);
+}
+
+void add_member(Record& record, std::size_t group, const MemberShape& shape, std::string_view path) {
+  const auto layout = checked_layout(record);
+  const auto range = scope_range(layout, record.subrecords.size(), shape.scope, group);
+  if (!range) throw schema::ScalarError(std::string(path) + " has no scene scope to hold it");
+  if (shape.scope == Scope::action && (shape.subrecord == s("SNAM") || shape.subrecord == s("ENAM")) &&
+      layout.phases.empty()) {
+    throw schema::ScalarError(std::string(path) + " needs a scene phase to reference first");
+  }
+  auto payload = new_member_payload(record, layout, group, shape);
+  const auto anchor = canonical_anchor(record, *range, shape.scope, shape.subrecord);
+  record.subrecords.insert(record.subrecords.begin() + static_cast<std::ptrdiff_t>(anchor),
+                           Subrecord{shape.subrecord, std::move(payload), false});
+  const auto placed = scope_range(checked_layout(record), record.subrecords.size(), shape.scope, group);
+  if (!placed || !find_in(record, *placed, shape.subrecord, path)) {
+    throw schema::ScalarError(std::string(path) + " does not read back in its scene scope");
+  }
+}
+
 }
 
 ScalarMutationStatus set_scene_scalar(Plugin& plugin,
@@ -585,6 +671,38 @@ ScalarMutationStatus set_scene_action_name(Plugin& plugin,
     return ScalarMutationStatus::unchanged;
   }
   data = std::move(payload);
+  mark_record_modified(plugin, *record);
+  return ScalarMutationStatus::updated;
+}
+
+ScalarMutationStatus ensure_scene_member(Plugin& plugin,
+                                         const FormKey& scene,
+                                         std::string_view path,
+                                         std::size_t group_index) {
+  const auto shape = member_shape(path);
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return ScalarMutationStatus::record_missing;
+  if (record->header.signature != k_scen) throw schema::ScalarError(std::string(path) + " target is not a SCEN record");
+  const auto layout = checked_layout(*record);
+  const auto range = scope_range(layout, record->subrecords.size(), shape.scope, group_index);
+  if (!range) return ScalarMutationStatus::subrecord_missing;
+  if (shape.action_types != k_any_action &&
+      !action_type_matches(*record, layout, group_index, shape.action_types)) {
+    return ScalarMutationStatus::subrecord_missing;
+  }
+  if (find_in(*record, *range, shape.subrecord, path)) return ScalarMutationStatus::unchanged;
+  constexpr std::string_view start_phase_path = "SCEN\\Action\\StartPhase";
+  Record candidate = *record;
+  if (shape.scope == Scope::action_payload && shape.subrecord == s("SNAM")) {
+    const auto candidate_layout = checked_layout(candidate);
+    const auto header = scope_range(candidate_layout, candidate.subrecords.size(), Scope::action, group_index);
+    if (!find_in(candidate, *header, s("SNAM"), start_phase_path)) {
+      add_member(candidate, group_index, MemberShape{Scope::action, s("SNAM"), sizeof(std::uint32_t), k_any_action},
+                 start_phase_path);
+    }
+  }
+  add_member(candidate, group_index, shape, path);
+  record->subrecords = std::move(candidate.subrecords);
   mark_record_modified(plugin, *record);
   return ScalarMutationStatus::updated;
 }

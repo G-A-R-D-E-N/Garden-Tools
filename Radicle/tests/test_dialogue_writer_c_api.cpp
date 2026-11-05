@@ -578,6 +578,37 @@ TEST_F(DialogueWriterCApi, UpdatedInfoSavesWithNewResponsesNoConditionsAndKeepsT
   radicle_env_destroy(env);
 }
 
+// Regression guard: radicle_plugin_create_scene must map each status to its C code and append a SCEN that survives a save and reload.
+TEST_F(DialogueWriterCApi, CreateSceneMapsStatusesAndAppendsASceneThatSurvivesReload) {
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
+  const auto before = bytes_of(plugin);
+  radicle_scene_spec spec{};
+  spec.editor_id = "Made scene";
+  spec.flags = 0x24;
+  spec.index = 7;
+  radicle_form_key out = rkey(0x9999);
+
+  EXPECT_EQ(radicle_plugin_create_scene(nullptr, rkey(k_quest), &spec, &out), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_scene(plugin, rkey(k_quest), nullptr, &out), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_scene(plugin, rkey(k_quest), &spec, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_scene(plugin, rkey(k_topic), &spec, &out), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(out.plugin, nullptr);
+  EXPECT_FALSE(std::string(radicle_last_error()).empty());
+  EXPECT_EQ(radicle_plugin_create_scene(plugin, radicle_form_key{"Other.esm", k_quest}, &spec, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out.plugin, nullptr);
+  EXPECT_EQ(bytes_of(plugin), before);
+
+  ASSERT_EQ(radicle_plugin_create_scene(plugin, rkey(k_quest), &spec, &out), RADICLE_STATUS_OK);
+  EXPECT_STREQ(out.plugin, k_plugin);
+  const auto saved = fo4::test::dialogue::read(bytes_of(plugin));
+  EXPECT_EQ(order(saved, out.local_id), (Order{"EDID", "FNAM", "PNAM", "INAM", "VNAM", "XNAM"}));
+  EXPECT_EQ(payloads(saved, out.local_id, "FNAM"), std::vector<Bytes>{words({0x24})});
+  EXPECT_EQ(payloads(saved, out.local_id, "XNAM"), std::vector<Bytes>{words({7})});
+  radicle_plugin_destroy(plugin);
+}
+
 TEST_F(DialogueWriterCApi, AuthoringRefusalsCarryAStatusAndMessageAndLeaveThePluginAlone) {
   radicle_plugin* plugin = nullptr;
   ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);

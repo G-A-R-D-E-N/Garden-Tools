@@ -95,6 +95,12 @@ typedef struct radicle_dialogue_topic_spec {
   const char* subtype_name;
 } radicle_dialogue_topic_spec;
 
+typedef struct radicle_scene_spec {
+  const char* editor_id;
+  uint32_t flags;
+  uint32_t index;
+} radicle_scene_spec;
+
 typedef struct radicle_dialogue_response_spec {
   const char* text;
   const char* script_notes;
@@ -254,6 +260,10 @@ RADICLE_API radicle_status radicle_plugin_update_dialogue_info(radicle_plugin* p
                                                                const radicle_dialogue_info_spec* spec);
 RADICLE_API radicle_status radicle_plugin_remove_dialogue_info(radicle_plugin* plugin,
                                                                radicle_form_key info);
+RADICLE_API radicle_status radicle_plugin_create_scene(radicle_plugin* plugin,
+                                                       radicle_form_key quest,
+                                                       const radicle_scene_spec* spec,
+                                                       radicle_form_key* out_key);
 
 #ifdef __cplusplus
 }

@@ -235,6 +235,7 @@ add_executable(
     unit/RadiclePluginPendingLifecycleTests.cpp
     unit/RadiclePluginQuestEndToEndTests.cpp
     unit/RadiclePluginDialogueTests.cpp
+    unit/RadiclePluginSceneTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
