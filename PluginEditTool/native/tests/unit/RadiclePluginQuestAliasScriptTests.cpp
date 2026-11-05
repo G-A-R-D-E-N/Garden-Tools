@@ -87,7 +87,7 @@ std::vector<std::byte> aliasScriptQuestWithAlias() {
     out.u16(1);
     out.u16(0);
     out.u16(1);
-    out.u32(0);
+    out.u32(0x01000801u);
     out.u16(6);
     out.u16(2);
     out.u16(1);
@@ -101,10 +101,10 @@ std::vector<std::byte> aliasScriptQuestWithAlias() {
     return out.bytes;
 }
 
-std::vector<std::byte> aliasScriptQuestBare(std::uint16_t version = 6) {
+std::vector<std::byte> aliasScriptQuestBare(std::uint16_t version = 6, std::uint16_t objectFormat = 2) {
     fo4::test::ByteWriter out;
     out.u16(version);
-    out.u16(2);
+    out.u16(objectFormat);
     out.u16(0);
     out.u8(3);
     out.u16(0);
@@ -134,6 +134,10 @@ std::vector<std::byte> aliasScriptPatch(std::uint16_t bareVersion = 6) {
     const auto plain = fo4::test::begin_record(out, "QUST", 0, 0x01000803u);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"Plain\0", 6});
     fo4::test::end_record(out, plain);
+    const auto legacy = fo4::test::begin_record(out, "QUST", 0, 0x01000804u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
+    fo4::test::write_subrecord(out, "VMAD", aliasScriptQuestBare(6, 1));
+    fo4::test::end_record(out, legacy);
     fo4::test::end_group(out, top);
     const auto actiGroup = fo4::test::begin_group(out, "ACTI", 0);
     const auto activator = fo4::test::begin_record(out, "ACTI", 0, 0x01000800u);
@@ -147,6 +151,19 @@ std::vector<std::byte> aliasScriptPatch(std::uint16_t bareVersion = 6) {
 std::vector<std::byte> aliasScriptBase() {
     fo4::test::ByteWriter out;
     aliasScriptHeader(out, {});
+    return out.bytes;
+}
+
+// Constraint: two masters put the patch at load index 2, so its own QUST is stored with index byte 0x02.
+std::vector<std::byte> aliasScriptTwoMasterPatch() {
+    fo4::test::ByteWriter out;
+    aliasScriptHeader(out, {"Base.esm", "Mod.esm"});
+    const auto top = fo4::test::begin_group(out, "QUST", 0);
+    const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x02000811u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"Indexed\0", 8});
+    fo4::test::write_subrecord(out, "VMAD", aliasScriptQuestBare());
+    fo4::test::end_record(out, quest);
+    fo4::test::end_group(out, top);
     return out.bytes;
 }
 
@@ -179,6 +196,25 @@ fo4::QuestVmadExtras aliasScriptExtras(const fo4::Record& record) {
     return fo4::read_quest_vmad_extras(
         std::span<const std::byte>(vmad->data).subspan(vmad->data.size() - scripts.trailing_bytes),
         scripts.object_format);
+}
+
+std::uint32_t aliasScriptU32At(const std::vector<std::byte>& data, std::size_t at) {
+    std::uint32_t value = 0;
+    for (std::size_t i = 0; i < 4; ++i) {
+        value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(data[at + i])) << (8 * i);
+    }
+    return value;
+}
+
+// Constraint: format 2 stores a zero word, then the alias ID, then the object word this helper reads.
+std::uint32_t aliasScriptObjectWord(const fo4::Record& record, std::size_t index) {
+    const auto* vmad = aliasScriptVmad(record);
+    REQUIRE(vmad != nullptr);
+    const auto scripts = fo4::read_vmad_scripts(vmad->data);
+    const auto extras = aliasScriptExtras(record);
+    REQUIRE(index < extras.aliases.size());
+    const auto start = vmad->data.size() - scripts.trailing_bytes + extras.aliases[index].offset;
+    return aliasScriptU32At(vmad->data, start + 4);
 }
 
 }  // namespace
@@ -217,6 +253,10 @@ TEST_CASE("Native quest alias scripts add, edit and remove and round-trip throug
     CHECK(extras.aliases[1].alias_id == 1);
     CHECK(extras.aliases[2].alias_id == 9);
     for (const auto& alias : extras.aliases) CHECK(alias.version == 6);
+    // Constraint: the untouched alias keeps its stored form ID, and entries created here carry the quest's own form ID (record C:\Users\Ricky\Documents\CodeNotes-GARDEN\GardenTools\Radicle\src\plugin\vmad_writer.cpp.md).
+    for (std::size_t i = 0; i < extras.aliases.size(); ++i) {
+        CHECK(aliasScriptObjectWord(*record, i) == 0x01000801u);
+    }
     REQUIRE(extras.aliases[0].scripts.size() == 1u);
     CHECK(extras.aliases[0].scripts[0].name == "Early");
     REQUIRE(extras.aliases[1].scripts.size() == 1u);
@@ -257,6 +297,7 @@ TEST_CASE("Native quest alias script bootstraps the extras section on a bare que
     CHECK(extras.aliases[0].alias_id == 4);
     CHECK(extras.aliases[0].version == 6);
     CHECK(extras.aliases[0].script_format == 2);
+    CHECK(aliasScriptObjectWord(*record, 0) == 0x01000802u);
     REQUIRE(extras.aliases[0].scripts.size() == 1u);
     CHECK(extras.aliases[0].scripts[0].name == "Only");
     CHECK(extras.aliases[0].scripts[0].flags == 1);
@@ -408,7 +449,7 @@ TEST_CASE("Native quest alias script inserts a middle script into an existing al
     CHECK(extras.fully_consumed);
 }
 
-TEST_CASE("Native quest alias script new entry carries version 6, the object format and a zero object word") {
+TEST_CASE("Native quest alias script new entry carries version 6, the object format and the quest's own form ID") {
     const auto root = aliasScriptTempRoot();
     AliasScriptCleanup cleanup{root};
     const auto basePath = root / "Base.esm";
@@ -444,11 +485,69 @@ TEST_CASE("Native quest alias script new entry carries version 6, the object for
     };
     CHECK(word(start) == 0u);
     CHECK(word(start + 2) == 4u);
-    CHECK(word(start + 4) == 0u);
-    CHECK(word(start + 6) == 0u);
+    // Constraint: the quest is stored as 0x01000802 (load index 1), so its object word is the low word then the high word.
+    CHECK(word(start + 4) == 0x0802u);
+    CHECK(word(start + 6) == 0x0100u);
     CHECK(word(start + 8) == 6u);
     CHECK(word(start + 10) == 2u);
     CHECK(word(start + 12) == 1u);
+    CHECK(aliasScriptObjectWord(*record, 0) == 0x01000802u);
+}
+
+TEST_CASE("Native quest alias script new entry takes the quest's form ID when its load index byte is nonzero") {
+    const auto root = aliasScriptTempRoot();
+    AliasScriptCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto modPath = root / "Mod.esm";
+    const auto patchPath = root / "Patch.esp";
+    aliasScriptWriteBytes(basePath, aliasScriptBase());
+    aliasScriptWriteBytes(modPath, aliasScriptBase());
+    aliasScriptWriteBytes(patchPath, aliasScriptTwoMasterPatch());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({aliasScriptPluginEntry("Base.esm", basePath),
+                                           aliasScriptPluginEntry("Mod.esm", modPath),
+                                           aliasScriptPluginEntry("Patch.esp", patchPath)})}};
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    const std::string key = "000811:Patch.esp";
+
+    REQUIRE(backend.addAliasScript(nlohmann::json::array({"Patch.esp", key, 6, "Index", 0, 0})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    auto reread = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(reread, fo4::FormKey::parse(key));
+    REQUIRE(record != nullptr);
+    REQUIRE(record->header.form_id.value() == 0x02000811u);
+    const auto extras = aliasScriptExtras(*record);
+    REQUIRE(extras.aliases.size() == 1u);
+    CHECK(extras.aliases[0].alias_id == 6);
+    CHECK(aliasScriptObjectWord(*record, 0) == 0x02000811u);
+    REQUIRE(extras.aliases[0].scripts.size() == 1u);
+    CHECK(extras.aliases[0].scripts[0].name == "Index");
+    CHECK(extras.fully_consumed);
+}
+
+TEST_CASE("Native quest alias script refuses a new alias entry under VMAD object format 1 without mutation") {
+    const auto root = aliasScriptTempRoot();
+    AliasScriptCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    aliasScriptWriteBytes(basePath, aliasScriptBase());
+    aliasScriptWriteBytes(patchPath, aliasScriptPatch());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    aliasScriptLoad(backend, basePath, patchPath);
+    const std::string legacy = "000804:Patch.esp";
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK_FALSE(aliasScriptPending(backend, 1));
+
+    const auto added = backend.addAliasScript(nlohmann::json::array({"Patch.esp", legacy, 1, "Nope", 0, 0}));
+    REQUIRE_FALSE(added.has_value());
+    INFO("add error: " << added.error().type << " / " << added.error().message);
+    CHECK(added.error().type == "ScriptWriteFailed");
+    CHECK(added.error().message.find("requires VMAD object format 2") != std::string::npos);
+    CHECK_FALSE(aliasScriptPending(backend, 1));
 }
 
 TEST_CASE("Native quest alias script new entry writes version 6 under a leading version 5 VMAD") {

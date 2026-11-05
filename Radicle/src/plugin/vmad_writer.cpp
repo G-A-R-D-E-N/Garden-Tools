@@ -10,6 +10,7 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -801,10 +802,16 @@ VmadStructureMutationStatus add_quest_alias_script(Plugin& plugin, const FormKey
     if (edit.extras.aliases.size() >= std::numeric_limits<std::uint16_t>::max()) {
       throw schema::ScalarError("the quest alias list is full");
     }
+    if (edit.object_format != 2) {
+      throw schema::ScalarError(
+          "a new quest alias entry requires VMAD object format 2; this VMAD uses object format " +
+          std::to_string(edit.object_format) + ", whose layout is unverified");
+    }
     open_quest_alias_extras(edit);
     std::vector<std::byte> entry;
-    append_object(entry, RawFormId{0u}, alias_id, edit.object_format);
-    // Constraint: a new alias entry writes version 6 (CK constant, RVA 0x2a88300 in E:\RE-work\scratch\ck_research\writer_chain2.txt).
+    // Constraint: a new alias entry's object form ID is the quest's own form ID from its record header (3245 of 3245 vanilla entries); record C:\Users\Ricky\Documents\CodeNotes-GARDEN\GardenTools\Radicle\src\plugin\vmad_writer.cpp.md, census tools/census_quest_alias_words.py.
+    append_object(entry, edit.record->header.form_id, alias_id, edit.object_format);
+    // Constraint: a new alias entry writes version 6, the constant the CreationKit alias writer uses; record C:\Users\Ricky\Documents\CodeNotes-GARDEN\GardenTools\Radicle\src\plugin\vmad_writer.cpp.md.
     append_u16(entry, 6);
     append_u16(entry, static_cast<std::uint16_t>(edit.object_format));
     append_u16(entry, 1);
