@@ -620,8 +620,9 @@ TEST(DialogueAuthoring, UpdateKeepsHeadSubrecordsAndPlacesNewResponsesBeforeNam0
 }
 
 TEST(DialogueAuthoring, UpdateRefusesMasterOwnedInfoAndWritesNothing) {
-  auto plugin = fo4::read_plugin(quest_plugin({"Base.esm"}, true), "Q.esp");
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
   const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  ASSERT_EQ(topic.status, fo4::forms::DialogueAuthorStatus::ok);
   ASSERT_EQ(fo4::forms::create_dialogue_info(plugin, topic.key, info_spec()).status,
             fo4::forms::DialogueAuthorStatus::ok);
   const auto before = fo4::write_plugin(plugin);
