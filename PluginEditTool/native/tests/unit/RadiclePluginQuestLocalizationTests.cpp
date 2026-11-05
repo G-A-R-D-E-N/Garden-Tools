@@ -415,6 +415,42 @@ TEST_CASE("Windows localized string staging preserves a Unicode plugin filename"
 #endif
 }
 
+// Invariant: a localized quest save whose plugin sits outside the configured Data directory must publish through the held read sources, so the new string rows reach the plugin's own STRINGS table.
+TEST_CASE("Windows localized quest save publishes held sources with a Data directory set") {
+#ifdef _WIN32
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    const auto mod = root / "mod";
+    const auto plugin = mod / "Patch.esp";
+    writeBytes(plugin, questPlugin(fo4::RecordFlags::localized));
+    writeLocalizationSet(mod, {{17, rawBytes("Original")}}, {}, {});
+    const auto data = root / "Data";
+    std::filesystem::create_directories(data);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    backend.testSetJournalRoot(root / "journal");
+    load(backend, plugin);
+    const auto created = backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Patch.esp", "QUST", nlohmann::json{{"editorId", "HeldSave"}, {"name", "Title"}}}));
+    REQUIRE(created.has_value());
+    const auto quest = nlohmann::json::parse(created->get<std::string>()).at("formKey").get<std::string>();
+    REQUIRE(backend.invokeBackend("SetQuestStages", nlohmann::json::array({
+        "Patch.esp", quest, nlohmann::json::array({{{"index", 10}, {"logEntry", "Begin"}}}),
+        localizedQuestContext(mod)})).has_value());
+    const auto saved = backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(saved.has_value());
+    const auto savedPlugin = fo4::read_plugin_file(plugin);
+    const auto stages = fo4::forms::decode_quest_stages(savedPlugin, fo4::FormKey::parse(quest));
+    REQUIRE(stages.stages.size() == 1u);
+    REQUIRE(stages.stages[0].log_entries.size() == 1u);
+    REQUIRE(stages.stages[0].log_entries[0].log_text.has_value());
+    const auto table = fo4::localization::read_string_table_file(
+        mod / "Strings" / "Patch_en.DLSTRINGS", fo4::localization::StringTableKind::dlstrings);
+    REQUIRE(fo4::localization::find_string(table, stages.stages[0].log_entries[0].log_text->id) != nullptr);
+#else
+    SUCCEED("held Windows journal destinations are not implemented on this platform");
+#endif
+}
+
 // Detects: mixed-case locale tokens must select the same pending quest stage and objective string tables.
 TEST_CASE("Localized quest stage and objective accept mixed-case language tokens") {
     const auto root = tempRoot(); Cleanup cleanup{root};
