@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <span>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -340,4 +341,48 @@ TEST_CASE("Scene phases carry start and completion conditions through the scoped
     fo4ide::plugin::RadiclePluginBackend restarted;
     loadPatch(restarted, root / "Patch.esp");
     CHECK(sceneOf(restarted, scene) == readback);
+}
+
+// Detects: a phase whose condition run cannot be decoded must be flagged unreadable, not reported as an empty (unconditional) list.
+TEST_CASE("Scene read flags phase conditions it cannot decode instead of reporting none") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(0);
+    hedr.u32(0x900);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+    const auto top = fo4::test::begin_group(out, "SCEN", 0);
+    const auto scene = fo4::test::begin_record(out, "SCEN", 0, 0x800);
+    const std::span<const std::byte> none;
+    fo4::test::write_subrecord(out, "HNAM", none);
+    fo4::test::write_subrecord(out, "CTDA", std::vector<std::byte>(20));
+    fo4::test::write_subrecord(out, "NEXT", none);
+    fo4::test::write_subrecord(out, "NEXT", none);
+    fo4::test::write_subrecord(out, "HNAM", none);
+    fo4::test::ByteWriter quest;
+    quest.u32(0x00000801u);
+    fo4::test::write_subrecord(out, "PNAM", quest.bytes);
+    fo4::test::end_record(out, scene);
+    fo4::test::end_group(out, top);
+    writeBytes(root / "Patch.esp", out.bytes);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, root / "Patch.esp");
+    const auto broken = sceneOf(backend, "000800:Patch.esp");
+    REQUIRE(broken.at("phases").size() == 1);
+    CHECK(broken.at("phases").at(0).at("startConditions").empty());
+    CHECK(broken.at("phases").at(0).at("startConditionsUnreadable") == true);
+    CHECK_FALSE(broken.at("phases").at(0).contains("completionConditionsUnreadable"));
+
+    const auto quest2 = freshQuest(backend);
+    const auto healthy = freshScene(backend, quest2);
+    REQUIRE(backend.invokeBackend("AddScenePhase", nlohmann::json::array({
+        "Patch.esp", healthy, 0, nlohmann::json{{"name", "P1"}}})).has_value());
+    const auto readback = sceneOf(backend, healthy);
+    CHECK_FALSE(readback.at("phases").at(0).contains("startConditionsUnreadable"));
+    CHECK_FALSE(readback.contains("conditionsUnreadable"));
 }

@@ -188,12 +188,20 @@ std::optional<SceneLayout> scanLayout(const fo4::Record& record) {
     return out;
 }
 
-std::vector<fo4::CtdaCondition> conditionsIn(const fo4::Record& record, std::size_t begin, std::size_t end) {
+std::optional<std::vector<fo4::CtdaCondition>> conditionsIn(const fo4::Record& record, std::size_t begin,
+                                                            std::size_t end) {
     try {
         return fo4::read_ctda_conditions_in(record, begin, end);
     } catch (const std::exception&) {
-        return {};
+        return std::nullopt;
     }
+}
+
+void putConditions(nlohmann::json& out, const char* key, const fo4::Plugin& plugin,
+                   const std::optional<std::vector<fo4::CtdaCondition>>& conditions) {
+    out[key] = conditionsJson(plugin, conditions ? std::span<const fo4::CtdaCondition>(*conditions)
+                                                 : std::span<const fo4::CtdaCondition>());
+    if (!conditions) out[std::string(key) + "Unreadable"] = true;
 }
 
 const fo4::Subrecord* firstOfIn(const fo4::Record& record, std::size_t begin, std::size_t end,
@@ -227,9 +235,9 @@ nlohmann::json phaseJson(const fo4::Plugin& plugin, const fo4::Record& record, s
         phase["questStageOnStart"] = readAt<std::int16_t>(subrecord->data, 0);
         phase["questStageOnCompletion"] = readAt<std::int16_t>(subrecord->data, 2);
     }
-    phase["startConditions"] = conditionsJson(plugin, conditionsIn(record, span.open + 1, span.firstNext));
-    phase["completionConditions"] =
-        conditionsJson(plugin, conditionsIn(record, span.firstNext + 1, span.secondNext));
+    putConditions(phase, "startConditions", plugin, conditionsIn(record, span.open + 1, span.firstNext));
+    putConditions(phase, "completionConditions", plugin,
+                  conditionsIn(record, span.firstNext + 1, span.secondNext));
     if (fragments != nullptr) {
         for (const auto& fragment : fragments->phases) {
             if (fragment.index != index) continue;
@@ -502,7 +510,11 @@ nlohmann::json sceneJson(const fo4::Plugin& plugin, const fo4::Record& record) {
         }
     }
     const auto root = fo4::schema::read_root_conditions(record);
-    if (root.ok) out["conditions"] = conditionsJson(plugin, root.conditions);
+    if (root.ok) {
+        out["conditions"] = conditionsJson(plugin, root.conditions);
+    } else {
+        out["conditionsUnreadable"] = true;
+    }
     return out;
 }
 
