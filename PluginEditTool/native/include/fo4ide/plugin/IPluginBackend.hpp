@@ -299,6 +299,13 @@ public:
     virtual Result<nlohmann::json> removeScriptProperty(const nlohmann::json&) {
         return std::unexpected(Error{"ScriptBackendUnavailable", "Script property writes are unavailable"});
     }
+    // Constraint: quest fragment removal refuses unmanaged script source and leaves the plugin unchanged.
+    virtual Result<nlohmann::json> removeQuestFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"QuestFragmentBackendUnavailable", "Quest fragment removal is unavailable"});
+    }
+    virtual Result<nlohmann::json> getQuestFragments(const nlohmann::json&) const {
+        return std::unexpected(Error{"QuestFragmentBackendUnavailable", "Quest fragment queries are unavailable"});
+    }
     virtual Result<nlohmann::json> getFaction(const nlohmann::json&) const {
         return std::unexpected(Error{"FactionBackendUnavailable", "Faction queries are unavailable"});
     }

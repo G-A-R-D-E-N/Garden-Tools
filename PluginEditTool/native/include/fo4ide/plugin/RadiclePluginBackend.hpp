@@ -142,6 +142,8 @@ public:
     Result<nlohmann::json> addScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> removeQuestFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getQuestFragments(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addPackageProcedure(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removePackageProcedure(const nlohmann::json& arguments) override;
@@ -310,6 +312,27 @@ private:
     Result<nlohmann::json> savePlugin(const nlohmann::json& arguments);
     Result<nlohmann::json> createRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> setQuestFragment(const nlohmann::json& arguments);
+    struct QuestFragmentWrite {
+        fo4::Plugin mutated{};
+        fo4::FormKey key{};
+        std::string scriptName{};
+        std::filesystem::path sourcePath{};
+        std::filesystem::path pexPath{};
+        std::filesystem::path imports{};
+        std::string function{};
+        std::string source{};
+        std::optional<std::string> originalSource{};
+        std::optional<std::string> originalPex{};
+        bool hasSource{false};
+        bool hasHeader{false};
+        bool hasBinding{false};
+    };
+    Result<QuestFragmentWrite> prepareQuestFragmentLocked(const LoadedPlugin& loaded, const fo4::FormKey& key,
+                                                          std::uint16_t stage, std::uint32_t index,
+                                                          std::string_view scriptName, std::string_view outputDirectory,
+                                                          std::string_view importsDirectory) const;
+    Result<nlohmann::json> stageQuestFragmentWriteLocked(LoadedPlugin& loaded, QuestFragmentWrite write,
+                                                         const std::string& source);
     Result<nlohmann::json> deleteRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> renumberRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> setField(const nlohmann::json& arguments);

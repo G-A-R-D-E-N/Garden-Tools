@@ -13,6 +13,7 @@ const CatalogTool kTools[] = {
     {"get_quest_objectives", "backend", "GetQuestObjectives", "plugin:string,form_key:string,context:object?", "Get quest objectives with alias targets and flags. Supply a language context to resolve localized display text."},
     {"get_quest_stages", "backend", "GetQuestStages", "plugin:string,form_key:string,context:object?", "Get quest stages, logs, notes, raw flags and startUp. Supply a language context to resolve localized log text. startUp does not establish automatic quest startup."},
     {"get_quest_aliases", "backend", "GetQuestAliases", "plugin:string,form_key:string", "Editor query: get quest aliases with kind, ID, name, flags and collection entries. Same RPC the desktop editor uses."},
+    {"get_quest_fragments", "backend", "GetQuestFragments", "plugin:string,form_key:string", "Editor query: list a quest's fragment bindings from plugin's in-memory version: stage, logEntryIndex, script, function and fragmentScript (the fragment script header name). Read-only; use it before remove_quest_fragment."},
     {"get_conditions_at", "backend", "GetConditionsAt", "plugin:string,form_key:string,path:string", "Editor query: get conditions at. Same RPC the desktop editor uses."},
     {"get_condition_functions", "backend", "GetConditionFunctions", "", "Editor query: get condition functions. Same RPC the desktop editor uses."},
     {"get_condition_run_on_types", "backend", "GetConditionRunOnTypes", "", "Editor query: get condition run on types. Same RPC the desktop editor uses."},
