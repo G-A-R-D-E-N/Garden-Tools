@@ -523,6 +523,10 @@ void read_quest_alias_extras(QuestAliasEdit& edit) {
 std::optional<VmadStructureMutationStatus> load_quest_aliases(Plugin& plugin,
                                                               const FormKey& record_key,
                                                               QuestAliasEdit& edit) {
+  if (const auto* record = detail::find_mutable_record(plugin, record_key);
+      record != nullptr && record->header.signature != sig_qust) {
+    return VmadStructureMutationStatus::not_authorable;
+  }
   VmadEdit vmad;
   const auto lookup = load_vmad(plugin, record_key, vmad);
   if (lookup != VmadLookup::ok) return absent_status(lookup);
@@ -919,27 +923,27 @@ ScalarMutationStatus set_vmad_property(Plugin& plugin, const FormKey& record_key
   return status;
 }
 
-ScalarMutationStatus set_quest_alias_script_value(Plugin& plugin, const FormKey& record_key,
-                                                  std::int16_t alias_id, std::size_t script,
-                                                  std::size_t property, const VmadValue& value,
-                                                  std::size_t element_index) {
+VmadStructureMutationStatus set_quest_alias_script_value(Plugin& plugin, const FormKey& record_key,
+                                                         std::int16_t alias_id, std::size_t script,
+                                                         std::size_t property, const VmadValue& value,
+                                                         std::size_t element_index) {
   QuestAliasEdit edit;
-  if (const auto refusal = load_quest_aliases(plugin, record_key, edit)) {
-    return *refusal == VmadStructureMutationStatus::record_missing
-               ? ScalarMutationStatus::record_missing
-               : ScalarMutationStatus::subrecord_missing;
-  }
+  if (const auto refusal = load_quest_aliases(plugin, record_key, edit)) return *refusal;
   const auto found = edit.has_extras ? find_quest_alias(edit, alias_id) : std::nullopt;
-  if (!found) return ScalarMutationStatus::subrecord_missing;
+  if (!found) return VmadStructureMutationStatus::subrecord_missing;
   const auto& alias = edit.extras.aliases[*found];
   if (script >= alias.scripts.size() || property >= alias.scripts[script].properties.size()) {
-    return ScalarMutationStatus::subrecord_missing;
+    return VmadStructureMutationStatus::subrecord_missing;
   }
   const auto status = write_property_value(plugin, edit.vmad->data, edit.tail_start,
                                            alias.scripts[script].properties[property], value,
                                            element_index, alias.script_format);
-  if (status == ScalarMutationStatus::updated) detail::mark_record_modified(plugin, *edit.record);
-  return status;
+  if (status == ScalarMutationStatus::updated) {
+    detail::mark_record_modified(plugin, *edit.record);
+    return VmadStructureMutationStatus::updated;
+  }
+  if (status == ScalarMutationStatus::unchanged) return VmadStructureMutationStatus::unchanged;
+  return VmadStructureMutationStatus::subrecord_missing;
 }
 
 }

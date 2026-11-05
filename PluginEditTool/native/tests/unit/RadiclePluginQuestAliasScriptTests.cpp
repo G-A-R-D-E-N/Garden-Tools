@@ -324,3 +324,157 @@ TEST_CASE("Native quest alias script refusals leave the plugin untouched and rep
             "no VMAD subrecord",
             [&](const nlohmann::json& args) { return backend.addAliasScript(args); });
 }
+
+namespace {
+
+std::vector<std::byte> aliasScriptActivatorWithAliasPatch() {
+    fo4::test::ByteWriter out;
+    aliasScriptHeader(out, {"Base.esm"});
+    const auto actiGroup = fo4::test::begin_group(out, "ACTI", 0);
+    const auto activator = fo4::test::begin_record(out, "ACTI", 0, 0x01000805u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"ActAlias\0", 9});
+    fo4::test::write_subrecord(out, "VMAD", aliasScriptQuestWithAlias());
+    fo4::test::end_record(out, activator);
+    fo4::test::end_group(out, actiGroup);
+    return out.bytes;
+}
+
+}  // namespace
+
+TEST_CASE("Native quest alias scripts keep negative alias ids in signed ascending order") {
+    const auto root = aliasScriptTempRoot();
+    AliasScriptCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    aliasScriptWriteBytes(basePath, aliasScriptBase());
+    aliasScriptWriteBytes(patchPath, aliasScriptPatch());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    aliasScriptLoad(backend, basePath, patchPath);
+    const std::string key = "000801:Patch.esp";
+
+    REQUIRE(backend.addAliasScript(nlohmann::json::array({"Patch.esp", key, -1, "Neg", 0, 0})).has_value());
+    REQUIRE(backend.addAliasScript(nlohmann::json::array({"Patch.esp", key, -32768, "Min", 0, 0})).has_value());
+    REQUIRE(backend.addAliasScript(nlohmann::json::array({"Patch.esp", key, 2, "Two", 0, 0})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    auto reread = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(reread, fo4::FormKey::parse(key));
+    REQUIRE(record != nullptr);
+    const auto extras = aliasScriptExtras(*record);
+    REQUIRE(extras.aliases.size() == 4u);
+    CHECK(extras.aliases[0].alias_id == -32768);
+    CHECK(extras.aliases[1].alias_id == -1);
+    CHECK(extras.aliases[2].alias_id == 1);
+    CHECK(extras.aliases[3].alias_id == 2);
+    REQUIRE(extras.aliases[0].scripts.size() == 1u);
+    CHECK(extras.aliases[0].scripts[0].name == "Min");
+    REQUIRE(extras.aliases[1].scripts.size() == 1u);
+    CHECK(extras.aliases[1].scripts[0].name == "Neg");
+    REQUIRE(extras.aliases[2].scripts.size() == 1u);
+    CHECK(extras.aliases[2].scripts[0].name == "Old");
+    CHECK(extras.fully_consumed);
+}
+
+TEST_CASE("Native quest alias script inserts a middle script into an existing alias") {
+    const auto root = aliasScriptTempRoot();
+    AliasScriptCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    aliasScriptWriteBytes(basePath, aliasScriptBase());
+    aliasScriptWriteBytes(patchPath, aliasScriptPatch());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    aliasScriptLoad(backend, basePath, patchPath);
+    const std::string key = "000801:Patch.esp";
+
+    REQUIRE(backend.addAliasScript(nlohmann::json::array({"Patch.esp", key, 1, "First", 0, 0})).has_value());
+    REQUIRE(backend.addAliasScript(nlohmann::json::array({"Patch.esp", key, 1, "Mid", 0, 1})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    auto reread = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(reread, fo4::FormKey::parse(key));
+    REQUIRE(record != nullptr);
+    const auto extras = aliasScriptExtras(*record);
+    REQUIRE(extras.aliases.size() == 1u);
+    REQUIRE(extras.aliases[0].scripts.size() == 3u);
+    CHECK(extras.aliases[0].scripts[0].name == "First");
+    CHECK(extras.aliases[0].scripts[1].name == "Mid");
+    CHECK(extras.aliases[0].scripts[2].name == "Old");
+    REQUIRE(extras.aliases[0].scripts[2].properties.size() == 1u);
+    CHECK(extras.aliases[0].scripts[2].properties[0].name == "Keep");
+    CHECK(extras.fully_consumed);
+}
+
+TEST_CASE("Native quest alias script new entry carries the leading version, object format and a zero object word") {
+    const auto root = aliasScriptTempRoot();
+    AliasScriptCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    aliasScriptWriteBytes(basePath, aliasScriptBase());
+    aliasScriptWriteBytes(patchPath, aliasScriptPatch());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    aliasScriptLoad(backend, basePath, patchPath);
+    const std::string key = "000802:Patch.esp";
+
+    REQUIRE(backend.addAliasScript(nlohmann::json::array({"Patch.esp", key, 4, "Only", 1, 0})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    auto reread = fo4::read_plugin_file(patchPath);
+    const auto* record = fo4::find_record(reread, fo4::FormKey::parse(key));
+    REQUIRE(record != nullptr);
+    const auto* sub = aliasScriptVmad(*record);
+    REQUIRE(sub != nullptr);
+    const auto scripts = fo4::read_vmad_scripts(sub->data);
+    REQUIRE(scripts.version == 6);
+    REQUIRE(scripts.object_format == 2);
+    const auto extras = aliasScriptExtras(*record);
+    REQUIRE(extras.aliases.size() == 1u);
+    const auto start = sub->data.size() - scripts.trailing_bytes + extras.aliases[0].offset;
+    std::string dump;
+    for (std::size_t i = 0; i < 14; ++i) dump += std::to_string(std::to_integer<unsigned>(sub->data[start + i])) + " ";
+    INFO("entry bytes: " << dump << "| trailing " << scripts.trailing_bytes << " size " << sub->data.size()
+                         << " offset " << extras.aliases[0].offset);
+    const auto word = [&](std::size_t at) {
+        return static_cast<unsigned>(std::to_integer<std::uint8_t>(sub->data[at])) |
+               (static_cast<unsigned>(std::to_integer<std::uint8_t>(sub->data[at + 1])) << 8);
+    };
+    CHECK(word(start) == 0u);
+    CHECK(word(start + 2) == 4u);
+    CHECK(word(start + 4) == 0u);
+    CHECK(word(start + 6) == 0u);
+    CHECK(word(start + 8) == 6u);
+    CHECK(word(start + 10) == 2u);
+    CHECK(word(start + 12) == 1u);
+}
+
+TEST_CASE("Native quest alias script refuses a non-QUST VMAD with a named error") {
+    const auto root = aliasScriptTempRoot();
+    AliasScriptCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    aliasScriptWriteBytes(basePath, aliasScriptBase());
+    aliasScriptWriteBytes(patchPath, aliasScriptActivatorWithAliasPatch());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    aliasScriptLoad(backend, basePath, patchPath);
+    const std::string activator = "000805:Patch.esp";
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK_FALSE(aliasScriptPending(backend, 1));
+
+    const auto added = backend.addAliasScript(nlohmann::json::array({"Patch.esp", activator, 1, "Nope", 0, 0}));
+    REQUIRE_FALSE(added.has_value());
+    INFO("add error: " << added.error().type << " / " << added.error().message);
+    CHECK(added.error().type == "ScriptWriteFailed");
+    CHECK(added.error().message.find("not authorable") != std::string::npos);
+
+    const auto valued = backend.setAliasScriptValue(
+        nlohmann::json::array({"Patch.esp", activator, 1, 0, 0, "int", "9", nullptr, nullptr}));
+    REQUIRE_FALSE(valued.has_value());
+    INFO("set error: " << valued.error().type << " / " << valued.error().message);
+    CHECK(valued.error().type == "ScriptValueNotAuthorable");
+    CHECK(valued.error().message.find("not authorable") != std::string::npos);
+    CHECK(valued.error().message.find("QUST") != std::string::npos);
+    CHECK_FALSE(aliasScriptPending(backend, 1));
+}

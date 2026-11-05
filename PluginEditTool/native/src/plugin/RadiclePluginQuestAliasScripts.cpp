@@ -18,6 +18,8 @@ using namespace script_support;
 namespace {
 
 constexpr const char* k_invalid_alias_id = "Alias ID must be an integer from -32768 to 32767";
+constexpr const char* k_value_not_authorable =
+    "Quest alias script values are not authorable: the record's VMAD is not a QUST quest";
 
 std::optional<std::int16_t> aliasIdArgument(const nlohmann::json& args, std::size_t index) {
     const auto value = support::argumentAt(args, index);
@@ -31,6 +33,7 @@ std::optional<std::int16_t> aliasIdArgument(const nlohmann::json& args, std::siz
 }
 
 std::optional<fo4::QuestVmadAliasScripts> questAliasFor(const fo4::Record& record, std::int16_t aliasId) {
+    if (record.header.signature.to_string() != "QUST") return std::nullopt;
     const auto* vmad = vmadSubrecord(record);
     if (vmad == nullptr) return std::nullopt;
     const auto scripts = fo4::read_vmad_scripts(vmad->data);
@@ -375,6 +378,9 @@ Result<nlohmann::json> RadiclePluginBackend::setAliasScriptValue(const nlohmann:
             return std::unexpected(Error{"RecordNotFound",
                                          "Record is not present in " + pluginName + ": " + formKeyText});
         }
+        if (record->header.signature.to_string() != "QUST") {
+            return std::unexpected(Error{"ScriptValueNotAuthorable", k_value_not_authorable});
+        }
         const auto quest = questAliasFor(*record, *aliasId);
         if (!quest) return std::unexpected(Error{"QuestAliasMissing", "Quest alias is absent from the VMAD"});
         if (*scriptIndex >= quest->scripts.size()) {
@@ -452,8 +458,16 @@ Result<nlohmann::json> RadiclePluginBackend::setAliasScriptValue(const nlohmann:
 
         const auto status = fo4::set_quest_alias_script_value(mutated, key, *aliasId, *scriptIndex,
                                                               *propertyIndex, value, element);
-        if (const auto failure = scalarValueFailure(status, "Quest alias script property"); !failure.empty()) {
-            return std::unexpected(Error{"ScriptValueWriteFailed", failure});
+        if (status == fo4::VmadStructureMutationStatus::not_authorable) {
+            return std::unexpected(Error{"ScriptValueNotAuthorable", k_value_not_authorable});
+        }
+        if (status == fo4::VmadStructureMutationStatus::record_missing) {
+            return std::unexpected(Error{"ScriptValueWriteFailed", "Record is not present in the plugin"});
+        }
+        if (status != fo4::VmadStructureMutationStatus::updated &&
+            status != fo4::VmadStructureMutationStatus::unchanged) {
+            return std::unexpected(Error{"ScriptValueWriteFailed",
+                                         "Quest alias script property value slot or index is absent from the VMAD"});
         }
         stagePluginMutationLocked(*loaded, std::move(mutated));
     } catch (const fo4::schema::ScalarError& error) {

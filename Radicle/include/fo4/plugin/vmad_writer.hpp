@@ -97,7 +97,7 @@ VmadStructureMutationStatus remove_quest_alias_script_property(Plugin& plugin, c
                                                                std::int16_t alias_id,
                                                                std::size_t script, std::size_t index);
 
-ScalarMutationStatus set_quest_alias_script_value(Plugin& plugin, const FormKey& record,
+VmadStructureMutationStatus set_quest_alias_script_value(Plugin& plugin, const FormKey& record,
                                                   std::int16_t alias_id, std::size_t script,
                                                   std::size_t property, const VmadValue& value,
                                                   std::size_t element = 0);
