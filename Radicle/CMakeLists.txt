@@ -497,6 +497,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/hkx/animation_binding.cpp
   src/hkx/animation_spline.cpp
   src/hkx/summary.cpp
+  src/hkx/write.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -1179,6 +1180,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_hkx_binding.cpp
     tests/test_hkx_real.cpp
     tests/test_hkx_summary.cpp
+    tests/test_hkx_write.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp

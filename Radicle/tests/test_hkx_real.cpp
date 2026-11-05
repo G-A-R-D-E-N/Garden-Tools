@@ -1,8 +1,10 @@
 #include "fo4/archive/assets.hpp"
 #include "fo4/hkx/animation.hpp"
+#include "fo4/hkx/layout.hpp"
 #include "fo4/hkx/packfile.hpp"
 #include "fo4/hkx/skeleton.hpp"
 #include "fo4/hkx/summary.hpp"
+#include "fo4/hkx/write.hpp"
 #include "hkx_animation_manifest.hpp"
 #include "hkx_seam_ratio.hpp"
 #include "real_data_build.hpp"
@@ -244,4 +246,44 @@ TEST(HkxSummaryReal, SummarisesTheVanillaSkeletonAndTheRadroachClip) {
   EXPECT_GT(clip.track_count, 0U);
   ASSERT_FALSE(clip_summary.binding_skeletons.empty());
   EXPECT_FALSE(clip_summary.binding_skeletons.front().empty());
+}
+
+// Constraint: the writer must append to a shipped packfile and read back with every existing object unchanged.
+TEST(HkxAppendReal, AppendsToTheVanillaSkeletonAndVerifiesTheRoundTrip) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  record_game_build(detect_game_build(dir));
+  const std::vector<std::string> plugins{"Fallout4.esm"};
+  const auto archives = fo4::archive::archive_load_order(dir, {}, plugins);
+  if (archives.empty()) {
+    GTEST_SKIP() << "no Fallout 4 archives found under FO4_DATA_DIR";
+  }
+  const auto assets = fo4::archive::AssetResolver::open(dir, archives);
+  const auto location = assets.locate("meshes/actors/character/characterassets/skeleton.hkx");
+  if (!location) {
+    GTEST_SKIP() << "no character skeleton in the installed archives";
+  }
+  const auto bytes = assets.read(*location);
+
+  fo4::hkx::HkxPackfile packfile;
+  ASSERT_EQ(fo4::hkx::read_packfile(bytes, packfile), fo4::hkx::HkxStatus::Ok);
+  ASSERT_FALSE(packfile.objects.empty());
+  const auto& object = packfile.objects.front();
+  const auto* layout = fo4::hkx::find_layout(object.class_name, object.signature);
+  if (layout == nullptr) {
+    GTEST_SKIP() << "the generated layout table has no entry for " << object.class_name;
+  }
+
+  fo4::hkx::HkxAppend appended;
+  const std::vector<std::byte> zeros(layout->size, std::byte{0});
+  ASSERT_EQ(fo4::hkx::append_object(bytes, object.class_name, object.signature, zeros, appended),
+            fo4::hkx::HkxStatus::Ok);
+  EXPECT_EQ(fo4::hkx::verify_append(bytes, appended.bytes, zeros), fo4::hkx::HkxStatus::Ok);
+
+  fo4::hkx::HkxPackfile written;
+  ASSERT_EQ(fo4::hkx::read_packfile(appended.bytes, written), fo4::hkx::HkxStatus::Ok);
+  EXPECT_EQ(written.objects.size(), packfile.objects.size() + 1);
+  EXPECT_EQ(written.objects.back().class_name, object.class_name);
 }
