@@ -416,6 +416,44 @@ TEST_CASE("QuestScriptEdit.RefusesNonQuestScript") {
     requireUnchanged(backend, s);
 }
 
+TEST_CASE("QuestScriptEdit.AcceptsQuestDescendantAndRefusesChainThatNeverReachesQuest") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    const auto fragment = [](const std::string& header) {
+        return header + "\n\nFunction Fragment_Stage_0010_Item_00()\n    SetStage(10)\nEndFunction\n";
+    };
+    writeText(s.imports / "QF_Base.psc", fragment("Scriptname QF_Base extends Quest"));
+    writeText(s.imports / "QF_Synth.psc", fragment("Scriptname QF_Synth extends QF_Base"));
+    writeText(s.imports / "QF_Detour.psc", "Scriptname QF_Detour extends ObjectReference\n");
+    writeText(s.imports / "QF_Other.psc", fragment("Scriptname QF_Other extends QF_Detour"));
+    writeText(s.imports / "QF_Loop.psc", fragment("Scriptname QF_Loop extends QF_Loop2"));
+    writeText(s.imports / "QF_Loop2.psc", "Scriptname QF_Loop2 extends QF_Loop\n");
+    writeText(s.imports / "QF_Lost.psc", fragment("Scriptname QF_Lost extends QF_Missing"));
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    for (const char* name : {"QF_Other", "QF_Loop", "QF_Lost"}) {
+        const auto refused = editScript(backend, name, s.out, std::nullopt,
+                                        editsJson("SetStage(10)", "SetStage(20)"), s.imports);
+        INFO(name);
+        REQUIRE_FALSE(refused.has_value());
+        CHECK(refused.error().type == "QuestScriptNotQuest");
+        requireUnchanged(backend, s);
+    }
+
+    const auto accepted = editScript(backend, "QF_Synth", s.out, std::nullopt,
+                                     editsJson("SetStage(10)", "SetStage(20)"), s.imports);
+    INFO("error: " << (accepted.has_value() ? std::string() : accepted.error().message));
+    REQUIRE(accepted.has_value());
+    CHECK((*accepted)["origin"] == "imports_psc");
+    const auto staged = backend.testStagedQuestScript(kPluginName);
+    REQUIRE(staged.has_value());
+    CHECK(staged->first.find("SetStage(20)") != std::string::npos);
+}
+
 TEST_CASE("QuestScriptEdit.RefusesCompileErrorWithoutStaging") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

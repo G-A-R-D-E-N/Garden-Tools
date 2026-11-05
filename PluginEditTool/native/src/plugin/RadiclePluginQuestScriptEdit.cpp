@@ -345,6 +345,13 @@ std::expected<std::string, Error> applyEdits(std::string text, const std::vector
     return text;
 }
 
+bool extendsQuest(fo4ide::papyrus::ScriptIndex& index, const fo4ide::papyrus::Script& script) {
+    const auto chain = index.baseChain(&script);
+    return std::any_of(chain.begin() + 1, chain.end(),
+                       [](const fo4ide::papyrus::Script* base) { return sameName(base->name, "Quest"); }) ||
+           (script.extends && sameName(*script.extends, "Quest"));
+}
+
 std::string diagnosticsText(const std::vector<fo4ide::papyrus::Diagnostic>& diagnostics, std::string_view head) {
     std::string message(head);
     for (const auto& diagnostic : diagnostics) {
@@ -520,14 +527,13 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
         if (!sameName(parsed.name, *name)) {
             return failure("QuestScriptNameMismatch", "source declares ScriptName " + parsed.name + ", not " + *name);
         }
-        if (!parsed.extends || !sameName(*parsed.extends, "Quest")) {
-            return failure("QuestScriptNotQuest", *name + " must extend Quest to be edited by edit_quest_script");
-        }
-
         // Constraint: imports are added first as snapshots, since ScriptIndex refuses to mix snapshot and filesystem roots.
         ScriptIndex index;
         if (imports) index.addSnapshot(*imports, readPscDirectory(*imports));
         addVanillaImports(index, dataDirectory_, kVanillaImportFolders);
+        if (!extendsQuest(index, parsed)) {
+            return failure("QuestScriptNotQuest", *name + " must extend Quest to be edited by edit_quest_script");
+        }
         PapyrusCompileOptions options;
         options.emitDebugInfo = false;
         options.emitDebugOnlyCode = false;
