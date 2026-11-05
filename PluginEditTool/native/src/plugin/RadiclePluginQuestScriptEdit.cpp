@@ -32,7 +32,11 @@ constexpr std::string_view kMiscArchive = "Fallout4 - Misc.ba2";
 constexpr std::size_t kSourceLimit = 4u * 1024u * 1024u;
 constexpr std::size_t kPexLimit = 64u * 1024u * 1024u;
 constexpr std::size_t kMaxNameLength = 64;
+constexpr std::size_t kMaxNameSegments = 6;
+constexpr std::size_t kMaxQualifiedNameLength = 256;
 constexpr std::string_view kDecompileFailed = "[decompile failed:";
+constexpr std::string_view kNameRule =
+    "script name must be a Papyrus identifier, optionally namespaced with ':' (for example Fragments:Quests:QF_X)";
 
 std::unexpected<Error> failure(std::string type, std::string message) {
     return std::unexpected(Error{std::move(type), std::move(message)});
@@ -46,6 +50,50 @@ bool identifierName(std::string_view name) {
         const auto c = static_cast<unsigned char>(ch);
         return std::isalnum(c) != 0 || c == '_';
     });
+}
+
+// Constraint: ':', '/' and '\\' all separate namespace segments; the result is always ':'-joined and every segment is an identifier.
+std::optional<std::string> canonicalScriptName(std::string_view raw) {
+    if (raw.empty() || raw.size() > kMaxQualifiedNameLength) return std::nullopt;
+    std::string canonical;
+    std::size_t segments = 0;
+    std::size_t start = 0;
+    for (;;) {
+        const auto at = raw.find_first_of(":/\\", start);
+        const auto part = raw.substr(start, at == std::string_view::npos ? std::string_view::npos : at - start);
+        if (!identifierName(part) || ++segments > kMaxNameSegments) return std::nullopt;
+        if (segments > 1) canonical += ':';
+        canonical += part;
+        if (at == std::string_view::npos) return canonical;
+        start = at + 1;
+    }
+}
+
+std::vector<std::string> splitScriptName(const std::string& canonical) {
+    std::vector<std::string> parts;
+    std::size_t start = 0;
+    for (;;) {
+        const auto at = canonical.find(':', start);
+        parts.push_back(canonical.substr(start, at == std::string::npos ? std::string::npos : at - start));
+        if (at == std::string::npos) return parts;
+        start = at + 1;
+    }
+}
+
+// Invariant: the namespace mirrors directories, so Fragments:Quests:QF_X maps to Fragments/Quests/QF_X<extension>.
+fs::path namespacedFile(const fs::path& root, const std::string& canonical, std::string_view extension) {
+    const auto parts = splitScriptName(canonical);
+    fs::path out = root;
+    for (std::size_t i = 0; i + 1 < parts.size(); ++i) out /= parts[i];
+    out /= parts.back() + std::string(extension);
+    return out;
+}
+
+// Constraint: archive entries are lowercase and namespace segments become directories under scripts/.
+std::string archiveEntryFor(const std::string& canonical) {
+    auto path = "scripts/" + support::asciiLower(canonical) + ".pex";
+    std::replace(path.begin(), path.end(), ':', '/');
+    return path;
 }
 
 bool sameName(std::string_view a, std::string_view b) {
@@ -99,37 +147,65 @@ std::string decompilePex(const std::vector<std::uint8_t>& bytes, std::string_vie
 struct ScriptSource {
     std::string text;
     std::string origin;
+    std::string archive;  // Constraint: empty unless the source is a vanilla PEX.
 };
+
+// Constraint: Fallout4 - Misc.ba2 is searched first and its errors propagate; other *.ba2 are scanned in name order, skipping unreadable ones.
+std::optional<std::pair<std::string, std::vector<std::uint8_t>>> findVanillaPex(const fs::path& dataDirectory,
+                                                                                 const std::string& canonical) {
+    const auto wanted = archiveEntryFor(canonical);
+    std::vector<fs::path> archives{dataDirectory / std::string(kMiscArchive)};
+    std::vector<fs::path> others;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(dataDirectory, ec)) {
+        if (!entry.is_regular_file(ec)) continue;
+        const auto name = entry.path().filename().string();
+        if (support::asciiLower(entry.path().extension().string()) != ".ba2" || name == kMiscArchive) continue;
+        others.push_back(entry.path());
+    }
+    std::sort(others.begin(), others.end());
+    archives.insert(archives.end(), others.begin(), others.end());
+
+    for (std::size_t n = 0; n < archives.size(); ++n) {
+        std::optional<std::vector<std::uint8_t>> bytes;
+        if (!fs::is_regular_file(archives[n], ec)) continue;
+        try {
+            const auto reader = fo4ide::archive::Ba2Reader::open(archives[n]);
+            for (std::size_t i = 0; i < reader.entryCount() && !bytes; ++i) {
+                auto path = support::asciiLower(reader.entryPath(i));
+                std::replace(path.begin(), path.end(), '\\', '/');
+                if (path != wanted) continue;
+                const auto raw = reader.extract(i);
+                std::vector<std::uint8_t> copy(raw.size());
+                std::transform(raw.begin(), raw.end(), copy.begin(),
+                               [](std::byte b) { return static_cast<std::uint8_t>(b); });
+                bytes = std::move(copy);
+            }
+        } catch (const std::exception&) {
+            if (n == 0) throw;
+        }
+        if (bytes) return std::make_pair(archives[n].filename().string(), std::move(*bytes));
+    }
+    return std::nullopt;
+}
 
 std::optional<ScriptSource> loadQuestScriptSource(const fs::path& dataDirectory,
                                                   const std::optional<fs::path>& imports,
-                                                  std::string_view name) {
+                                                  const std::string& canonical) {
     std::error_code ec;
     if (imports) {
-        const auto psc = *imports / (std::string(name) + ".psc");
-        if (fs::is_regular_file(psc, ec)) return ScriptSource{readBoundedFile(psc, kSourceLimit), "imports_psc"};
-        const auto pex = *imports / (std::string(name) + ".pex");
+        const auto psc = namespacedFile(*imports, canonical, ".psc");
+        if (fs::is_regular_file(psc, ec)) return ScriptSource{readBoundedFile(psc, kSourceLimit), "imports_psc", {}};
+        const auto pex = namespacedFile(*imports, canonical, ".pex");
         if (fs::is_regular_file(pex, ec)) {
             const auto raw = readBoundedFile(pex, kPexLimit);
-            return ScriptSource{decompilePex(toBytes(raw), name), "imports_pex"};
+            return ScriptSource{decompilePex(toBytes(raw), canonical), "imports_pex", {}};
         }
     }
     if (dataDirectory.empty()) return std::nullopt;
-    const auto archive = dataDirectory / std::string(kMiscArchive);
-    if (!fs::is_regular_file(archive, ec)) return std::nullopt;
-    const auto reader = fo4ide::archive::Ba2Reader::open(archive);
-    const auto wanted = "scripts/" + support::asciiLower(name) + ".pex";
-    for (std::size_t i = 0; i < reader.entryCount(); ++i) {
-        auto path = support::asciiLower(reader.entryPath(i));
-        std::replace(path.begin(), path.end(), '\\', '/');
-        if (path != wanted) continue;
-        const auto raw = reader.extract(i);
-        std::vector<std::uint8_t> bytes(raw.size());
-        std::transform(raw.begin(), raw.end(), bytes.begin(),
-                       [](std::byte b) { return static_cast<std::uint8_t>(b); });
-        return ScriptSource{decompilePex(bytes, name), "vanilla_pex"};
-    }
-    return std::nullopt;
+    auto found = findVanillaPex(dataDirectory, canonical);
+    if (!found) return std::nullopt;
+    return ScriptSource{decompilePex(found->second, canonical), "vanilla_pex", found->first};
 }
 
 struct TextEdit {
@@ -196,8 +272,8 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestScript(const nlohmann::json
         if (!args.is_array() || args.empty() || !args[0].is_string()) {
             return failure("QuestScriptFailed", "invalid script arguments");
         }
-        const auto name = args[0].get<std::string>();
-        if (!identifierName(name)) return failure("QuestScriptFailed", "script name must be a Papyrus identifier");
+        const auto name = canonicalScriptName(args[0].get<std::string>());
+        if (!name) return failure("QuestScriptFailed", std::string(kNameRule));
         if (dataDirectory_.empty() && (args.size() < 2 || args[1].is_null())) {
             return failure("QuestScriptFailed", "game Data directory is not configured");
         }
@@ -208,11 +284,12 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestScript(const nlohmann::json
             if (!imports) imports = questinternal::allowedVanillaFragmentImports(requested, dataDirectory_);
             if (!imports) return failure("QuestScriptFailed", "import directory is outside trusted writable roots");
         }
-        const auto source = loadQuestScriptSource(dataDirectory_, imports, name);
-        if (!source) return failure("QuestScriptNotFound", "no source for " + name + " in imports or Fallout4 - Misc.ba2");
-        const auto parsed = fo4ide::papyrus::Parser::parse(source->text, name + ".psc");
-        return nlohmann::json{{"script", name}, {"origin", source->origin}, {"source", source->text},
-                              {"extends", parsed.extends.value_or("")}, {"parses", !parsed.hasErrors()}};
+        const auto source = loadQuestScriptSource(dataDirectory_, imports, *name);
+        if (!source) return failure("QuestScriptNotFound", "no source for " + *name + " in imports or a vanilla BA2 under Data");
+        const auto parsed = fo4ide::papyrus::Parser::parse(source->text, *name + ".psc");
+        return nlohmann::json{{"script", *name}, {"origin", source->origin}, {"archive", source->archive},
+                              {"source", source->text}, {"extends", parsed.extends.value_or("")},
+                              {"parses", !parsed.hasErrors()}};
     } catch (const std::exception& error) {
         return failure("QuestScriptFailed", error.what());
     }
@@ -224,9 +301,10 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
         if (!args.is_array() || args.size() < 3 || !args[0].is_string() || !args[1].is_string() ||
             !args[2].is_string()) return failure("QuestScriptFailed", "invalid script arguments");
         const auto pluginName = args[0].get<std::string>();
-        const auto name = args[1].get<std::string>();
+        const auto requestedName = args[1].get<std::string>();
         const auto outputDirectory = args[2].get<std::string>();
-        if (!identifierName(name)) return failure("QuestScriptFailed", "script name must be a Papyrus identifier");
+        const auto name = canonicalScriptName(requestedName);
+        if (!name) return failure("QuestScriptFailed", std::string(kNameRule));
         std::optional<std::string> replacement;
         if (args.size() > 3 && !args[3].is_null()) {
             if (!args[3].is_string()) return failure("QuestScriptFailed", "source must be a string");
@@ -266,9 +344,11 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
         if (!loaded) return failure("QuestScriptFailed", "plugin is not loaded");
         if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
 
-        const auto sourcePath = *directory / (name + ".psc");
-        const auto pexPath = *directory / (name + ".pex");
-        if (sourcePath.parent_path() != *directory || pexPath.parent_path() != *directory) {
+        // Constraint: a namespaced script stages under its namespace folders, and the pair must stay inside the output directory.
+        const auto sourcePath = namespacedFile(*directory, *name, ".psc");
+        const auto pexPath = namespacedFile(*directory, *name, ".pex");
+        if (!insideDirectory(sourcePath, *directory) || !insideDirectory(pexPath, *directory) ||
+            sourcePath.parent_path() != pexPath.parent_path() || sourcePath.stem() != pexPath.stem()) {
             return failure("QuestScriptFailed", "unsafe output path");
         }
         const auto* pending = loaded->stagedQuestFragments ? &*loaded->stagedQuestFragments : nullptr;
@@ -295,8 +375,8 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
             text = *originalSource;
             origin = "output_psc";
         } else {
-            auto source = loadQuestScriptSource(dataDirectory_, imports, name);
-            if (!source) return failure("QuestScriptNotFound", "no source for " + name + " in imports or Fallout4 - Misc.ba2");
+            auto source = loadQuestScriptSource(dataDirectory_, imports, *name);
+            if (!source) return failure("QuestScriptNotFound", "no source for " + *name + " in imports or a vanilla BA2 under Data");
             text = std::move(source->text);
             origin = std::move(source->origin);
         }
@@ -308,15 +388,15 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
             text = std::move(*applied);
         }
 
-        auto parsed = Parser::parse(text, name + ".psc");
+        auto parsed = Parser::parse(text, *name + ".psc");
         if (parsed.hasErrors()) {
             return failure("QuestScriptCompileFailed", diagnosticsText(parsed.diagnostics, "Papyrus parse failed"));
         }
-        if (!sameName(parsed.name, name)) {
-            return failure("QuestScriptNameMismatch", "source declares ScriptName " + parsed.name + ", not " + name);
+        if (!sameName(parsed.name, *name)) {
+            return failure("QuestScriptNameMismatch", "source declares ScriptName " + parsed.name + ", not " + *name);
         }
         if (!parsed.extends || !sameName(*parsed.extends, "Quest")) {
-            return failure("QuestScriptNotQuest", name + " must extend Quest to be edited by edit_quest_script");
+            return failure("QuestScriptNotQuest", *name + " must extend Quest to be edited by edit_quest_script");
         }
 
         // Constraint: imports are added first as snapshots, since ScriptIndex refuses to mix snapshot and filesystem roots.
@@ -342,7 +422,7 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
         if (!stageQuestFragmentMutationLocked(*loaded, std::move(mutated), std::move(staged))) {
             return failure("QuestScriptFailed", "script output is already staged by another plugin");
         }
-        return nlohmann::json{{"script", name}, {"origin", origin}, {"source", sourcePath.string()},
+        return nlohmann::json{{"script", *name}, {"origin", origin}, {"source", sourcePath.string()},
                               {"pex", pexPath.string()}};
     } catch (const std::exception& error) {
         return failure("QuestScriptFailed", error.what());
