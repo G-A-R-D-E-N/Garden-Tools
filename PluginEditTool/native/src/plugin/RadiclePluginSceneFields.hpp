@@ -8,7 +8,7 @@ struct PayloadField {
     bool link;
 };
 
-// Constraint: every path must exist in Radicle's scene writer payload table with the same link flag.
+// Constraint: the rows must match Radicle's scene writer payload table one for one, link flags included.
 inline constexpr PayloadField k_payloadFields[] = {
     {"topic", "SCEN\\Action\\Topic", true},
     {"dialogueSubtype", "SCEN\\Action\\DialogueSubtype", true},
@@ -20,10 +20,18 @@ inline constexpr PayloadField k_payloadFields[] = {
     {"playerNegativeResponse", "SCEN\\Action\\PlayerNegativeResponse", true},
     {"playerNeutralResponse", "SCEN\\Action\\PlayerNeutralResponse", true},
     {"playerQuestionResponse", "SCEN\\Action\\PlayerQuestionResponse", true},
+    {"playerPositiveDialogueSubtype", "SCEN\\Action\\PlayerPositiveDialogueSubtype", true},
+    {"playerNegativeDialogueSubtype", "SCEN\\Action\\PlayerNegativeDialogueSubtype", true},
+    {"playerNeutralDialogueSubtype", "SCEN\\Action\\PlayerNeutralDialogueSubtype", true},
+    {"playerQuestionDialogueSubtype", "SCEN\\Action\\PlayerQuestionDialogueSubtype", true},
     {"npcPositiveResponse", "SCEN\\Action\\NpcPositiveResponse", true},
     {"npcNegativeResponse", "SCEN\\Action\\NpcNegativeResponse", true},
     {"npcNeutralResponse", "SCEN\\Action\\NpcNeutralResponse", true},
     {"npcQuestionResponse", "SCEN\\Action\\NpcQuestionResponse", true},
+    {"npcPositiveDialogueSubtype", "SCEN\\Action\\NpcPositiveDialogueSubtype", true},
+    {"npcNegativeDialogueSubtype", "SCEN\\Action\\NpcNegativeDialogueSubtype", true},
+    {"npcNeutralDialogueSubtype", "SCEN\\Action\\NpcNeutralDialogueSubtype", true},
+    {"npcQuestionDialogueSubtype", "SCEN\\Action\\NpcQuestionDialogueSubtype", true},
     {"loopingMax", "SCEN\\Action\\LoopingMax", false},
     {"loopingMin", "SCEN\\Action\\LoopingMin", false},
     {"cameraFovOnPlayerCamera", "SCEN\\Action\\CameraFovOnPlayerCamera", false},

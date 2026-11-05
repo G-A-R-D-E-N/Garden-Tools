@@ -257,20 +257,39 @@ nlohmann::json actionJson(const fo4::Plugin& plugin, const fo4::Record& record, 
             payload[key] = linkJson(plugin, rawLink(subs[at]));
         }
     };
-    putPayloadLink("topic", "DATA");
-    putPayloadLink("dialogueSubtype", "VENC");
-    putPayloadLink("animArchType", "PNAM");
-    putPayloadLink("audioOutputOverride", "ONAM");
-    putPayloadLink("startSceneTopic", "STSC");
-    if (type == 6) putPayloadLink("playSound", "HTID");
-    putPayloadLink("playerPositiveResponse", "PTOP");
-    putPayloadLink("playerNegativeResponse", "NTOP");
-    putPayloadLink("playerNeutralResponse", "NETO");
-    putPayloadLink("playerQuestionResponse", "QTOP");
-    putPayloadLink("npcPositiveResponse", "NPOT");
-    putPayloadLink("npcNegativeResponse", "NNGT");
-    putPayloadLink("npcNeutralResponse", "NNUT");
-    putPayloadLink("npcQuestionResponse", "NQUT");
+    // Constraint: a key is read only for the action types the scene writer accepts it on, so a shared tag never carries two labels.
+    const bool dialogue = type == 0;
+    const bool playerDialogue = type == 3;
+    const bool npcResponse = type == 5;
+    const bool radio = type == 6;
+    if (dialogue || radio) {
+        putPayloadLink("topic", "DATA");
+        putPayloadLink("dialogueSubtype", "VENC");
+    }
+    if (dialogue) putPayloadLink("animArchType", "PNAM");
+    if (dialogue || playerDialogue || npcResponse) putPayloadLink("audioOutputOverride", "ONAM");
+    if (type == 4) putPayloadLink("startSceneTopic", "STSC");
+    if (radio) putPayloadLink("playSound", "HTID");
+    if (playerDialogue || npcResponse) {
+        putPayloadLink("playerPositiveResponse", "PTOP");
+        putPayloadLink("playerNegativeResponse", "NTOP");
+        putPayloadLink("playerNeutralResponse", "NETO");
+        putPayloadLink("playerQuestionResponse", "QTOP");
+        putPayloadLink("playerPositiveDialogueSubtype", "VENC");
+        putPayloadLink("playerNegativeDialogueSubtype", "PLVD");
+        putPayloadLink("playerNeutralDialogueSubtype", "JOUT");
+        putPayloadLink("playerQuestionDialogueSubtype", "DALC");
+    }
+    if (playerDialogue) {
+        putPayloadLink("npcPositiveResponse", "NPOT");
+        putPayloadLink("npcNegativeResponse", "NNGT");
+        putPayloadLink("npcNeutralResponse", "NNUT");
+        putPayloadLink("npcQuestionResponse", "NQUT");
+        putPayloadLink("npcPositiveDialogueSubtype", "NPOS");
+        putPayloadLink("npcNegativeDialogueSubtype", "NNGS");
+        putPayloadLink("npcNeutralDialogueSubtype", "NNUS");
+        putPayloadLink("npcQuestionDialogueSubtype", "NQUS");
+    }
     for (std::size_t at = span.header_end; at < span.close; ++at) {
         const auto tag = subs[at].signature;
         if (tag == fo4::Signature::from_string("CRIS")) {

@@ -96,6 +96,24 @@ nlohmann::json sceneOf(fo4ide::plugin::RadiclePluginBackend& backend, const std:
     return parseResult(backend.invokeBackend("GetScene", nlohmann::json::array({"Patch.esp", scene})));
 }
 
+std::vector<std::byte> patchWithKeyword() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(0);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "KYWD", 0);
+    const auto keyword = fo4::test::begin_record(out, "KYWD", 0, 0x00000800, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view("SceneSubtype"));
+    fo4::test::end_record(out, keyword);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 std::string freshTopic(fo4ide::plugin::RadiclePluginBackend& backend, const std::string& quest) {
     return createdKey(backend.invokeBackend("CreateDialogueTopic", nlohmann::json::array({
         "Patch.esp", quest, nlohmann::json{{"editorId", "SceneTopic"}}})));
@@ -345,7 +363,7 @@ TEST_CASE("Scene phases carry start and completion conditions through the scoped
     CHECK(sceneOf(restarted, scene) == readback);
 }
 
-// Detects: a Radicle writer payload row renamed or reclassified, which must keep the PET key table in step.
+// Detects: a Radicle writer payload row renamed or reclassified, which must keep the PET key table covering every row.
 TEST_CASE("Scene action payload keys still name rows of the Radicle scene writer table") {
     const auto writerRows = fo4::scene_action_payload_paths();
     REQUIRE(!writerRows.empty());
@@ -359,11 +377,36 @@ TEST_CASE("Scene action payload keys still name rows of the Radicle scene writer
     }
 
     for (const auto& row : writerRows) {
-        if (row.link) continue;
         bool named = false;
         for (const auto& field : fo4ide::plugin::scenefields::k_payloadFields) {
             if (std::string(field.path) == row.path) named = true;
         }
         CHECK(named);
     }
+}
+
+// Detects: a response subtype member the writer accepts, which the reader must report back.
+TEST_CASE("Scene response subtype members round-trip on a player dialogue action") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Patch.esp", patchWithKeyword());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, root / "Patch.esp");
+    const auto quest = freshQuest(backend);
+    const auto scene = freshScene(backend, quest);
+    REQUIRE(backend.invokeBackend("AddSceneAction", nlohmann::json::array({"Patch.esp", scene, 0, 3})).has_value());
+    REQUIRE(backend.invokeBackend("SetSceneAction", nlohmann::json::array({
+        "Patch.esp", scene, 0, nlohmann::json{{"playerPositiveDialogueSubtype", "000800:Patch.esp"},
+                                              {"npcNegativeDialogueSubtype", "000800:Patch.esp"}}})).has_value());
+
+    const auto readback = sceneOf(backend, scene);
+    REQUIRE(readback.at("actions").size() == 1);
+    const auto& payload = readback.at("actions").at(0).at("payload");
+    CHECK(payload.at("playerPositiveDialogueSubtype") == "000800:Patch.esp");
+    CHECK(payload.at("npcNegativeDialogueSubtype") == "000800:Patch.esp");
+    CHECK(!payload.contains("dialogueSubtype"));
+
+    REQUIRE(backend.invokeBackend("AddSceneAction", nlohmann::json::array({"Patch.esp", scene, 1, 5})).has_value());
+    CHECK(!backend.invokeBackend("SetSceneAction", nlohmann::json::array({
+        "Patch.esp", scene, 1, nlohmann::json{{"npcPositiveDialogueSubtype", "000800:Patch.esp"}}})).has_value());
 }
