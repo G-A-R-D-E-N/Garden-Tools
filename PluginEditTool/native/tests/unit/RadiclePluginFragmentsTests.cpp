@@ -187,3 +187,80 @@ TEST_CASE("Scene phase fragments bind start and completion and read back per pha
     CHECK(errorType(backend.invokeBackend("RemoveScenePhaseFragment", nlohmann::json::array({
         "Patch.esp", scene, 0, 0}))) == "InvalidFragmentArgument");
 }
+
+TEST_CASE("INFO add refuses an absent section and a bound slot, then fills the free slot and round-trips") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root);
+    const auto quest = createdKey(backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Patch.esp", "QUST", nlohmann::json{{"editorId", "FragQuest"}}})));
+    const auto topic = createdKey(backend.invokeBackend("CreateDialogueTopic", nlohmann::json::array({
+        "Patch.esp", quest, nlohmann::json{{"editorId", "FragTopic"}}})));
+    const auto info = createdKey(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json::object()})));
+
+    const auto fresh = dialogueOf(backend, quest);
+    CHECK(errorType(backend.invokeBackend("AddInfoFragment", nlohmann::json::array({
+        "Patch.esp", info, 0, "TIF_FragQuest", "Fragment_Begin"}))) == "FragmentSectionMissing");
+    CHECK(dialogueOf(backend, quest) == fresh);
+
+    REQUIRE(backend.invokeBackend("SetInfoFragment", nlohmann::json::array({
+        "Patch.esp", info, 0, "TIF_FragQuest", "Fragment_Begin"})).has_value());
+    const auto bound = dialogueOf(backend, quest);
+    CHECK(errorType(backend.invokeBackend("AddInfoFragment", nlohmann::json::array({
+        "Patch.esp", info, 0, "TIF_FragQuest", "Fragment_Other"}))) == "FragmentAlreadyBound");
+    CHECK(dialogueOf(backend, quest) == bound);
+
+    REQUIRE(backend.invokeBackend("AddInfoFragment", nlohmann::json::array({
+        "Patch.esp", info, 1, "TIF_FragQuest", "Fragment_End"})).has_value());
+    const auto readback = dialogueOf(backend, quest).at("topics").at(0).at("infos").at(0).at("fragments");
+    REQUIRE(readback.size() == 2);
+    CHECK(readback.at(0).at("index") == 0);
+    CHECK(readback.at(0).at("function") == "Fragment_Begin");
+    CHECK(readback.at(1).at("index") == 1);
+    CHECK(readback.at(1).at("function") == "Fragment_End");
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    fo4ide::plugin::RadiclePluginBackend restarted;
+    const auto entry = nlohmann::json{{"name", "Patch.esp"}, {"path", (root / "Patch.esp").string()},
+                                      {"source", "FragmentTests"}, {"resolved", true}};
+    REQUIRE(restarted.invoke("environment.LoadMo2",
+                             nlohmann::json{{"plugins", nlohmann::json::array({entry})}})
+                .has_value());
+    CHECK(dialogueOf(restarted, quest).at("topics").at(0).at("infos").at(0).at("fragments") == readback);
+}
+
+TEST_CASE("Scene phase add refuses an absent section and a bound pair, then binds the other flag") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root);
+    const auto quest = createdKey(backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Patch.esp", "QUST", nlohmann::json{{"editorId", "FragQuest"}}})));
+    const auto scene = createdKey(backend.invokeBackend("CreateScene", nlohmann::json::array({
+        "Patch.esp", quest, nlohmann::json{{"editorId", "FragScene"}}})));
+    REQUIRE(backend.invokeBackend("AddScenePhase", nlohmann::json::array({
+        "Patch.esp", scene, 0, nlohmann::json{{"name", "P1"}}})).has_value());
+
+    const auto fresh = sceneOf(backend, scene);
+    CHECK(errorType(backend.invokeBackend("AddScenePhaseFragment", nlohmann::json::array({
+        "Patch.esp", scene, 0, 1, "QF_FragScene", "Fragment_Start"}))) == "FragmentSectionMissing");
+    CHECK(sceneOf(backend, scene) == fresh);
+    CHECK(errorType(backend.invokeBackend("AddScenePhaseFragment", nlohmann::json::array({
+        "Patch.esp", scene, 0, 3, "QF_FragScene", "Fragment_Start"}))) == "InvalidFragmentArgument");
+
+    REQUIRE(backend.invokeBackend("SetScenePhaseFragment", nlohmann::json::array({
+        "Patch.esp", scene, 0, 1, "QF_FragScene", "Fragment_Start"})).has_value());
+    const auto bound = sceneOf(backend, scene);
+    CHECK(errorType(backend.invokeBackend("AddScenePhaseFragment", nlohmann::json::array({
+        "Patch.esp", scene, 0, 1, "QF_FragScene", "Fragment_Other"}))) == "FragmentAlreadyBound");
+    CHECK(sceneOf(backend, scene) == bound);
+
+    REQUIRE(backend.invokeBackend("AddScenePhaseFragment", nlohmann::json::array({
+        "Patch.esp", scene, 0, 2, "QF_FragScene", "Fragment_Done"})).has_value());
+    const auto readback = sceneOf(backend, scene);
+    REQUIRE(readback.at("phases").size() == 1);
+    CHECK(readback.at("phases").at(0).at("startFragment").at("function") == "Fragment_Start");
+    CHECK(readback.at("phases").at(0).at("completionFragment").at("function") == "Fragment_Done");
+}
