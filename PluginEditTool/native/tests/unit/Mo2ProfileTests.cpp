@@ -1,7 +1,7 @@
-#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -10,6 +10,7 @@
 #include <fo4ide/mo2/Mo2Profile.hpp>
 
 #include "../helpers/PluginFixtures.hpp"
+#include "../helpers/TempRoot.hpp"
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -22,8 +23,7 @@ using namespace plugin_fixtures_test;
 namespace {
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_mo2_test_" + std::to_string(id));
+    return std::filesystem::temp_directory_path() / ("fo4ide_mo2_test_" + fo4ide_test::uniqueTempName());
 }
 
 struct Cleanup {
@@ -379,6 +379,15 @@ TEST_CASE("MO2 profile surfaces a plugins.txt control-character line as a warnin
     CHECK(reported);
     const std::vector<std::string> expected{"Fallout4.esm"};
     CHECK(snapshot->loadOrder == expected);
+}
+
+TEST_CASE("MO2 test roots are distinct and start absent so cases never share files") {
+    std::set<std::filesystem::path> seen;
+    for (int i = 0; i < 1000; ++i) {
+        const auto root = tempRoot();
+        CHECK_FALSE(std::filesystem::exists(root));
+        CHECK(seen.insert(root).second);
+    }
 }
 
 TEST_CASE("MO2 profile refuses a profile without plugins.txt") {

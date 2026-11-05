@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -21,6 +22,7 @@
 #include <fo4/schema/vmad.hpp>
 #include <fo4ide/papyrus/Pex.hpp>
 #include "../helpers/GraphTestSupport.hpp"
+#include "../helpers/TempRoot.hpp"
 #include "../../src/plugin/RadiclePluginJournalSession.hpp"
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include <fo4ide/app/PluginBackendTarget.hpp>
@@ -28,9 +30,8 @@
 
 namespace {
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_quest_authoring_" + std::to_string(id));
+           ("fo4ide_quest_authoring_" + fo4ide_test::uniqueTempName());
 }
 
 struct Cleanup {
@@ -415,6 +416,65 @@ TEST_CASE("Windows localized string staging preserves a Unicode plugin filename"
 #endif
 }
 
+// Invariant: a localized quest save whose plugin sits outside the configured Data directory must publish through the held read sources, so the new string rows reach the plugin's own STRINGS table.
+TEST_CASE("Windows localized quest save publishes held sources with a Data directory set") {
+#ifdef _WIN32
+    // Requires: a root whose ancestors grant no untrusted write access, which the Windows journal checks.
+    const char* profile = std::getenv("USERPROFILE");
+    const auto base = (profile && *profile) ? std::filesystem::path(profile)
+                                            : std::filesystem::temp_directory_path();
+    const auto root = base / ("fo4ide_held_save_" + fo4ide_test::uniqueTempName());
+    Cleanup cleanup{root};
+    const auto mod = root / "mod";
+    const auto plugin = mod / "Patch.esp";
+    writeBytes(plugin, questPlugin(fo4::RecordFlags::localized));
+    writeLocalizationSet(mod, {{17, rawBytes("Original")}}, {}, {});
+    const auto data = root / "Data";
+    std::filesystem::create_directories(data);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    backend.testSetJournalRoot(root / "journal");
+    load(backend, plugin);
+    const auto created = backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Patch.esp", "QUST", nlohmann::json{{"editorId", "HeldSave"}, {"name", "Title"}}}));
+    REQUIRE(created.has_value());
+    const auto quest = nlohmann::json::parse(created->get<std::string>()).at("formKey").get<std::string>();
+    REQUIRE(backend.invokeBackend("SetQuestStages", nlohmann::json::array({
+        "Patch.esp", quest, nlohmann::json::array({{{"index", 10}, {"logEntry", "Begin"}}}),
+        localizedQuestContext(mod)})).has_value());
+    const auto saved = backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"}));
+    if (!saved.has_value()) FAIL("SavePlugin failed: " << saved.error().type << ": " << saved.error().message);
+    const auto savedPlugin = fo4::read_plugin_file(plugin);
+    const auto stages = fo4::forms::decode_quest_stages(savedPlugin, fo4::FormKey::parse(quest));
+    REQUIRE(stages.stages.size() == 1u);
+    REQUIRE(stages.stages[0].log_entries.size() == 1u);
+    REQUIRE(stages.stages[0].log_entries[0].log_text.has_value());
+    const auto textId = stages.stages[0].log_entries[0].log_text->id;
+    REQUIRE(textId.has_value());
+    const auto table = fo4::localization::read_string_table_file(
+        mod / "Strings" / "Patch_en.DLSTRINGS", fo4::localization::StringTableKind::dlstrings);
+    REQUIRE(fo4::localization::find_string(table, *textId) != nullptr);
+#else
+    SUCCEED("held Windows journal destinations are not implemented on this platform");
+#endif
+}
+
+// Invariant: a localized plugin that has no Strings directory yet must still read its quest stages.
+TEST_CASE("Reading quest stages of a localized plugin with no Strings directory succeeds") {
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    const auto plugin = root / "Patch.esp";
+    writeBytes(plugin, questPlugin(fo4::RecordFlags::localized));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, plugin);
+    const auto stages = backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE(stages.has_value());
+    CHECK(stages->at("stages").empty());
+    const auto withContext = backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", localizedQuestContext(root)}));
+    if (!withContext.has_value()) FAIL("context read failed: " << withContext.error().type);
+    CHECK(withContext->at("stages").empty());
+}
 // Detects: mixed-case locale tokens must select the same pending quest stage and objective string tables.
 TEST_CASE("Localized quest stage and objective accept mixed-case language tokens") {
     const auto root = tempRoot(); Cleanup cleanup{root};

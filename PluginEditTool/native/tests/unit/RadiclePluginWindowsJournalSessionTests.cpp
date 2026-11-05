@@ -163,7 +163,7 @@ TEST_CASE("Windows multi-file recovery worker", "[.windows-session-worker]") {
 #endif
 }
 
-TEST_CASE("Windows JournalSession recovers staged receipts exposure and plugin-last publication in fresh processes") {
+TEST_CASE("Windows JournalSession recovers staged receipts exposure and plugin-last publication in fresh processes", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     for (const int phase : {10, 11, 12, 13, 14, 15, 16, 17, 18, 1, 2, 3}) { DYNAMIC_SECTION("crash phase " << phase) {
         CAPTURE(phase);
@@ -318,7 +318,7 @@ TEST_CASE("Windows JournalSession rechecks all targets after publish preflight b
 #endif
 }
 
-TEST_CASE("Windows Session refuses altered private staging ACLs without changing participants") {
+TEST_CASE("Windows Session refuses altered private staging ACLs without changing participants", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     const auto root = makeSplitRoot(); Cleanup cleanup{root}; prepareSessionFiles(root);
     REQUIRE(runSplitWorker(root, true, 11, L"Windows multi-file recovery worker") == 77);
@@ -351,7 +351,7 @@ TEST_CASE("Windows Session refuses altered private staging ACLs without changing
 #endif
 }
 
-TEST_CASE("Windows completion cleanup refuses a same-content later backup newcomer before deleting earlier evidence") {
+TEST_CASE("Windows completion cleanup refuses a same-content later backup newcomer before deleting earlier evidence", "[multi-process]") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     const auto root = makeSplitRoot(); Cleanup cleanup{root}; prepareSessionFiles(root);
     REQUIRE(runSplitWorker(root, true, 14, L"Windows multi-file recovery worker") == 77);
