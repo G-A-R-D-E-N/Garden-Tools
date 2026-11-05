@@ -460,6 +460,22 @@ TEST_CASE("Windows localized quest save publishes held sources with a Data direc
 #endif
 }
 
+// Invariant: a localized plugin that has no Strings directory yet must still read its quest stages.
+TEST_CASE("Reading quest stages of a localized plugin with no Strings directory succeeds") {
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    const auto plugin = root / "Patch.esp";
+    writeBytes(plugin, questPlugin(fo4::RecordFlags::localized));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, plugin);
+    const auto stages = backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE(stages.has_value());
+    CHECK(stages->at("stages").empty());
+    const auto withContext = backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", localizedQuestContext(root)}));
+    if (!withContext.has_value()) FAIL("context read failed: " << withContext.error().type);
+    CHECK(withContext->at("stages").empty());
+}
 // Detects: mixed-case locale tokens must select the same pending quest stage and objective string tables.
 TEST_CASE("Localized quest stage and objective accept mixed-case language tokens") {
     const auto root = tempRoot(); Cleanup cleanup{root};

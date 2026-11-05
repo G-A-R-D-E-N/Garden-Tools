@@ -117,9 +117,9 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
                 return std::unexpected(Error{"ScalarFieldWriteFailed",
                     "Text must be valid UTF-8 representable in Windows-1252"});
             }
-            status = fo4::set_record_string(mutated, key, *field, address->index, *stored);
+            status = fo4::set_record_string(mutated, key, *field, address->index, *stored, true);
         } else {
-            status = fo4::set_record_scalar(mutated, key, *field, address->index, value);
+            status = fo4::set_record_scalar(mutated, key, *field, address->index, value, true);
         }
         switch (status) {
             case fo4::ScalarMutationStatus::record_missing:

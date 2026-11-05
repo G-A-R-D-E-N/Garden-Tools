@@ -211,7 +211,8 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
                                   const schema::ScalarFieldDescriptor& field,
                                   std::size_t index,
                                   std::string_view value,
-                                  bool string_setter) {
+                                  bool string_setter,
+                                  bool create_missing) {
   assign_record_form_keys(plugin);
   auto* target = find_mutable_record(plugin, record_key);
   if (target == nullptr) return ScalarMutationStatus::record_missing;
@@ -247,7 +248,7 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
 
   auto resolved = scalar_slots(*target, field);
   if (index >= resolved.slots.size() || !resolved.slots[index].valid) {
-    if (!insert_authoring_subrecord(*target, field.scalar.subrecord, field.scalar)) {
+    if (!create_missing || !insert_authoring_subrecord(*target, field.scalar.subrecord, field.scalar)) {
       return ScalarMutationStatus::subrecord_missing;
     }
     resolved = scalar_slots(*target, field);
@@ -319,16 +320,18 @@ ScalarMutationStatus set_record_scalar(Plugin& plugin,
                                        const FormKey& record_key,
                                        const schema::ScalarFieldDescriptor& field,
                                        std::size_t index,
-                                       std::string_view value) {
-  return write_scalar(plugin, record_key, field, index, value, false);
+                                       std::string_view value,
+                                       bool create_missing) {
+  return write_scalar(plugin, record_key, field, index, value, false, create_missing);
 }
 
 ScalarMutationStatus set_record_string(Plugin& plugin,
                                        const FormKey& record_key,
                                        const schema::ScalarFieldDescriptor& field,
                                        std::size_t index,
-                                       std::string_view value) {
-  return write_scalar(plugin, record_key, field, index, value, true);
+                                       std::string_view value,
+                                       bool create_missing) {
+  return write_scalar(plugin, record_key, field, index, value, true, create_missing);
 }
 
 ScalarMutationStatus set_record_string(Plugin& plugin,
@@ -338,7 +341,7 @@ ScalarMutationStatus set_record_string(Plugin& plugin,
                                        std::string_view value) {
   const auto field = schema::scalar_field_descriptor(path);
   if (!field) throw schema::ScalarError("unknown string field path: " + std::string(path));
-  return write_scalar(plugin, record_key, *field, index, value, true);
+  return write_scalar(plugin, record_key, *field, index, value, true, false);
 }
 
 FormLinkFieldMutationStatus set_record_formlink_field(
