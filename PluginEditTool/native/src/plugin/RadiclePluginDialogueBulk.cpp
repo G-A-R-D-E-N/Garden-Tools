@@ -211,7 +211,12 @@ Result<nlohmann::json> RadiclePluginBackend::createDialogueTopicBulk(const nlohm
         if (!entry.is_string()) {
             return std::unexpected(Error{"InvalidDialogueArgument", "every line must be a string"});
         }
-        lines.push_back(cp1252(entry.get<std::string>()));
+        auto stored = fo4::text::utf8_to_windows1252(entry.get<std::string>());
+        if (!stored) {
+            return std::unexpected(Error{"InvalidDialogueArgument",
+                                         "a line has characters that Windows-1252 cannot hold"});
+        }
+        lines.push_back(std::move(*stored));
     }
 
     OpLock lock(*this, OpLock::Mode::Write, {pluginName});
@@ -257,6 +262,8 @@ Result<nlohmann::json> RadiclePluginBackend::createDialogueTopicBulk(const nlohm
         nlohmann::json infos = nlohmann::json::array();
         for (const auto& line : lines) {
             auto segments = splitResponseLine(line, limit);
+            // Constraint: Radicle takes UTF-8 and converts on write, so segments go back to UTF-8 after the byte-count split.
+            for (auto& segment : segments) segment = fo4::text::windows1252_to_utf8(segment);
             if (segments.empty()) {
                 return std::unexpected(Error{"InvalidDialogueArgument", "a line is empty once trimmed"});
             }

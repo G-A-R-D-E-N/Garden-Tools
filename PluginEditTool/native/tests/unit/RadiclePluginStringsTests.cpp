@@ -14,15 +14,16 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
+#include "../helpers/TempRoot.hpp"
 
 namespace {
 
 using fo4::localization::StringTableKind;
 
+// Requires: a per-process unique folder so parallel ctest cases never share one temp root.
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_plugin_strings_" + std::to_string(id));
+           ("fo4ide_plugin_strings_" + fo4ide_test::uniqueTempName());
 }
 
 struct Cleanup {

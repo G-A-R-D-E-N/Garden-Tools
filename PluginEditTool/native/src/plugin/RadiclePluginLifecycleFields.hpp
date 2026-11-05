@@ -3,6 +3,8 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <array>
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <exception>
@@ -346,6 +348,47 @@ inline bool unsignedPayloadField(const nlohmann::json& payload,
     return true;
 }
 
+// Constraint: flag names and bits come from the schema row, so no bit meaning is restated here.
+inline std::optional<std::uint32_t> schemaFlagBits(const fo4::schema::ScalarFieldDescriptor& field,
+                                                  const nlohmann::json& payload,
+                                                  const char* key) {
+    const auto found = payload.find(key);
+    if (found == payload.end() || found->is_null()) return std::optional<std::uint32_t>{0u};
+    std::uint32_t bits = 0;
+    const auto apply = [&](std::string_view name, bool on) {
+        for (const auto& entry : field.scalar.names) {
+            if (entry.name.size() != name.size()) continue;
+            const auto same = std::equal(entry.name.begin(), entry.name.end(), name.begin(),
+                                         [](char left, char right) {
+                                             return std::tolower(static_cast<unsigned char>(left)) ==
+                                                    std::tolower(static_cast<unsigned char>(right));
+                                         });
+            if (!same) continue;
+            if (on) bits |= static_cast<std::uint32_t>(entry.value);
+            return true;
+        }
+        return false;
+    };
+    if (found->is_number_integer() || found->is_number_unsigned()) {
+        const auto raw = found->get<std::int64_t>();
+        if (raw < 0 || raw > 0xFFFF) return std::nullopt;
+        return static_cast<std::uint32_t>(raw);
+    }
+    if (found->is_array()) {
+        for (const auto& item : *found) {
+            if (!item.is_string() || !apply(item.get_ref<const std::string&>(), true)) return std::nullopt;
+        }
+        return bits;
+    }
+    if (found->is_object()) {
+        for (auto item = found->begin(); item != found->end(); ++item) {
+            if (!item.value().is_boolean() || !apply(item.key(), item.value().get<bool>())) return std::nullopt;
+        }
+        return bits;
+    }
+    return std::nullopt;
+}
+
 // Constraint: rule defaults point into storage, which the caller keeps alive across create_record.
 inline Result<std::optional<std::vector<fo4::schema::SubrecordAuthoringConstraint>>> explicitCreationRules(
     std::string_view signature, const nlohmann::json& payload, bool localized, std::vector<std::uint8_t>& storage) {
@@ -406,13 +449,21 @@ inline Result<std::optional<std::vector<fo4::schema::SubrecordAuthoringConstrain
         std::uint32_t flags = 0;
         std::uint32_t priority = 0;
         std::uint32_t type = 0;
-        if (!unsignedPayloadField(payload, "flags", 0xFFFFu, flags) ||
-            !unsignedPayloadField(payload, "priority", 0xFFu, priority) ||
+        const auto flagField = fo4::schema::scalar_field_descriptor(record, "QUST\\Flags");
+        if (!flagField) {
+            return std::unexpected(Error{
+                "RecordCreationRequiresSchema",
+                "QUST's DNAM flags field is not in the scalar schema"});
+        }
+        const auto parsedFlags = schemaFlagBits(*flagField, payload, "flags");
+        if (!parsedFlags || !unsignedPayloadField(payload, "priority", 0xFFu, priority) ||
             !unsignedPayloadField(payload, "type", 0xFFu, type)) {
             return std::unexpected(Error{
                 "InvalidRecordCreationPayload",
-                "QUST flags must be 0..65535 and priority and type must be 0..255"});
+                "QUST flags must be 0..65535, or an array of schema flag names, or an object of "
+                "schema flag names to booleans; priority and type must be 0..255"});
         }
+        flags = *parsedFlags;
         storage.clear();
         const auto name = payload.find("name");
         bool hasTextName = false;

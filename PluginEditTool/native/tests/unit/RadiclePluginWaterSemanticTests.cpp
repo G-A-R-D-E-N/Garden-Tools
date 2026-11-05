@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <filesystem>
 #include <string>
@@ -15,7 +16,7 @@ namespace water = fo4::test::water;
 
 struct Fixture {
     std::filesystem::path root = std::filesystem::temp_directory_path() /
-        ("fo4ide_water_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("fo4ide_water_" + fo4ide_test::uniqueTempName());
     std::filesystem::path path = root / water::k_plugin;
     fo4ide::plugin::RadiclePluginBackend backend;
 

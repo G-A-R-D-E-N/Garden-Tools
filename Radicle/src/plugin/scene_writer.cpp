@@ -613,6 +613,17 @@ SubrecordGroupMutationStatus insert_scene_actor(Plugin& plugin,
   return insert_at(plugin, *record, actor_anchor(layout, *record, index), new_actor_subrecords());
 }
 
+namespace {
+
+std::optional<std::int32_t> alias_of(const Subrecord& subrecord) {
+  if (subrecord.data.size() != sizeof(std::int32_t)) return std::nullopt;
+  std::int32_t value = 0;
+  std::memcpy(&value, subrecord.data.data(), sizeof(value));
+  return value;
+}
+
+}  // namespace
+
 SubrecordGroupMutationStatus remove_scene_actor(Plugin& plugin,
                                                 const FormKey& scene,
                                                 std::size_t index) {
@@ -620,6 +631,21 @@ SubrecordGroupMutationStatus remove_scene_actor(Plugin& plugin,
   if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
   const auto layout = checked_layout(*record);
   if (index >= layout.actors.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  const auto alias = alias_of(record->subrecords[layout.actors[index]]);
+  const bool shared = std::any_of(layout.actors.begin(), layout.actors.end(), [&](std::size_t other) {
+    return other != layout.actors[index] && alias_of(record->subrecords[other]) == alias;
+  });
+  if (alias && *alias >= 0 && !shared) {
+    for (std::size_t action = 0; action < layout.actions.size(); ++action) {
+      const auto& span = layout.actions[action];
+      for (std::size_t at = span.open + 1; at < span.header_end; ++at) {
+        if (record->subrecords[at].signature == s("ALID") && alias_of(record->subrecords[at]) == alias) {
+          throw schema::ScalarError("scene action " + std::to_string(action) +
+                                    " references the actor alias this edit removes");
+        }
+      }
+    }
+  }
   const auto begin = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.actors[index]);
   record->subrecords.erase(begin, begin + 3);
   mark_record_modified(plugin, *record);

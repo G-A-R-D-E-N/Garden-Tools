@@ -153,6 +153,33 @@ TEST_CASE("Bulk topic creation refuses bad input and localized plugins without s
     CHECK(fileBytes(localizedRoot / "Patch.esp") == beforeRefusal);
 }
 
+TEST_CASE("Bulk topic creation keeps accented response text as UTF-8 and refuses text Windows-1252 cannot hold") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root);
+    const auto quest = freshQuest(backend);
+    CHECK(errorType(backend.invokeBackend("CreateDialogueTopicBulk", nlohmann::json::array({
+        "Patch.esp", quest, nlohmann::json{{"editorId", "BadBulk"},
+                                           {"lines", nlohmann::json::array({"\xe4\xb8\xad"})}}}))) ==
+          "InvalidDialogueArgument");
+    CHECK(dialogueOf(backend, quest).at("topics").empty());
+
+    const auto created = parseResult(backend.invokeBackend("CreateDialogueTopicBulk", nlohmann::json::array({
+        "Patch.esp", quest, nlohmann::json{
+            {"editorId", "AccentBulk"}, {"lines", nlohmann::json::array({
+                "Caf\xc3\xa9 au lait. Cr\xc3\xa8me br\xc3\xbbl\xc3\xa9" "e"})},
+            {"maxChars", 20}}})));
+    const auto& responses = created.at("infos").at(0).at("responses");
+    REQUIRE(responses.size() == 2);
+    CHECK(responses.at(0) == "Caf\xc3\xa9 au lait.");
+    CHECK(responses.at(1) == "Cr\xc3\xa8me br\xc3\xbbl\xc3\xa9" "e");
+    const auto stored = dialogueOf(backend, quest).at("topics").at(0).at("infos").at(0).at("responses");
+    REQUIRE(stored.size() == 2);
+    CHECK(stored.at(0).at("text") == "Caf\xc3\xa9 au lait.");
+    CHECK(stored.at(1).at("text") == "Cr\xc3\xa8me br\xc3\xbbl\xc3\xa9" "e");
+}
+
 TEST_CASE("Voice path helper names every stored response of an INFO") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

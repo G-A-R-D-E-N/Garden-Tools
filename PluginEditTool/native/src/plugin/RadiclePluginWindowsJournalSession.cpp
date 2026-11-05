@@ -33,7 +33,7 @@ WindowsJournalFileIdentity nativeIdentity(HANDLE handle) {
     return result;
 }
 Handle relative(HANDLE parent, std::string_view name, bool directory, bool create = false,
-    ACCESS_MASK extra = 0, PSECURITY_DESCRIPTOR security = nullptr) {
+    ACCESS_MASK extra = 0, PSECURITY_DESCRIPTOR security = nullptr, bool absentIfDeletePending = false) {
     validateWindowsJournalFileName(name);
     const std::wstring wide(name.begin(), name.end());
     UNICODE_STRING component{static_cast<USHORT>(wide.size() * sizeof(wchar_t)), static_cast<USHORT>(wide.size() * sizeof(wchar_t)), const_cast<wchar_t*>(wide.data())};
@@ -49,6 +49,7 @@ Handle relative(HANDLE parent, std::string_view name, bool directory, bool creat
         const auto error = ::RtlNtStatusToDosError(result);
         if (!create && (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)) return {};
         if (create && (error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS)) return {};
+        if (absentIfDeletePending && result == kWindowsDeletePendingStatus) return {};
         nativeFailure(result, "open Windows staging object");
     }
     return Handle(raw);
@@ -635,7 +636,7 @@ bool WindowsJournalSessionState::cleanup(const WindowsJournalDirectory& journal,
     for (std::size_t index = 0; index < paths.size(); ++index) {
         const auto& entry = manifest.files[index]; if (entry.verifyOnly || !entry.originalExists) continue;
         revalidate(); const auto& row = authority.at("entries").at(index); const auto name = row.at("backup").get<std::string>();
-        auto file = relative(targets[index]->stagingParent(), name, false, false, DELETE);
+        auto file = relative(targets[index]->stagingParent(), name, false, false, DELETE, nullptr, true);
         if (!file) continue;
         const auto snapshot = JournalDestination::stagingSnapshot(file.get(), static_cast<std::size_t>(entry.originalSize));
         if (snapshot.identity != decodeIdentity(row.at("original")) || snapshot.metadata != decodeMetadata(row.at("metadata")) ||
@@ -648,7 +649,7 @@ bool WindowsJournalSessionState::cleanup(const WindowsJournalDirectory& journal,
     for (const auto& row : value.at("directories")) {
         if (!row.at("remove").get<bool>()) continue;
         revalidate(); const auto index = row.at("index").get<std::size_t>(); const auto name = row.at("name").get<std::string>();
-        auto directory = relative(targets[index]->stagingParent(), name, true, false, DELETE);
+        auto directory = relative(targets[index]->stagingParent(), name, true, false, DELETE, nullptr, true);
         if (!directory) continue;
         requirePrivateStageDirectory(directory.get());
         if (nativeIdentity(directory.get()) != decodeIdentity(row.at("identity"))) throw std::runtime_error("Windows staging directory changed before cleanup");

@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -23,7 +24,7 @@
 
 namespace {
 std::filesystem::path tempRoot() {
-    return std::filesystem::temp_directory_path() / ("papyrus_flag_snapshot_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    return std::filesystem::temp_directory_path() / ("papyrus_flag_snapshot_" + fo4ide_test::uniqueTempName());
 }
 struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(path, ec); } };
 #ifdef __linux__

@@ -381,7 +381,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             }
         }
         if (hasStartUp) {
-            flags = startUpField->get<bool>() ? (flags | 0x02u) : (flags & ~0x02u);
+            constexpr auto runOnStart = static_cast<std::uint32_t>(fo4::forms::QuestStageFlag::RunOnStart);
+            flags = startUpField->get<bool>() ? (flags | runOnStart) : (flags & ~runOnStart);
         }
         stage.flags = static_cast<std::uint8_t>(flags);
         if (!indexes.insert(stage.index).second) {

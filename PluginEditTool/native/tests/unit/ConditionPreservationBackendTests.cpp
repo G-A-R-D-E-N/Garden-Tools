@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include "../helpers/TempRoot.hpp"
 #include <catch2/generators/catch_generators.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include <fo4/plugin/reader.hpp>
@@ -11,7 +12,7 @@ namespace {
 
 struct Fixture {
     std::filesystem::path root = std::filesystem::temp_directory_path() /
-        ("condition_preservation_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("condition_preservation_" + fo4ide_test::uniqueTempName());
     std::filesystem::path path = root / "Patch.esp";
     std::vector<fo4::CtdaCondition> conditions;
     fo4ide::plugin::RadiclePluginBackend backend;
