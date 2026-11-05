@@ -54,6 +54,13 @@ std::size_t nth_index_of(const Order& names, const char* signature, std::size_t 
   return names.size();
 }
 
+void detach_actions(fo4::Plugin& plugin) {
+  for (std::size_t action = 0; action < 3; ++action) {
+    EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\ActorAlias", action, "-1"),
+              Scalar::updated);
+  }
+}
+
 std::size_t part_count(const fo4::Plugin& plugin, fo4::ScenePart part) {
   return fo4::scene_group_count(plugin, key(k_scene), part).value_or(9999);
 }
@@ -114,6 +121,7 @@ TEST(SceneActorEdit, AnActorAppendedLastLandsAfterTheActorsAndBeforeTheActions) 
 
 TEST(SceneActorEdit, AnActorLandsAfterThePhasesWhenNoActorExists) {
   auto plugin = read(build());
+  detach_actions(plugin);
   EXPECT_EQ(fo4::remove_scene_actor(plugin, key(k_scene), 1), Group::updated);
   EXPECT_EQ(fo4::remove_scene_actor(plugin, key(k_scene), 0), Group::updated);
   EXPECT_EQ(part_count(reload(plugin), fo4::ScenePart::actor), 0u);
@@ -133,8 +141,21 @@ TEST(SceneActorEdit, AnActorLandsAfterThePhasesWhenNoActorExists) {
   EXPECT_EQ(scene.actions.size(), 3u);
 }
 
+TEST(SceneActorEdit, RemovingAnActorThatActionsStillReferenceIsRefusedAndChangesNoByte) {
+  auto plugin = read(build());
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(static_cast<void>(fo4::remove_scene_actor(plugin, key(k_scene), 0)), fo4::schema::ScalarError);
+  EXPECT_THROW(static_cast<void>(fo4::remove_scene_actor(plugin, key(k_scene), 1)), fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\ActorAlias", 0, "-1"), Scalar::updated);
+  EXPECT_EQ(fo4::remove_scene_actor(plugin, key(k_scene), 0), Group::updated);
+  EXPECT_THROW(static_cast<void>(fo4::remove_scene_actor(plugin, key(k_scene), 0)), fo4::schema::ScalarError);
+}
+
 TEST(SceneActorEdit, RemovingAnActorErasesExactlyItsTriplet) {
   auto plugin = read(build());
+  detach_actions(plugin);
   const auto before = snapshot(plugin, k_scene);
   const auto open = first_index_of(order(plugin, k_scene), "ALID");
   ASSERT_LT(open + 2, before.size());
