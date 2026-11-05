@@ -518,6 +518,7 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
   }
 
   next.original_range.clear();
+  if (!target_exists) next.original_structure_fingerprint = 0;
   destination = std::move(next);
   return target_exists ? PlacedReferenceCopyStatus::replaced
                        : PlacedReferenceCopyStatus::inserted;
@@ -615,6 +616,7 @@ PlacedReferenceCopyNewResult copy_placed_reference_as_new(
   bucket->children.emplace_back(std::move(copied));
 
   next.original_range.clear();
+  next.original_structure_fingerprint = 0;
   destination = std::move(next);
   return {PlacedReferenceCopyNewStatus::created, new_key};
 }

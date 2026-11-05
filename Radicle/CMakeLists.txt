@@ -668,6 +668,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_undecodable_record.cpp
     tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
+    tests/test_hedr_count_real.cpp
     tests/test_row_roundtrip_real.cpp
     tests/test_actor_value_perk_real.cpp
     tests/test_perk_effects_real.cpp

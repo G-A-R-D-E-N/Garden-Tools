@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <fo4ide/papyrus/Ast.hpp>
+#include <fo4ide/papyrus/SecureSourceSnapshot.hpp>
 
 namespace fo4ide::papyrus {
 
@@ -21,8 +22,12 @@ namespace fo4ide::papyrus {
 // them (mirrors the C# lifetime contract).
 class ScriptIndex {
 public:
-    void addRoot(const std::filesystem::path& root);
+    void addSnapshot(const std::filesystem::path& root, const std::vector<SnapshotSource>& sources);
+    void addRoot(const std::filesystem::path& root, std::size_t maxEntries = 0);
+    void setReadLimits(std::size_t maxFileBytes, std::size_t maxTotalBytes);
 
+    bool snapshotOnly() const { return snapshotOnly_; }
+    const std::optional<std::string>& snapshotFlags() const { return snapshotFlags_; }
     std::size_t count() const { return byQualifiedName_.size(); }
     const std::vector<std::filesystem::path>& roots() const { return roots_; }
     std::vector<std::string> scriptNames() const;
@@ -51,6 +56,9 @@ public:
     static const Declaration* findMemberOn(const Script* script, std::string_view memberName);
 
 private:
+    bool snapshotOnly_{false};
+    std::optional<std::string> snapshotFlags_;
+    std::unordered_map<std::string, std::unique_ptr<Script>> snapshots_;
     std::vector<std::filesystem::path> roots_;
     // Keys are lowercased; values keep the canonical spelling.
     std::unordered_map<std::string, std::filesystem::path> byQualifiedName_;
@@ -63,6 +71,8 @@ private:
     };
     // Keyed on the absolute path string.
     std::unordered_map<std::string, CacheEntry> parsed_;
+    std::size_t maxFileBytes_{0};
+    std::size_t maxTotalBytes_{0};
 };
 
 }  // namespace fo4ide::papyrus

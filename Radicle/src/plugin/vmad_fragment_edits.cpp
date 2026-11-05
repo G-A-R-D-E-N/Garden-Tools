@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -618,6 +619,62 @@ VmadStructureMutationStatus remap_scene_phase_indices(Plugin& plugin, const Form
   if (!changed) return VmadStructureMutationStatus::unchanged;
   detail::mark_record_modified(plugin, *section.record);
   return VmadStructureMutationStatus::updated;
+}
+
+
+VmadStructureMutationStatus bootstrap_quest_vmad_fragment(Plugin& plugin, const FormKey& key,
+                                                          std::uint16_t stage, std::int32_t index,
+                                                          std::string_view script,
+                                                          std::string_view function) {
+  if (script.empty() || function.empty() || script.size() > std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("invalid quest fragment names");
+  }
+  auto mutated = plugin;
+  auto* record = detail::locate_mutable_record(mutated, key);
+  if (!record) return VmadStructureMutationStatus::record_missing;
+  if (record->header.signature != sig_qust) return VmadStructureMutationStatus::not_authorable;
+  auto status = add_vmad(mutated, key);
+  if (status != VmadStructureMutationStatus::updated &&
+      status != VmadStructureMutationStatus::already_present) return status;
+  record = detail::locate_mutable_record(mutated, key);
+  Subrecord* vmad = nullptr;
+  for (auto& sub : record->subrecords) {
+    if (sub.signature != Signature::from_string("VMAD")) continue;
+    if (vmad) throw schema::ScalarError("duplicate VMAD subrecords");
+    vmad = &sub;
+  }
+  if (!vmad_coverage(vmad->data, sig_qust).complete()) {
+    throw schema::ScalarError("VMAD layout is unsupported, malformed or has unknown trailing bytes");
+  }
+  const auto scripts = read_vmad_scripts(vmad->data);
+  if (scripts.unsupported || (scripts.version != 5 && scripts.version != 6) ||
+      (scripts.object_format != 1 && scripts.object_format != 2)) {
+    throw schema::ScalarError("unsupported VMAD version or object format");
+  }
+  auto& data = vmad->data;
+  const auto tail = data.size() - scripts.trailing_bytes;
+  if (scripts.trailing_bytes == 0) {
+    data.insert(data.end(), {std::byte{3}, std::byte{0}, std::byte{0}, std::byte{0},
+                             std::byte{0}, std::byte{0}, std::byte{0}});
+  } else {
+    const auto extras = read_quest_vmad_extras(std::span<const std::byte>(data).subspan(tail),
+                                                scripts.object_format);
+    if (extras.unsupported || !extras.fully_consumed) {
+      throw schema::ScalarError("quest VMAD extras are unsupported or malformed");
+    }
+    if (!extras.script_name.empty() || !extras.fragments.empty()) {
+      return VmadStructureMutationStatus::not_authorable;
+    }
+  }
+  data[tail + 3] = std::byte{static_cast<std::uint8_t>(script.size())};
+  data[tail + 4] = std::byte{static_cast<std::uint8_t>(script.size() >> 8)};
+  std::vector<std::byte> entry;
+  for (char ch : script) entry.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  entry.insert(entry.end(), {std::byte{0}, std::byte{0}, std::byte{0}});
+  data.insert(data.begin() + static_cast<std::ptrdiff_t>(tail + 5), entry.begin(), entry.end());
+  status = add_quest_vmad_fragment(mutated, key, stage, index, script, function);
+  if (status == VmadStructureMutationStatus::updated) plugin = std::move(mutated);
+  return status;
 }
 
 }  // namespace fo4

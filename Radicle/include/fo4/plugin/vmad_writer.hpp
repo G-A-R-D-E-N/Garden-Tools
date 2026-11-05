@@ -55,6 +55,11 @@ VmadStructureMutationStatus replace_vmad_property(Plugin& plugin, const FormKey&
                                                   std::size_t script, std::size_t index,
                                                   const VmadProperty& property);
 
+VmadStructureMutationStatus bootstrap_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
+                                                          std::uint16_t stage, std::int32_t stage_index,
+                                                          std::string_view script,
+                                                          std::string_view function);
+
 VmadStructureMutationStatus add_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
                                                     std::uint16_t stage, std::int32_t stage_index,
                                                     std::string_view script,

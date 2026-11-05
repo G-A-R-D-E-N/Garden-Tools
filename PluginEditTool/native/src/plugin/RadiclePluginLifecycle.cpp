@@ -6,7 +6,10 @@
 #include <fo4/schema/preflight.hpp>
 #include <fo4/schema/record_constraints.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace fo4ide::plugin {
@@ -17,7 +20,8 @@ namespace {
 
 Result<fo4::FormKey> createRichSchemaRecordLocked(fo4::Plugin& mutated,
                                                   std::string_view signature,
-                                                  const nlohmann::json& payload) {
+                                                  const nlohmann::json& payload,
+                                                  std::span<const fo4::LocalizedRowId> localized_ids) {
     const auto* editor = editorIdPayloadField(payload);
     if (editor == nullptr || !editor->is_string() ||
         editor->get_ref<const std::string&>().empty()) {
@@ -29,56 +33,18 @@ Result<fo4::FormKey> createRichSchemaRecordLocked(fo4::Plugin& mutated,
     if (!editorId) return std::unexpected(editorId.error());
 
     const auto record = fo4::Signature::from_string(signature);
-    std::vector<fo4::schema::SubrecordAuthoringConstraint> rules;
-    bool explicitRules = false;
-    if (signature == "GLOB") {
-        const auto type = payload.find("type");
-        if (type == payload.end() || !type->is_string()) {
-            return std::unexpected(Error{
-                "InvalidRecordCreationPayload",
-                "GLOB creation requires a string type: short, long, float or boolean"});
-        }
-        static constexpr std::uint8_t codes[] = {115, 108, 102, 98};  // Short, Long, Float, Boolean
-        const auto name = type->get_ref<const std::string&>();
-        const int index = name == "short"   ? 0
-                          : name == "long"    ? 1
-                          : name == "float"   ? 2
-                          : name == "boolean" ? 3
-                                              : -1;
-        const std::uint8_t* data = index < 0 ? nullptr : &codes[static_cast<std::size_t>(index)];
-        if (data == nullptr) {
-            return std::unexpected(Error{
-                "InvalidRecordCreationPayload",
-                "GLOB type must be short, long, float or boolean"});
-        }
-        const auto constraint = fo4::schema::record_authoring_constraint(record);
-        if (!constraint) {
-            return std::unexpected(Error{
-                "RecordCreationRequiresSchema",
-                "No authoring schema is registered for GLOB"});
-        }
-        const auto generated = fo4::schema::authoring_subrecords(*constraint);
-        rules.assign(generated.begin(), generated.end());
-        bool found = false;
-        for (auto& rule : rules) {
-            if (rule.signature != fo4::Signature::from_string("FNAM")) continue;
-            rule.minimum = 1;
-            rule.maximum = 1;
-            rule.default_data = data;
-            rule.default_size = 1;
-            found = true;
-        }
-        if (!found) {
-            return std::unexpected(Error{
-                "RecordCreationRequiresSchema",
-                "GLOB's FNAM type subrecord is not in the authoring schema"});
-        }
-        explicitRules = true;
-    }
+    std::vector<std::uint8_t> ruleStorage;
+    const auto explicitRules = explicitCreationRules(signature, payload, mutated.header.tes4_flags.is_localized(), ruleStorage);
+    if (!explicitRules) return std::unexpected(explicitRules.error());
 
-    const auto created = explicitRules
-        ? fo4::create_record(mutated, record, *editorId, std::span<const fo4::schema::SubrecordAuthoringConstraint>(rules))
-        : fo4::create_record(mutated, record, *editorId);
+    const auto rules = *explicitRules
+        ? std::span<const fo4::schema::SubrecordAuthoringConstraint>(**explicitRules)
+        : std::span<const fo4::schema::SubrecordAuthoringConstraint>{};
+    const auto created = !localized_ids.empty()
+        ? fo4::create_record_with_localized_rows(mutated, record, *editorId, localized_ids, rules)
+        : *explicitRules
+            ? fo4::create_record(mutated, record, *editorId, rules)
+            : fo4::create_record(mutated, record, *editorId);
     switch (created.status) {
         case fo4::RecordCreateStatus::created:
             break;
@@ -102,6 +68,21 @@ Result<fo4::FormKey> createRichSchemaRecordLocked(fo4::Plugin& mutated,
             issue.path.empty() ? issue.message : issue.path + ": " + issue.message});
     }
     return created.key;
+}
+
+Result<std::string> qustLanguage(const nlohmann::json& payload) {
+    std::string language = "en";
+    if (const auto found = payload.find("language"); found != payload.end()) {
+        if (!found->is_string()) {
+            return std::unexpected(Error{"InvalidRecordCreationPayload", "QUST language must be a string"});
+        }
+        language = found->get<std::string>();
+    }
+    const bool valid = !language.empty() && std::all_of(language.begin(), language.end(), [](unsigned char ch) {
+        return std::isalnum(ch) != 0;
+    });
+    if (!valid) return std::unexpected(Error{"InvalidStringLanguage", "QUST language must be an alphanumeric token"});
+    return fo4::text::fold(language);
 }
 
 struct TravelLocationName {
@@ -252,6 +233,8 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         auto mutated = loaded->plugin;
         fo4::FormKey key;
         LocalizedStringAllocation strings;
+        fo4::LocalizedRowId localizedNameId;
+        std::span<const fo4::LocalizedRowId> localizedIds;
 
         if (schemaCreation) {
             const auto* editor = editorIdPayloadField(*payload);
@@ -583,7 +566,22 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             }
             key = created.key;
         } else if (generatedLayoutCreationSupported(signatureText)) {
-            const auto created = createRichSchemaRecordLocked(mutated, signatureText, *payload);
+            if (signatureText == "QUST" && mutated.header.tes4_flags.is_localized()) {
+                const auto name = payload->find("name");
+                if (name != payload->end() && name->is_string() && !name->get_ref<const std::string&>().empty()) {
+                    const auto language = qustLanguage(*payload);
+                    if (!language) return std::unexpected(language.error());
+                    auto opened = openLocalizedStrings(*loaded, *language);
+                    if (!opened) return std::unexpected(opened.error());
+                    strings = std::move(*opened);
+                    const auto id = allocateLocalizedString(strings, fo4::env::StringSource::normal,
+                                                            name->get_ref<const std::string&>());
+                    if (!id) return std::unexpected(id.error());
+                    localizedNameId = {fo4::Signature::from_string("FULL"), *id};
+                    localizedIds = std::span<const fo4::LocalizedRowId>(&localizedNameId, 1);
+                }
+            }
+            const auto created = createRichSchemaRecordLocked(mutated, signatureText, *payload, localizedIds);
             if (!created) return std::unexpected(created.error());
             key = *created;
         } else if (signatureText == "PERK") {
@@ -604,8 +602,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             });
         }
 
-        stagePluginMutationLocked(*loaded, std::move(mutated));
-        stageLocalizedStrings(loaded->name, strings);
+        if (const auto staged = stageLocalizedStringsAndPlugin(loaded->name, std::move(strings), std::move(mutated)); !staged) {
+            return std::unexpected(staged.error());
+        }
         return nlohmann::json(nlohmann::json{
             {"ok", true},
             {"plugin", pluginName},

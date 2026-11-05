@@ -123,9 +123,12 @@ Result<nlohmann::json> RadiclePluginBackend::createSeqFile(
         }
         if (previouslyEnabled) continue;
 
-        const auto raw =
-            (static_cast<std::uint32_t>(loaded->plugin.header.masters.size()) << 24u) |
-            (record->form_key.local().value() & 0x00FFFFFFu);
+        std::uint32_t raw = 0;
+        try {
+            raw = fo4::encode_plugin_form_id(record->form_key, fo4::plugin_form_id_context(loaded->plugin)).value();
+        } catch (const fo4::FormIdError& error) {
+            return std::unexpected(Error{"SeqFormIdInvalid", error.what()});
+        }
         ids.push_back(raw);
         const auto editor = editorId(*record);
         included.push_back(

@@ -5,10 +5,10 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **172 tools**: 70 hand-written tools and 102 catalog tools. The 70 are 20 for plugins and records,
+It advertises **178 tools**: 70 hand-written tools and 108 catalog tools. The 70 are 20 for plugins and records,
 29 for typed records (leveled lists, NPCs, factions, sounds, scripts, magic effects, weapons and perks), 5 for MO2 profile
 and host state, 5 for Papyrus, and 11 for NIFs, materials, audio and BA2 archives (4 NIF, 2 material, 4 audio, 1
-archive). The 102 catalog tools are the editor parity set: 24 read-side (`McpCatalogRead.cpp`), 46 edit-side
+archive). The 108 catalog tools are the editor parity set: 27 read-side (`McpCatalogRead.cpp`), 49 edit-side
 (`McpCatalogEdit.cpp`) and 32 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
 blueprint graphs and `load_script`).
 
@@ -145,7 +145,7 @@ that does not fit is rejected with `InvalidRecordCreationPayload`, and the messa
 | `LVLI`, `LVLN` | none | `editorId`; `chanceNone`, `maxCount` and `flags` (each 0..255, `flags` uses only 0x01, 0x02 and 0x04). Creates an empty list; entries are added afterwards. A local entry must reference a record of a type the list accepts; references into other plugins are not type-checked. |
 | `FACT` | none | `editorId`, `fullName` (inline text; refused in localized plugins), `flags` (u32, bits 0x00000001 through 0x00010000). Creates a faction with no relations or ranks. |
 | `RACE` | `description`, `maleHeight`, `femaleHeight` | `editorId`, `fullName`, `flags`, `flags2`, `size`, `accelerationRate`, `decelerationRate`, `injuredHealthPct` |
-| `QUST`, `SPEL`, `MGEF`, `FLST`, `MESG` | `editorId` (non-empty; `editor_id` accepted) | none. Builds the schema's required subrecords from their registered defaults: `QUST` takes a zeroed `DNAM`, `MESG` an empty `DESC` plus `INAM` and `DNAM`, `MGEF` a zeroed `DATA`, `SPEL` `OBND`, `DESC` and `SPIT`, and `FLST` carries only its `EDID`. Nothing else is set at creation. |
+| `QUST`, `SPEL`, `MGEF`, `FLST`, `MESG` | `editorId` (non-empty; `editor_id` accepted) | none. Builds the schema's required subrecords from their registered defaults: `QUST` takes a zeroed `DNAM` plus an ANAM Next Alias ID of zero; its optional `name` (an inline title, refused in a localized plugin) becomes FULL, and optional `flags` (u16), `priority` and `type` (u8) fill DNAM. `MESG` an empty `DESC` plus `INAM` and `DNAM`, `MGEF` a zeroed `DATA`, `SPEL` `OBND`, `DESC` and `SPIT`, and `FLST` carries only its `EDID`. Nothing else is set at creation. |
 | `GLOB` | `editorId` (non-empty), `type` (`short`, `long`, `float` or `boolean`) | none. The type is the required `FNAM` byte the schema has no default for; `FLTV` is created as a zero `f32`. |
 | `PROJ`, `EXPL`, `HAZD` | none | `editorId`, `name`, `bounds` (six integers), and the type's own numbers and form-key links, for example `speed`, `range` and `explosionType` on `PROJ`; `force`, `damage` and `innerRadius` on `EXPL`; `radius`, `lifetime` and `spell` on `HAZD` |
 | `PERK` | `editorId` (non-empty; `editor_id` accepted) | `full` and `desc` (inline text in a non-localized plugin; in a localized plugin they become new string IDs in the staged string tables, so call `strings_save` to persist them; `language` picks the table language, default `en`), `trait` (0 or 1, default 0), `level` (0-255, default 0), `ranks` (0-255, default 1), `playable` (0 or 1, default 1), `conditions` (the `set_conditions` array; the root condition list), `nextPerk` (a PERK FormKey), `sound` (an SNDR FormKey), `swf` (text, the FNAM), `effects` (an array in the `set_perk_effects` shape; `quest` must be a loaded QUST, `ability` a loaded SPEL, and the typed parameter form and actor value a loaded record of the type the effect expects) |
@@ -207,6 +207,9 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `describe_element` | `plugin`, `form_key`, `path` | no | Editor query: describe element. Same RPC the desktop editor uses. |
 | `get_conditions` | `plugin`, `form_key` | no | Editor query: get conditions. Same RPC the desktop editor uses. |
 | `get_conditions_at` | `plugin`, `form_key`, `path` | no | Editor query: get conditions at. Same RPC the desktop editor uses. |
+| `get_quest_objectives` | `plugin`, `form_key` | no | Editor query: get quest objectives with their alias targets and flags. Each objective also returns `flagNames` (named FNAM bits set: `ORedWithPrevious`, `NoStatsTracking`) and `unknownFlagBits` (remaining raw bits, unnamed). Same RPC the desktop editor uses. |
+| `get_quest_stages` | `plugin`, `form_key` | no | Editor query: get quest stages with log entries, log text and notes. Each stage also returns raw `flags`, `startUp`, `flagNames` (named INDX bits set: `RunOnStart`, `RunOnStop`, `KeepInstanceDataFromHereOn`) and `unknownFlagBits` (remaining raw bits, unnamed). Conditions are not returned. Same RPC the desktop editor uses. |
+| `get_quest_aliases` | `plugin`, `form_key` | no | Editor query: get quest aliases with kind, ID, name, flags and collection entries. Same RPC the desktop editor uses. |
 | `get_condition_functions` | none | no | Editor query: get condition functions. Same RPC the desktop editor uses. |
 | `get_condition_run_on_types` | none | no | Editor query: get condition run on types. Same RPC the desktop editor uses. |
 | `get_condition_function_params` | none | no | Editor query: get condition function params. Same RPC the desktop editor uses. |
@@ -227,6 +230,8 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `set_components` | `plugin`, `form_key`, `components_json` | memory | Editor operation: set components. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `set_quest_aliases` | `plugin`, `form_key`, `aliases_json` | memory | Editor operation: set quest aliases. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `set_quest_stages` | `plugin`, `form_key`, `stages_json` | memory | Editor operation: set quest stages. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_quest_objectives` | `plugin`, `form_key`, `objectives_json` | memory | Editor operation: set quest objectives. Replaces the whole objective list. Each target names an alias by ID or name (never a reference); conditions are optional. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
+| `set_quest_fragment` | `plugin`, `form_key`, `stage`, `log_entry_index`, `script_name`, `output_directory`, `imports_directory`, `actions_json` | memory | Editor operation: stage a quest stage fragment (script and plugin change). The stage must exist; directories must be trusted save roots. save_plugin persists it and needs recoverable publication; discard_plugin drops a pending edit. |
 | `set_conditions` | `plugin`, `form_key`, `conditions_json` | memory | Editor operation: set conditions. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `add_list_item` | `plugin`, `form_key`, `field`, `value` | memory | Editor operation: add list item. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `remove_list_item` | `plugin`, `form_key`, `field`, `value` | memory | Editor operation: remove list item. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |

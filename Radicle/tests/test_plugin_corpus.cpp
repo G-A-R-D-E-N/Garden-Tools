@@ -13,6 +13,7 @@
 #include "fo4/forms/race.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "hedr_count.hpp"
 
 #include <gtest/gtest.h>
 
@@ -174,7 +175,9 @@ TEST(PluginCorpus, EveryUnmodifiedPluginWritesByteIdentically) {
       const auto written = fo4::write_plugin(plugin);
       if (written.size() != original.size() ||
           !std::equal(written.begin(), written.end(), original.begin())) {
-        failures.push_back(path.string());
+        if (!fo4::test::hedr_count_only_difference(written, original, plugin)) {
+          failures.push_back(path.string());
+        }
       }
       ++processed;
     } catch (const std::exception& error) {

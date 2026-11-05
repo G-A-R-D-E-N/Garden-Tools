@@ -16,6 +16,8 @@
 #include <vector>
 
 #include <fo4/localization/strings.hpp>
+#include <fo4/io/path_text.hpp>
+#include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin::questinternal {
 
@@ -140,7 +142,8 @@ std::optional<Error> encodeLocalizedText(std::string_view language,
 std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
                                               const std::filesystem::path& pluginPath,
                                               const std::filesystem::path& directory,
-                                              LocalizedQuestTables& result) {
+                                              LocalizedQuestTables& result,
+                                              bool allowAbsent) {
     if (!arguments.is_array() || arguments.size() <= 3 || !arguments[3].is_object()) {
         return Error{
             "LocalizedLogTextUnsupported",
@@ -155,7 +158,7 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
             "localized QUST context requires string language and stringsDirectory"
         };
     }
-    const auto language = context["language"].get<std::string>();
+    const auto language = fo4::text::fold(context["language"].get<std::string>());
     static constexpr std::array<std::string_view, 11> supportedLanguages{
         "en", "de", "it", "es", "esmx", "fr", "pl", "ptbr", "cn", "ru", "ja"};
     if (std::find(supportedLanguages.begin(), supportedLanguages.end(), language) ==
@@ -167,14 +170,22 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
     }
     result.language = language;
 
-    const auto stem = pluginPath.stem().string() + "_" + language;
+    const auto stem = fo4::io::utf8(pluginPath.stem()) + "_" + language;
     const auto load = [&](fo4::localization::StringTableKind kind,
                           std::string_view extension,
                           fo4::localization::LocalizedStringTable& table)
         -> std::optional<Error> {
-        const auto path = directory / (stem + std::string(extension));
+        const auto path = directory / fo4::io::from_utf8(stem + std::string(extension));
+        if (kind == fo4::localization::StringTableKind::strings) result.stringsPath = path;
+        else if (kind == fo4::localization::StringTableKind::dlstrings) result.dlstringsPath = path;
+        else result.ilstringsPath = path;
         std::error_code ec;
         const auto status = std::filesystem::symlink_status(path, ec);
+        if (allowAbsent && (ec == std::errc::no_such_file_or_directory ||
+                            (!ec && status.type() == std::filesystem::file_type::not_found))) {
+            table = {kind, {}};
+            return std::nullopt;
+        }
         if (ec || std::filesystem::is_symlink(status) ||
             !std::filesystem::is_regular_file(status)) {
             return Error{
@@ -192,13 +203,13 @@ std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
             }
 #endif
             if (kind == fo4::localization::StringTableKind::strings) {
-                result.stringsPath = path;
+                result.stringsExist = true;
                 result.originalStringsBytes = originalBytes;
             } else if (kind == fo4::localization::StringTableKind::dlstrings) {
-                result.dlstringsPath = path;
+                result.dlstringsExist = true;
                 result.originalDlstringsBytes = originalBytes;
             } else {
-                result.ilstringsPath = path;
+                result.ilstringsExist = true;
                 result.originalIlstringsBytes = originalBytes;
             }
         } catch (const std::exception& error) {

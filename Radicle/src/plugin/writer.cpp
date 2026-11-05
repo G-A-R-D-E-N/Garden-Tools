@@ -1,5 +1,6 @@
 #include "fo4/plugin/writer.hpp"
 
+#include "fo4/binary/cursor.hpp"
 #include "fo4/io/atomic_write.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/onam.hpp"
@@ -191,12 +192,6 @@ std::uint32_t rebuilt_hedr_record_count(const Plugin& plugin) {
   return static_cast<std::uint32_t>(count);
 }
 
-std::uint64_t current_structure_fingerprint(const Plugin& plugin) {
-  const auto group_count = collect_groups(plugin).size();
-  const auto record_count = collect_records(plugin).size();
-  return (static_cast<std::uint64_t>(group_count) << 32) |
-         static_cast<std::uint64_t>(record_count);
-}
 
 void patch_hedr_record_count(Record& tes4, std::uint32_t count) {
   Subrecord* hedr = nullptr;
@@ -222,6 +217,34 @@ void patch_hedr_record_count(Record& tes4, std::uint32_t count) {
   hedr->data[6] = std::byte{static_cast<std::uint8_t>(count >> 16)};
   hedr->data[7] = std::byte{static_cast<std::uint8_t>(count >> 24)};
   tes4.original_range.clear();
+}
+
+std::vector<std::byte> patched_original_hedr(std::span<const std::byte> original,
+                                             std::uint32_t count) {
+  binary::Cursor cursor{original};
+  cursor.seek(k_record_header_size);
+  std::optional<std::uint32_t> extended;
+  while (!cursor.at_end()) {
+    const auto signature = cursor.read_signature();
+    const auto stored = cursor.read_u16();
+    const auto size = extended.value_or(stored);
+    extended.reset();
+    const auto offset = cursor.position();
+    const auto data = cursor.read_bytes(size);
+    if (signature == sig_hedr) {
+      if (size < 12) throw std::runtime_error("TES4 HEDR must be at least 12 bytes on rebuild");
+      std::vector<std::byte> result{original.begin(), original.end()};
+      for (unsigned i = 0; i != 4; ++i) {
+        result[offset + 4 + i] = std::byte{static_cast<std::uint8_t>(count >> (8 * i))};
+      }
+      return result;
+    }
+    if (signature == sig_xxxx) {
+      binary::Cursor size_cursor{data};
+      extended = size_cursor.read_u32();
+    }
+  }
+  throw std::runtime_error("TES4 HEDR must be at least 12 bytes on rebuild");
 }
 
 Subrecord zstring_subrecord(Signature signature, std::string_view text) {
@@ -292,7 +315,6 @@ void clear_original_bytes(Plugin& plugin) {
   plugin.original_range.clear();
   visit_records(plugin, [](Record& record) { record.original_range.clear(); });
   plugin.original_data.reset();
-  plugin.original_structure_fingerprint = 0;
 }
 
 std::string lower_extension(const std::filesystem::path& path) {
@@ -312,6 +334,27 @@ bool extension_flags_missing(const Plugin& plugin, const std::filesystem::path& 
 
 }  // namespace
 
+void repair_hedr_record_count(Plugin& plugin) {
+  const auto count = rebuilt_hedr_record_count(plugin);
+  const auto original = record_original_bytes(plugin, plugin.tes4);
+  auto checked = plugin.tes4;
+  patch_hedr_record_count(checked, count);
+  std::vector<std::byte> repaired_bytes;
+  if (!plugin.tes4.compressed && !original.empty()) {
+    repaired_bytes = patched_original_hedr(original, count);
+  }
+  const auto original_range = plugin.tes4.original_range;
+  patch_hedr_record_count(plugin.tes4, count);
+  if (!original_range.empty() && plugin.tes4.original_range.empty()) {
+    plugin.tes4_after_hedr_repair = plugin.tes4;
+    plugin.tes4_repaired_bytes = std::move(repaired_bytes);
+  }
+  if (plugin.header.record_count != count || plugin.tes4.original_range.empty()) {
+    plugin.original_range.clear();
+  }
+  plugin.header.record_count = count;
+}
+
 std::vector<std::byte> write_plugin(const Plugin& plugin) {
   if (const auto original = plugin_original_bytes(plugin); !original.empty()) {
     return {original.begin(), original.end()};
@@ -326,15 +369,23 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
   }
 
   auto tes4 = prepared.tes4;
-  const bool structure_changed =
-      prepared.original_structure_fingerprint == 0 ||
-      current_structure_fingerprint(prepared) != prepared.original_structure_fingerprint;
-  if (tes4.original_range.empty() || structure_changed) {
+  const auto groups = collect_groups(prepared).size();
+  const auto records = collect_records(prepared).size();
+  const auto fingerprint = (static_cast<std::uint64_t>(groups) << 32) |
+                           static_cast<std::uint64_t>(records);
+  const bool structure_changed = prepared.original_structure_fingerprint == 0 ||
+                                 fingerprint != prepared.original_structure_fingerprint;
+  if (structure_changed) {
     patch_hedr_record_count(tes4, rebuilt_hedr_record_count(prepared));
   }
 
   ByteWriter out;
-  write_record(out, prepared, tes4);
+  if (!structure_changed && !prepared.tes4_repaired_bytes.empty() &&
+      tes4_matches_hedr_repair(prepared)) {
+    out.raw(prepared.tes4_repaired_bytes);
+  } else {
+    write_record(out, prepared, tes4);
+  }
   for (const auto& group : prepared.groups) {
     write_group(out, prepared, group);
   }

@@ -15,6 +15,9 @@
 #include <utility>
 
 #include "RadiclePluginSupport.hpp"
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+#include "RadiclePluginBa2Source.hpp"
+#endif
 
 #include <fo4ide/plugin/ConditionCodec.hpp>
 #include <fo4/forms/eyes.hpp>
@@ -177,12 +180,26 @@ bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
 
 void RadiclePluginBackend::setDataDirectory(std::filesystem::path dataDirectory) {
     OpLock lock(*this, OpLock::Mode::Lifecycle);
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+    testDataReadRoot_.reset();
+    dataReadRootError_.clear();
+    if (!dataDirectory.empty()) {
+        try {
+            const auto root = std::filesystem::absolute(dataDirectory).lexically_normal();
+            testDataReadRoot_ = std::make_shared<detail::Ba2ReadRoot>(detail::Ba2ReadRoot::authorize(root));
+        } catch (const std::exception& error) {
+            dataReadRootError_ = error.what();
+        }
+    }
+#endif
     dataDirectory_ = std::move(dataDirectory);
+    ++mutationEpoch_;
 }
 
 Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     std::string_view method,
     const nlohmann::json& arguments) {
+    if (const auto error = testRecoveryGate(method, arguments)) return std::unexpected(*error);
     if (method == "CreateRecord") return createRecord(arguments);
     if (method == "DeleteRecord") return deleteRecord(arguments);
     if (method == "RenumberRecord") return renumberRecord(arguments);
@@ -194,6 +211,11 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "SetComponents") return setComponents(arguments);
     if (method == "SetQuestAliases") return setQuestAliases(arguments);
     if (method == "SetQuestStages") return setQuestStages(arguments);
+    if (method == "SetQuestObjectives") return setQuestObjectives(arguments);
+    if (method == "SetQuestFragment") return setQuestFragment(arguments);
+    if (method == "GetQuestObjectives") return getQuestObjectives(arguments);
+    if (method == "GetQuestStages") return getQuestStages(arguments);
+    if (method == "GetQuestAliases") return getQuestAliases(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "CopyElementToSelected") return copyElementToSelected(arguments);

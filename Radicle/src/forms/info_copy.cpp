@@ -416,6 +416,7 @@ InfoCopyNewResult copy_info_as_new(
   insert_info(topic[0], std::move(copied), at_head, after);
 
   next.original_range.clear();
+  next.original_structure_fingerprint = 0;
   destination = std::move(next);
   return {InfoCopyNewStatus::created, new_key};
 }

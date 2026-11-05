@@ -33,6 +33,15 @@ struct PluginStringTable {
   localization::LocalizedStringTable table;
 };
 
+struct PluginStringTableSnapshot {
+  PluginStringTable resolved;
+  std::vector<std::byte> bytes;
+};
+
+std::vector<PluginStringTableSnapshot> load_plugin_string_table_snapshots(
+    std::span<const std::filesystem::path> strings_dirs, const Plugin& plugin,
+    std::string_view language, const archive::AssetResolver* archives = nullptr);
+
 std::vector<PluginStringTable> load_plugin_string_tables(std::span<const std::filesystem::path> strings_dirs,
                                                          const Plugin& plugin,
                                                          std::string_view language,

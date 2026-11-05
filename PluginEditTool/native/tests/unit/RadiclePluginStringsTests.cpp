@@ -14,15 +14,16 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
+#include "../helpers/TempRoot.hpp"
 
 namespace {
 
 using fo4::localization::StringTableKind;
 
+// Requires: a per-process unique folder so parallel ctest cases never share one temp root.
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_plugin_strings_" + std::to_string(id));
+           ("fo4ide_plugin_strings_" + fo4ide_test::uniqueTempName());
 }
 
 struct Cleanup {
@@ -471,6 +472,7 @@ TEST_CASE("Staged string edits save as loose files and keep untouched ids byte-i
     writeStrings(root);
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root);
+    backend.testSetJournalRoot(root / "journal");
     const auto path = root / "Strings" / "Patch_en.STRINGS";
     const auto original = fo4::localization::read_string_table_file(path, StringTableKind::strings);
 
@@ -520,6 +522,54 @@ TEST_CASE("Discard drops staged string edits so reads show the saved table again
     CHECK_FALSE(page.contains("pending"));
     const auto tables = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
     CHECK_FALSE(tables[0].contains("pending"));
+}
+
+// Detects: discarding an independent AddString edit must preserve pending edits in other languages.
+TEST_CASE("Discard independent string allocation preserves other languages") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPlugin(backend, root);
+    REQUIRE(backend.invoke("strings.AddString", nlohmann::json::array({"Patch.esp", "en", "STRINGS", "Added"})).has_value());
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "de", "STRINGS", 10, "Geaendert"})).has_value());
+    REQUIRE(backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", "en"})).has_value());
+    const auto english = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS", "", 0, 200}));
+    const auto german = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "de", "STRINGS", "", 0, 200}));
+    CHECK_FALSE(english.contains("pending"));
+    CHECK(german["pending"] == true);
+    CHECK(german["rows"][0]["text"] == "Geaendert");
+    REQUIRE(backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", "de"})).has_value());
+}
+
+// Detects: a plugin-dependent localized edit must prevent discarding its table without blocking an unrelated language.
+TEST_CASE("Discard respects plugin-dependent localized languages") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPlugin(backend, root);
+    REQUIRE(backend.invokeBackend("CreateRecord", nlohmann::json::array({"Patch.esp", "QUST",
+        nlohmann::json{{"editorId", "Localized"}, {"name", "New title"}}})).has_value());
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "de", "STRINGS", 10, "Geaendert"})).has_value());
+    REQUIRE(backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", "de"})).has_value());
+    const auto rejected = backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", "en"}));
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().type == "LocalizedPendingPluginEdit");
+    const auto english = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS", "", 0, 200}));
+    CHECK(english["pending"] == true);
+}
+
+// Detects: removing or replacing a newly referenced string ID must be refused while nonconflicting edits remain available.
+TEST_CASE("String removals and imports preserve newly staged plugin references") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPlugin(backend, root);
+    REQUIRE(backend.invokeBackend("CreateRecord", nlohmann::json::array({"Patch.esp", "QUST",
+        nlohmann::json{{"editorId", "Localized"}, {"name", "New title"}}})).has_value());
+    const auto removed = backend.invoke("strings.RemoveString", nlohmann::json::array({"Patch.esp", "en", "STRINGS", 1001}));
+    REQUIRE_FALSE(removed.has_value());
+    CHECK(removed.error().type == "LocalizedStringInUse");
+    REQUIRE(backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS", R"({"rows":[{"id":20,"text":"Changed"}]})", "merge"})).has_value());
+    REQUIRE(backend.invoke("strings.RemoveString", nlohmann::json::array({"Patch.esp", "en", "STRINGS", 10})).has_value());
+    const auto unsafe = backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS", R"({"rows":[]})", "replace"}));
+    REQUIRE_FALSE(unsafe.has_value());
+    CHECK(unsafe.error().type == "LocalizedStringInUse");
+    REQUIRE(backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS",
+        R"({"rows":[{"id":1001,"text":"New title"}]})", "replace"})).has_value());
 }
 
 TEST_CASE("Staged string edits block a LoadMo2 or OpenPlugin reload without discardPending instead of dropping them (regression: silent loss of staged strings on reload)") {
@@ -607,7 +657,7 @@ TEST_CASE("DiscardPlugin on a clean plugin drops its staged string edits (regres
     CHECK_FALSE(page.contains("pending"));
 }
 
-TEST_CASE("Saving string tables into the backend Data folder is refused and leaves the file unchanged") {
+TEST_CASE("Editing and saving string tables in the backend Data folder is refused and leaves the file unchanged") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto data = root / "Data";
@@ -615,7 +665,10 @@ TEST_CASE("Saving string tables into the backend Data folder is refused and leav
     fo4ide::plugin::RadiclePluginBackend backend;
     backend.setDataDirectory(data);
     loadPlugin(backend, data);
-    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"})).has_value());
+
+    const auto edit = backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"}));
+    REQUIRE_FALSE(edit.has_value());
+    CHECK(edit.error().type == "StringSavePathNotAllowed");
 
     const auto refused = backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""}));
     REQUIRE_FALSE(refused.has_value());
@@ -631,6 +684,7 @@ TEST_CASE("English string text outside Windows-1252 is refused, and Windows-1252
     writeStrings(root);
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root);
+    backend.testSetJournalRoot(root / "journal");
 
     const auto refused = backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "\xCE\xA9 mega"}));
     REQUIRE_FALSE(refused.has_value());
@@ -672,6 +726,7 @@ TEST_CASE("Import merge keeps explicit ids below the next free id and exports ro
     writeStrings(root);
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root);
+    backend.testSetJournalRoot(root / "journal");
 
     const std::string listing = R"({"rows":[{"id":7,"text":"Seven"},{"id":10,"text":"Apple tart"}]})";
     REQUIRE(backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", listing, "merge"})).has_value());

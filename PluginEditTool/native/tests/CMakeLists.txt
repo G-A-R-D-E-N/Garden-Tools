@@ -5,6 +5,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(FO4IDE_TEST_TIMEOUT 60)
 endif()
 set(FO4IDE_SLOW_TEST_TIMEOUT 300)
+# Tests tagged [multi-process] spawn a fresh worker per crash phase and must keep this longer timeout under runner load.
+set(FO4IDE_MULTI_PROCESS_TEST_TIMEOUT 120)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME fo4ide_native_mcp_smoke
@@ -112,6 +114,8 @@ fo4ide_add_test(fo4ide_test_swf_target unit/SwfTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_swf_target_save_as unit/SwfTargetSaveAsTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_settings_security unit/SettingsTargetSecurityTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_papyrus_target unit/PapyrusTargetTests.cpp fo4ide_app)
+target_sources(fo4ide_test_papyrus_target PRIVATE unit/PapyrusSnapshotFlagsTests.cpp)
+target_compile_definitions(fo4ide_test_papyrus_target PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_add_test(fo4ide_test_plugin_backend_target unit/PluginBackendTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_backend_target_perk unit/PluginBackendTargetPerkTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_element_routing unit/PluginBackendElementRoutingTests.cpp fo4ide_app)
@@ -133,7 +137,22 @@ endforeach()
 add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
+    unit/RadiclePluginNameFieldTests.cpp
+    unit/RadiclePluginQuestObjectiveTests.cpp
+    unit/RadiclePluginQuestAuthorTests.cpp
+    unit/RadiclePluginJournalRootTests.cpp
+    unit/RadiclePluginJournalIntegrationTests.cpp
+    unit/RadiclePluginJournalDirectoryTests.cpp
+    unit/RadiclePluginJournalArchiveTests.cpp
+    unit/RadiclePluginJournalReadStringsTests.cpp
+    unit/RadiclePluginBa2SourceTests.cpp
+    unit/RadiclePluginStringJournalTests.cpp
+    unit/RadiclePluginWindowsJournalProbeTests.cpp
+    unit/RadiclePluginWindowsJournalSessionTests.cpp
+    unit/RadiclePluginWindowsJournalIntentTests.cpp
+    unit/RadiclePluginHedrCountTests.cpp
     unit/RadiclePluginStringsTests.cpp
+    unit/RadiclePluginStringLanguagesTests.cpp
     unit/RadiclePluginWorklistTests.cpp
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
@@ -207,12 +226,16 @@ add_executable(
     unit/RadiclePluginProjFlagsTests.cpp
     unit/RadiclePluginProjExplHazdLimitsTests.cpp
     unit/RadiclePluginQuestAuthoringTests.cpp
+    unit/RadiclePluginQuestLocalizedCnamTests.cpp
+    unit/RadiclePluginQuestLocalizationTests.cpp
+    unit/RadiclePluginQuestReadbackTests.cpp
     unit/RadiclePluginQuestEventDataTests.cpp
     unit/RadiclePluginQuestPartialFormTests.cpp
     unit/RadiclePluginQuestCreateLevelTests.cpp
     unit/RadiclePluginQuestConditionDefaultsTests.cpp
     unit/RadiclePluginDeferredLocalizationTests.cpp
     unit/RadiclePluginPendingLifecycleTests.cpp
+    unit/RadiclePluginQuestEndToEndTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
@@ -227,10 +250,15 @@ target_link_libraries(
     fo4ide_test_plugin_backend
     PRIVATE fo4ide_plugin fo4ide_app Catch2::Catch2WithMain ZLIB::ZLIB
 )
+if(WIN32)
+    target_link_libraries(fo4ide_test_plugin_backend PRIVATE ntdll advapi32 userenv)
+endif()
 target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
+target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 fo4ide_enable_warnings(fo4ide_test_plugin_backend)
 fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
-catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "~[multi-process]" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "[multi-process]" OUTPUT_SUFFIX _multi_process PROPERTIES TIMEOUT ${FO4IDE_MULTI_PROCESS_TEST_TIMEOUT})
 
 add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRealTests.cpp)
 target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)

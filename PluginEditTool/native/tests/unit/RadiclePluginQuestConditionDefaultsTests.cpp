@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -45,9 +46,9 @@ std::vector<std::byte> bareQuestPlugin() {
 }
 
 TEST_CASE("Native SetQuestStages stores a quest condition without a value as comparison 0") {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     const auto root = std::filesystem::temp_directory_path() /
-                      ("fo4ide_quest_condition_default_" + std::to_string(id));
+                      ("fo4ide_quest_condition_default_" + id);
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     const auto path = root / "Patch.esp";
@@ -92,9 +93,9 @@ TEST_CASE("Native SetQuestStages stores a quest condition without a value as com
 }
 
 TEST_CASE("Native SetQuestStages refuses a quest condition value outside float range") {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     const auto root = std::filesystem::temp_directory_path() /
-                      ("fo4ide_quest_condition_range_" + std::to_string(id));
+                      ("fo4ide_quest_condition_range_" + id);
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     const auto path = root / "Patch.esp";

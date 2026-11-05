@@ -6,13 +6,27 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
 namespace fo4::archive {
+
+class FileCursor;
+
+class Ba2ByteSource {
+public:
+  virtual ~Ba2ByteSource() = default;
+  virtual std::uint64_t size() const noexcept = 0;
+  // Reads must fill the range or throw, always from the same held source.
+  virtual void read(std::uint64_t offset, std::span<std::byte> out) const = 0;
+};
+
+std::string hash_byte_source(const std::shared_ptr<const Ba2ByteSource>& source);
 
 enum class Ba2Kind : std::uint8_t {
   general,
@@ -39,6 +53,39 @@ struct Ba2EntryInfo {
   std::uint64_t unpacked_size() const noexcept;
 };
 
+struct Ba2ExtractedPayload {
+  std::vector<std::byte> bytes;
+  std::uint64_t size{0};
+  std::string sha256;
+};
+
+struct Ba2IndexLimits {
+  std::size_t max_entries{1000000};
+  std::uint64_t max_bytes{256ull * 1024 * 1024};
+};
+
+class Ba2Snapshot {
+public:
+  static Ba2Snapshot open(std::shared_ptr<const Ba2ByteSource> source);
+  static Ba2Snapshot open(std::shared_ptr<const Ba2ByteSource> source, Ba2IndexLimits limits);
+
+  const std::vector<Ba2EntryInfo>& entries() const noexcept;
+  Ba2Kind kind() const noexcept;
+  std::uint32_t version() const noexcept;
+  bool has_name_table() const noexcept;
+  const std::string& archive_sha256() const noexcept;
+  std::uint64_t index_bytes() const noexcept;
+  std::optional<std::size_t> find(std::string_view path) const;
+  Ba2ExtractedPayload extract(std::size_t index, std::uint64_t max_bytes) const;
+  std::vector<Ba2ExtractedPayload> extract_many(std::span<const std::size_t> indices,
+                                               std::uint64_t max_total_bytes) const;
+
+private:
+  Ba2Snapshot() = default;
+  struct Impl;
+  std::shared_ptr<Impl> impl_;
+};
+
 // Immutable after open; extraction opens its own stream, so const members are thread-safe.
 class Ba2Reader {
 public:
@@ -54,6 +101,13 @@ public:
   std::vector<std::byte> extract(std::size_t index) const;
 
 private:
+  friend class Ba2Snapshot;
+  static Ba2Reader open_source(const std::shared_ptr<const Ba2ByteSource>& source,
+                               const std::filesystem::path& label, Ba2IndexLimits limits,
+                               std::uint64_t* index_bytes);
+  std::vector<std::byte> extract_with(FileCursor& file, std::size_t index,
+                                      std::uint64_t max_input_bytes) const;
+
   std::filesystem::path path_;
   Ba2Kind kind_{Ba2Kind::general};
   std::uint32_t version_{0};

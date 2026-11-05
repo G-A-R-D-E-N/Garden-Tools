@@ -202,9 +202,11 @@ TEST_CASE("Native localized PERK string IDs never collide across languages") {
     writeBytes(masterPath, makeMasterPlugin());
     writeBytes(patchPath, makePatchPlugin(0x80));
     writeStringTable(root / "Strings" / "Patch_de.STRINGS", fo4::localization::StringTableKind::strings, 5, "Bestehend");
+    writeStringTable(root / "Strings" / "Patch_en.STRINGS", fo4::localization::StringTableKind::strings, 1, "Englisch");
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, masterPath, patchPath);
+    backend.testSetJournalRoot(root / "journal");
     const auto english = createPerk(backend, nlohmann::json{{"editorId", "AlphaPerk"}, {"full", "Alpha"}});
     const auto german = createPerk(backend, nlohmann::json{
         {"editorId", "BetaPerk"}, {"full", "Beta"}, {"language", "de"}
@@ -223,9 +225,11 @@ TEST_CASE("Native localized PERK text takes an ID past every ID the plugin's rec
     const auto patchPath = root / "Patch.esp";
     writeBytes(masterPath, makeMasterPlugin());
     writeBytes(patchPath, makeLocalizedPatchReferencing40());
+    writeStringTable(root / "Strings" / "Patch_en.STRINGS", fo4::localization::StringTableKind::strings, 1, "Englisch");
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, masterPath, patchPath);
+    backend.testSetJournalRoot(root / "journal");
     const auto formKey = createPerk(backend, nlohmann::json{{"editorId", "FreshPerk"}, {"full", "Fresh"}});
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 

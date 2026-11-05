@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -18,9 +19,9 @@
 namespace {
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_deferred_localization_" + std::to_string(id));
+           ("fo4ide_deferred_localization_" + id);
 }
 
 struct Cleanup {
@@ -153,6 +154,7 @@ TEST_CASE("Localized quest persistence stages alongside unrelated pending edits"
     const auto dlstringsBefore = readBytes(dlstringsPath);
 
     fo4ide::plugin::RadiclePluginBackend backend;
+    backend.testSetJournalRoot(root / "journal");
     REQUIRE(backend.invoke(
         "environment.LoadMo2",
         nlohmann::json{{"plugins", nlohmann::json::array({{
@@ -192,7 +194,7 @@ TEST_CASE("Localized quest persistence stages alongside unrelated pending edits"
     REQUIRE(fo4::localization::find_string(table, 201u) != nullptr);
 }
 
-TEST_CASE("A string edit is refused while a localized quest edit is pending (regression: a SaveStringTables after SavePlugin overwrote the quest log IDs with the older DLSTRINGS table)") {
+TEST_CASE("A string edit is kept alongside a pending localized quest edit (regression: a SaveStringTables after SavePlugin overwrote the quest log IDs with the older DLSTRINGS table)") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -202,6 +204,7 @@ TEST_CASE("A string edit is refused while a localized quest edit is pending (reg
     const auto dlstringsBefore = readBytes(dlstringsPath);
 
     fo4ide::plugin::RadiclePluginBackend backend;
+    backend.testSetJournalRoot(root / "journal");
     REQUIRE(backend.invoke(
         "environment.LoadMo2",
         nlohmann::json{{"plugins", nlohmann::json::array({{
@@ -222,10 +225,8 @@ TEST_CASE("A string edit is refused while a localized quest edit is pending (reg
             }
         })).has_value());
 
-    const auto edit = backend.invoke(
-        "strings.SetString", nlohmann::json::array({"Patch.esp", "", "DLSTRINGS", 42, "Edited"}));
-    REQUIRE_FALSE(edit.has_value());
-    CHECK(edit.error().type == "StringEditBlockedByPendingLocalization");
+    REQUIRE(backend.invoke(
+        "strings.SetString", nlohmann::json::array({"Patch.esp", "", "DLSTRINGS", 42, "Edited"})).has_value());
     CHECK(readBytes(dlstringsPath) == dlstringsBefore);
 
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
@@ -234,10 +235,10 @@ TEST_CASE("A string edit is refused while a localized quest edit is pending (reg
         dlstringsPath, fo4::localization::StringTableKind::dlstrings);
     REQUIRE(fo4::localization::find_string(table, 201u) != nullptr);
     REQUIRE(fo4::localization::find_string(table, 42u) != nullptr);
-    CHECK(fo4::localization::find_string(table, 42u)->text == rawBytes("Original"));
+    CHECK(fo4::localization::find_string(table, 42u)->text == rawBytes("Edited"));
 }
 
-TEST_CASE("A localized quest edit is refused while a string edit is pending (regression: a quest table built from disk dropped the pending string edit when SaveStringTables wrote DLSTRINGS)") {
+TEST_CASE("A localized quest edit is kept alongside a pending string edit (regression: a quest table built from disk dropped the pending string edit when SaveStringTables wrote DLSTRINGS)") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -246,6 +247,7 @@ TEST_CASE("A localized quest edit is refused while a string edit is pending (reg
     const auto dlstringsPath = root / "Strings" / "Patch_en.DLSTRINGS";
 
     fo4ide::plugin::RadiclePluginBackend backend;
+    backend.testSetJournalRoot(root / "journal");
     REQUIRE(backend.invoke(
         "environment.LoadMo2",
         nlohmann::json{{"plugins", nlohmann::json::array({{
@@ -258,7 +260,7 @@ TEST_CASE("A localized quest edit is refused while a string edit is pending (reg
         "strings.SetString", nlohmann::json::array({"Patch.esp", "", "DLSTRINGS", 42, "Edited"})).has_value());
     const auto dlstringsBefore = readBytes(dlstringsPath);
 
-    const auto localized = backend.invokeBackend(
+    REQUIRE(backend.invokeBackend(
         "SetQuestStages",
         nlohmann::json::array({
             "Patch.esp",
@@ -268,15 +270,14 @@ TEST_CASE("A localized quest edit is refused while a string edit is pending (reg
                 {"language", "en"},
                 {"stringsDirectory", (root / "Strings").string()}
             }
-        }));
-    REQUIRE_FALSE(localized.has_value());
-    CHECK(localized.error().type == "LocalizedEditBlockedByPendingStrings");
+        })).has_value());
     CHECK(readBytes(dlstringsPath) == dlstringsBefore);
 
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
     const auto table = fo4::localization::read_string_table_file(
         dlstringsPath, fo4::localization::StringTableKind::dlstrings);
     REQUIRE(fo4::localization::find_string(table, 42u) != nullptr);
     CHECK(fo4::localization::find_string(table, 42u)->text == rawBytes("Edited"));
-    CHECK(fo4::localization::find_string(table, 201u) == nullptr);
+    REQUIRE(fo4::localization::find_string(table, 201u) != nullptr);
 }
