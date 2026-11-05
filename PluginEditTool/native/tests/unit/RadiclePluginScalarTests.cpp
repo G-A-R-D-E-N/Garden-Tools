@@ -257,7 +257,8 @@ TEST_CASE("Native schema SetField rejects invalid REFR percentage without touchi
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
-TEST_CASE("Native schema SetField refuses missing scalar rather than guessing insertion order") {
+// Invariant: a scalar whose optional subrecord is absent must be written by creating that subrecord where the authoring schema places it.
+TEST_CASE("Native schema SetField creates a missing optional scalar subrecord at its authoring position") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -270,15 +271,26 @@ TEST_CASE("Native schema SetField refuses missing scalar rather than guessing in
     const auto health = backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", "000800:Patch.esp", "REFR\\HealthPercent", "50"
     }));
-    REQUIRE_FALSE(health.has_value());
-    CHECK(health.error().type == "ScalarFieldMissing");
-
+    if (!health.has_value()) FAIL("health set failed: " << health.error().type);
     const auto scale = backend.setFieldValue(nlohmann::json::array({
         "Patch.esp", "000800:Patch.esp", "REFR\\Scale", "1"
     }));
-    REQUIRE_FALSE(scale.has_value());
-    CHECK(scale.error().type == "ScalarFieldMissing");
-    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+    if (!scale.has_value()) FAIL("scale set failed: " << scale.error().type);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(record != nullptr);
+    const auto has = [&](std::string_view signature) {
+        const auto wanted = fo4::Signature::from_string(signature);
+        for (const auto& sub : record->subrecords) {
+            if (sub.signature == wanted) return !sub.data.empty();
+        }
+        return false;
+    };
+    CHECK(has("XHLT"));
+    CHECK(has("XSCL"));
+    CHECK(fo4::test::original_bytes(disk) != before);
 }
 
 TEST_CASE("Native schema SetField requires REFR record type") {

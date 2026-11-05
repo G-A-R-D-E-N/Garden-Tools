@@ -536,6 +536,36 @@ TEST_CASE("Native CreateRecord QUST accepts schema flag names and refuses an unk
     CHECK(std::to_integer<std::uint8_t>(bits->data[1]) == 0x01);
 }
 
+// Invariant: a story manager node must be creatable from the schema and keep a setting whose subrecord the schema leaves optional.
+TEST_CASE("Native CreateRecord SMQN creates a story manager node and stores its settings") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin(0u));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, path);
+    const auto node = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "SMQN", nlohmann::json{
+            {"editorId", "SmNode"}, {"schema", true}}}));
+    if (!node.has_value()) FAIL("SMQN create failed: " << node.error().type << ": " << node.error().message);
+    const auto nodeText = parseResult(node).at("formKey").get<std::string>();
+    const auto nodeKey = fo4::FormKey::parse(nodeText);
+
+    // Invariant: XNAM is optional in the SMQN authoring schema, so this also covers creating an absent subrecord.
+    const auto settings = backend.invokeBackend(
+        "SetField", nlohmann::json::array({"Patch.esp", nodeText, "SMQN\\MaxConcurrentQuests", "2"}));
+    if (!settings.has_value()) FAIL("SMQN setting failed: " << settings.error().type << ": " << settings.error().message);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK(zstringOf(subrecordOf(disk, nodeKey, "EDID")) == "SmNode");
+    const auto* limit = subrecordOf(disk, nodeKey, "XNAM");
+    REQUIRE(limit != nullptr);
+    REQUIRE_FALSE(limit->data.empty());
+    CHECK(std::to_integer<std::uint8_t>(limit->data[0]) == 2);
+}
+
 // Detects: set_field on QUST\Flags, QUST\Priority, QUST\Type and QUST\Name must update a created quest and keep the values after save and reload.
 TEST_CASE("Native set_field edits quest flags, priority, type and title and keeps them after save") {    const auto root = tempRoot();
     Cleanup cleanup{root};

@@ -10,6 +10,7 @@
 #include "fo4/schema/field_address.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/localized_fields.hpp"
+#include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 
 #include <algorithm>
@@ -149,8 +150,55 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   return resolved;
 }
 
-std::optional<std::uint32_t> highest_alias_id(const Plugin& plugin, const FormKey& record_key) {
-  std::optional<std::uint32_t> highest;
+// Requires: an absent optional member is created where the authoring order places it; unlisted members stay refused.
+bool insert_authoring_subrecord(Record& record, Signature subrecord, const schema::ScalarDescriptor& scalar) {
+  const auto constraint = schema::record_authoring_constraint(record.header.signature);
+  if (!constraint) return false;
+  const auto rules = schema::authoring_subrecords(*constraint);
+  std::size_t wanted = rules.size();
+  for (std::size_t rule = 0; rule < rules.size(); ++rule) {
+    if (rules[rule].signature == subrecord) {
+      wanted = rule;
+      break;
+    }
+  }
+  if (wanted == rules.size() || rules[wanted].maximum == 0) return false;
+
+  std::size_t payload = scalar.payload_size;
+  if (payload == 0) payload = schema::scalar_storage_size(scalar.storage);
+  const auto width = schema::scalar_storage_size(scalar.storage);
+  if (scalar.embedded && payload < scalar.offset + width) payload = scalar.offset + width;
+
+  const auto rule_of = [&](Signature signature) {
+    for (std::size_t rule = 0; rule < rules.size(); ++rule) {
+      if (rules[rule].signature == signature) return rule;
+    }
+    return rules.size();
+  };
+  std::size_t insert_at = 0;
+  bool anchored = false;
+  for (std::size_t slot = 0; slot < record.subrecords.size(); ++slot) {
+    if (rule_of(record.subrecords[slot].signature) < wanted) {
+      insert_at = slot + 1;
+      anchored = true;
+    }
+  }
+  if (!anchored) {
+    for (std::size_t slot = 0; slot < record.subrecords.size(); ++slot) {
+      if (rule_of(record.subrecords[slot].signature) > wanted) {
+        insert_at = slot;
+        break;
+      }
+    }
+  }
+  Subrecord member;
+  member.signature = subrecord;
+  member.data.assign(payload, std::byte{0});
+  record.subrecords.insert(record.subrecords.begin() + static_cast<std::ptrdiff_t>(insert_at), std::move(member));
+  return true;
+}
+
+std::optional<std::uint32_t> highest_alias_id(const Plugin& plugin, const FormKey& record_key) {  std::optional<std::uint32_t> highest;
   for (const auto& alias : forms::decode_quest_aliases(plugin, record_key).aliases) {
     if (alias.kind == forms::QuestAliasKind::collection) continue;
     highest = highest ? std::max(*highest, alias.id) : alias.id;
@@ -197,9 +245,15 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
                               " sits in a fixed-size slot and cannot be written generically");
   }
 
-  const auto resolved = scalar_slots(*target, field);
+  auto resolved = scalar_slots(*target, field);
   if (index >= resolved.slots.size() || !resolved.slots[index].valid) {
-    return ScalarMutationStatus::subrecord_missing;
+    if (!insert_authoring_subrecord(*target, field.scalar.subrecord, field.scalar)) {
+      return ScalarMutationStatus::subrecord_missing;
+    }
+    resolved = scalar_slots(*target, field);
+    if (index >= resolved.slots.size() || !resolved.slots[index].valid) {
+      return ScalarMutationStatus::subrecord_missing;
+    }
   }
   const auto slot = resolved.slots[index];
   auto& data = target->subrecords[slot.subrecord].data;
