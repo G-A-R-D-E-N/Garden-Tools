@@ -157,21 +157,14 @@ struct ScriptSource {
     std::string text;
     std::string origin;
     std::string archive;  // Constraint: empty unless the source is a vanilla PEX; "loose" for a Data\Scripts file.
+    bool archiveActive{true};  // Invariant: false only when no active plugin owns the archive that supplied the script.
 };
 
 struct VanillaPex {
     std::string archive;
     std::vector<std::uint8_t> bytes;
+    bool archiveActive{true};
 };
-
-// Invariant: the loaded plugins are in load order, which is the order the game mounts their archives.
-template <class Plugins>
-std::vector<std::string> loadedPluginNames(const Plugins& plugins) {
-    std::vector<std::string> names;
-    names.reserve(plugins.size());
-    for (const auto& loaded : plugins) names.push_back(loaded.name);
-    return names;
-}
 
 // Constraint: archives named for a non-script asset kind are skipped; Misc, Main, DLC and CC archives are always searched.
 bool holdsNoScripts(std::string_view archiveName) {
@@ -223,8 +216,10 @@ std::vector<std::uint8_t> toBytes(std::vector<std::byte> raw) {
 
 // Invariant: a loose Data\Scripts file overrides every archive; otherwise the active archive order decides the winner.
 // Constraint: only archive tables are opened, so a large archive costs its index and never its payload.
+// Requires: allowInactiveArchive is false for an edit, which must not build on a script the game never loads.
 std::optional<VanillaPex> findVanillaPex(const fs::path& dataDirectory, const std::vector<std::string>& pluginNames,
-                                         const std::string& canonical, std::vector<std::string>& notes) {
+                                         const std::string& canonical, bool allowInactiveArchive,
+                                         std::vector<std::string>& notes) {
     const auto wanted = archiveEntryFor(canonical);
     const auto active = activeScriptArchives(dataDirectory, pluginNames);
     const auto inactive = inactiveScriptArchives(dataDirectory, active);
@@ -252,6 +247,7 @@ std::optional<VanillaPex> findVanillaPex(const fs::path& dataDirectory, const st
     if (location->origin == fo4::archive::AssetOrigin::loose) {
         return VanillaPex{"loose", toBytes(readBoundedFile(location->loose_path, kPexLimit))};
     }
+    bool inactiveSource = false;
     if (location->archive < inactiveReadable) {
         std::vector<std::string> holders;
         for (std::size_t i = 0; i < inactiveReadable; ++i) {
@@ -263,12 +259,18 @@ std::optional<VanillaPex> findVanillaPex(const fs::path& dataDirectory, const st
                                      support::joinNames(holders) +
                                      "); load the owning plugin or pass an import directory");
         }
+        // Constraint: a lone inactive archive holds a version the game does not load, so an edit must not start from it.
+        if (!allowInactiveArchive) {
+            throw std::runtime_error("script " + canonical + " is only in " + support::joinNames(holders) +
+                                     ", whose plugin is not active; load the owning plugin or pass an import directory");
+        }
+        inactiveSource = true;
     }
     const auto& reader = assets.archives().at(location->archive);
     if (reader.entries().at(location->entry).unpacked_size() > kPexLimit) {
         throw std::runtime_error("archive entry exceeds its read limit: " + wanted);
     }
-    return VanillaPex{reader.path().filename().string(), toBytes(assets.read(*location))};
+    return VanillaPex{reader.path().filename().string(), toBytes(assets.read(*location)), !inactiveSource};
 }
 
 // Constraint: an import file must resolve inside the imports root, so a junction or symlink under it cannot read another folder.
@@ -281,7 +283,7 @@ void requireInsideImports(const fs::path& file, const fs::path& imports) {
 std::optional<ScriptSource> loadQuestScriptSource(const fs::path& dataDirectory,
                                                   const std::vector<std::string>& pluginNames,
                                                   const std::optional<fs::path>& imports,
-                                                  const std::string& canonical,
+                                                  const std::string& canonical, bool allowInactiveArchive,
                                                   std::vector<std::string>& notes) {
     std::error_code ec;
     if (imports) {
@@ -298,9 +300,10 @@ std::optional<ScriptSource> loadQuestScriptSource(const fs::path& dataDirectory,
         }
     }
     if (dataDirectory.empty()) return std::nullopt;
-    auto found = findVanillaPex(dataDirectory, pluginNames, canonical, notes);
+    auto found = findVanillaPex(dataDirectory, pluginNames, canonical, allowInactiveArchive, notes);
     if (!found) return std::nullopt;
-    return ScriptSource{decompilePex(found->bytes, canonical), "vanilla_pex", found->archive};
+    return ScriptSource{decompilePex(found->bytes, canonical), "vanilla_pex", found->archive, found->archiveActive};
+
 }
 
 struct TextEdit {
@@ -362,6 +365,16 @@ std::optional<std::pair<std::string, std::vector<std::uint8_t>>> RadiclePluginBa
 }
 #endif
 
+// Invariant: the loaded plugins are in load order, which is the order the game mounts their archives.
+std::vector<std::string> RadiclePluginBackend::archivePluginNames() const {
+    // Constraint: lifecycle operations replace plugins_, so the list is only read under the shared lifecycle lock.
+    OpLock lock(*this, OpLock::Mode::Read);
+    std::vector<std::string> names;
+    names.reserve(plugins_.size());
+    for (const auto& loaded : plugins_) names.push_back(loaded.name);
+    return names;
+}
+
 Result<nlohmann::json> RadiclePluginBackend::getQuestScript(const nlohmann::json& args) const {
     try {
         if (!args.is_array() || args.empty() || !args[0].is_string()) {
@@ -380,7 +393,7 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestScript(const nlohmann::json
             if (!imports) return failure("QuestScriptFailed", "import directory is outside trusted writable roots");
         }
         std::vector<std::string> notes;
-        const auto source = loadQuestScriptSource(dataDirectory_, loadedPluginNames(plugins_), imports, *name, notes);
+        const auto source = loadQuestScriptSource(dataDirectory_, archivePluginNames(), imports, *name, true, notes);
         if (!source) {
             std::string message = "no source for " + *name + " in imports or a vanilla BA2 under Data";
             for (const auto& note : notes) message += "; " + note;
@@ -388,7 +401,8 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestScript(const nlohmann::json
         }
         const auto parsed = fo4ide::papyrus::Parser::parse(source->text, *name + ".psc");
         return nlohmann::json{{"script", *name}, {"origin", source->origin}, {"archive", source->archive},
-                              {"source", source->text}, {"extends", parsed.extends.value_or("")},
+                              {"archiveActive", source->archiveActive}, {"source", source->text},
+                              {"extends", parsed.extends.value_or("")},
                               {"parses", !parsed.hasErrors()}, {"notes", notes}};
     } catch (const std::exception& error) {
         return failure("QuestScriptFailed", error.what());
@@ -439,6 +453,8 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
             if (!imports) return failure("QuestScriptFailed", "import directory is outside trusted writable roots");
         }
 
+        // Constraint: plugins_ cannot be read while the write lock is held, so the archive order is snapshotted first.
+        const auto pluginNames = archivePluginNames();
         OpLock lock(*this, OpLock::Mode::Write, {pluginName});
         auto* loaded = findPlugin(pluginName);
         if (!loaded) return failure("QuestScriptFailed", "plugin is not loaded");
@@ -476,8 +492,12 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
             origin = "output_psc";
         } else {
             std::vector<std::string> notes;
-            auto source = loadQuestScriptSource(dataDirectory_, loadedPluginNames(plugins_), imports, *name, notes);
-            if (!source) return failure("QuestScriptNotFound", "no source for " + *name + " in imports or a vanilla BA2 under Data");
+            auto source = loadQuestScriptSource(dataDirectory_, pluginNames, imports, *name, false, notes);
+            if (!source) {
+                std::string message = "no source for " + *name + " in imports or a vanilla BA2 under Data";
+                for (const auto& note : notes) message += "; " + note;
+                return failure("QuestScriptNotFound", message);
+            }
             text = std::move(source->text);
             origin = std::move(source->origin);
         }

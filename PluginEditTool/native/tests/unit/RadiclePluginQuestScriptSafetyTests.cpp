@@ -468,3 +468,28 @@ TEST_CASE("QuestScriptSafety.AmbiguousInactiveArchivesAreRefused") {
     CHECK(fetched.error().message.find("Aaa - Main.ba2") != std::string::npos);
     CHECK(fetched.error().message.find("Zzz - Main.ba2") != std::string::npos);
 }
+
+TEST_CASE("QuestScriptSafety.EditRefusesScriptOnlyInAnInactiveArchive") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    // Constraint: no loaded plugin owns this archive, so the game never loads the script stored inside it.
+    writeScriptArchive(s.data / "Zzz - Main.ba2", compiledPex(stageSource(40), "QF_Synth"));
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    // Invariant: a read may still report the inactive copy, but it must say that no active plugin owns it.
+    const auto fetched = getScript(backend, "QF_Synth", s.imports);
+    REQUIRE(fetched.has_value());
+    CHECK(fetched->at("archive").get<std::string>() == "Zzz - Main.ba2");
+    CHECK_FALSE(fetched->at("archiveActive").get<bool>());
+
+    // Invariant: an edit never builds on a script the game does not load, and it names the archive to load.
+    const auto edited = editScript(backend, "QF_Synth", s.out, editsJson("SetStage(40)", "SetStage(20)"), s.imports);
+    REQUIRE_FALSE(edited.has_value());
+    CHECK(edited.error().type == "QuestScriptFailed");
+    CHECK(edited.error().message.find("Zzz - Main.ba2") != std::string::npos);
+    requireUnchanged(backend, s);
+}

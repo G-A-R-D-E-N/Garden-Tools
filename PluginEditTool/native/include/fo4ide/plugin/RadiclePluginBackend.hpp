@@ -295,6 +295,8 @@ private:
         StateHold restore_;
     };
 
+    // Constraint: plugins_ is replaced by lifecycle operations, so this snapshot takes the lifecycle lock.
+    std::vector<std::string> archivePluginNames() const;
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
     bool stageQuestFragmentMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated,
