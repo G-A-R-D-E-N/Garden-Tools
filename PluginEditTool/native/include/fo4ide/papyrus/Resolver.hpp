@@ -58,16 +58,20 @@ private:
     // points take Node* and downcast internally.
     const Type* resolveMemberTarget(Context& ctx, const Node* target) const;
     const Type* resolveCallee(Context& ctx, const Node* callee) const;
+    const Type* resolveMemberExpression(Context& ctx, const MemberExpression* member,
+                                        bool callPosition) const;
     const Type* resolveExpression(Context& ctx, const Node* expression) const;
     const Type* computeType(Context& ctx, const Node* expression) const;
 
     static Type binaryResult(TokenKind op, const Type& left, const Type& right);
 
+    // callPosition: a callee must bind to a function or event before any same-named property.
     const Binding* lookupName(Context& ctx, const std::string& name, bool inCallPosition) const;
     const Binding* lookupOnChain(Context& ctx, const std::vector<const Script*>& chain,
-                                 const std::string& name, bool globalsOnly) const;
+                                 const std::string& name, bool globalsOnly,
+                                 bool callPosition = false) const;
     const Binding* lookupMember(Context& ctx, const Node* target, const Type& targetType,
-                                const std::string& name) const;
+                                const std::string& name, bool callPosition = false) const;
     static std::optional<Binding> arrayMember(const Type& arrayType, const std::string& name);
 
     const Binding* bindingFor(Context& ctx, const Declaration* declaration,
