@@ -6,7 +6,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / ".github" / "workflows" / "native-real-data.yml"
+WORKFLOW_CANDIDATES = (ROOT / ".github" / "workflows" / "native-ci.yml",
+                       ROOT / ".github" / "public-ci" / "workflows" / "native-ci.yml")
+WORKFLOW = next((path for path in WORKFLOW_CANDIDATES if path.is_file()), WORKFLOW_CANDIDATES[0])
 TEST_FILES = sorted(path
                     for root in (ROOT / "Radicle" / "tests", ROOT / "PluginEditTool" / "native" / "tests")
                     for path in root.rglob("*") if path.suffix in {".cpp", ".hpp", ".h"})
