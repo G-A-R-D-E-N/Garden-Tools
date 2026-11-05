@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -21,6 +22,7 @@
 #include <fo4/schema/vmad.hpp>
 #include <fo4ide/papyrus/Pex.hpp>
 #include "../helpers/GraphTestSupport.hpp"
+#include "../helpers/TempRoot.hpp"
 #include "../../src/plugin/RadiclePluginJournalSession.hpp"
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include <fo4ide/app/PluginBackendTarget.hpp>
@@ -418,7 +420,12 @@ TEST_CASE("Windows localized string staging preserves a Unicode plugin filename"
 // Invariant: a localized quest save whose plugin sits outside the configured Data directory must publish through the held read sources, so the new string rows reach the plugin's own STRINGS table.
 TEST_CASE("Windows localized quest save publishes held sources with a Data directory set") {
 #ifdef _WIN32
-    const auto root = tempRoot(); Cleanup cleanup{root};
+    // Requires: a root whose ancestors grant no untrusted write access, which the Windows journal checks.
+    const char* profile = std::getenv("USERPROFILE");
+    const auto base = (profile && *profile) ? std::filesystem::path(profile)
+                                            : std::filesystem::temp_directory_path();
+    const auto root = base / ("fo4ide_held_save_" + fo4ide_test::uniqueTempName());
+    Cleanup cleanup{root};
     const auto mod = root / "mod";
     const auto plugin = mod / "Patch.esp";
     writeBytes(plugin, questPlugin(fo4::RecordFlags::localized));
@@ -443,9 +450,11 @@ TEST_CASE("Windows localized quest save publishes held sources with a Data direc
     REQUIRE(stages.stages.size() == 1u);
     REQUIRE(stages.stages[0].log_entries.size() == 1u);
     REQUIRE(stages.stages[0].log_entries[0].log_text.has_value());
+    const auto textId = stages.stages[0].log_entries[0].log_text->id;
+    REQUIRE(textId.has_value());
     const auto table = fo4::localization::read_string_table_file(
         mod / "Strings" / "Patch_en.DLSTRINGS", fo4::localization::StringTableKind::dlstrings);
-    REQUIRE(fo4::localization::find_string(table, stages.stages[0].log_entries[0].log_text->id) != nullptr);
+    REQUIRE(fo4::localization::find_string(table, *textId) != nullptr);
 #else
     SUCCEED("held Windows journal destinations are not implemented on this platform");
 #endif
