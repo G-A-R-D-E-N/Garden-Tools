@@ -745,4 +745,36 @@ SceneVmadExtras read_scene_vmad_extras(std::span<const std::byte> data,
   return result;
 }
 
+InfoVmadExtras read_info_vmad_extras(std::span<const std::byte> data,
+                                     std::int16_t object_format) {
+  InfoVmadExtras result;
+  try {
+    Slice slice(data);
+    result.version = static_cast<std::int8_t>(slice.u8());
+    result.flags = slice.u8();
+    std::vector<std::size_t> ignored;
+    walk_script_entry(slice, object_format, ignored);
+    // Constraint: INFO stores no fragment count; the OnBegin/OnEnd flag bits are the count.
+    const unsigned count = (result.flags & 1u) + ((result.flags >> 1) & 1u);
+    result.fragments.reserve(count);
+    for (unsigned i = 0; i < count; ++i) {
+      InfoVmadFragment fragment;
+      fragment.offset = slice.position();
+      fragment.unknown = slice.u8();
+      fragment.script = slice.wstring();
+      fragment.function = slice.wstring();
+      fragment.end = slice.position();
+      result.fragments.push_back(std::move(fragment));
+    }
+    result.fully_consumed = slice.at_end();
+  } catch (const UnsupportedVmadProperty&) {
+    result.unsupported = true;
+    result.unsupported_reason = "a VMAD property in the info extras is unsupported";
+  } catch (const parse_error& error) {
+    result.unsupported = true;
+    result.unsupported_reason = error.what();
+  }
+  return result;
+}
+
 }  // namespace fo4

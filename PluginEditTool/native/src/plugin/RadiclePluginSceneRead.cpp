@@ -1,5 +1,6 @@
 #include "RadiclePluginSupport.hpp"
 #include "RadiclePluginQuestInternal.hpp"
+#include "RadiclePluginFragmentSupport.hpp"
 
 #include <fo4ide/plugin/ConditionCodec.hpp>
 
@@ -229,6 +230,17 @@ nlohmann::json phaseJson(const fo4::Plugin& plugin, const fo4::Record& record, s
     phase["startConditions"] = conditionsJson(plugin, conditionsIn(record, span.open + 1, span.firstNext));
     phase["completionConditions"] =
         conditionsJson(plugin, conditionsIn(record, span.firstNext + 1, span.secondNext));
+    if (const auto extras = fragmentread::read_scene_fragments(record)) {
+        for (const auto& fragment : extras->phases) {
+            if (fragment.index != index) continue;
+            nlohmann::json binding{{"script", fragment.script}, {"function", fragment.function}};
+            if (fragment.flag == 1) {
+                phase["startFragment"] = std::move(binding);
+            } else if (fragment.flag == 2) {
+                phase["completionFragment"] = std::move(binding);
+            }
+        }
+    }
     return phase;
 }
 
