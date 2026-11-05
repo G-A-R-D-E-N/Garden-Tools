@@ -11,6 +11,7 @@
 
 #include <fo4/pex/pex.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4ide/papyrus/QuestFragmentSource.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "../helpers/GraphTestSupport.hpp"
@@ -269,4 +270,49 @@ TEST_CASE("Journal refuses to remove a binding backed by unmanaged script source
     CHECK(readBytes(root / "QF_CoWelcome.pex") == pexBefore);
     CHECK(readBytes(path) == pluginBefore);
     CHECK(listedFragments(reader, key).size() == 1u);
+}
+
+TEST_CASE("Quest fragment source edits carry objective flags and removals without a journal") {
+    using namespace fo4ide::papyrus;
+    const std::vector<QuestFragmentAction> stage10{
+        {QuestFragmentActionKind::Display, 0, false, true, std::nullopt},
+        {QuestFragmentActionKind::Complete, 1, std::nullopt, std::nullopt, false},
+        {QuestFragmentActionKind::SetStage, 10, std::nullopt, std::nullopt, std::nullopt}};
+    const std::vector<QuestFragmentAction> stage20{
+        {QuestFragmentActionKind::Display, 0, true, std::nullopt, std::nullopt}};
+    const auto first = updateQuestFragmentSource({}, "QF_CoWelcome", 10, 0, stage10);
+    REQUIRE(first.has_value());
+    CHECK(isManagedQuestFragmentSource(*first));
+    CHECK(first->find("SetObjectiveDisplayed(0, false, true)") != std::string::npos);
+    CHECK(first->find("SetObjectiveCompleted(1, false)") != std::string::npos);
+    CHECK(first->find("SetStage(10)") != std::string::npos);
+    CHECK(first->find("Fragment_Stage_0010_Item_00") != std::string::npos);
+    const auto both = updateQuestFragmentSource(*first, "QF_CoWelcome", 20, 0, stage20);
+    REQUIRE(both.has_value());
+    const auto removed = removeQuestFragmentSource(*both, "QF_CoWelcome", 10, 0);
+    REQUIRE(removed.has_value());
+    CHECK(removed->find("Fragment_Stage_0010_Item_00") == std::string::npos);
+    CHECK(removed->find("SetObjectiveCompleted(1, false)") == std::string::npos);
+    CHECK(removed->find("Fragment_Stage_0020_Item_00") != std::string::npos);
+    CHECK_FALSE(removeQuestFragmentSource(*removed, "QF_CoWelcome", 10, 0).has_value());
+    const std::string unmanaged = "Scriptname QF_CoWelcome Extends Quest\n";
+    CHECK_FALSE(isManagedQuestFragmentSource(unmanaged));
+    CHECK_FALSE(removeQuestFragmentSource(unmanaged, "QF_CoWelcome", 10, 0).has_value());
+}
+
+TEST_CASE("Quest fragment objective flags stage in memory without a journal") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin(0u));
+    const auto imports = root / "imports"; copyImports(imports);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPatch(backend, path);
+    const auto key = createStagedQuest(backend, {10});
+    const auto actions = nlohmann::json::array({{{"kind", "display"}, {"value", 0}, {"visible", false}, {"force", true}},
+                                                {{"kind", "complete"}, {"value", 1}, {"completed", false}},
+                                                {{"kind", "stage"}, {"value", 10}}});
+    REQUIRE(backend.invokeBackend("SetQuestFragment", fragmentArgs(key, 10, root, imports, actions)).has_value());
+    const auto listed = listedFragments(backend, key);
+    REQUIRE(listed.size() == 1u);
+    CHECK(listed[0].at("function").get<std::string>() == "Fragment_Stage_0010_Item_00");
+    CHECK_FALSE(std::filesystem::exists(root / "QF_CoWelcome.psc"));
+    CHECK_FALSE(std::filesystem::exists(root / "QF_CoWelcome.pex"));
 }
