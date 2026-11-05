@@ -162,6 +162,7 @@ public static class PapyrusDiagnosticCodes
     public const string CannotEmit = "PAP0050";
     public const string UnknownCallTarget = "PAP0051";
     public const string NonConstantInitializer = "PAP0052";
+    public const string ArrayLengthLimit = "PAP0053";
 }
 
 
