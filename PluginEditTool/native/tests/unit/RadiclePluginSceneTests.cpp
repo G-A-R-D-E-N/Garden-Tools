@@ -136,9 +136,8 @@ TEST_CASE("Scene authoring survives save and reload with the same read") {
     REQUIRE(backend.invokeBackend("SetSceneActor", nlohmann::json::array({
         "Patch.esp", scene, 0, nlohmann::json{{"alias", 3}, {"flags", 1}, {"behaviorFlags", 26}}})).has_value());
 
-    const auto action = createdKey(backend.invokeBackend("AddSceneAction", nlohmann::json::array({
-        "Patch.esp", scene, 0, 2})));
-    (void)action;
+    REQUIRE(backend.invokeBackend("AddSceneAction", nlohmann::json::array({
+        "Patch.esp", scene, 0, 2})).has_value());
     REQUIRE(backend.invokeBackend("SetSceneAction", nlohmann::json::array({
         "Patch.esp", scene, 0, nlohmann::json{{"startPhase", 0}, {"endPhase", 0}, {"timerMax", 2.5f},
                                               {"timerMin", 1.5f}}})).has_value());
