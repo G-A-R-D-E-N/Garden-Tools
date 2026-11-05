@@ -86,6 +86,7 @@ add_library(
     plugin/RadiclePluginSound.cpp
     plugin/RadiclePluginPackage.cpp
     plugin/RadiclePluginScripts.cpp
+    plugin/RadiclePluginQuestAliasScripts.cpp
     plugin/RadiclePluginMemory.cpp
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
