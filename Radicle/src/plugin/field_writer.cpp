@@ -150,7 +150,7 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   return resolved;
 }
 
-// Requires: an absent optional member is created where the authoring order places it; unlisted members stay refused.
+// Constraint: only an absent optional member is created where the authoring order places it; required, forbidden or unlisted members stay refused.
 bool insert_authoring_subrecord(Record& record, Signature subrecord, const schema::ScalarDescriptor& scalar) {
   const auto constraint = schema::record_authoring_constraint(record.header.signature);
   if (!constraint) return false;
@@ -162,7 +162,11 @@ bool insert_authoring_subrecord(Record& record, Signature subrecord, const schem
       break;
     }
   }
-  if (wanted == rules.size() || rules[wanted].maximum == 0) return false;
+  if (wanted == rules.size() || rules[wanted].maximum == 0 || rules[wanted].minimum != 0) return false;
+  if (std::any_of(record.subrecords.begin(), record.subrecords.end(),
+                  [&](const Subrecord& sub) { return sub.signature == subrecord; })) {
+    return false;
+  }
 
   std::size_t payload = scalar.payload_size;
   if (payload == 0) payload = schema::scalar_storage_size(scalar.storage);
@@ -198,7 +202,8 @@ bool insert_authoring_subrecord(Record& record, Signature subrecord, const schem
   return true;
 }
 
-std::optional<std::uint32_t> highest_alias_id(const Plugin& plugin, const FormKey& record_key) {  std::optional<std::uint32_t> highest;
+std::optional<std::uint32_t> highest_alias_id(const Plugin& plugin, const FormKey& record_key) {
+  std::optional<std::uint32_t> highest;
   for (const auto& alias : forms::decode_quest_aliases(plugin, record_key).aliases) {
     if (alias.kind == forms::QuestAliasKind::collection) continue;
     highest = highest ? std::max(*highest, alias.id) : alias.id;

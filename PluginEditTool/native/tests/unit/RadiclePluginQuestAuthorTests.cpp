@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <barrier>
 #include <cstdint>
@@ -65,8 +66,8 @@ void convertSnapshotDirectoryToJunction() {
 #endif
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_quest_author_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    return std::filesystem::temp_directory_path() / ("fo4ide_quest_author_" + id);
 }
 
 struct Cleanup {
@@ -829,6 +830,10 @@ TEST_CASE("Native quest stage startUp bit round-trips and preserves unrelated fl
     CHECK(read["stages"][0]["flags"] == 0xA7);
     CHECK(read["stages"][1]["startUp"] == false);
     CHECK(read["stages"][1]["flags"] == 0xA5);
+    CHECK(read["stages"][0]["flagNames"] == nlohmann::json::array({"RunOnStart", "RunOnStop"}));
+    CHECK(read["stages"][0]["unknownFlagBits"] == 0xA1);
+    CHECK(read["stages"][1]["flagNames"] == nlohmann::json::array({"RunOnStop"}));
+    CHECK(read["stages"][1]["unknownFlagBits"] == 0xA1);
 
     const auto update = nlohmann::json::array({
         {{"index", 10}, {"startUp", false}},
@@ -850,4 +855,43 @@ TEST_CASE("Native quest stage startUp bit round-trips and preserves unrelated fl
     CHECK(invalid.error().type == "InvalidQuestStagePayload");
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(readBytes(path) == beforeInvalid);
+}
+
+// Detects: GetQuestStages and GetQuestObjectives must name the known flag bits and report the unnamed remainder, leaving the raw flags unchanged.
+TEST_CASE("Native quest readback names known stage and objective flag bits and reports the unknown remainder") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin(0u));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, path);
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "FlagNameQuest"}, {"name", "Flag name test"}}})));
+    const auto questKey = created.at("formKey").get<std::string>();
+    REQUIRE(backend.invokeBackend("SetQuestStages", nlohmann::json::array({"Patch.esp", questKey,
+        nlohmann::json::array({{{"index", 10}, {"flags", 0x0F}}, {{"index", 20}, {"flags", 0}}})})).has_value());
+    REQUIRE(backend.invokeBackend("SetQuestObjectives", nlohmann::json::array({"Patch.esp", questKey,
+        nlohmann::json::array({{{"index", 10}, {"flags", 0x80000003u}, {"displayText", "Go"},
+                                {"targets", nlohmann::json::array()}}})})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    auto stages = parseResult(backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", questKey})));
+    REQUIRE(stages.at("stages").size() == 2u);
+    CHECK(stages["stages"][0]["flags"] == 0x0F);
+    CHECK(stages["stages"][0]["flagNames"] == nlohmann::json::array(
+        {"RunOnStart", "RunOnStop", "KeepInstanceDataFromHereOn"}));
+    CHECK(stages["stages"][0]["unknownFlagBits"] == 0x01);
+    CHECK(stages["stages"][1]["flagNames"] == nlohmann::json::array());
+    CHECK(stages["stages"][1]["unknownFlagBits"] == 0);
+
+    auto objectives = parseResult(backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", questKey})));
+    REQUIRE(objectives.at("objectives").size() == 1u);
+    CHECK(objectives["objectives"][0]["flags"] == 0x80000003u);
+    CHECK(objectives["objectives"][0]["flagNames"] == nlohmann::json::array(
+        {"ORedWithPrevious", "NoStatsTracking"}));
+    CHECK(objectives["objectives"][0]["unknownFlagBits"] == 0x80000000u);
 }

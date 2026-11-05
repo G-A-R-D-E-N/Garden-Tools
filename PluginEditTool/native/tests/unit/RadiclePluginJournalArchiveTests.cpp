@@ -1,4 +1,5 @@
 #include "../../src/plugin/RadiclePluginBa2Source.hpp"
+#include "../helpers/TempRoot.hpp"
 #include "../../src/plugin/RadiclePluginJournalSession.hpp"
 #include "../../src/plugin/RadiclePluginJournalPeers.hpp"
 #include "../../src/plugin/RadiclePluginJournalReadStrings.hpp"
@@ -36,7 +37,7 @@ using namespace fo4ide::plugin::detail;
 struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(path, ec); } };
 std::filesystem::path tempRoot() {
     return std::filesystem::temp_directory_path() / ("fo4ide_archive_journal_" +
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        fo4ide_test::uniqueTempName());
 }
 void write(const std::filesystem::path& path, const std::vector<std::byte>& bytes) {
     std::filesystem::create_directories(path.parent_path()); std::ofstream stream(path, std::ios::binary);

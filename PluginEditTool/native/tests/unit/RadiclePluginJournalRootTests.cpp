@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -101,7 +102,7 @@ std::filesystem::path testRoot(std::string_view label) {
 #endif
     return parent /
         ("fo4ide_journal_root_" + std::string(label) + "_" +
-         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+         fo4ide_test::uniqueTempName());
 }
 
 struct Cleanup {
