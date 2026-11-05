@@ -140,6 +140,7 @@ add_executable(
     unit/RadiclePluginQuestAuthorTests.cpp
     unit/RadiclePluginQuestFragmentAuthorTests.cpp
     unit/RadiclePluginQuestScriptEditTests.cpp
+    unit/RadiclePluginQuestScriptSafetyTests.cpp
     unit/RadiclePluginJournalRootTests.cpp
     unit/RadiclePluginJournalIntegrationTests.cpp
     unit/RadiclePluginJournalDirectoryTests.cpp

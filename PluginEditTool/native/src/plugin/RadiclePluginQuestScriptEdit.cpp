@@ -52,6 +52,13 @@ bool identifierName(std::string_view name) {
     });
 }
 
+// Constraint: Windows reserves these device names with or without an extension, so no segment may name a device instead of a file.
+bool reservedWindowsName(std::string_view part) {
+    const auto stem = support::asciiLower(part.substr(0, part.find('.')));
+    if (stem == "con" || stem == "prn" || stem == "aux" || stem == "nul") return true;
+    return stem.size() == 4 && (stem.starts_with("com") || stem.starts_with("lpt")) && stem[3] >= '1' && stem[3] <= '9';
+}
+
 // Constraint: ':', '/' and '\\' all separate namespace segments; the result is always ':'-joined and every segment is an identifier.
 std::optional<std::string> canonicalScriptName(std::string_view raw) {
     if (raw.empty() || raw.size() > kMaxQualifiedNameLength) return std::nullopt;
@@ -61,7 +68,7 @@ std::optional<std::string> canonicalScriptName(std::string_view raw) {
     for (;;) {
         const auto at = raw.find_first_of(":/\\", start);
         const auto part = raw.substr(start, at == std::string_view::npos ? std::string_view::npos : at - start);
-        if (!identifierName(part) || ++segments > kMaxNameSegments) return std::nullopt;
+        if (!identifierName(part) || reservedWindowsName(part) || ++segments > kMaxNameSegments) return std::nullopt;
         if (segments > 1) canonical += ':';
         canonical += part;
         if (at == std::string_view::npos) return canonical;
