@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include "../helpers/TempRoot.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -20,8 +21,7 @@ struct SourceRoot {
     std::string path = [] {
         const auto dir = std::filesystem::temp_directory_path() /
                          ("fo4ide-symbols-" +
-                          std::to_string(
-                              std::chrono::steady_clock::now().time_since_epoch().count()));
+                          fo4ide_test::uniqueTempName());
         std::filesystem::create_directories(dir);
         return dir.string();
     }();
