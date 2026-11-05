@@ -1,5 +1,5 @@
+#include <fo4/archive/assets.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
-#include <fo4ide/archive/Ba2Reader.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 #include <fo4ide/papyrus/Decompiler.hpp>
 #include <fo4ide/papyrus/Parser.hpp>
@@ -164,6 +164,15 @@ struct VanillaPex {
     std::vector<std::uint8_t> bytes;
 };
 
+// Invariant: the loaded plugins are in load order, which is the order the game mounts their archives.
+template <class Plugins>
+std::vector<std::string> loadedPluginNames(const Plugins& plugins) {
+    std::vector<std::string> names;
+    names.reserve(plugins.size());
+    for (const auto& loaded : plugins) names.push_back(loaded.name);
+    return names;
+}
+
 // Constraint: archives named for a non-script asset kind are skipped; Misc, Main, DLC and CC archives are always searched.
 bool holdsNoScripts(std::string_view archiveName) {
     const auto lower = support::asciiLower(archiveName);
@@ -173,62 +182,93 @@ bool holdsNoScripts(std::string_view archiveName) {
                        [&](std::string_view kind) { return lower.find(kind) != std::string::npos; });
 }
 
-std::string normalizedArchivePath(std::string path) {
-    auto normalized = support::asciiLower(path);
-    std::replace(normalized.begin(), normalized.end(), '\\', '/');
-    return normalized;
+// Invariant: the game mounts the base archives and every active plugin's own archives in load order.
+std::vector<fs::path> activeScriptArchives(const fs::path& dataDirectory,
+                                           const std::vector<std::string>& pluginNames) {
+    std::vector<std::string> names{"Fallout4.esm"};
+    for (const auto& plugin : pluginNames) {
+        if (!sameName(plugin, "Fallout4.esm")) names.push_back(plugin);
+    }
+    std::vector<fs::path> archives;
+    for (const auto& path : fo4::archive::archive_load_order(dataDirectory, {}, names)) {
+        if (!holdsNoScripts(path.filename().string())) archives.push_back(path);
+    }
+    return archives;
 }
 
-// Invariant: a loose Data\Scripts file overrides every archive; otherwise the last archive in load order holding the script wins.
-// Constraint: Fallout4 - Misc.ba2 is opened first and its errors propagate; other unreadable archives are skipped and recorded in notes.
-std::optional<VanillaPex> findVanillaPex(const fs::path& dataDirectory, const std::string& canonical,
-                                         std::vector<std::string>& notes) {
+// Constraint: an archive in Data that no active plugin owns is only a fallback, so it can never shadow an active one.
+std::vector<fs::path> inactiveScriptArchives(const fs::path& dataDirectory, const std::vector<fs::path>& active) {
+    std::vector<fs::path> archives;
     std::error_code ec;
-    const auto loose = namespacedFile(dataDirectory / "Scripts", canonical, ".pex");
-    if (fs::is_regular_file(loose, ec)) return VanillaPex{"loose", toBytes(readBoundedFile(loose, kPexLimit))};
-
-    const auto wanted = archiveEntryFor(canonical);
-    std::vector<fs::path> archives{dataDirectory / std::string(kMiscArchive)};
-    std::vector<fs::path> others;
     for (const auto& entry : fs::directory_iterator(dataDirectory, ec)) {
         if (!entry.is_regular_file(ec)) continue;
-        const auto name = entry.path().filename().string();
-        if (support::asciiLower(entry.path().extension().string()) != ".ba2" || name == kMiscArchive ||
-            holdsNoScripts(name)) continue;
-        others.push_back(entry.path());
+        if (support::asciiLower(entry.path().extension().string()) != ".ba2" ||
+            holdsNoScripts(entry.path().filename().string())) continue;
+        const bool known = std::any_of(active.begin(), active.end(), [&](const fs::path& path) {
+            return sameName(path.filename().string(), entry.path().filename().string());
+        });
+        if (!known) archives.push_back(entry.path());
     }
-    std::sort(others.begin(), others.end(), [](const fs::path& a, const fs::path& b) {
+    std::sort(archives.begin(), archives.end(), [](const fs::path& a, const fs::path& b) {
         return support::asciiLower(a.filename().string()) < support::asciiLower(b.filename().string());
     });
-    archives.insert(archives.end(), others.begin(), others.end());
+    return archives;
+}
 
-    // Invariant: each archive is opened once per call and records only the index of its script entry, so nothing is extracted yet.
-    std::vector<std::optional<std::size_t>> hits(archives.size());
-    for (std::size_t n = 0; n < archives.size(); ++n) {
-        if (!fs::is_regular_file(archives[n], ec)) continue;
-        try {
-            const auto reader = fo4ide::archive::Ba2Reader::open(archives[n]);
-            for (std::size_t i = 0; i < reader.entryCount(); ++i) {
-                if (normalizedArchivePath(reader.entryPath(i)) != wanted) continue;
-                hits[n] = i;
-                break;
+std::vector<std::uint8_t> toBytes(std::vector<std::byte> raw) {
+    std::vector<std::uint8_t> out(raw.size());
+    std::transform(raw.begin(), raw.end(), out.begin(), [](std::byte b) { return static_cast<std::uint8_t>(b); });
+    return out;
+}
+
+// Invariant: a loose Data\Scripts file overrides every archive; otherwise the active archive order decides the winner.
+// Constraint: only archive tables are opened, so a large archive costs its index and never its payload.
+std::optional<VanillaPex> findVanillaPex(const fs::path& dataDirectory, const std::vector<std::string>& pluginNames,
+                                         const std::string& canonical, std::vector<std::string>& notes) {
+    const auto wanted = archiveEntryFor(canonical);
+    const auto active = activeScriptArchives(dataDirectory, pluginNames);
+    const auto inactive = inactiveScriptArchives(dataDirectory, active);
+
+    // Invariant: inactive archives sit below every active one, and unreadable ones are dropped with a note.
+    std::vector<fs::path> readable;
+    std::size_t inactiveReadable = 0;
+    for (const auto* group : {&inactive, &active}) {
+        for (const auto& path : *group) {
+            try {
+                fo4::archive::Ba2Reader::open(path);
+                readable.push_back(path);
+                if (group == &inactive) ++inactiveReadable;
+            } catch (const std::exception& error) {
+                // Constraint: a broken Misc archive fails the lookup, since it holds most vanilla scripts.
+                if (sameName(path.filename().string(), kMiscArchive)) throw;
+                notes.push_back("skipped unreadable archive " + path.filename().string() + ": " + error.what());
             }
-        } catch (const std::exception& error) {
-            if (n == 0) throw;
-            notes.push_back("skipped unreadable archive " + archives[n].filename().string() + ": " + error.what());
         }
     }
 
-    std::optional<std::size_t> winner;
-    for (std::size_t n = 0; n < hits.size(); ++n) {
-        if (hits[n]) winner = n;
+    const auto assets = fo4::archive::AssetResolver::open(dataDirectory, readable);
+    const auto location = assets.locate(wanted);
+    if (!location) return std::nullopt;
+    if (location->origin == fo4::archive::AssetOrigin::loose) {
+        return VanillaPex{"loose", toBytes(readBoundedFile(location->loose_path, kPexLimit))};
     }
-    if (!winner) return std::nullopt;
-    const auto reader = fo4ide::archive::Ba2Reader::open(archives[*winner]);
-    const auto raw = reader.extract(*hits[*winner]);
-    std::vector<std::uint8_t> copy(raw.size());
-    std::transform(raw.begin(), raw.end(), copy.begin(), [](std::byte b) { return static_cast<std::uint8_t>(b); });
-    return VanillaPex{archives[*winner].filename().string(), std::move(copy)};
+    if (location->archive < inactiveReadable) {
+        std::vector<std::string> holders;
+        for (std::size_t i = 0; i < inactiveReadable; ++i) {
+            if (assets.archives()[i].find(wanted)) holders.push_back(assets.archives()[i].path().filename().string());
+        }
+        // Constraint: two inactive archives may hold different versions, so no winner is provable and the lookup refuses.
+        if (holders.size() > 1) {
+            throw std::runtime_error("script " + canonical + " is in several archives whose plugins are not active (" +
+                                     support::joinNames(holders) +
+                                     "); load the owning plugin or pass an import directory");
+        }
+    }
+    const auto& reader = assets.archives().at(location->archive);
+    if (reader.entries().at(location->entry).unpacked_size() > kPexLimit) {
+        throw std::runtime_error("archive entry exceeds its read limit: " + wanted);
+    }
+    return VanillaPex{reader.path().filename().string(), toBytes(assets.read(*location))};
 }
 
 // Constraint: an import file must resolve inside the imports root, so a junction or symlink under it cannot read another folder.
@@ -239,6 +279,7 @@ void requireInsideImports(const fs::path& file, const fs::path& imports) {
 }
 
 std::optional<ScriptSource> loadQuestScriptSource(const fs::path& dataDirectory,
+                                                  const std::vector<std::string>& pluginNames,
                                                   const std::optional<fs::path>& imports,
                                                   const std::string& canonical,
                                                   std::vector<std::string>& notes) {
@@ -257,7 +298,7 @@ std::optional<ScriptSource> loadQuestScriptSource(const fs::path& dataDirectory,
         }
     }
     if (dataDirectory.empty()) return std::nullopt;
-    auto found = findVanillaPex(dataDirectory, canonical, notes);
+    auto found = findVanillaPex(dataDirectory, pluginNames, canonical, notes);
     if (!found) return std::nullopt;
     return ScriptSource{decompilePex(found->bytes, canonical), "vanilla_pex", found->archive};
 }
@@ -339,7 +380,7 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestScript(const nlohmann::json
             if (!imports) return failure("QuestScriptFailed", "import directory is outside trusted writable roots");
         }
         std::vector<std::string> notes;
-        const auto source = loadQuestScriptSource(dataDirectory_, imports, *name, notes);
+        const auto source = loadQuestScriptSource(dataDirectory_, loadedPluginNames(plugins_), imports, *name, notes);
         if (!source) {
             std::string message = "no source for " + *name + " in imports or a vanilla BA2 under Data";
             for (const auto& note : notes) message += "; " + note;
@@ -435,7 +476,7 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
             origin = "output_psc";
         } else {
             std::vector<std::string> notes;
-            auto source = loadQuestScriptSource(dataDirectory_, imports, *name, notes);
+            auto source = loadQuestScriptSource(dataDirectory_, loadedPluginNames(plugins_), imports, *name, notes);
             if (!source) return failure("QuestScriptNotFound", "no source for " + *name + " in imports or a vanilla BA2 under Data");
             text = std::move(source->text);
             origin = std::move(source->origin);

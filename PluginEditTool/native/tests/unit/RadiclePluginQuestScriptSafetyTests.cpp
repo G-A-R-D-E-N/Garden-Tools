@@ -106,6 +106,15 @@ void loadPatch(RadiclePluginBackend& backend, const fs::path& path) {
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
 }
 
+// Constraint: archive precedence follows the loaded plugin order, so tests state that order explicitly.
+void loadPlugins(RadiclePluginBackend& backend, const std::vector<std::pair<std::string, fs::path>>& plugins) {
+    Args list = Args::array();
+    for (const auto& [name, path] : plugins) {
+        list.push_back({{"name", name}, {"path", path.string()}, {"source", "QuestScriptSafety"}, {"resolved", true}});
+    }
+    REQUIRE(backend.invoke("environment.LoadMo2", Args{{"plugins", list}}).has_value());
+}
+
 std::string editsJson(const std::string& find, const std::string& replace) {
     return Args::array({Args{{"find", find}, {"replace", replace}}}).dump();
 }
@@ -370,7 +379,7 @@ TEST_CASE("QuestScriptSafety.LooseScriptOverridesVanillaArchive") {
     CHECK(fetched->at("notes").empty());
 }
 
-TEST_CASE("QuestScriptSafety.LaterArchiveOverridesMiscAndTexturesArchiveIsSkipped") {
+TEST_CASE("QuestScriptSafety.LaterActiveArchiveOverridesMiscAndTexturesArchiveIsSkipped") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     auto s = makeSandbox(root);
@@ -379,9 +388,14 @@ TEST_CASE("QuestScriptSafety.LaterArchiveOverridesMiscAndTexturesArchiveIsSkippe
     writeScriptArchive(s.data / "DLCRobot - Main.ba2", compiledPex(stageSource(20), "QF_Synth"));
     // Constraint: " - Textures" archives hold no scripts, so this copy sorts last yet must never be read.
     writeScriptArchive(s.data / "Zeta - Textures.ba2", compiledPex(stageSource(40), "QF_Synth"));
+    writeBytes(s.data / "Fallout4.esm", emptyPlugin());
+    writeBytes(s.data / "DLCRobot.esm", emptyPlugin());
     RadiclePluginBackend backend;
     backend.setDataDirectory(s.data);
-    loadPatch(backend, s.plugin);
+    // Invariant: DLCRobot.esm is loaded after Fallout4.esm, so its archive wins as it does in the game.
+    loadPlugins(backend, {{"Fallout4.esm", s.data / "Fallout4.esm"},
+                          {"DLCRobot.esm", s.data / "DLCRobot.esm"},
+                          {std::string(kPluginName), s.plugin}});
 
     const auto fetched = getScript(backend, "QF_Synth", s.imports);
     REQUIRE(fetched.has_value());
@@ -413,4 +427,44 @@ TEST_CASE("QuestScriptSafety.CorruptNonMiscArchiveIsSkippedAndNoted") {
     REQUIRE(notes.is_array());
     REQUIRE(notes.size() == 1);
     CHECK(notes[0].get<std::string>().find("DLCRobot - Main.ba2") != std::string::npos);
+}
+
+TEST_CASE("QuestScriptSafety.InactiveArchiveCannotShadowTheActiveScript") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeScriptArchive(s.data / "Fallout4 - Misc.ba2", compiledPex(stageSource(10), "QF_Synth"));
+    // Constraint: this archive belongs to no loaded plugin and sorts last, which is what a filename-ordered scan picked.
+    writeScriptArchive(s.data / "Zzz - Main.ba2", compiledPex(stageSource(40), "QF_Synth"));
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    // Invariant: only an active plugin's archive may supply a script, so the inactive copy must never win.
+    const auto fetched = getScript(backend, "QF_Synth", s.imports);
+    REQUIRE(fetched.has_value());
+    CHECK(fetched->at("archive").get<std::string>() == "Fallout4 - Misc.ba2");
+    const auto source = fetched->at("source").get<std::string>();
+    CHECK(source.find("SetStage(10)") != std::string::npos);
+    CHECK(source.find("SetStage(40)") == std::string::npos);
+}
+
+TEST_CASE("QuestScriptSafety.AmbiguousInactiveArchivesAreRefused") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeScriptArchive(s.data / "Aaa - Main.ba2", compiledPex(stageSource(10), "QF_Synth"));
+    writeScriptArchive(s.data / "Zzz - Main.ba2", compiledPex(stageSource(40), "QF_Synth"));
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    // Constraint: with no active archive holding the script, two inactive copies leave no evidence for a winner.
+    const auto fetched = getScript(backend, "QF_Synth", s.imports);
+    REQUIRE_FALSE(fetched.has_value());
+    CHECK(fetched.error().type == "QuestScriptFailed");
+    CHECK(fetched.error().message.find("Aaa - Main.ba2") != std::string::npos);
+    CHECK(fetched.error().message.find("Zzz - Main.ba2") != std::string::npos);
 }
