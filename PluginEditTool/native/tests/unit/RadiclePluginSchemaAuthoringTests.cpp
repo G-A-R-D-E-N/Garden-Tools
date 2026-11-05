@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -17,7 +18,7 @@ namespace {
 
 struct Fixture {
     std::filesystem::path root = std::filesystem::temp_directory_path() /
-        ("fo4ide_authoring_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("fo4ide_authoring_" + fo4ide_test::uniqueTempName());
     std::filesystem::path path = root / "Authoring.esp";
     fo4::FormKey key;
     fo4ide::plugin::RadiclePluginBackend backend;

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
@@ -17,7 +18,7 @@ namespace {
 
 struct Fixture {
     std::filesystem::path root = std::filesystem::temp_directory_path() /
-        ("fo4ide_w0_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("fo4ide_w0_" + fo4ide_test::uniqueTempName());
     std::filesystem::path path = root / "W0.esp";
     fo4ide::plugin::RadiclePluginBackend backend;
 

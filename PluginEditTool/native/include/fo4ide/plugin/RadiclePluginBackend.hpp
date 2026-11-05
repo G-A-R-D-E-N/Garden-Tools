@@ -141,6 +141,11 @@ public:
     Result<nlohmann::json> removeScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addAliasScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeAliasScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addAliasScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeAliasScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setAliasScriptValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addPackageProcedure(const nlohmann::json& arguments) override;

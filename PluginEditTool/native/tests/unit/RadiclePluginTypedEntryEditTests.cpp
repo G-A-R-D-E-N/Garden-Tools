@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -22,9 +23,9 @@
 namespace {
 
 std::filesystem::path entryEditTempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_typed_entry_edit_" + std::to_string(id));
+           ("fo4ide_typed_entry_edit_" + id);
 }
 
 struct EntryEditCleanup {

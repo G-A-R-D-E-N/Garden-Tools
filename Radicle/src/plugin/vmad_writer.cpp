@@ -10,6 +10,7 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -470,6 +471,98 @@ VmadStructureMutationStatus remove_quest_fragment(Plugin& plugin, const FormKey&
   return VmadStructureMutationStatus::updated;
 }
 
+ScalarMutationStatus write_property_value(const Plugin& plugin, std::vector<std::byte>& data,
+                                          std::size_t base, const VmadProperty& property,
+                                          const VmadValue& value, std::size_t element_index,
+                                          std::int16_t format) {
+  const bool array = property.type >= 11 && property.type <= 15;
+  const auto type = array ? property.type - 10 : property.type;
+  if (type < 1 || type > 5 || static_cast<std::size_t>(type) != value.index() + 1) {
+    throw schema::ScalarError("VMAD property type does not match the typed setter");
+  }
+  if ((array && element_index >= *property.element_count) || (!array && element_index != 0)) {
+    return ScalarMutationStatus::subrecord_missing;
+  }
+  auto at = base + property.value_offset + (array ? 4 : 0);
+  for (std::size_t i = 0; i < element_index; ++i) {
+    at += value_width(data, at, static_cast<std::uint8_t>(type));
+  }
+  const auto width = value_width(data, at, static_cast<std::uint8_t>(type));
+  const auto old = std::span<const std::byte>(data).subspan(at, width);
+  const auto encoded = encode_value(plugin, value, old, format);
+  if (std::equal(old.begin(), old.end(), encoded.begin(), encoded.end())) {
+    return ScalarMutationStatus::unchanged;
+  }
+  splice(data, at, width, encoded);
+  return ScalarMutationStatus::updated;
+}
+
+struct QuestAliasEdit {
+  Record* record{nullptr};
+  Subrecord* vmad{nullptr};
+  std::size_t tail_start{0};
+  std::int16_t object_format{0};
+  bool has_extras{false};
+  QuestVmadExtras extras;
+};
+
+void read_quest_alias_extras(QuestAliasEdit& edit) {
+  edit.extras = read_quest_vmad_extras(
+      std::span<const std::byte>(edit.vmad->data).subspan(edit.tail_start), edit.object_format);
+  if (edit.extras.unsupported) {
+    throw schema::ScalarError(edit.extras.unsupported_reason.empty()
+                                  ? "VMAD quest extras are unsupported"
+                                  : edit.extras.unsupported_reason);
+  }
+  if (!edit.extras.fully_consumed) {
+    throw schema::ScalarError("VMAD quest extras were not fully consumed");
+  }
+  edit.has_extras = true;
+}
+
+std::optional<VmadStructureMutationStatus> load_quest_aliases(Plugin& plugin,
+                                                              const FormKey& record_key,
+                                                              QuestAliasEdit& edit) {
+  if (const auto* record = detail::find_mutable_record(plugin, record_key);
+      record != nullptr && record->header.signature != sig_qust) {
+    return VmadStructureMutationStatus::not_authorable;
+  }
+  VmadEdit vmad;
+  const auto lookup = load_vmad(plugin, record_key, vmad);
+  if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (vmad.record->header.signature != sig_qust) {
+    return VmadStructureMutationStatus::not_authorable;
+  }
+  edit.record = vmad.record;
+  edit.vmad = vmad.vmad;
+  edit.tail_start = vmad.leading_end;
+  edit.object_format = vmad.scripts.object_format;
+  if (vmad.scripts.trailing_bytes != 0) read_quest_alias_extras(edit);
+  return std::nullopt;
+}
+
+void open_quest_alias_extras(QuestAliasEdit& edit) {
+  if (edit.has_extras) return;
+  const std::vector<std::byte> header{std::byte{3}, std::byte{0}, std::byte{0}, std::byte{0},
+                                      std::byte{0}, std::byte{0}, std::byte{0}};
+  splice(edit.vmad->data, edit.tail_start, 0, header);
+  read_quest_alias_extras(edit);
+}
+
+std::optional<std::size_t> find_quest_alias(const QuestAliasEdit& edit, std::int16_t alias_id) {
+  std::optional<std::size_t> found;
+  for (std::size_t index = 0; index < edit.extras.aliases.size(); ++index) {
+    if (edit.extras.aliases[index].alias_id != alias_id) continue;
+    if (found.has_value()) throw schema::ScalarError("the quest VMAD binds one alias twice");
+    found = index;
+  }
+  return found;
+}
+
+std::size_t alias_script_end(const QuestVmadAliasScripts& alias, std::size_t script) {
+  return script + 1 < alias.scripts.size() ? alias.scripts[script + 1].offset : alias.end;
+}
+
 }
 
 VmadStructureMutationStatus add_vmad(Plugin& plugin, const FormKey& record_key) {
@@ -680,6 +773,141 @@ VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const For
   return remove_quest_fragment(plugin, record_key, stage, stage_index);
 }
 
+VmadStructureMutationStatus add_quest_alias_script(Plugin& plugin, const FormKey& record_key,
+                                                   std::int16_t alias_id, std::size_t index,
+                                                   std::string_view name, std::uint8_t flags) {
+  QuestAliasEdit edit;
+  if (const auto refusal = load_quest_aliases(plugin, record_key, edit)) return *refusal;
+  if (name.empty()) throw schema::ScalarError("VMAD script name is required");
+  std::vector<std::byte> script;
+  append_name(script, name);
+  append_u8(script, flags);
+  append_u16(script, 0);
+  if (const auto found = find_quest_alias(edit, alias_id)) {
+    const auto& alias = edit.extras.aliases[*found];
+    if (index > alias.scripts.size()) return VmadStructureMutationStatus::index_out_of_range;
+    for (const auto& existing : alias.scripts) {
+      if (same_name(existing.name, name)) return VmadStructureMutationStatus::already_present;
+    }
+    if (alias.scripts.size() >= std::numeric_limits<std::uint16_t>::max()) {
+      throw schema::ScalarError("the quest alias script list is full");
+    }
+    const auto at = edit.tail_start +
+                    (index < alias.scripts.size() ? alias.scripts[index].offset : alias.end);
+    splice(edit.vmad->data, at, 0, script);
+    put(edit.vmad->data, edit.tail_start + alias.script_count_offset,
+        static_cast<std::uint32_t>(alias.scripts.size() + 1), 2);
+  } else {
+    if (index != 0) return VmadStructureMutationStatus::index_out_of_range;
+    if (edit.extras.aliases.size() >= std::numeric_limits<std::uint16_t>::max()) {
+      throw schema::ScalarError("the quest alias list is full");
+    }
+    if (edit.object_format != 2) {
+      throw schema::ScalarError(
+          "a new quest alias entry requires VMAD object format 2; this VMAD uses object format " +
+          std::to_string(edit.object_format) + ", whose layout is unverified");
+    }
+    open_quest_alias_extras(edit);
+    std::vector<std::byte> entry;
+    // Constraint: a new alias entry's object form ID is the quest's own form ID from its record header (3245 of 3245 vanilla entries); record C:\Users\Ricky\Documents\CodeNotes-GARDEN\GardenTools\Radicle\src\plugin\vmad_writer.cpp.md, census tools/census_quest_alias_words.py.
+    append_object(entry, edit.record->header.form_id, alias_id, edit.object_format);
+    // Constraint: a new alias entry writes version 6, the constant the CreationKit alias writer uses; record C:\Users\Ricky\Documents\CodeNotes-GARDEN\GardenTools\Radicle\src\plugin\vmad_writer.cpp.md.
+    append_u16(entry, 6);
+    append_u16(entry, static_cast<std::uint16_t>(edit.object_format));
+    append_u16(entry, 1);
+    entry.insert(entry.end(), script.begin(), script.end());
+    auto at = edit.tail_start + edit.extras.aliases_count_offset + 2;
+    for (const auto& alias : edit.extras.aliases) {
+      if (alias.alias_id > alias_id) {
+        at = edit.tail_start + alias.offset;
+        break;
+      }
+      at = edit.tail_start + alias.end;
+    }
+    splice(edit.vmad->data, at, 0, entry);
+    put(edit.vmad->data, edit.tail_start + edit.extras.aliases_count_offset,
+        static_cast<std::uint32_t>(edit.extras.aliases.size() + 1), 2);
+  }
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus remove_quest_alias_script(Plugin& plugin, const FormKey& record_key,
+                                                      std::int16_t alias_id, std::size_t index) {
+  QuestAliasEdit edit;
+  if (const auto refusal = load_quest_aliases(plugin, record_key, edit)) return *refusal;
+  const auto found = find_quest_alias(edit, alias_id);
+  if (!found) return VmadStructureMutationStatus::binding_missing;
+  const auto& alias = edit.extras.aliases[*found];
+  if (index >= alias.scripts.size()) return VmadStructureMutationStatus::index_out_of_range;
+  if (alias.scripts.size() == 1) {
+    splice(edit.vmad->data, edit.tail_start + alias.offset, alias.end - alias.offset, {});
+    put(edit.vmad->data, edit.tail_start + edit.extras.aliases_count_offset,
+        static_cast<std::uint32_t>(edit.extras.aliases.size() - 1), 2);
+  } else {
+    const auto begin = alias.scripts[index].offset;
+    const auto end = alias_script_end(alias, index);
+    splice(edit.vmad->data, edit.tail_start + begin, end - begin, {});
+    put(edit.vmad->data, edit.tail_start + alias.script_count_offset,
+        static_cast<std::uint32_t>(alias.scripts.size() - 1), 2);
+  }
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus add_quest_alias_script_property(Plugin& plugin,
+                                                            const FormKey& record_key,
+                                                            std::int16_t alias_id, std::size_t script,
+                                                            std::size_t index,
+                                                            const VmadProperty& property) {
+  QuestAliasEdit edit;
+  if (const auto refusal = load_quest_aliases(plugin, record_key, edit)) return *refusal;
+  const auto found = find_quest_alias(edit, alias_id);
+  if (!found) return VmadStructureMutationStatus::binding_missing;
+  const auto& alias = edit.extras.aliases[*found];
+  if (script >= alias.scripts.size()) return VmadStructureMutationStatus::index_out_of_range;
+  const auto& target = alias.scripts[script];
+  if (index > target.properties.size()) return VmadStructureMutationStatus::index_out_of_range;
+  for (const auto& existing : target.properties) {
+    if (same_name(existing.name, property.name)) return VmadStructureMutationStatus::already_present;
+  }
+  if (target.properties.size() >= std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("the quest alias property list is full");
+  }
+  const auto encoded = encode_property(property, alias.script_format);
+  const auto at = edit.tail_start + (index < target.properties.size()
+                                         ? target.properties[index].offset
+                                         : alias_script_end(alias, script));
+  splice(edit.vmad->data, at, 0, encoded);
+  put(edit.vmad->data, edit.tail_start + target.property_count_offset,
+      static_cast<std::uint32_t>(target.properties.size() + 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus remove_quest_alias_script_property(Plugin& plugin,
+                                                               const FormKey& record_key,
+                                                               std::int16_t alias_id,
+                                                               std::size_t script,
+                                                               std::size_t index) {
+  QuestAliasEdit edit;
+  if (const auto refusal = load_quest_aliases(plugin, record_key, edit)) return *refusal;
+  const auto found = find_quest_alias(edit, alias_id);
+  if (!found) return VmadStructureMutationStatus::binding_missing;
+  const auto& alias = edit.extras.aliases[*found];
+  if (script >= alias.scripts.size()) return VmadStructureMutationStatus::index_out_of_range;
+  const auto& target = alias.scripts[script];
+  if (index >= target.properties.size()) return VmadStructureMutationStatus::index_out_of_range;
+  const auto& property = target.properties[index];
+  const auto begin = property.offset;
+  const auto end = property.value_offset + property.value_size;
+  splice(edit.vmad->data, edit.tail_start + begin, end - begin, {});
+  put(edit.vmad->data, edit.tail_start + target.property_count_offset,
+      static_cast<std::uint32_t>(target.properties.size() - 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
 ScalarMutationStatus set_vmad_property(Plugin& plugin, const FormKey& record_key,
                                         std::size_t script_index, std::size_t property_index,
                                         const VmadValue& value, std::size_t element_index) {
@@ -689,37 +917,39 @@ ScalarMutationStatus set_vmad_property(Plugin& plugin, const FormKey& record_key
     return lookup == VmadLookup::record_missing ? ScalarMutationStatus::record_missing
                                                 : ScalarMutationStatus::subrecord_missing;
   }
-  auto* vmad = edit.vmad;
   const auto& scripts = edit.scripts;
   if (script_index >= scripts.scripts.size() ||
       property_index >= scripts.scripts[script_index].properties.size()) {
     return ScalarMutationStatus::subrecord_missing;
   }
-  const auto& property = scripts.scripts[script_index].properties[property_index];
-  const bool array = property.type >= 11 && property.type <= 15;
-  const auto type = array ? property.type - 10 : property.type;
-  if (type < 1 || type > 5 || static_cast<std::size_t>(type) != value.index() + 1) {
-    throw schema::ScalarError("VMAD property type does not match the typed setter");
+  const auto status = write_property_value(plugin, edit.vmad->data, 0,
+                                           scripts.scripts[script_index].properties[property_index],
+                                           value, element_index, scripts.object_format);
+  if (status == ScalarMutationStatus::updated) detail::mark_record_modified(plugin, *edit.record);
+  return status;
+}
+
+VmadStructureMutationStatus set_quest_alias_script_value(Plugin& plugin, const FormKey& record_key,
+                                                         std::int16_t alias_id, std::size_t script,
+                                                         std::size_t property, const VmadValue& value,
+                                                         std::size_t element_index) {
+  QuestAliasEdit edit;
+  if (const auto refusal = load_quest_aliases(plugin, record_key, edit)) return *refusal;
+  const auto found = edit.has_extras ? find_quest_alias(edit, alias_id) : std::nullopt;
+  if (!found) return VmadStructureMutationStatus::subrecord_missing;
+  const auto& alias = edit.extras.aliases[*found];
+  if (script >= alias.scripts.size() || property >= alias.scripts[script].properties.size()) {
+    return VmadStructureMutationStatus::subrecord_missing;
   }
-  if ((array && element_index >= *property.element_count) || (!array && element_index != 0)) {
-    return ScalarMutationStatus::subrecord_missing;
+  const auto status = write_property_value(plugin, edit.vmad->data, edit.tail_start,
+                                           alias.scripts[script].properties[property], value,
+                                           element_index, alias.script_format);
+  if (status == ScalarMutationStatus::updated) {
+    detail::mark_record_modified(plugin, *edit.record);
+    return VmadStructureMutationStatus::updated;
   }
-  auto at = property.value_offset + (array ? 4 : 0);
-  for (std::size_t i = 0; i < element_index; ++i) {
-    at += value_width(vmad->data, at, static_cast<std::uint8_t>(type));
-  }
-  const auto width = value_width(vmad->data, at, static_cast<std::uint8_t>(type));
-  const auto old = std::span<const std::byte>(vmad->data).subspan(at, width);
-  const auto encoded = encode_value(plugin, value, old, scripts.object_format);
-  if (std::equal(old.begin(), old.end(), encoded.begin(), encoded.end())) {
-    return ScalarMutationStatus::unchanged;
-  }
-  auto replacement = vmad->data;
-  replacement.erase(replacement.begin() + at, replacement.begin() + at + width);
-  replacement.insert(replacement.begin() + at, encoded.begin(), encoded.end());
-  vmad->data = std::move(replacement);
-  detail::mark_record_modified(plugin, *edit.record);
-  return ScalarMutationStatus::updated;
+  if (status == ScalarMutationStatus::unchanged) return VmadStructureMutationStatus::unchanged;
+  return VmadStructureMutationStatus::subrecord_missing;
 }
 
 }

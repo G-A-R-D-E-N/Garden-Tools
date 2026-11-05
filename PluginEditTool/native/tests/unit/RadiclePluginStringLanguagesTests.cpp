@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -18,8 +19,7 @@ namespace {
 
 std::filesystem::path tempRoot() {
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_string_languages_" + std::to_string(
-               std::chrono::steady_clock::now().time_since_epoch().count()));
+           ("fo4ide_string_languages_" + fo4ide_test::uniqueTempName());
 }
 
 struct Cleanup {

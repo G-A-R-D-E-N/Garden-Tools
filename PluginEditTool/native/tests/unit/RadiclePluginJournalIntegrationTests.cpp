@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -37,8 +38,8 @@ void write(const std::filesystem::path& path, const std::vector<std::byte>& data
 }
 void interrupt(std::size_t count) { if (count == 3) throw std::runtime_error("interrupted"); }
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_quest_author_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    return std::filesystem::temp_directory_path() / ("fo4ide_quest_author_" + id);
 }
 
 struct Cleanup {
@@ -110,7 +111,7 @@ std::vector<std::byte> journalBytes(std::string_view text) {
 TEST_CASE("Journal recovers plugin multiple string tables and quest scripts together") {
 #ifdef __linux__
     namespace fs = std::filesystem;
-    const auto root = fs::temp_directory_path() / ("fo4ide_multi_journal_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root = fs::temp_directory_path() / ("fo4ide_multi_journal_" + fo4ide_test::uniqueTempName());
     const auto plugin = root / "Patch.esp", strings = root / "Custom" / "Strings";
     const auto psc = root / "Scripts" / "QF_Test.psc", pex = root / "Scripts" / "QF_Test.pex";
     const auto oldPlugin = fo4::test::make_tes4_plugin(0, 1.0f, {});
