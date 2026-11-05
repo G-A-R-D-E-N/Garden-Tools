@@ -380,3 +380,34 @@ TEST_CASE("Decompiler disassemble lists functions and instructions") {
     CHECK(text.find(".function Go -> None") != std::string::npos);
     CHECK(text.find("assign") != std::string::npos);
 }
+
+TEST_CASE("Decompiler an inherited auto property read maps back to the property name") {
+    const std::string base = "Scriptname InheritBase\nint Property Count = 3 Auto\n";
+    const std::string child =
+            "Scriptname InheritChild extends InheritBase\n"
+            "Function Go()\n"
+            "    int i = Count\n"
+            "    Count = i + 1\n"
+            "EndFunction\n";
+
+    Fixture f;
+    f.writeWithScriptObject();
+    f.write("InheritBase", base);
+    f.write("InheritChild", child);
+    auto pex = f.compile("InheritChild");
+    REQUIRE(pex != nullptr);
+    const std::string text = Decompiler::toSource(*pex);
+    INFO("decompiled source:\n" << text);
+    CHECK(text.find("_Count_var") == std::string::npos);
+    CHECK(text.find("i = Count") != std::string::npos);
+    CHECK(text.find("Count = (i + 1)") != std::string::npos);
+
+    Fixture f2;
+    f2.writeWithScriptObject();
+    f2.write("InheritBase", base);
+    f2.write("InheritChild", text);
+    auto again = f2.compile("InheritChild");
+    REQUIRE(again != nullptr);
+    REQUIRE(again->objects.size() == 1);
+    CHECK(firstDifference(pex->objects[0], again->objects[0]).empty());
+}

@@ -29,6 +29,10 @@ bool startsWith(std::string_view text, std::string_view prefix) {
     return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
 }
 
+bool endsWith(std::string_view text, std::string_view suffix) {
+    return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
+}
+
 std::string cap(std::string s) {
     if (s.empty()) return s;
     s[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
@@ -279,7 +283,14 @@ struct BodyState {
 
     std::string resolveName(const std::string& n) const {
         const auto it = backing.find(n);
-        return it == backing.end() ? n : it->second;
+        if (it != backing.end()) return it->second;
+        // Inherited auto property backing vars must map back to the property name.
+        constexpr std::string_view kSuffix = "_var";
+        if (startsWith(n, "::") && n.size() > 2 + kSuffix.size() && endsWith(n, kSuffix) &&
+            !types.contains(n)) {
+            return n.substr(2, n.size() - 2 - kSuffix.size());
+        }
+        return n;
     }
 
     static std::string san(std::string_view n) {
