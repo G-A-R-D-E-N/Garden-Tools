@@ -536,8 +536,8 @@ TEST_CASE("Native CreateRecord QUST accepts schema flag names and refuses an unk
     CHECK(std::to_integer<std::uint8_t>(bits->data[1]) == 0x01);
 }
 
-// Invariant: a story manager node must be creatable from the schema and keep a setting whose subrecord the schema leaves optional.
-TEST_CASE("Native CreateRecord SMQN creates a story manager node and stores its settings") {
+// Invariant: a story manager node must be creatable, keep a setting whose subrecord the schema leaves optional, and hold the quest attached to it.
+TEST_CASE("Native CreateRecord SMQN creates a story manager node and attaches a quest") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -545,6 +545,10 @@ TEST_CASE("Native CreateRecord SMQN creates a story manager node and stores its 
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPatch(backend, path);
+    const auto quest = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "QUST", nlohmann::json{
+            {"editorId", "SmQuest"}, {"name", "SmQuest"}}})));
+    const auto questKey = quest.at("formKey").get<std::string>();
     const auto node = backend.invokeBackend(
         "CreateRecord", nlohmann::json::array({"Patch.esp", "SMQN", nlohmann::json{
             {"editorId", "SmNode"}, {"schema", true}}}));
@@ -556,6 +560,9 @@ TEST_CASE("Native CreateRecord SMQN creates a story manager node and stores its 
     const auto settings = backend.invokeBackend(
         "SetField", nlohmann::json::array({"Patch.esp", nodeText, "SMQN\\MaxConcurrentQuests", "2"}));
     if (!settings.has_value()) FAIL("SMQN setting failed: " << settings.error().type << ": " << settings.error().message);
+    const auto link = backend.invokeBackend(
+        "InsertFormLinkListElement", nlohmann::json::array({"Patch.esp", nodeText, "SMQN\\Quests", 0, questKey}));
+    if (!link.has_value()) FAIL("SMQN quest link failed: " << link.error().type << ": " << link.error().message);
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 
     const auto disk = fo4::read_plugin_file(path);
@@ -564,10 +571,18 @@ TEST_CASE("Native CreateRecord SMQN creates a story manager node and stores its 
     REQUIRE(limit != nullptr);
     REQUIRE_FALSE(limit->data.empty());
     CHECK(std::to_integer<std::uint8_t>(limit->data[0]) == 2);
+    const auto* quests = subrecordOf(disk, nodeKey, "NNAM");
+    REQUIRE(quests != nullptr);
+    const auto linked = std::to_integer<std::uint32_t>(quests->data[0]) |
+                        (std::to_integer<std::uint32_t>(quests->data[1]) << 8) |
+                        (std::to_integer<std::uint32_t>(quests->data[2]) << 16) |
+                        (std::to_integer<std::uint32_t>(quests->data[3]) << 24);
+    CHECK(linked != 0u);
 }
 
 // Detects: set_field on QUST\Flags, QUST\Priority, QUST\Type and QUST\Name must update a created quest and keep the values after save and reload.
-TEST_CASE("Native set_field edits quest flags, priority, type and title and keeps them after save") {    const auto root = tempRoot();
+TEST_CASE("Native set_field edits quest flags, priority, type and title and keeps them after save") {
+    const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
     writeBytes(path, emptyPlugin(0u));
