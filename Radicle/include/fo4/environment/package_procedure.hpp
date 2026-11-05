@@ -145,4 +145,35 @@ PackageTreeMutationStatus remove_package_procedure_node(Plugin& plugin,
                                                         const FormKey& record_key,
                                                         std::size_t node_index);
 
+enum class TravelPackageStatus {
+  created,
+  invalid_editor_id,
+  location_unsupported,
+  location_form_missing,
+  location_form_unexpected,
+  speed_invalid,
+  form_unresolvable,
+};
+
+struct TravelPackageOptions {
+  PackageLocationType location_type{PackageLocationType::near_reference};
+  std::optional<FormKey> location_form;
+  std::int32_t radius{0};
+  std::uint8_t preferred_speed{1};
+  bool prefer_preferred_path{false};
+  bool use_soft_radius{false};
+  bool ignore_marker_orientation{false};
+};
+
+struct TravelPackageResult {
+  TravelPackageStatus status;
+  FormKey key;
+};
+
+TravelPackageResult create_travel_package(Plugin& plugin,
+                                          std::string_view editor_id,
+                                          const TravelPackageOptions& options);
+
+const char* travel_package_status_message(TravelPackageStatus status);
+
 }

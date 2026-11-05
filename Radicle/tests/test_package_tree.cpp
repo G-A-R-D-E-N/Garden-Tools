@@ -9,6 +9,7 @@
 #include <cstring>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -51,6 +52,32 @@ std::uint32_t pkcu_input_count(const Plugin& plugin, std::uint32_t local) {
     }
   }
   return 0;
+}
+
+const std::vector<std::byte>* subrecord_data(const Record& record, std::string_view signature) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == Signature::from_string(signature)) return &sub.data;
+  }
+  return nullptr;
+}
+
+std::uint32_t word_at(const std::vector<std::byte>& data, std::size_t offset) {
+  std::uint32_t value = 0;
+  std::memcpy(&value, data.data() + offset, 4);
+  return value;
+}
+
+std::vector<std::string> signatures_of(const Record& record) {
+  std::vector<std::string> out;
+  for (const auto& sub : record.subrecords) out.push_back(sub.signature.to_string());
+  return out;
+}
+
+env::TravelPackageOptions travel(env::PackageLocationType type, std::optional<FormKey> form = std::nullopt) {
+  env::TravelPackageOptions options;
+  options.location_type = type;
+  options.location_form = form;
+  return options;
 }
 
 }  // namespace
@@ -185,4 +212,120 @@ TEST(PackageTree, RemovesALeafAndKeepsTheRestOfTheTreeStable) {
   EXPECT_EQ(decoded.nodes[2].name, "Activate");
   const auto reloaded = read_plugin(write_plugin(plugin), "Pack.esp");
   EXPECT_TRUE(env::decode_package_procedure(*find_record(reloaded, key(0x800))).decoded);
+}
+
+TEST(PackageTree, CreatesATravelPackageThatDecodesWithFourInputsAndOneTravelLeaf) {
+  auto plugin = read_fixture();
+  const auto created = env::create_travel_package(plugin, "TravelTest",
+                                                  travel(env::PackageLocationType::near_reference, key(0x800)));
+  ASSERT_EQ(created.status, env::TravelPackageStatus::created);
+  const auto* record = find_record(plugin, created.key);
+  ASSERT_NE(record, nullptr);
+  const auto tree = env::decode_package_procedure(*record);
+  ASSERT_TRUE(tree.decoded);
+  ASSERT_EQ(tree.inputs.size(), 4u);
+  EXPECT_EQ(tree.inputs[0].index, 1);
+  EXPECT_EQ(tree.inputs[1].index, 3);
+  EXPECT_EQ(tree.inputs[2].index, 5);
+  EXPECT_EQ(tree.inputs[3].index, 7);
+  ASSERT_EQ(tree.nodes.size(), 2u);
+  EXPECT_EQ(tree.nodes[0].name, "Sequence");
+  EXPECT_EQ(tree.nodes[0].kind, env::PackageProcedureKind::container);
+  EXPECT_EQ(tree.nodes[1].name, "Travel");
+  EXPECT_EQ(tree.nodes[1].kind, env::PackageProcedureKind::leaf);
+  EXPECT_EQ(leaf_input_ids(*record, tree.nodes[1]),
+            (std::vector<std::uint8_t>{1, 0xFF, 3, 5, 7, 0xFF, 0xFF, 0xFF}));
+
+  const auto* pkcu = subrecord_data(*record, "PKCU");
+  ASSERT_NE(pkcu, nullptr);
+  ASSERT_EQ(pkcu->size(), 12u);
+  EXPECT_EQ(word_at(*pkcu, 0), 4u);
+  EXPECT_EQ(word_at(*pkcu, 4), 0u);
+  EXPECT_EQ(word_at(*pkcu, 8), 1u);
+  const auto* xnam = subrecord_data(*record, "XNAM");
+  ASSERT_NE(xnam, nullptr);
+  EXPECT_EQ(*xnam, std::vector<std::byte>{std::byte{8}});
+  const auto* pldt = subrecord_data(*record, "PLDT");
+  ASSERT_NE(pldt, nullptr);
+  ASSERT_EQ(pldt->size(), 16u);
+  EXPECT_EQ(word_at(*pldt, 0), 0u);
+  EXPECT_EQ(word_at(*pldt, 4), encode_plugin_form_id(key(0x800), plugin_form_id_context(plugin)).value());
+}
+
+TEST(PackageTree, CreatesATravelPackageWithTheVanillaSubrecordOrderAndRereadsByteIdentically) {
+  auto plugin = read_fixture();
+  const auto created = env::create_travel_package(plugin, "TravelTest", travel(env::PackageLocationType::near_self));
+  ASSERT_EQ(created.status, env::TravelPackageStatus::created);
+  const std::vector<std::string> vanilla_order = {
+      "EDID", "PKDT", "PSDT", "PKCU", "ANAM", "PLDT", "ANAM", "CNAM", "ANAM", "CNAM", "ANAM", "CNAM",
+      "UNAM", "UNAM", "UNAM", "UNAM", "XNAM", "ANAM", "CITC", "PRCB", "ANAM", "CITC", "PNAM", "FNAM",
+      "PKC2", "PKC2", "PKC2", "PKC2", "PKC2", "PKC2", "PKC2", "PKC2",
+      "UNAM", "BNAM", "PNAM", "UNAM", "BNAM", "PNAM", "UNAM", "BNAM", "PNAM", "UNAM", "BNAM", "PNAM",
+      "POBA", "INAM", "PDTO", "POEA", "INAM", "PDTO", "POCA", "INAM", "PDTO"};
+  const auto* record = find_record(plugin, created.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(signatures_of(*record), vanilla_order);
+  const auto bytes = write_plugin(plugin);
+  const auto reread = read_plugin(bytes, "Pack.esp");
+  EXPECT_EQ(write_plugin(reread), bytes);
+  const auto* reloaded = find_record(reread, created.key);
+  ASSERT_NE(reloaded, nullptr);
+  EXPECT_EQ(signatures_of(*reloaded), vanilla_order);
+}
+
+TEST(PackageTree, TravelNonDefaultOptionsDetectSwappedFlagsWrongSpeedAndIgnoredRadius) {
+  auto plugin = read_fixture();
+  auto options = travel(env::PackageLocationType::in_cell, key(0x800));
+  options.radius = 300;
+  options.preferred_speed = 0;
+  options.prefer_preferred_path = true;
+  options.use_soft_radius = false;
+  options.ignore_marker_orientation = true;
+  const auto created = env::create_travel_package(plugin, "TravelOptions", options);
+  ASSERT_EQ(created.status, env::TravelPackageStatus::created);
+  const auto* record = find_record(plugin, created.key);
+  ASSERT_NE(record, nullptr);
+
+  const auto* pkdt = subrecord_data(*record, "PKDT");
+  ASSERT_NE(pkdt, nullptr);
+  ASSERT_EQ(pkdt->size(), 12u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>((*pkdt)[6]), 0u);
+
+  std::vector<std::uint8_t> flag_bytes;
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature == Signature::from_string("CNAM") && sub.data.size() == 1) {
+      flag_bytes.push_back(std::to_integer<std::uint8_t>(sub.data[0]));
+    }
+  }
+  EXPECT_EQ(flag_bytes, (std::vector<std::uint8_t>{1, 0, 1}));
+
+  const auto* pldt = subrecord_data(*record, "PLDT");
+  ASSERT_NE(pldt, nullptr);
+  ASSERT_EQ(pldt->size(), 16u);
+  EXPECT_EQ(word_at(*pldt, 0), 1u);
+  EXPECT_EQ(word_at(*pldt, 8), 300u);
+}
+
+TEST(PackageTree, RefusesABadTravelPayloadWithoutTouchingThePlugin) {
+  auto plugin = read_fixture();
+  const auto original = write_plugin(plugin);
+  EXPECT_EQ(env::create_travel_package(plugin, std::string_view("Tra\0vel", 7),
+                                       travel(env::PackageLocationType::near_self)).status,
+            env::TravelPackageStatus::invalid_editor_id);
+  EXPECT_EQ(env::create_travel_package(plugin, "", travel(env::PackageLocationType::near_self)).status,
+            env::TravelPackageStatus::invalid_editor_id);
+  EXPECT_EQ(env::create_travel_package(plugin, "Travel",
+                                       travel(env::PackageLocationType::near_reference,
+                                              FormKey{PluginKey::from_filename("Missing.esp"), LocalFormId{0x800}}))
+                .status,
+            env::TravelPackageStatus::form_unresolvable);
+  EXPECT_EQ(env::create_travel_package(plugin, "Travel", travel(env::PackageLocationType::near_reference)).status,
+            env::TravelPackageStatus::location_form_missing);
+  EXPECT_EQ(env::create_travel_package(plugin, "Travel",
+                                       travel(env::PackageLocationType::near_self, key(0x800))).status,
+            env::TravelPackageStatus::location_form_unexpected);
+  auto fast = travel(env::PackageLocationType::near_self);
+  fast.preferred_speed = 4;
+  EXPECT_EQ(env::create_travel_package(plugin, "Travel", fast).status, env::TravelPackageStatus::speed_invalid);
+  EXPECT_EQ(write_plugin(plugin), original);
 }

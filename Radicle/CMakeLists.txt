@@ -282,6 +282,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/environment/vegetation.cpp
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
+  src/environment/package_create.cpp
   src/environment/package_procedure.cpp
   src/environment/package_procedure_tree.cpp
   src/environment/dialogue.cpp
