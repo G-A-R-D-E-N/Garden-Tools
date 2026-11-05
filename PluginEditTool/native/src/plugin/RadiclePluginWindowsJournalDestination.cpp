@@ -14,6 +14,7 @@
 #include <array>
 #include <cstring>
 #include <limits>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -149,7 +150,7 @@ void requireSafe(HANDLE handle, bool directory, bool ancestor = false) {
             throw std::runtime_error("destination permits untrusted mutation" + describeHandle(handle));
     }
 }
-Handle openChild(HANDLE parent, const std::wstring& name, bool directory, ACCESS_MASK extraAccess = 0) {
+Handle openChild(HANDLE parent, const std::wstring& name, bool directory, ACCESS_MASK extraAccess = 0, bool absentIfDeletePending = false) {
     UNICODE_STRING component{};
     component.Length = static_cast<USHORT>(name.size() * sizeof(wchar_t));
     component.MaximumLength = component.Length;
@@ -166,9 +167,13 @@ Handle openChild(HANDLE parent, const std::wstring& name, bool directory, ACCESS
         FILE_ATTRIBUTE_NORMAL, directory ? FILE_SHARE_READ | FILE_SHARE_WRITE : FILE_SHARE_READ, FILE_OPEN,
         FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | (directory ? FILE_DIRECTORY_FILE : FILE_NON_DIRECTORY_FILE), nullptr, 0);
     if (status < 0) {
+        if (absentIfDeletePending && status == kWindowsDeletePendingStatus) return {};
         const auto error = ::RtlNtStatusToDosError(status);
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) return {};
-        throw std::system_error(static_cast<int>(error), std::system_category(), "open destination component");
+        std::ostringstream text;
+        text << "open destination component " << narrowName(name) << " NTSTATUS 0x" << std::hex << std::uppercase
+             << static_cast<unsigned long>(status);
+        throw std::system_error(static_cast<int>(error), std::system_category(), text.str());
     }
     return Handle(raw);
 }
@@ -467,7 +472,7 @@ WindowsJournalReplacementArtifacts JournalDestination::replacementArtifacts(cons
     std::array<Handle, 3> files{
         openChild(parent, wideName(request.destination), false),
         openChild(parent, wideName(request.staged), false),
-        openChild(parent, wideName(request.backup), false)};
+        openChild(parent, wideName(request.backup), false, 0, true)};
     std::array<std::optional<WindowsJournalFileSnapshot>*, 3> outputs{&result.destination, &result.staged, &result.backup};
     const std::array<std::uint64_t, 3> bounds{std::max(originalSize, finalSize), finalSize, originalSize};
     for (std::size_t i = 0; i < files.size(); ++i) {
