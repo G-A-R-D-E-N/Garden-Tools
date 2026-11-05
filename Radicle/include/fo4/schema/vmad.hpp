@@ -144,8 +144,12 @@ struct QuestVmadFragment {
 
 struct QuestVmadAliasScripts {
   std::int16_t alias_id{0};
+  std::int16_t version{0};
   std::int16_t script_format{0};
   std::vector<VmadScript> scripts;
+  std::size_t offset{0};
+  std::size_t script_count_offset{0};
+  std::size_t end{0};
 };
 
 struct QuestVmadExtras {
@@ -158,6 +162,7 @@ struct QuestVmadExtras {
   bool fully_consumed{false};
   std::size_t count_offset{0};
   std::size_t entries_begin{0};
+  std::size_t aliases_count_offset{0};
 };
 
 QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int16_t object_format);

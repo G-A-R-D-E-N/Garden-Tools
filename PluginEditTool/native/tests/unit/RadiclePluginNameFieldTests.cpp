@@ -1,4 +1,5 @@
 #include <cstring>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -24,8 +25,8 @@ constexpr std::string_view kNamedTypes[] = {
 };
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_name_field_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    return std::filesystem::temp_directory_path() / ("fo4ide_name_field_" + id);
 }
 
 struct Cleanup {

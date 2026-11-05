@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <span>
 #include <optional>
@@ -126,7 +127,7 @@ std::filesystem::path makeSplitRoot() {
     DWORD length = static_cast<DWORD>(profile.size());
     REQUIRE(::GetUserProfileDirectoryW(token.value, profile.data(), &length));
     const auto path = std::filesystem::path(profile.data()) / ("journal_split_apply_" +
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        fo4ide_test::uniqueTempName());
     REQUIRE(::CreateDirectoryW(path.c_str(), nullptr));
     return path;
 }

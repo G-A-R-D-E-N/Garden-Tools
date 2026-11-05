@@ -1,4 +1,5 @@
 #include "../../src/plugin/RadiclePluginJournalDestination.hpp"
+#include "../helpers/TempRoot.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -26,8 +27,8 @@ struct Cleanup {
 
 // Detects: source directory enumeration must fail when entries change during its held-directory scan.
 TEST_CASE("Journal source inventory rejects concurrent directory mutation") {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    const auto root = std::filesystem::temp_directory_path() / ("fo4ide_inventory_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    const auto root = std::filesystem::temp_directory_path() / ("fo4ide_inventory_" + id);
     Cleanup cleanup{root}; std::filesystem::create_directories(root);
     std::ofstream(root / "existing.ba2").put('x');
     const auto identity = fo4ide::plugin::detail::JournalDestination::captureRoot(root);

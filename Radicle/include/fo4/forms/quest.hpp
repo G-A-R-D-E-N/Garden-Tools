@@ -244,6 +244,16 @@ struct QuestStage {
   std::vector<Subrecord> leading_members;
 };
 
+// Constraint: only 0x02, 0x04 and 0x08 are named; 0x01 and 0x10-0x80 stay unnamed (no evidence).
+enum class QuestStageFlag : std::uint8_t {
+  // Constraint: RVA 0xaeceb0 (E:\RE-work\scratch\ck_research\dlg_handlers.txt) writes this from control 0x875, dialog 3240 'Run on start?'.
+  RunOnStart = 0x02,
+  // Constraint: RVA 0xaeceb0 (E:\RE-work\scratch\ck_research\dlg_handlers.txt) writes this from control 0x876, dialog 3240 'Run on stop?'.
+  RunOnStop = 0x04,
+  // Constraint: RVA 0xaeceb0 (E:\RE-work\scratch\ck_research\dlg_handlers.txt) writes this from control 0x877, dialog 3240 'Keep Instance Data From Here On'.
+  KeepInstanceDataFromHereOn = 0x08,
+};
+
 struct QuestStages {
   std::vector<QuestStage> stages;
 };
@@ -282,6 +292,14 @@ struct QuestObjective {
   std::optional<schema::LocalizedString> display_text;
   // 66 shipped objectives carry no target at all.
   std::vector<QuestObjectiveTarget> targets;
+};
+
+// Constraint: only 0x01 and 0x02 are named; bits 2-31 stay unnamed (no evidence).
+enum class QuestObjectiveFlag : std::uint32_t {
+  // Constraint: RVA 0xa0dbc0 (E:\RE-work\scratch\ck_research\dlg_handlers.txt) reads this, dialog 3245 'ORed With Previous'.
+  ORedWithPrevious = 0x01,
+  // Constraint: RVA 0xa0dbc0 (E:\RE-work\scratch\ck_research\dlg_handlers.txt) reads this, dialog 3245 'No Stats Tracking'.
+  NoStatsTracking = 0x02,
 };
 
 struct QuestObjectives {

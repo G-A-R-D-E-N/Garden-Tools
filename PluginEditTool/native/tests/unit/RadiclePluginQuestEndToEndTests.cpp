@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -23,8 +24,8 @@
 namespace {
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_quest_e2e_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    return std::filesystem::temp_directory_path() / ("fo4ide_quest_e2e_" + id);
 }
 
 struct Cleanup {
@@ -179,7 +180,6 @@ TEST_CASE("Quest end-to-end build survives plain atomic save and reload") {
 }
 
 TEST_CASE("Quest end-to-end fragment publishes through the journal and reloads its VMAD binding") {
-#ifdef __linux__
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -228,7 +228,4 @@ TEST_CASE("Quest end-to-end fragment publishes through the journal and reloads i
         "GetQuestStages", nlohmann::json::array({"Patch.esp", questKey})));
     REQUIRE(readStages.at("stages").size() == 1u);
     CHECK(readStages.at("stages")[0].at("index") == 10);
-#else
-    SUCCEED("quest fragment journal publish is verified on Linux only");
-#endif
 }

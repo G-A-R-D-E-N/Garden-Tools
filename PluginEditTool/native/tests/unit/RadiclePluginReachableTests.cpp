@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -38,7 +39,7 @@ std::vector<std::byte> gamePlugin() {
 
 TEST_CASE("Native FindUnreachable lists records no root reaches") {
     const auto root = std::filesystem::temp_directory_path() /
-        ("fo4ide_reachable_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("fo4ide_reachable_" + fo4ide_test::uniqueTempName());
     std::filesystem::create_directories(root);
     const auto bytes = gamePlugin();
     std::ofstream(root / "Game.esm", std::ios::binary)

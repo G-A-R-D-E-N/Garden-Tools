@@ -104,6 +104,35 @@ nlohmann::json logTextJson(const std::optional<fo4::schema::LocalizedString>& te
     return out;
 }
 
+struct NamedFlagBit {
+    std::uint32_t bit;
+    const char* name;
+};
+
+constexpr std::array<NamedFlagBit, 3> kStageFlagNames{{
+    {static_cast<std::uint32_t>(fo4::forms::QuestStageFlag::RunOnStart), "RunOnStart"},
+    {static_cast<std::uint32_t>(fo4::forms::QuestStageFlag::RunOnStop), "RunOnStop"},
+    {static_cast<std::uint32_t>(fo4::forms::QuestStageFlag::KeepInstanceDataFromHereOn), "KeepInstanceDataFromHereOn"},
+}};
+
+constexpr std::array<NamedFlagBit, 2> kObjectiveFlagNames{{
+    {static_cast<std::uint32_t>(fo4::forms::QuestObjectiveFlag::ORedWithPrevious), "ORedWithPrevious"},
+    {static_cast<std::uint32_t>(fo4::forms::QuestObjectiveFlag::NoStatsTracking), "NoStatsTracking"},
+}};
+
+template <std::size_t N>
+void addNamedFlags(nlohmann::json& row, std::uint32_t flags, const std::array<NamedFlagBit, N>& names) {
+    nlohmann::json set = nlohmann::json::array();
+    std::uint32_t known = 0;
+    for (const auto& flag : names) {
+        if ((flags & flag.bit) == 0) continue;
+        set.push_back(flag.name);
+        known |= flag.bit;
+    }
+    row["flagNames"] = std::move(set);
+    row["unknownFlagBits"] = flags & ~known;
+}
+
 }  // namespace
 
 Result<std::vector<fo4::env::PluginStringTable>> RadiclePluginBackend::readQuestStringTables(
@@ -190,9 +219,12 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestStages(const nlohmann::json
                 row["note"] = fo4::text::windows1252_to_utf8(entry.note.value_or(std::string{}));
                 entries.push_back(std::move(row));
             }
-            out.push_back({{"index", stage.index}, {"flags", stage.flags},
-                           {"startUp", (stage.flags & 0x02u) != 0},
-                           {"logEntries", entries}});
+            nlohmann::json row{{"index", stage.index}, {"flags", stage.flags},
+                               {"startUp", (stage.flags & static_cast<std::uint8_t>(
+                                                              fo4::forms::QuestStageFlag::RunOnStart)) != 0},
+                               {"logEntries", entries}};
+            addNamedFlags(row, stage.flags, kStageFlagNames);
+            out.push_back(std::move(row));
         }
         return nlohmann::json{{"stages", out}};
     } catch (const fo4::forms::QuestError& error) {
@@ -272,6 +304,7 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestObjectives(const nlohmann::
                 }
             }
             row["displayText"] = text;
+            addNamedFlags(row, objective.flags, kObjectiveFlagNames);
             out.push_back(std::move(row));
         }
         return nlohmann::json{{"objectives", out}};
