@@ -253,6 +253,8 @@ public:
 
     fo4ide::Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json& args) override {
         return recordTypedCall("RemoveScenePhaseFragment", args);
+    }
+
     fo4ide::Result<nlohmann::json> addAliasScript(const nlohmann::json& args) override {
         return recordTypedCall("AddAliasScript", args);
     }
