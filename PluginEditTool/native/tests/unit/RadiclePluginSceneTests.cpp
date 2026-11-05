@@ -125,12 +125,13 @@ TEST_CASE("Scene authoring survives save and reload with the same read") {
 
     REQUIRE(backend.invokeBackend("AddScenePhase", nlohmann::json::array({
         "Patch.esp", scene, 0, nlohmann::json{{"name", "Opening"}}})).has_value());
+    nlohmann::json startConditions = nlohmann::json::array();
+    startConditions.push_back(nlohmann::json{
+        {"function", "GetStage"}, {"operator", ">="}, {"value", 5}, {"param1", 2}});
     REQUIRE(backend.invokeBackend("SetScenePhase", nlohmann::json::array({
         "Patch.esp", scene, 0, nlohmann::json{{"editorWidth", 400}, {"flags", 1},
                                               {"questStageOnStart", 10},
-                                              {"startConditions", nlohmann::json::array(
-                                                  {{{"function", "GetStage"}, {"operator", ">="},
-                                                    {"value", 5}, {"param1", 2}}})}}})).has_value());
+                                              {"startConditions", startConditions}}})).has_value());
     REQUIRE(backend.invokeBackend("AddSceneActor", nlohmann::json::array({"Patch.esp", scene, 0})).has_value());
     REQUIRE(backend.invokeBackend("SetSceneActor", nlohmann::json::array({
         "Patch.esp", scene, 0, nlohmann::json{{"alias", 3}, {"flags", 1}, {"behaviorFlags", 26}}})).has_value());
@@ -322,12 +323,16 @@ TEST_CASE("Scene phases carry start and completion conditions through the scoped
     const auto scene = freshScene(backend, quest);
     REQUIRE(backend.invokeBackend("AddScenePhase", nlohmann::json::array({
         "Patch.esp", scene, 0, nlohmann::json{{"name", "P1"}}})).has_value());
+    nlohmann::json startConditions = nlohmann::json::array();
+    startConditions.push_back(nlohmann::json{
+        {"function", "GetStage"}, {"operator", ">="}, {"value", 5}, {"param1", 2}});
+    nlohmann::json completionConditions = nlohmann::json::array();
+    completionConditions.push_back(nlohmann::json{
+        {"function", "GetStageDone"}, {"operator", "=="}, {"value", 1}, {"param1", 2}, {"param2", 10}});
     REQUIRE(backend.invokeBackend("SetScenePhase", nlohmann::json::array({
-        "Patch.esp", scene, 0, nlohmann::json{{"startConditions", nlohmann::json::array(
-            {{{"function", "GetStage"}, {"operator", ">="}, {"value", 5}, {"param1", 2}}})},
-            {"completionConditions", nlohmann::json::array(
-                {{{"function", "GetStageDone"}, {"operator", "=="}, {"value", 1}, {"param1", 2},
-                  {"param2", 10}}})}}}})).has_value());
+        "Patch.esp", scene, 0,
+        nlohmann::json{{"startConditions", startConditions},
+                       {"completionConditions", completionConditions}}})).has_value());
     const auto readback = sceneOf(backend, scene);
     CHECK(readback.at("phases").at(0).at("startConditions").at(0).at("function") == "GetStage");
     CHECK(readback.at("phases").at(0).at("completionConditions").at(0).at("function") == "GetStageDone");
