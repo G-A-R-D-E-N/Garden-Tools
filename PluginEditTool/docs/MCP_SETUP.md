@@ -207,8 +207,8 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `describe_element` | `plugin`, `form_key`, `path` | no | Editor query: describe element. Same RPC the desktop editor uses. |
 | `get_conditions` | `plugin`, `form_key` | no | Editor query: get conditions. Same RPC the desktop editor uses. |
 | `get_conditions_at` | `plugin`, `form_key`, `path` | no | Editor query: get conditions at. Same RPC the desktop editor uses. |
-| `get_quest_objectives` | `plugin`, `form_key` | no | Editor query: get quest objectives with their alias targets and flags. Same RPC the desktop editor uses. |
-| `get_quest_stages` | `plugin`, `form_key` | no | Editor query: get quest stages with log entries, log text and notes. Conditions are not returned. Same RPC the desktop editor uses. |
+| `get_quest_objectives` | `plugin`, `form_key` | no | Editor query: get quest objectives with their alias targets and flags. Each objective also returns `flagNames` (named FNAM bits set: `ORedWithPrevious`, `NoStatsTracking`) and `unknownFlagBits` (remaining raw bits, unnamed). Same RPC the desktop editor uses. |
+| `get_quest_stages` | `plugin`, `form_key` | no | Editor query: get quest stages with log entries, log text and notes. Each stage also returns raw `flags`, `startUp`, `flagNames` (named INDX bits set: `RunOnStart`, `RunOnStop`, `KeepInstanceDataFromHereOn`) and `unknownFlagBits` (remaining raw bits, unnamed). Conditions are not returned. Same RPC the desktop editor uses. |
 | `get_quest_aliases` | `plugin`, `form_key` | no | Editor query: get quest aliases with kind, ID, name, flags and collection entries. Same RPC the desktop editor uses. |
 | `get_condition_functions` | none | no | Editor query: get condition functions. Same RPC the desktop editor uses. |
 | `get_condition_run_on_types` | none | no | Editor query: get condition run on types. Same RPC the desktop editor uses. |
