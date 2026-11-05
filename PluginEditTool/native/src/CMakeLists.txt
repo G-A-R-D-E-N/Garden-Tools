@@ -90,7 +90,7 @@ add_library(
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )
-target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4 PRIVATE ZLIB::ZLIB)
+target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4 fo4ide_archive PRIVATE ZLIB::ZLIB)
 if(WIN32)
     target_sources(fo4ide_plugin PRIVATE plugin/RadiclePluginWindowsJournalDirectory.cpp plugin/RadiclePluginWindowsJournalIntent.cpp plugin/RadiclePluginWindowsJournalDestination.cpp plugin/RadiclePluginWindowsJournalSession.cpp)
     target_link_libraries(fo4ide_plugin PRIVATE advapi32 ntdll)
