@@ -281,14 +281,15 @@ TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows refuses renaming a held BA2", "[ba2
     REQUIRE(std::string(reinterpret_cast<char*>(bytes.data()), bytes.size()) == "original");
 }
 
-// Invariant, detects: a string lease that blocks the journal's rename of its table, or that keeps reading the old object after a same-named replacement appears.
-TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows string lease lets its file be renamed away and detects a replacement", "[ba2][held-source]") {
+// Invariant, detects: a string lease that blocks the journal's rename of its table, that admits a writer, or that keeps serving its old bytes after the table was renamed away.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows string lease admits its table being renamed and then refuses to read it", "[ba2][held-source]") {
     auto root = Ba2ReadRoot::authorize(path);
     auto source = root.open("data/archive.ba2", 8, true);
     std::array<std::byte, 8> bytes{};
     REQUIRE_NOTHROW(source->read(0, bytes));
-    std::filesystem::rename(path / "data/archive.ba2", path / "data/backup.ba2");
-    std::ofstream(path / "data/archive.ba2") << "replaced";
+    std::ofstream writer(path / "data/archive.ba2");
+    CHECK_FALSE(writer.is_open());
+    REQUIRE_NOTHROW(std::filesystem::rename(path / "data/archive.ba2", path / "data/backup.ba2"));
     REQUIRE_THROWS_AS(source->read(0, bytes), std::exception);
 }
 
