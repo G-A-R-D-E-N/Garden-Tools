@@ -289,3 +289,20 @@ TEST_CASE("TypeChecker a var accepts anything and is accepted anywhere") {
 
     CHECK(f.check("A").empty());
 }
+
+TEST_CASE("TypeChecker a literal array length above 128 is a warning") {
+    Fixture f;
+    f.writeWithHierarchy("\n    int[] items = new int[129]");
+
+    const auto diagnostics = f.check("A");
+    REQUIRE(diagnostics.size() == 1u);
+    CHECK(diagnostics[0].code == DiagnosticCode::ArrayLengthLimit);
+    CHECK(diagnostics[0].severity == fo4ide::papyrus::Severity::Warning);
+}
+
+TEST_CASE("TypeChecker a literal array length of 128 is accepted") {
+    Fixture f;
+    f.writeWithHierarchy("\n    int[] items = new int[128]");
+
+    CHECK(f.check("A").empty());
+}
