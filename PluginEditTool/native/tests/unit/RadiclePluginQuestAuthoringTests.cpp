@@ -2640,7 +2640,7 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
                     {"kind", "reference"},
                     {"id", 1},
                     {"name", "Rich"},
-                    {"flags", 0},
+                    {"flags", 2},
                     {"keywords", nlohmann::json::array({"000800:Master.esm"})},
                     {"items", nlohmann::json::array({
                         {{"item", "000801:Master.esm"}, {"count", 2}}
@@ -2704,6 +2704,8 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
         CHECK(alias.factions[0] == fo4::FormKey::parse("000803:Master.esm"));
         REQUIRE(alias.packages.size() == 1u);
         CHECK(alias.packages[0] == fo4::FormKey::parse("000804:Master.esm"));
+        REQUIRE(alias.flags.has_value());
+        CHECK((*alias.flags & 0x2u) != 0u);
     }
 
     const auto locationExtras = backend.invokeBackend(
