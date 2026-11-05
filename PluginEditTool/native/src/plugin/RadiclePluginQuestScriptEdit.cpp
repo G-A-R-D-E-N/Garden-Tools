@@ -434,7 +434,9 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
         }
         auto pexBytes = compiled.pex->toBytes();
 
-        StagedQuestFragments staged{fo4::FormKey{}, sourcePath, pexPath, text, std::move(pexBytes),
+        // Constraint: an edit of a script staged by set_quest_fragment keeps that quest key, so the fragment can be bound again.
+        const auto questKey = pending ? pending->questKey : fo4::FormKey{};
+        StagedQuestFragments staged{questKey, sourcePath, pexPath, text, std::move(pexBytes),
                                     originalSource, originalPex};
         auto mutated = loaded->plugin;
         if (!stageQuestFragmentMutationLocked(*loaded, std::move(mutated), std::move(staged))) {

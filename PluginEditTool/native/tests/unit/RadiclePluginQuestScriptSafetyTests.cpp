@@ -247,3 +247,74 @@ TEST_CASE("QuestScriptSafety.RefusesImportFileSymlinkEscapingImportsRoot") {
     CHECK(fetched.error().message.find("outside the imports directory") != std::string::npos);
     requireUnchanged(backend, s);
 }
+
+namespace {
+
+// Constraint: set_quest_fragment binds fragment stage 10 of the quest, so the quest must already carry that stage.
+std::string createStagedQuest(RadiclePluginBackend& backend, const std::string& editorId) {
+    const auto created = backend.invokeBackend("CreateRecord", Args::array({std::string(kPluginName), "QUST", Args{{"editorId", editorId}}}));
+    REQUIRE(created.has_value());
+    const auto record = created->is_string() ? nlohmann::json::parse(created->get<std::string>()) : *created;
+    const auto key = record.at("formKey").get<std::string>();
+    REQUIRE(backend.invokeBackend("SetQuestStages", Args::array({std::string(kPluginName), key,
+        Args::array({{{"index", 10}, {"logEntry", "Begin"}}})})).has_value());
+    return key;
+}
+
+Args fragmentArgs(const std::string& key, const Sandbox& s) {
+    return Args::array({std::string(kPluginName), key, 10, 0, "QF_Synth", s.out.string(), s.imports.string(),
+                        Args::array({{{"kind", "stage"}, {"value", 10}}})});
+}
+
+std::size_t countOccurrences(const std::string& text, std::string_view needle) {
+    std::size_t count = 0;
+    for (auto at = text.find(needle); at != std::string::npos; at = text.find(needle, at + needle.size())) ++count;
+    return count;
+}
+
+}  // namespace
+
+TEST_CASE("QuestScriptSafety.EditKeepsStagedFragmentQuestKey") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    fs::copy(fo4::graph::test::baseStubs(), s.imports, fs::copy_options::recursive);
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+    const auto key = createStagedQuest(backend, "CoWelcome");
+    REQUIRE(backend.invokeBackend("SetQuestFragment", fragmentArgs(key, s)).has_value());
+
+    // Invariant: an edit of a fragment staged by set_quest_fragment keeps its quest key, so binding the same quest again succeeds.
+    REQUIRE(editScript(backend, "QF_Synth", s.out, editsJson("SetStage(10)", "SetStage(10)\n    SetStage(10)"), s.imports).has_value());
+    const auto edited = backend.testStagedQuestScript(kPluginName);
+    REQUIRE(edited.has_value());
+    CHECK(countOccurrences(edited->first, "SetStage(10)") == 2);
+
+    const auto rebound = backend.invokeBackend("SetQuestFragment", fragmentArgs(key, s));
+    REQUIRE(rebound.has_value());
+    const auto restaged = backend.testStagedQuestScript(kPluginName);
+    REQUIRE(restaged.has_value());
+    CHECK(countOccurrences(restaged->first, "SetStage(10)") == 1);
+    REQUIRE(backend.invoke("backend.DiscardPlugin", Args::array({std::string(kPluginName)})).has_value());
+}
+
+TEST_CASE("QuestScriptSafety.EditFirstStillRefusesLaterFragment") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeText(s.imports / "QF_Synth.psc", kSynthFragment);
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+    const auto key = createStagedQuest(backend, "CoWelcome");
+
+    // Constraint: a script first staged by edit_quest_script has no quest key, so set_quest_fragment on it is refused.
+    REQUIRE(editScript(backend, "QF_Synth", s.out, editsJson("SetStage(10)", "SetStage(20)"), s.imports).has_value());
+    const auto refused = backend.invokeBackend("SetQuestFragment", fragmentArgs(key, s));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().message.find("already staged") != std::string::npos);
+    REQUIRE(backend.invoke("backend.DiscardPlugin", Args::array({std::string(kPluginName)})).has_value());
+}
