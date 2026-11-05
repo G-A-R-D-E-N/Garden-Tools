@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / ".github" / "workflows" / "native-ci.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "native-real-data.yml"
 TEST_FILES = sorted(path
                     for root in (ROOT / "Radicle" / "tests", ROOT / "PluginEditTool" / "native" / "tests")
                     for path in root.rglob("*") if path.suffix in {".cpp", ".hpp", ".h"})
