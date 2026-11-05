@@ -369,6 +369,10 @@ std::optional<std::pair<std::string, std::vector<std::uint8_t>>> RadiclePluginBa
 std::vector<std::string> RadiclePluginBackend::archivePluginNames() const {
     // Constraint: lifecycle operations replace plugins_, so the list is only read under the shared lifecycle lock.
     OpLock lock(*this, OpLock::Mode::Read);
+    return archivePluginNamesLocked();
+}
+
+std::vector<std::string> RadiclePluginBackend::archivePluginNamesLocked() const {
     std::vector<std::string> names;
     names.reserve(plugins_.size());
     for (const auto& loaded : plugins_) names.push_back(loaded.name);
@@ -453,11 +457,11 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
             if (!imports) return failure("QuestScriptFailed", "import directory is outside trusted writable roots");
         }
 
-        // Constraint: plugins_ cannot be read while the write lock is held, so the archive order is snapshotted first.
-        const auto pluginNames = archivePluginNames();
         OpLock lock(*this, OpLock::Mode::Write, {pluginName});
         auto* loaded = findPlugin(pluginName);
         if (!loaded) return failure("QuestScriptFailed", "plugin is not loaded");
+        // Invariant: the archive order is read under the same write lock as the edit, so both see one load state.
+        const auto pluginNames = archivePluginNamesLocked();
         if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
 
         // Constraint: a namespaced script stages under its namespace folders, and the pair must stay inside the output directory.

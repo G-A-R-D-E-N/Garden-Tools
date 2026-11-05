@@ -50,6 +50,7 @@ using LoadMo2AfterPendingCheckHook = void (*)();
 void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook);
 using WriteOpLockedHook = void (*)();
 void setWriteOpLockedHook(WriteOpLockedHook hook);
+void setWriteOpPendingHook(WriteOpLockedHook hook);
 void setSaveIoLockedHook(WriteOpLockedHook hook);
 using LoadReadWindowHook = void (*)();
 void setLoadReadWindowHook(LoadReadWindowHook hook);
@@ -295,8 +296,10 @@ private:
         StateHold restore_;
     };
 
-    // Constraint: plugins_ is replaced by lifecycle operations, so this snapshot takes the lifecycle lock.
+    // Constraint: plugins_ is replaced by lifecycle operations, so this snapshot takes a read OpLock.
     std::vector<std::string> archivePluginNames() const;
+    // Requires: caller holds an OpLock.
+    std::vector<std::string> archivePluginNamesLocked() const;
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
     bool stageQuestFragmentMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated,

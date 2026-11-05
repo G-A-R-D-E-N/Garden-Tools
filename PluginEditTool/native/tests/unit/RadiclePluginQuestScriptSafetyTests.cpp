@@ -106,13 +106,17 @@ void loadPatch(RadiclePluginBackend& backend, const fs::path& path) {
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
 }
 
-// Constraint: archive precedence follows the loaded plugin order, so tests state that order explicitly.
-void loadPlugins(RadiclePluginBackend& backend, const std::vector<std::pair<std::string, fs::path>>& plugins) {
+Args environmentFor(const std::vector<std::pair<std::string, fs::path>>& plugins) {
     Args list = Args::array();
     for (const auto& [name, path] : plugins) {
         list.push_back({{"name", name}, {"path", path.string()}, {"source", "QuestScriptSafety"}, {"resolved", true}});
     }
-    REQUIRE(backend.invoke("environment.LoadMo2", Args{{"plugins", list}}).has_value());
+    return Args{{"plugins", list}};
+}
+
+// Constraint: archive precedence follows the loaded plugin order, so tests state that order explicitly.
+void loadPlugins(RadiclePluginBackend& backend, const std::vector<std::pair<std::string, fs::path>>& plugins) {
+    REQUIRE(backend.invoke("environment.LoadMo2", environmentFor(plugins)).has_value());
 }
 
 std::string editsJson(const std::string& find, const std::string& replace) {
@@ -355,6 +359,34 @@ std::string stageSource(int stage) {
            "EndFunction\n";
 }
 
+struct ReloadGap {
+    RadiclePluginBackend* backend{nullptr};
+    Args environment{};
+    bool fired{false};
+    bool reloaded{false};
+};
+
+ReloadGap* activeReloadGap = nullptr;
+
+void reloadInGap() {
+    if (activeReloadGap == nullptr || activeReloadGap->fired) return;
+    activeReloadGap->fired = true;
+    activeReloadGap->reloaded = activeReloadGap->backend->invoke("environment.LoadMo2", activeReloadGap->environment).has_value();
+}
+
+struct ReloadGapGuard {
+    explicit ReloadGapGuard(ReloadGap& gap) {
+        activeReloadGap = &gap;
+        fo4ide::plugin::setWriteOpPendingHook(reloadInGap);
+    }
+    ~ReloadGapGuard() {
+        fo4ide::plugin::setWriteOpPendingHook(nullptr);
+        activeReloadGap = nullptr;
+    }
+    ReloadGapGuard(const ReloadGapGuard&) = delete;
+    ReloadGapGuard& operator=(const ReloadGapGuard&) = delete;
+};
+
 }  // namespace
 
 TEST_CASE("QuestScriptSafety.LooseScriptOverridesVanillaArchive") {
@@ -492,4 +524,43 @@ TEST_CASE("QuestScriptSafety.EditRefusesScriptOnlyInAnInactiveArchive") {
     CHECK(edited.error().type == "QuestScriptFailed");
     CHECK(edited.error().message.find("Zzz - Main.ba2") != std::string::npos);
     requireUnchanged(backend, s);
+}
+
+TEST_CASE("QuestScriptSafety.EditUsesArchiveOrderOfTheLoadStateItWrites") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    fs::copy(fo4::graph::test::baseStubs(), s.imports, fs::copy_options::recursive);
+    writeScriptArchive(s.data / "Alpha - Main.ba2", compiledPex(stageSource(20), "QF_Synth"));
+    writeScriptArchive(s.data / "Beta - Main.ba2", compiledPex(stageSource(30), "QF_Synth"));
+    writeBytes(s.data / "Alpha.esm", emptyPlugin());
+    writeBytes(s.data / "Beta.esm", emptyPlugin());
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    const std::vector<std::pair<std::string, fs::path>> orderA{{"Alpha.esm", s.data / "Alpha.esm"},
+                                                               {"Beta.esm", s.data / "Beta.esm"},
+                                                               {std::string(kPluginName), s.plugin}};
+    const std::vector<std::pair<std::string, fs::path>> orderB{{"Beta.esm", s.data / "Beta.esm"},
+                                                               {"Alpha.esm", s.data / "Alpha.esm"},
+                                                               {std::string(kPluginName), s.plugin}};
+    loadPlugins(backend, orderA);
+
+    const auto before = getScript(backend, "QF_Synth", s.imports);
+    REQUIRE(before.has_value());
+    CHECK(before->at("archive").get<std::string>() == "Beta - Main.ba2");
+
+    ReloadGap gap{&backend, environmentFor(orderB)};
+    ReloadGapGuard guard(gap);
+    const auto edited = editScript(backend, "QF_Synth", s.out, editsJson("SetStage(20)", "SetStage(99)"), s.imports);
+    CHECK(gap.fired);
+    CHECK(gap.reloaded);
+    // Invariant: the archive order must be read under the same lock as the edit, so the script matches the load state it writes.
+    REQUIRE(edited.has_value());
+    CHECK(edited->at("origin").get<std::string>() == "vanilla_pex");
+    const auto staged = backend.testStagedQuestScript(kPluginName);
+    REQUIRE(staged.has_value());
+    CHECK(staged->first.find("SetStage(99)") != std::string::npos);
+    CHECK(staged->first.find("SetStage(30)") == std::string::npos);
+    REQUIRE(backend.invoke("backend.DiscardPlugin", Args::array({std::string(kPluginName)})).has_value());
 }
