@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -336,6 +337,34 @@ TEST_CASE("Decompiler a remote event name is reconstructed") {
     REQUIRE(pex != nullptr);
     const std::string text = Decompiler::toSource(*pex);
     CHECK(text.find("Event Sender.OnSomething(Sender akSender)") != std::string::npos);
+}
+
+TEST_CASE("Decompiler a remote event whose name prefix differs in case from the sender type recompiles to the same name") {
+    Fixture f;
+    f.writeWithScriptObject();
+    f.write("Sender", "Scriptname Sender\n");
+    f.write("Listener",
+            "Scriptname Listener\n"
+            "Event sender.Kick(Sender akSender)\n"
+            "EndEvent\n");
+    auto pex = f.compile("Listener");
+    REQUIRE(pex != nullptr);
+    const std::string text = Decompiler::toSource(*pex);
+    CHECK(text.find("Event Sender.Kick(Sender akSender)") != std::string::npos);
+
+    Fixture f2;
+    f2.writeWithScriptObject();
+    f2.write("Sender", "Scriptname Sender\n");
+    f2.write("Listener", text);
+    auto again = f2.compile("Listener");
+    REQUIRE(again != nullptr);
+    auto lower = [](std::string s) {
+        for (auto& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        return s;
+    };
+    const auto& original = pex->objects.at(0).states.at(0).functions.at(0).name;
+    const auto& recompiled = again->objects.at(0).states.at(0).functions.at(0).name;
+    CHECK(lower(recompiled) == lower(original));
 }
 
 TEST_CASE("Decompiler disassemble lists functions and instructions") {
