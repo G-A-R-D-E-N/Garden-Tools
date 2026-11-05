@@ -602,7 +602,12 @@ TEST_F(DialogueWriterCApi, CreateSceneMapsStatusesAndAppendsASceneThatSurvivesRe
 
   ASSERT_EQ(radicle_plugin_create_scene(plugin, rkey(k_quest), &spec, &out), RADICLE_STATUS_OK);
   EXPECT_STREQ(out.plugin, k_plugin);
-  const auto saved = fo4::test::dialogue::read(bytes_of(plugin));
+  const auto raw_bytes = bytes_of(plugin);
+  std::vector<std::byte> plugin_bytes(raw_bytes.size());
+  for (std::size_t index = 0; index < raw_bytes.size(); ++index) {
+    plugin_bytes[index] = static_cast<std::byte>(raw_bytes[index]);
+  }
+  const auto saved = fo4::test::dialogue::read(plugin_bytes);
   EXPECT_EQ(order(saved, out.local_id), (Order{"EDID", "FNAM", "PNAM", "INAM", "VNAM", "XNAM"}));
   EXPECT_EQ(payloads(saved, out.local_id, "FNAM"), std::vector<Bytes>{words({0x24})});
   EXPECT_EQ(payloads(saved, out.local_id, "XNAM"), std::vector<Bytes>{words({7})});
