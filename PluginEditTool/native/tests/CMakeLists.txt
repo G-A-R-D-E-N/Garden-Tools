@@ -263,6 +263,17 @@ fo4ide_enable_warnings(fo4ide_test_sound_semantic_real)
 fo4ide_enable_sanitizers(fo4ide_test_sound_semantic_real)
 catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 1800)
 
+# The vanilla sweep decompiles and recompiles every quest script in Misc.ba2; give it headroom.
+add_executable(
+    fo4ide_test_quest_script_real
+    unit/QuestScriptRealTests.cpp
+    unit/VanillaScriptSourcesTests.cpp
+)
+target_link_libraries(fo4ide_test_quest_script_real PRIVATE fo4ide_papyrus fo4ide_archive Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_quest_script_real)
+fo4ide_enable_sanitizers(fo4ide_test_quest_script_real)
+catch_discover_tests(fo4ide_test_quest_script_real PROPERTIES TIMEOUT 1800)
+
 add_executable(
     fo4ide_test_archive_backend
     unit/RadicleArchiveBackendTests.cpp

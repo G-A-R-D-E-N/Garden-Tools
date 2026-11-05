@@ -232,8 +232,9 @@ add_library(
     papyrus/SecureSourceSnapshot.cpp
     papyrus/SecureSourceSnapshotWindows.cpp
     papyrus/CompileScript.cpp
+    papyrus/VanillaScriptSources.cpp
 )
-target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4)
+target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4 PRIVATE ZLIB::ZLIB)
 if(WIN32)
     target_link_libraries(fo4ide_papyrus PRIVATE ntdll)
 endif()
