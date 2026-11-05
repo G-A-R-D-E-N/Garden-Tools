@@ -144,6 +144,8 @@ public:
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> removeQuestFragment(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getQuestFragments(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getQuestScript(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> editQuestScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addPackageProcedure(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removePackageProcedure(const nlohmann::json& arguments) override;
@@ -165,6 +167,7 @@ public:
 #ifdef FO4IDE_TEST_HOOKS
     std::weak_ptr<const fo4::ConflictGraph> cachedGraphForTest() const;
     Result<nlohmann::json> testSetQuestFragment(const nlohmann::json& arguments);
+    std::optional<std::pair<std::string, std::vector<std::uint8_t>>> testStagedQuestScript(std::string_view plugin) const;
     void testSetJournalRoot(std::filesystem::path root);
 #ifdef __linux__
     bool testHasReadAuthority(const std::filesystem::path& root) const;

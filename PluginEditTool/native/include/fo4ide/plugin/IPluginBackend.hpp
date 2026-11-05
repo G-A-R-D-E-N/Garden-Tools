@@ -306,6 +306,13 @@ public:
     virtual Result<nlohmann::json> getQuestFragments(const nlohmann::json&) const {
         return std::unexpected(Error{"QuestFragmentBackendUnavailable", "Quest fragment queries are unavailable"});
     }
+    // edit_quest_script must stage only a Quest-extending script and must never write into the game Data folder.
+    virtual Result<nlohmann::json> getQuestScript(const nlohmann::json&) const {
+        return std::unexpected(Error{"QuestScriptBackendUnavailable", "Quest script reads are unavailable"});
+    }
+    virtual Result<nlohmann::json> editQuestScript(const nlohmann::json&) {
+        return std::unexpected(Error{"QuestScriptBackendUnavailable", "Quest script edits are unavailable"});
+    }
     virtual Result<nlohmann::json> getFaction(const nlohmann::json&) const {
         return std::unexpected(Error{"FactionBackendUnavailable", "Faction queries are unavailable"});
     }

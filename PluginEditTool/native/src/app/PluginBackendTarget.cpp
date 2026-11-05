@@ -499,6 +499,8 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveScriptProperty") return backend_.removeScriptProperty(args);
         if (method == "RemoveQuestFragment") return backend_.removeQuestFragment(args);
         if (method == "GetQuestFragments") return backend_.getQuestFragments(args);
+        if (method == "GetQuestScript") return backend_.getQuestScript(args);
+        if (method == "EditQuestScript") return backend_.editQuestScript(args);
         if (method == "EditNpcEntries") return backend_.editNpcEntries(args);
         if (method == "GetPerkEffects") return backend_.getPerkEffects(args);
         if (method == "SetPerkEffects") return backend_.setPerkEffects(args);

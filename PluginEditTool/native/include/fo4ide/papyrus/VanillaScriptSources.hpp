@@ -13,6 +13,9 @@ namespace fo4ide::papyrus {
 
 class ScriptIndex;
 
+inline constexpr std::string_view kVanillaImportFolders[] = {
+    "Base", "User", "CreationClub", "DLC01", "DLC02", "DLC03", "DLC04", "DLC05", "DLC06"};
+
 // Entry names must stay below the root; zip64 archives are refused.
 std::vector<SnapshotSource> readPscZip(const std::filesystem::path& zipPath);
 

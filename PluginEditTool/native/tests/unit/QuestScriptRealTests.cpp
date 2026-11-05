@@ -39,8 +39,7 @@ using fo4ide::papyrus::ScriptIndex;
 using Bytes = std::vector<std::uint8_t>;
 
 // The vanilla import roots for shipped scripts; a missing root must be skipped, not fatal.
-constexpr std::string_view kImportFolders[] = {"Base", "User", "CreationClub", "DLC01", "DLC02",
-                                               "DLC03", "DLC04", "DLC05", "DLC06"};
+constexpr auto& kImportFolders = fo4ide::papyrus::kVanillaImportFolders;
 
 std::string lowerText(std::string text) {
     for (auto& ch : text) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
