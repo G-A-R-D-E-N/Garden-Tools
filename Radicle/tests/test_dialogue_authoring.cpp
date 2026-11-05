@@ -98,6 +98,19 @@ std::vector<std::byte> quest_plugin(std::initializer_list<std::string_view> mast
   return out.bytes;
 }
 
+std::vector<std::byte> two_quest_plugin() {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  for (const auto raw : {0x00000800u, 0x00000801u}) {
+    const auto quest_top = fo4::test::begin_group(out, "QUST", 0);
+    const auto quest = fo4::test::begin_record(out, "QUST", 0, raw);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"Quest\0", 6});
+    fo4::test::end_record(out, quest);
+    fo4::test::end_group(out, quest_top);
+  }
+  return out.bytes;
+}
+
 fo4::FormKey quest_key() { return fo4::FormKey::parse("000800:Q.esp"); }
 
 fo4::forms::DialogueBranchSpec branch_spec() {
@@ -432,6 +445,30 @@ TEST(DialogueAuthoring, SetBranchStartWritesTopicIntoBranchSnam) {
   const auto* record = fo4::find_record(plugin, branch.key);
   ASSERT_NE(record, nullptr);
   EXPECT_EQ(u32_of(*record, "SNAM"), topic.key.local().value());
+}
+
+TEST(DialogueAuthoring, BranchAndTopicMustShareQuest) {
+  auto plugin = fo4::read_plugin(two_quest_plugin(), "Q.esp");
+  const auto quest_a = fo4::FormKey::parse("000800:Q.esp");
+  const auto quest_b = fo4::FormKey::parse("000801:Q.esp");
+  const auto branch = fo4::forms::create_dialogue_branch(plugin, quest_a, branch_spec());
+  ASSERT_EQ(branch.status, fo4::forms::DialogueAuthorStatus::ok);
+  const auto before = fo4::write_plugin(plugin);
+
+  auto cross = topic_spec();
+  cross.branch = branch.key;
+  EXPECT_EQ(fo4::forms::create_dialogue_topic(plugin, quest_b, cross).status,
+            fo4::forms::DialogueAuthorStatus::structure_invalid);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  EXPECT_EQ(fo4::forms::create_dialogue_topic(plugin, quest_a, cross).status,
+            fo4::forms::DialogueAuthorStatus::ok);
+  const auto other = fo4::forms::create_dialogue_topic(plugin, quest_b, topic_spec());
+  ASSERT_EQ(other.status, fo4::forms::DialogueAuthorStatus::ok);
+  const auto before_start = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::forms::set_dialogue_branch_start(plugin, branch.key, other.key),
+            fo4::forms::DialogueAuthorStatus::structure_invalid);
+  EXPECT_EQ(fo4::write_plugin(plugin), before_start);
 }
 
 TEST(DialogueAuthoring, SetBranchStartRejectsMissingTopicAndWritesNothing) {
