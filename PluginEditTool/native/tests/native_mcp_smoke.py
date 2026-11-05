@@ -47,7 +47,7 @@ def main(executable):
             try:
                 assert rpc("initialize")["serverInfo"]["name"] == "fo4editor"
                 names = {tool["name"] for tool in rpc("tools/list")["tools"]}
-                required = {"list_plugins", "open_plugin", "create_plugin", "create_record", "get_record", "set_field", "save_plugin", "discard_plugin", "list_record_types", "list_records", "set_quest_fragment", "remove_quest_fragment", "get_quest_fragments"}
+                required = {"list_plugins", "open_plugin", "create_plugin", "create_record", "get_record", "set_field", "save_plugin", "discard_plugin", "list_record_types", "list_records", "set_quest_fragment", "remove_quest_fragment", "get_quest_fragments", "get_quest_script", "edit_quest_script"}
                 assert required <= names, f"Missing native plugin tools: {sorted(required - names)}"
                 status = json.loads(call("get_mo2_status"))
                 assert status["loaded"] and status["profile"] == "Smoke", status
