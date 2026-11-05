@@ -8,6 +8,7 @@
 #include <fo4/environment/scene_layout.hpp>
 #include <fo4/plugin/info_responses.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/scene_writer.hpp>
 #include <fo4/schema/condition_scopes.hpp>
 #include <fo4/schema/ctda.hpp>
 #include <fo4/signature.hpp>
