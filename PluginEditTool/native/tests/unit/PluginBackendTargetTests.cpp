@@ -231,6 +231,14 @@ public:
         return recordTypedCall("RemoveScriptProperty", args);
     }
 
+    fo4ide::Result<nlohmann::json> removeQuestFragment(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveQuestFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> getQuestFragments(const nlohmann::json& args) const override {
+        return recordTypedCall("GetQuestFragments", args);
+    }
+
     fo4ide::Result<nlohmann::json> releaseMemory(const nlohmann::json& args) override {
         return recordTypedCall("ReleaseMemory", args);
     }
@@ -694,7 +702,8 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
         "EditFactionEntries", "GetWeaponDamageTypes", "GetPerkEffects", "SetPerkEffects", "CreatePlacedObject",
         "CreateInteriorCell", "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound",
         "AddPackageProcedure", "RemovePackageProcedure",
-        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty", "ReleaseMemory"};
+        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty", "ReleaseMemory",
+        "RemoveQuestFragment", "GetQuestFragments"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());
@@ -733,6 +742,8 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.removeScript(args), "ScriptBackendUnavailable");
     unavailable(base.addScriptProperty(args), "ScriptBackendUnavailable");
     unavailable(base.removeScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.removeQuestFragment(args), "QuestFragmentBackendUnavailable");
+    unavailable(base.getQuestFragments(args), "QuestFragmentBackendUnavailable");
     unavailable(base.getLeveledList(args), "LeveledListBackendUnavailable");
     unavailable(base.setLeveledListSettings(args), "LeveledListBackendUnavailable");
     unavailable(base.editLeveledListEntry(args), "LeveledListBackendUnavailable");
