@@ -516,10 +516,10 @@ FormLinkFieldMutationStatus set_scene_action_formlink(Plugin& plugin,
 std::vector<ScenePayloadPath> scene_action_payload_paths() {
   std::vector<ScenePayloadPath> rows;
   for (const auto& entry : k_links) {
-    if (entry.scope == Scope::action_payload) rows.push_back({entry.path, true});
+    if (entry.scope == Scope::action_payload) rows.push_back({entry.path, entry.subrecord, true});
   }
   for (const auto& entry : k_scalars) {
-    if (entry.scope == Scope::action_payload) rows.push_back({entry.path, false});
+    if (entry.scope == Scope::action_payload) rows.push_back({entry.path, entry.subrecord, false});
   }
   return rows;
 }

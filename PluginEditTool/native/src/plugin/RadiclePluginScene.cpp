@@ -210,13 +210,7 @@ std::optional<Error> applyActionLink(fo4::Plugin& plugin, const fo4::FormKey& sc
 
 using scenefields::k_payloadFields;
 using scenefields::PayloadField;
-
-const PayloadField* payloadField(std::string_view key) {
-    for (const auto& field : k_payloadFields) {
-        if (field.key == key) return &field;
-    }
-    return nullptr;
-}
+using scenefields::payloadField;
 
 std::optional<Error> applyPayloadField(fo4::Plugin& plugin, const fo4::FormKey& scene, std::size_t index,
                                        const PayloadField& field, const nlohmann::json& value,

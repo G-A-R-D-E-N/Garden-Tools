@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string_view>
+
 namespace fo4ide::plugin::scenefields {
 
 struct PayloadField {
@@ -42,5 +44,13 @@ inline constexpr PayloadField k_payloadFields[] = {
     {"timerMin", "SCEN\\Action\\TimerMin", false},
     {"dialogueTargetActor", "SCEN\\Action\\DialogueTargetActor", false},
 };
+
+// Constraint: one row per key, so the reader and the writer must resolve the same path.
+inline const PayloadField* payloadField(std::string_view key) {
+    for (const auto& field : k_payloadFields) {
+        if (std::string_view{field.key} == key) return &field;
+    }
+    return nullptr;
+}
 
 }

@@ -2,6 +2,7 @@
 #include "RadiclePluginQuestInternal.hpp"
 #include "RadiclePluginFragmentSupport.hpp"
 #include "RadiclePluginReadJson.hpp"
+#include "RadiclePluginSceneFields.hpp"
 
 #include <fo4/environment/dialogue.hpp>
 #include <fo4/environment/scene_layout.hpp>
@@ -34,6 +35,15 @@ constexpr auto k_scen = fo4::Signature::from_string("SCEN");
 constexpr auto k_dial = fo4::Signature::from_string("DIAL");
 constexpr auto k_info = fo4::Signature::from_string("INFO");
 constexpr auto k_nam1 = fo4::Signature::from_string("NAM1");
+
+// Constraint: the tag must come from the writer's own row, so a renamed subrecord cannot leave the reader on a stale literal.
+fo4::Signature payloadSignature(std::string_view path) {
+    static const auto rows = fo4::scene_action_payload_paths();
+    for (const auto& row : rows) {
+        if (row.path == path) return row.signature;
+    }
+    return fo4::Signature{};
+}
 
 using namespace readjson;
 
@@ -239,9 +249,12 @@ nlohmann::json actionJson(const fo4::Plugin& plugin, const fo4::Record& record, 
         }
     }
     auto& payload = action["payload"];
-    auto putPayloadLink = [&](const char* key, const char* tag) {
+    auto putPayloadLink = [&](const char* key) {
+        const auto* field = scenefields::payloadField(key);
+        if (field == nullptr) return;
+        const auto tag = payloadSignature(field->path);
         for (std::size_t at = span.header_end; at < span.close; ++at) {
-            if (subs[at].signature != fo4::Signature::from_string(tag)) continue;
+            if (subs[at].signature != tag) continue;
             if (!sized(subs[at], 4)) continue;
             payload[key] = linkJson(plugin, rawLink(subs[at]));
         }
@@ -252,32 +265,32 @@ nlohmann::json actionJson(const fo4::Plugin& plugin, const fo4::Record& record, 
     const bool npcResponse = type == 5;
     const bool radio = type == 6;
     if (dialogue || radio) {
-        putPayloadLink("topic", "DATA");
-        putPayloadLink("dialogueSubtype", "VENC");
+        putPayloadLink("topic");
+        putPayloadLink("dialogueSubtype");
     }
-    if (dialogue) putPayloadLink("animArchType", "PNAM");
-    if (dialogue || playerDialogue || npcResponse) putPayloadLink("audioOutputOverride", "ONAM");
-    if (type == 4) putPayloadLink("startSceneTopic", "STSC");
-    if (radio) putPayloadLink("playSound", "HTID");
+    if (dialogue) putPayloadLink("animArchType");
+    if (dialogue || playerDialogue || npcResponse) putPayloadLink("audioOutputOverride");
+    if (type == 4) putPayloadLink("startSceneTopic");
+    if (radio) putPayloadLink("playSound");
     if (playerDialogue || npcResponse) {
-        putPayloadLink("playerPositiveResponse", "PTOP");
-        putPayloadLink("playerNegativeResponse", "NTOP");
-        putPayloadLink("playerNeutralResponse", "NETO");
-        putPayloadLink("playerQuestionResponse", "QTOP");
-        putPayloadLink("playerPositiveDialogueSubtype", "VENC");
-        putPayloadLink("playerNegativeDialogueSubtype", "PLVD");
-        putPayloadLink("playerNeutralDialogueSubtype", "JOUT");
-        putPayloadLink("playerQuestionDialogueSubtype", "DALC");
+        putPayloadLink("playerPositiveResponse");
+        putPayloadLink("playerNegativeResponse");
+        putPayloadLink("playerNeutralResponse");
+        putPayloadLink("playerQuestionResponse");
+        putPayloadLink("playerPositiveDialogueSubtype");
+        putPayloadLink("playerNegativeDialogueSubtype");
+        putPayloadLink("playerNeutralDialogueSubtype");
+        putPayloadLink("playerQuestionDialogueSubtype");
     }
     if (playerDialogue) {
-        putPayloadLink("npcPositiveResponse", "NPOT");
-        putPayloadLink("npcNegativeResponse", "NNGT");
-        putPayloadLink("npcNeutralResponse", "NNUT");
-        putPayloadLink("npcQuestionResponse", "NQUT");
-        putPayloadLink("npcPositiveDialogueSubtype", "NPOS");
-        putPayloadLink("npcNegativeDialogueSubtype", "NNGS");
-        putPayloadLink("npcNeutralDialogueSubtype", "NNUS");
-        putPayloadLink("npcQuestionDialogueSubtype", "NQUS");
+        putPayloadLink("npcPositiveResponse");
+        putPayloadLink("npcNegativeResponse");
+        putPayloadLink("npcNeutralResponse");
+        putPayloadLink("npcQuestionResponse");
+        putPayloadLink("npcPositiveDialogueSubtype");
+        putPayloadLink("npcNegativeDialogueSubtype");
+        putPayloadLink("npcNeutralDialogueSubtype");
+        putPayloadLink("npcQuestionDialogueSubtype");
     }
     for (std::size_t at = span.header_end; at < span.close; ++at) {
         const auto tag = subs[at].signature;

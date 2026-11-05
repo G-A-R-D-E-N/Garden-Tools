@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/environment/scene_layout.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/scene_writer.hpp>
 #include <fo4/signature.hpp>
@@ -405,6 +406,28 @@ TEST_CASE("Scene response subtype members round-trip on a player dialogue action
     CHECK(payload.at("playerPositiveDialogueSubtype") == "000800:Patch.esp");
     CHECK(payload.at("npcNegativeDialogueSubtype") == "000800:Patch.esp");
     CHECK(!payload.contains("dialogueSubtype"));
+
+    // Constraint: the reader must key on the signature the writer stored, so the saved bytes are checked, not the readback.
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto saved = fo4::read_plugin_file(root / "Patch.esp");
+    const auto* record = fo4::find_record(saved, fo4::FormKey::parse(scene));
+    REQUIRE(record != nullptr);
+    const auto layout = fo4::env::detail::scene_layout(record->subrecords);
+    REQUIRE(layout.actions.size() == 1);
+    const auto signatureOf = [](std::string_view path) {
+        for (const auto& row : fo4::scene_action_payload_paths()) {
+            if (row.path == path) return row.signature;
+        }
+        return fo4::Signature{};
+    };
+    bool positive = false;
+    bool negative = false;
+    for (std::size_t at = layout.actions[0].header_end; at < layout.actions[0].close; ++at) {
+        if (record->subrecords[at].signature == signatureOf("SCEN\\Action\\PlayerPositiveDialogueSubtype")) positive = true;
+        if (record->subrecords[at].signature == signatureOf("SCEN\\Action\\NpcNegativeDialogueSubtype")) negative = true;
+    }
+    CHECK(positive);
+    CHECK(negative);
 
     REQUIRE(backend.invokeBackend("AddSceneAction", nlohmann::json::array({"Patch.esp", scene, 1, 5})).has_value());
     CHECK(!backend.invokeBackend("SetSceneAction", nlohmann::json::array({
