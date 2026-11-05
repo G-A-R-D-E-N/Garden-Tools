@@ -182,6 +182,13 @@ std::optional<DialogueAuthorStatus> refusal(const Located& location,
   return std::nullopt;
 }
 
+const Subrecord* quest_link(const Record& record) {
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature == k_qnam) return &subrecord;
+  }
+  return nullptr;
+}
+
 void commit(Plugin& plugin, Plugin& next) {
   next.original_range.clear();
   next.original_structure_fingerprint = 0;
@@ -255,6 +262,10 @@ DialogueCreateResult topic_impl(Plugin& plugin,
     if (auto refused = refusal(branch_location, k_dlbr, DialogueAuthorStatus::branch_missing)) {
       return {*refused, {}};
     }
+    const auto* branch_quest = quest_link(branch_location->record());
+    if (branch_quest == nullptr || branch_quest->data != packed(raw_form_id(quest, next))) {
+      return {DialogueAuthorStatus::structure_invalid, {}};
+    }
   }
 
   const auto key = reserve_local_form_key(next);
@@ -305,6 +316,11 @@ DialogueAuthorStatus start_impl(Plugin& plugin, const FormKey& branch, const For
   auto topic_location = fo4::detail::find_mutable_location(next, topic);
   if (auto refused = refusal(topic_location, k_dial, DialogueAuthorStatus::topic_missing)) {
     return *refused;
+  }
+  const auto* branch_quest = quest_link(branch_location->record());
+  const auto* topic_quest = quest_link(topic_location->record());
+  if (branch_quest == nullptr || topic_quest == nullptr || branch_quest->data != topic_quest->data) {
+    return DialogueAuthorStatus::structure_invalid;
   }
 
   auto& record = branch_location->record();
