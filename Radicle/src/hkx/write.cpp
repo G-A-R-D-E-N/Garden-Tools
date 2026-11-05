@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -25,6 +27,12 @@ constexpr std::size_t kSectionStartAt = 0x14;
 constexpr std::size_t kSectionMarksAt = 0x18;
 constexpr std::size_t kSectionTableOffsetAt = 0x3E;
 constexpr std::size_t kMaxAppendGrowth = 15;
+constexpr std::size_t kQsTransformSize = 48;
+constexpr std::size_t kQsRotationOffset = 16;
+constexpr std::size_t kQsScaleOffset = 32;
+constexpr std::size_t kMaxAnimationSamples = 1u << 20;
+constexpr std::int32_t kInterleavedType = 1;
+constexpr std::uint32_t kArrayFlag = 0x80000000u;
 
 std::uint16_t read_u16(std::span<const std::byte> bytes, std::size_t at) {
   std::uint16_t value = 0;
@@ -40,6 +48,15 @@ std::uint32_t read_u32(std::span<const std::byte> bytes, std::size_t at) {
 
 void write_u32(std::vector<std::byte>& bytes, std::size_t at, std::uint32_t value) {
   std::memcpy(bytes.data() + at, &value, sizeof value);
+}
+
+void put_int(std::vector<std::byte>& bytes, std::size_t at, std::int32_t value) {
+  std::memcpy(bytes.data() + at, &value, sizeof value);
+}
+
+void put_float(std::vector<std::byte>& bytes, std::size_t at, float value) {
+  const auto bits = std::bit_cast<std::uint32_t>(value);
+  std::memcpy(bytes.data() + at, &bits, sizeof bits);
 }
 
 std::size_t align_to(std::size_t value, std::size_t alignment) {
@@ -94,6 +111,17 @@ std::optional<std::size_t> ensure_class_name(HkxSection& names, std::string_view
   for (const char c : class_name) names.data.push_back(static_cast<std::byte>(c));
   names.data.push_back(std::byte{0});
   return name_at;
+}
+
+// Invariant: a stored rotation is a unit quaternion, so a non-unit input is normalised and a zero one becomes identity.
+std::array<float, 4> normalised_quaternion(const std::array<float, 4>& rotation) {
+  const double length = std::sqrt(static_cast<double>(rotation[0]) * rotation[0] +
+                                  static_cast<double>(rotation[1]) * rotation[1] +
+                                  static_cast<double>(rotation[2]) * rotation[2] +
+                                  static_cast<double>(rotation[3]) * rotation[3]);
+  if (!(length > 0.0)) return {0.0f, 0.0f, 0.0f, 1.0f};
+  const auto scale = static_cast<float>(1.0 / length);
+  return {rotation[0] * scale, rotation[1] * scale, rotation[2] * scale, rotation[3] * scale};
 }
 
 struct Marks {
@@ -256,6 +284,97 @@ HkxStatus append_object(std::span<const std::byte> source, std::string_view clas
   pad_filler(data.data, align_to(data.data.size(), kObjectAlign));
   const auto object_at = data.data.size();
   data.data.insert(data.data.end(), instance_bytes.begin(), instance_bytes.end());
+  data.virtual_fixups.push_back({static_cast<std::uint32_t>(object_at),
+                                 static_cast<std::uint32_t>(packfile.class_names_section),
+                                 static_cast<std::uint32_t>(*name_at)});
+  out.object_index = packfile.objects.size();
+  return finish_rebuild(source, packfile, table_at, out);
+}
+
+HkxStatus append_interleaved_animation(std::span<const std::byte> source, const HkxInterleavedAnimation& animation,
+                                       HkxAppend& out) {
+  HkxPackfile packfile;
+  if (const auto status = read_packfile(source, packfile); status != HkxStatus::Ok) return status;
+  const auto table_at = kHeaderSize + read_u16(source, kSectionTableOffsetAt);
+  if (table_at > source.size() || (source.size() - table_at) / kSectionHeaderSize < packfile.sections.size()) {
+    return HkxStatus::Truncated;
+  }
+  const HkxClassLayout* base = find_layout("hkaAnimation");
+  const HkxClassLayout* interleaved = find_layout("hkaInterleavedUncompressedAnimation");
+  if (base == nullptr || interleaved == nullptr) return HkxStatus::UnsupportedLayout;
+  const auto type_at = find_member_offset(*base, "type");
+  const auto duration_at = find_member_offset(*base, "duration");
+  const auto tracks_at = find_member_offset(*base, "numberOfTransformTracks");
+  const auto float_tracks_at = find_member_offset(*base, "numberOfFloatTracks");
+  const auto annotations_at = find_member_offset(*base, "annotationTracks");
+  const auto transforms_at = find_member_offset(*interleaved, "transforms");
+  const auto floats_at = find_member_offset(*interleaved, "floats");
+  if (!type_at || !duration_at || !tracks_at || !float_tracks_at || !annotations_at || !transforms_at || !floats_at) {
+    return HkxStatus::UnsupportedLayout;
+  }
+  if (!std::isfinite(animation.duration) || animation.frame_count == 0 || animation.track_count == 0) {
+    return HkxStatus::BadSection;
+  }
+  if (animation.frame_count > kMaxAnimationSamples / animation.track_count) return HkxStatus::BadSection;
+  const auto samples = animation.frame_count * animation.track_count;
+  if (animation.translations.size() != samples || animation.rotations.size() != samples ||
+      animation.scales.size() != samples) {
+    return HkxStatus::BadSection;
+  }
+  // Constraint: a non-finite sample cannot be stored, because the reader would hand it to the engine unchanged.
+  for (std::size_t sample = 0; sample < samples; ++sample) {
+    for (const float value : animation.translations[sample]) {
+      if (!std::isfinite(value)) return HkxStatus::BadSection;
+    }
+    for (const float value : animation.rotations[sample]) {
+      if (!std::isfinite(value)) return HkxStatus::BadSection;
+    }
+    for (const float value : animation.scales[sample]) {
+      if (!std::isfinite(value)) return HkxStatus::BadSection;
+    }
+  }
+
+  HkxSection& names = packfile.sections[packfile.class_names_section];
+  HkxSection& data = packfile.sections[packfile.data_section];
+  const auto name_at = ensure_class_name(names, interleaved->name, interleaved->signature);
+  if (!name_at) return HkxStatus::BadClassName;
+
+  // Constraint: the object comes first and its transforms array after it, so the array fixup points forwards.
+  pad_filler(data.data, align_to(data.data.size(), kObjectAlign));
+  const auto object_at = data.data.size();
+  data.data.resize(object_at + interleaved->size, std::byte{0});
+  put_int(data.data, object_at + *type_at, kInterleavedType);
+  put_float(data.data, object_at + *duration_at, animation.duration);
+  put_int(data.data, object_at + *tracks_at, static_cast<std::int32_t>(animation.track_count));
+  put_int(data.data, object_at + *float_tracks_at, 0);
+  // Invariant: an array header is pointer, count and a flagged capacity, and an empty array has no local fixup.
+  put_int(data.data, object_at + *annotations_at + 8, 0);
+  put_int(data.data, object_at + *annotations_at + 12, static_cast<std::int32_t>(kArrayFlag));
+  put_int(data.data, object_at + *floats_at + 8, 0);
+  put_int(data.data, object_at + *floats_at + 12, static_cast<std::int32_t>(kArrayFlag));
+  put_int(data.data, object_at + *transforms_at + 8, static_cast<std::int32_t>(samples));
+  put_int(data.data, object_at + *transforms_at + 12, static_cast<std::int32_t>(kArrayFlag | samples));
+
+  // Constraint: the transforms array is frame-major and 16-aligned, because the reader slices it by track count.
+  pad_filler(data.data, align_to(data.data.size(), kObjectAlign));
+  const auto transforms_run = data.data.size();
+  data.data.resize(transforms_run + samples * kQsTransformSize, std::byte{0});
+  for (std::size_t sample = 0; sample < samples; ++sample) {
+    const auto at = transforms_run + sample * kQsTransformSize;
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+      put_float(data.data, at + 4 * axis, animation.translations[sample][axis]);
+    }
+    const auto rotation = normalised_quaternion(animation.rotations[sample]);
+    for (std::size_t axis = 0; axis < 4; ++axis) {
+      put_float(data.data, at + kQsRotationOffset + 4 * axis, rotation[axis]);
+    }
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+      put_float(data.data, at + kQsScaleOffset + 4 * axis, animation.scales[sample][axis]);
+    }
+  }
+
+  data.local_fixups.push_back({static_cast<std::uint32_t>(object_at + *transforms_at),
+                               static_cast<std::uint32_t>(transforms_run)});
   data.virtual_fixups.push_back({static_cast<std::uint32_t>(object_at),
                                  static_cast<std::uint32_t>(packfile.class_names_section),
                                  static_cast<std::uint32_t>(*name_at)});

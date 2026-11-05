@@ -1,3 +1,4 @@
+#include "fo4/hkx/animation.hpp"
 #include "fo4/hkx/layout.hpp"
 #include "fo4/hkx/packfile.hpp"
 #include "fo4/hkx/write.hpp"
@@ -7,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -253,4 +255,78 @@ TEST(HkxWrite, VerificationRejectsACorruptedPreExistingObject) {
   const auto at = static_cast<std::size_t>(start) + parsed.objects.front().offset;
   corrupted[at] = std::byte{static_cast<unsigned char>(std::to_integer<unsigned char>(corrupted[at]) ^ 0x01U)};
   EXPECT_NE(verify_append(source, corrupted, instance), HkxStatus::Ok);
+}
+
+// Constraint: an appended clip must read back through the decoder the editor uses, sample for sample.
+TEST(HkxWrite, AppendsAnInterleavedAnimationAndReadsItBack) {
+  const std::vector<std::byte> names;
+  const auto source = build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", {}, {}, {}, {}},
+  });
+  fo4::hkx::HkxInterleavedAnimation animation;
+  animation.duration = 1.5f;
+  animation.frame_count = 3;
+  animation.track_count = 2;
+  for (std::size_t sample = 0; sample < 6; ++sample) {
+    animation.translations.push_back({static_cast<float>(sample), 0.0f, 1.0f});
+    animation.rotations.push_back({0.0f, 0.0f, 0.0f, 1.0f});
+    animation.scales.push_back({1.0f, 1.0f, 1.0f});
+  }
+  HkxAppend appended;
+  ASSERT_EQ(fo4::hkx::append_interleaved_animation(source, animation, appended), HkxStatus::Ok);
+  fo4::hkx::HkxPackfile written;
+  ASSERT_EQ(read_packfile(appended.bytes, written), HkxStatus::Ok);
+  fo4::hkx::HkxAnimation decoded;
+  ASSERT_EQ(fo4::hkx::read_animation(written, decoded), HkxStatus::Ok);
+  EXPECT_EQ(decoded.kind, fo4::hkx::HkxAnimationKind::Interleaved);
+  EXPECT_EQ(decoded.frame_count, 3U);
+  EXPECT_EQ(decoded.tracks.size(), 2U);
+  EXPECT_FLOAT_EQ(decoded.duration, 1.5f);
+  EXPECT_FLOAT_EQ(decoded.tracks[1].translations[2][0], 5.0f);
+  EXPECT_FLOAT_EQ(decoded.tracks[0].rotations[1][3], 1.0f);
+  EXPECT_FLOAT_EQ(decoded.tracks[1].scales[2][2], 1.0f);
+  EXPECT_EQ(verify_append(source, appended.bytes), HkxStatus::Ok);
+}
+
+// Constraint: a sample count that does not match frame_count * track_count is refused instead of truncated.
+TEST(HkxWrite, RefusesAnAnimationWithTheWrongSampleCount) {
+  const std::vector<std::byte> names;
+  const auto source = build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", {}, {}, {}, {}},
+  });
+  fo4::hkx::HkxInterleavedAnimation animation;
+  animation.duration = 1.0f;
+  animation.frame_count = 2;
+  animation.track_count = 2;
+  animation.translations.assign(3, {0.0f, 0.0f, 0.0f});
+  animation.rotations.assign(3, {0.0f, 0.0f, 0.0f, 1.0f});
+  animation.scales.assign(3, {1.0f, 1.0f, 1.0f});
+  HkxAppend appended;
+  EXPECT_EQ(fo4::hkx::append_interleaved_animation(source, animation, appended), HkxStatus::BadSection);
+  EXPECT_TRUE(appended.bytes.empty());
+}
+
+// Constraint: a non-finite sample cannot be stored, because the reader would hand it to the engine unchanged.
+TEST(HkxWrite, RefusesANonFiniteAnimationSample) {
+  const std::vector<std::byte> names;
+  const auto source = build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", {}, {}, {}, {}},
+  });
+  fo4::hkx::HkxInterleavedAnimation animation;
+  animation.duration = 1.0f;
+  animation.frame_count = 1;
+  animation.track_count = 1;
+  const auto nan = std::numeric_limits<float>::quiet_NaN();
+  animation.translations.push_back({nan, 0.0f, 0.0f});
+  animation.rotations.push_back({0.0f, 0.0f, 0.0f, 1.0f});
+  animation.scales.push_back({1.0f, 1.0f, 1.0f});
+  HkxAppend appended;
+  EXPECT_EQ(fo4::hkx::append_interleaved_animation(source, animation, appended), HkxStatus::BadSection);
+  EXPECT_TRUE(appended.bytes.empty());
 }

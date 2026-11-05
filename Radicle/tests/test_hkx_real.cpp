@@ -287,3 +287,46 @@ TEST(HkxAppendReal, AppendsToTheVanillaSkeletonAndVerifiesTheRoundTrip) {
   EXPECT_EQ(written.objects.size(), packfile.objects.size() + 1);
   EXPECT_EQ(written.objects.back().class_name, object.class_name);
 }
+
+// Constraint: a clip written into a shipped packfile must decode through read_animation with its samples intact.
+TEST(HkxAnimationWriteReal, AppendsAClipToTheVanillaSkeletonAndReadsItBack) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  record_game_build(detect_game_build(dir));
+  const std::vector<std::string> plugins{"Fallout4.esm"};
+  const auto archives = fo4::archive::archive_load_order(dir, {}, plugins);
+  if (archives.empty()) {
+    GTEST_SKIP() << "no Fallout 4 archives found under FO4_DATA_DIR";
+  }
+  const auto assets = fo4::archive::AssetResolver::open(dir, archives);
+  const auto location = assets.locate("meshes/actors/character/characterassets/skeleton.hkx");
+  if (!location) {
+    GTEST_SKIP() << "no character skeleton in the installed archives";
+  }
+  const auto bytes = assets.read(*location);
+
+  fo4::hkx::HkxInterleavedAnimation animation;
+  animation.duration = 2.0f;
+  animation.frame_count = 2;
+  animation.track_count = 2;
+  for (std::size_t sample = 0; sample < 4; ++sample) {
+    animation.translations.push_back({static_cast<float>(sample) * 0.25f, 1.0f, 2.0f});
+    animation.rotations.push_back({0.0f, 0.0f, 0.0f, 1.0f});
+    animation.scales.push_back({1.0f, 1.0f, 1.0f});
+  }
+
+  fo4::hkx::HkxAppend appended;
+  ASSERT_EQ(fo4::hkx::append_interleaved_animation(bytes, animation, appended), fo4::hkx::HkxStatus::Ok);
+  EXPECT_EQ(fo4::hkx::verify_append(bytes, appended.bytes), fo4::hkx::HkxStatus::Ok);
+  fo4::hkx::HkxPackfile written;
+  ASSERT_EQ(fo4::hkx::read_packfile(appended.bytes, written), fo4::hkx::HkxStatus::Ok);
+  fo4::hkx::HkxAnimation decoded;
+  ASSERT_EQ(fo4::hkx::read_animation(written, decoded), fo4::hkx::HkxStatus::Ok);
+  EXPECT_EQ(decoded.kind, fo4::hkx::HkxAnimationKind::Interleaved);
+  EXPECT_EQ(decoded.frame_count, 2U);
+  EXPECT_EQ(decoded.tracks.size(), 2U);
+  EXPECT_FLOAT_EQ(decoded.duration, 2.0f);
+  EXPECT_FLOAT_EQ(decoded.tracks[1].translations[1][0], 0.75f);
+}

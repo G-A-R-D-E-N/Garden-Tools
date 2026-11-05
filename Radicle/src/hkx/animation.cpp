@@ -182,6 +182,7 @@ HkxStatus read_animation(const HkxPackfile& packfile, HkxAnimation& out) {
   out = HkxAnimation{};
 
   const HkxObjectView* animation = nullptr;
+  // Constraint: a packfile may hold several animation objects and this reports the first one, one clip per model.
   for (const HkxObjectView& object : packfile.objects) {
     if (object.class_name != "hkaSplineCompressedAnimation" &&
         object.class_name != "hkaInterleavedUncompressedAnimation") {

@@ -2,6 +2,7 @@
 
 #include "fo4/hkx/packfile.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -23,5 +24,19 @@ HkxStatus append_object(std::span<const std::byte> source, std::string_view clas
 // Invariant: verify needs one more object with unchanged old offsets and bytes; empty skips the byte check.
 HkxStatus verify_append(std::span<const std::byte> source, std::span<const std::byte> written,
                         std::span<const std::byte> expected_instance = {});
+
+// Invariant: samples are frame-major, so sample t of frame f sits at index f * track_count + t.
+struct HkxInterleavedAnimation {
+  float duration{0.0f};
+  std::size_t frame_count{0};
+  std::size_t track_count{0};
+  std::vector<std::array<float, 3>> translations;
+  std::vector<std::array<float, 4>> rotations;
+  std::vector<std::array<float, 3>> scales;
+};
+
+// Requires frame_count * track_count finite samples; appends a clip with its transforms array and empty tails.
+HkxStatus append_interleaved_animation(std::span<const std::byte> source, const HkxInterleavedAnimation& animation,
+                                       HkxAppend& out);
 
 }  // namespace fo4::hkx
