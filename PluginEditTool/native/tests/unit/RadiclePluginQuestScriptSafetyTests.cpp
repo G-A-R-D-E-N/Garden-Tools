@@ -318,3 +318,99 @@ TEST_CASE("QuestScriptSafety.EditFirstStillRefusesLaterFragment") {
     CHECK(refused.error().message.find("already staged") != std::string::npos);
     REQUIRE(backend.invoke("backend.DiscardPlugin", Args::array({std::string(kPluginName)})).has_value());
 }
+
+namespace {
+
+std::vector<std::byte> asBytes(const std::vector<std::uint8_t>& bytes) {
+    std::vector<std::byte> out;
+    out.reserve(bytes.size());
+    for (const auto b : bytes) out.push_back(static_cast<std::byte>(b));
+    return out;
+}
+
+// Constraint: a vanilla script sits under scripts/ inside a BA2, the same entry shape the game archives use.
+void writeScriptArchive(const fs::path& path, const std::vector<std::uint8_t>& pex) {
+    fo4::archive::Ba2GeneralEntry entry;
+    entry.path = "scripts\\qf_synth.pex";
+    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(asBytes(pex)));
+    fo4::archive::Ba2GeneralArchive archive;
+    archive.entries.push_back(std::move(entry));
+    fo4::archive::write_ba2_general_file(archive, path);
+}
+
+std::string stageSource(int stage) {
+    return "Scriptname QF_Synth extends Quest\n"
+           "\n"
+           "Function Fragment_Stage_0010_Item_00()\n"
+           "    SetStage(" + std::to_string(stage) + ")\n"
+           "EndFunction\n";
+}
+
+}  // namespace
+
+TEST_CASE("QuestScriptSafety.LooseScriptOverridesVanillaArchive") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeScriptArchive(s.data / "Fallout4 - Misc.ba2", compiledPex(stageSource(10), "QF_Synth"));
+    writeBytes(s.data / "Scripts" / "QF_Synth.pex", asBytes(compiledPex(stageSource(30), "QF_Synth")));
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    // Invariant: a loose Data\Scripts file wins over every archive and is reported with the archive name "loose".
+    const auto fetched = getScript(backend, "QF_Synth", s.imports);
+    REQUIRE(fetched.has_value());
+    CHECK(fetched->at("origin").get<std::string>() == "vanilla_pex");
+    CHECK(fetched->at("archive").get<std::string>() == "loose");
+    const auto source = fetched->at("source").get<std::string>();
+    CHECK(source.find("SetStage(30)") != std::string::npos);
+    CHECK(source.find("SetStage(10)") == std::string::npos);
+    CHECK(fetched->at("notes").empty());
+}
+
+TEST_CASE("QuestScriptSafety.LaterArchiveOverridesMiscAndTexturesArchiveIsSkipped") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeScriptArchive(s.data / "Fallout4 - Misc.ba2", compiledPex(stageSource(10), "QF_Synth"));
+    writeScriptArchive(s.data / "DLCRobot - Main.ba2", compiledPex(stageSource(20), "QF_Synth"));
+    // Constraint: " - Textures" archives hold no scripts, so this copy sorts last yet must never be read.
+    writeScriptArchive(s.data / "Zeta - Textures.ba2", compiledPex(stageSource(40), "QF_Synth"));
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    const auto fetched = getScript(backend, "QF_Synth", s.imports);
+    REQUIRE(fetched.has_value());
+    CHECK(fetched->at("archive").get<std::string>() == "DLCRobot - Main.ba2");
+    const auto source = fetched->at("source").get<std::string>();
+    CHECK(source.find("SetStage(20)") != std::string::npos);
+    CHECK(source.find("SetStage(10)") == std::string::npos);
+    CHECK(source.find("SetStage(40)") == std::string::npos);
+    CHECK(fetched->at("notes").empty());
+}
+
+TEST_CASE("QuestScriptSafety.CorruptNonMiscArchiveIsSkippedAndNoted") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeScriptArchive(s.data / "Fallout4 - Misc.ba2", compiledPex(stageSource(10), "QF_Synth"));
+    writeText(s.data / "DLCRobot - Main.ba2", "this is not a BA2 archive");
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    // Invariant: an unreadable non-Misc archive does not fail the lookup; it is skipped and named in notes.
+    const auto fetched = getScript(backend, "QF_Synth", s.imports);
+    REQUIRE(fetched.has_value());
+    CHECK(fetched->at("archive").get<std::string>() == "Fallout4 - Misc.ba2");
+    CHECK(fetched->at("source").get<std::string>().find("SetStage(10)") != std::string::npos);
+    const auto notes = fetched->at("notes");
+    REQUIRE(notes.is_array());
+    REQUIRE(notes.size() == 1);
+    CHECK(notes[0].get<std::string>().find("DLCRobot - Main.ba2") != std::string::npos);
+}
