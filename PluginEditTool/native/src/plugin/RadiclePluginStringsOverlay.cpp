@@ -1,5 +1,5 @@
 #include "RadiclePluginSupport.hpp"
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
 #include "RadiclePluginHeldLocalization.hpp"
 #endif
 
@@ -259,7 +259,7 @@ Result<RadiclePluginBackend::StagedStringTable> RadiclePluginBackend::prepareAll
         return std::unexpected(Error{"LocalizedAllocationSnapshotUnsupported", "localized allocation requires a verified loose destination snapshot"});
     }
     if (found == allocation.sourceSnapshots.end()) {
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
         if (!allocation.heldGeneration)
 #endif
             return std::unexpected(Error{"LocalizedAllocationSnapshotUnsupported", "localized allocation requires a verified loose destination snapshot"});
@@ -272,10 +272,12 @@ Result<RadiclePluginBackend::StagedStringTable> RadiclePluginBackend::prepareAll
         : localizationFile(directory, filename, kind, allocation.language, found->bytes, true);
     if (!baseline) return std::unexpected(Error{"StringSavePathNotAllowed", "string table destination is outside an approved writable root"});
     bool heldVerified = false;
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     if (allocation.heldGeneration) {
-        try { allocation.heldGeneration->verify(); testReserveHeldWriter(*allocation.heldGeneration, allocation.tables.at(source)); heldVerified = true; }
+        try { allocation.heldGeneration->verify(); }
         catch (const std::exception& error) { return std::unexpected(Error{"LocalizedSidecarChangedOnDisk", error.what()}); }
+        try { testReserveHeldWriter(*allocation.heldGeneration, allocation.tables.at(source)); heldVerified = true; }
+        catch (const std::exception& error) { return std::unexpected(Error{"LocalizedSourcesUnavailable", error.what()}); }
     }
 #endif
     return prepareStringTable(plugin, allocation.language, source, std::move(allocation.tables.at(source)), directory, &*baseline, heldVerified);
@@ -308,7 +310,7 @@ Result<void> RadiclePluginBackend::stageAllocatedStringTable(
 
 Result<void> RadiclePluginBackend::validateLocalizedAllocation(
     const LoadedPlugin& loaded, const LocalizedStringAllocation& allocation) const {
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     if (allocation.heldGeneration) {
         try { allocation.heldGeneration->verify(); return {}; }
         catch (const std::exception& error) { return std::unexpected(Error{"LocalizedSidecarChangedOnDisk", error.what()}); }

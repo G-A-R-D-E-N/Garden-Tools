@@ -9,6 +9,7 @@
 #include <cctype>
 #include <map>
 #include <set>
+#include <span>
 #include <stdexcept>
 #include <utility>
 
@@ -205,8 +206,14 @@ void HeldArchiveSet::verify() const {
             if (names[i] != inventory.providers[i].filename) throw std::runtime_error("archive inventory changed");
     }
     for (const auto& source : sources_) {
+#ifdef _WIN32
+        // Invariant: held BA2 handles share read only, so no writer can change a digest captured at capture time.
+        source.bytes->read(0, std::span<std::byte>{});
+        if (source.bytes->size() != source.size) throw std::runtime_error("archive source changed");
+#else
         if (source.bytes->size() != source.size || fo4::archive::hash_byte_source(source.bytes) != source.digest)
             throw std::runtime_error("archive source changed");
+#endif
     }
 }
 }

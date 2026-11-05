@@ -19,7 +19,7 @@ public:
     const std::filesystem::path& path() const noexcept;
     bool sameRoot(const Ba2ReadRoot& other) const;
     std::shared_ptr<const fo4::archive::Ba2ByteSource> open(
-        const std::filesystem::path& relative, std::uint64_t maxBytes) const;
+        const std::filesystem::path& relative, std::uint64_t maxBytes, bool shareDelete = false) const;
     std::vector<std::string> list(const std::filesystem::path& relativeDirectory,
                                   std::size_t maxEntries) const;
     std::optional<std::vector<std::string>> listOptional(const std::filesystem::path& relativeDirectory,

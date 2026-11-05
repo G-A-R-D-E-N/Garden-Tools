@@ -87,7 +87,7 @@ HeldStringDirectory HeldStringDirectory::capture(std::shared_ptr<const Ba2ReadRo
     remaining -= overhead;
     std::size_t remainingRows = 1000000;
     if (listed) for (const auto& [filename, language, source] : *listed) {
-        auto lease = result.root_->open(result.relative_ / fo4::io::from_utf8(filename), remaining);
+        auto lease = result.root_->open(result.relative_ / fo4::io::from_utf8(filename), remaining, true);
         std::vector<std::byte> bytes(static_cast<std::size_t>(lease->size()));
         lease->read(0, bytes);
         remaining -= bytes.size();

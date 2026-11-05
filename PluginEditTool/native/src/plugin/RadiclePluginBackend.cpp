@@ -298,7 +298,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         if (!recoveryFailed) recoveryPlugin_ = owner;
         recoveryFailed = true;
     };
-#ifdef FO4IDE_TEST_HOOKS
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     TestReadRoots candidateReadRoots;
 #endif
     try {
@@ -308,7 +308,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             if (testJournalRoot_ != configuredJournalRoot) throw std::runtime_error("journal root changed");
             if (!detail::journalHasRecoveryFiles(configuredJournalRoot)) recoveryState.reset();
         }
-#ifdef FO4IDE_TEST_HOOKS
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
         if (!configuredJournalRoot.empty()) {
             for (const auto& entry : arguments["plugins"]) {
                 if (!entry.is_object()) continue;
@@ -363,7 +363,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                 const std::vector<detail::JournalRoots> owner{item};
                 const auto name = fo4::io::utf8(item.plugin.filename());
                 try {
-#ifdef FO4IDE_TEST_HOOKS
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
                     if (testRecoverJournal(*recoverySession, owner, arguments, candidateReadRoots)) recovered = true;
 #else
                     if (recoverySession->recover(owner)) recovered = true;
@@ -467,7 +467,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         }
         plugins_ = std::move(loaded);
         ++mutationEpoch_;
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
         testReadRoots_ = std::move(candidateReadRoots);
 #endif
         if (!recoveryFailed) recoveryPlugin_.clear();

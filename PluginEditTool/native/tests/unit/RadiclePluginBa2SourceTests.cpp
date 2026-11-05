@@ -250,15 +250,46 @@ TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows refuses writers and deleters of a h
     REQUIRE_THROWS_AS(source->read(1, bytes), std::exception);
 }
 
-// Invariant, detects: an authorized folder renamed away under a live root, so later reads reach a different folder.
-TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows refuses renaming a held authorized directory until the root is released", "[ba2][held-source]") {
-    {
-        auto root = Ba2ReadRoot::authorize(path / "data");
-        std::error_code error;
-        std::filesystem::rename(path / "data", path / "old", error);
-        CHECK(static_cast<bool>(error));
-    }
+// Invariant, detects: an authorized folder renamed away under a live root, so later reads reach a different folder or fail to notice the rename.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows held source fails while its authorized directory is renamed away", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path / "data");
     std::filesystem::rename(path / "data", path / "old");
+    REQUIRE_THROWS_AS(root.open("archive.ba2", 8), std::exception);
+    std::filesystem::rename(path / "old", path / "data");
+    REQUIRE_NOTHROW(root.open("archive.ba2", 8));
+}
+
+// Invariant, detects: a held authorized directory that refuses a write open from the same process, which would block the journal from creating a missing Strings folder at publish.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows held directory accepts a write open from the same process", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path / "data");
+    const HANDLE writer = ::CreateFileW((path / "data").c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    REQUIRE(writer != INVALID_HANDLE_VALUE);
+    ::CloseHandle(writer);
+    REQUIRE_NOTHROW(root.open("archive.ba2", 8));
+}
+
+// Invariant, detects: a held BA2 that another process can rename away while a held source still reads the old name.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows refuses renaming a held BA2", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    auto source = root.open("data/archive.ba2", 8);
+    std::error_code error;
+    std::filesystem::rename(path / "data/archive.ba2", path / "data/moved.ba2", error);
+    CHECK(static_cast<bool>(error));
+    std::array<std::byte, 8> bytes{};
+    REQUIRE_NOTHROW(source->read(0, bytes));
+    REQUIRE(std::string(reinterpret_cast<char*>(bytes.data()), bytes.size()) == "original");
+}
+
+// Invariant, detects: a string lease that blocks the journal's rename of its table, or that keeps reading the old object after a same-named replacement appears.
+TEST_CASE_METHOD(Ba2ReadSourceTest, "Windows string lease lets its file be renamed away and detects a replacement", "[ba2][held-source]") {
+    auto root = Ba2ReadRoot::authorize(path);
+    auto source = root.open("data/archive.ba2", 8, true);
+    std::array<std::byte, 8> bytes{};
+    REQUIRE_NOTHROW(source->read(0, bytes));
+    std::filesystem::rename(path / "data/archive.ba2", path / "data/backup.ba2");
+    std::ofstream(path / "data/archive.ba2") << "replaced";
+    REQUIRE_THROWS_AS(source->read(0, bytes), std::exception);
 }
 
 // Invariant, detects: a held source that keeps reading after an outside process changes the file's timestamps.

@@ -1,5 +1,5 @@
 #include "RadiclePluginSupport.hpp"
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
 #include "RadiclePluginHeldLocalization.hpp"
 #endif
 
@@ -441,10 +441,12 @@ Result<nlohmann::json> RadiclePluginBackend::saveStringTables(const nlohmann::js
 Result<LocalizedStringAllocation> RadiclePluginBackend::openLocalizedStrings(
     const LoadedPlugin& loaded, std::string_view language) const {
     if (loaded.stagedLocalization.has_value()) return std::unexpected(pendingLocalizationError());
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     if (!testJournalRoot_.empty() && (!dataDirectory_.empty() || (loaded.stagedAllocation && loaded.stagedAllocation->heldGeneration))) {
         auto held = testOpenHeldLocalizedStrings(loaded, language);
+#ifdef FO4IDE_TEST_HOOKS
         if (held && localizedAllocationAfterReadHook != nullptr) localizedAllocationAfterReadHook();
+#endif
         return held;
     }
 #endif
@@ -466,7 +468,7 @@ Result<LocalizedStringAllocation> RadiclePluginBackend::openLocalizedStrings(
 
 Result<std::uint32_t> RadiclePluginBackend::allocateLocalizedString(
     LocalizedStringAllocation& allocation, StringSource source, std::string_view text) const {
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     if (allocation.heldGeneration) {
         try {
             allocation.heldGeneration->reserveWorkingBytes(256);
@@ -503,7 +505,7 @@ Result<void> RadiclePluginBackend::stageLocalizedStringsAndPlugin(
     if (loaded->stagedAllocation) { auto valid = validateLocalizedAllocation(*loaded, *loaded->stagedAllocation); if (!valid) return std::unexpected(valid.error()); }
     if (!allocation.touched.empty()) { auto valid = validateLocalizedAllocation(*loaded, allocation); if (!valid) return std::unexpected(valid.error()); }
     const bool hasAllocation = !allocation.touched.empty();
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     const auto heldGeneration = allocation.heldGeneration;
 #endif
     auto dependentLanguages = loaded->stagedPluginLanguages; if (!allocation.touched.empty()) dependentLanguages.insert(allocation.language);
@@ -523,8 +525,11 @@ Result<void> RadiclePluginBackend::stageLocalizedStringsAndPlugin(
     if (hasAllocation) retained = std::make_unique<LocalizedStringAllocation>(std::move(allocation));
     CommitScope commit;
     std::scoped_lock staged(stagedStringsMutex_);
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
-    if (heldGeneration) testReserveHeldStagedCopy(*heldGeneration);
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+    if (heldGeneration) {
+        try { testReserveHeldStagedCopy(*heldGeneration); }
+        catch (const std::exception& error) { return std::unexpected(Error{"LocalizedSourcesUnavailable", error.what()}); }
+    }
 #endif
     auto replacement = stagedStrings_;
     std::size_t inserted = 0;
@@ -705,7 +710,7 @@ Result<void> RadiclePluginBackend::stageQuestLocalizationMutationLocked(
     StringSource source, StagedStringTable table, LocalizedStringAllocation allocation) {
     if (loaded.stagedAllocation) { auto valid = validateLocalizedAllocation(loaded, *loaded.stagedAllocation); if (!valid) return std::unexpected(valid.error()); }
     if (auto valid = validateLocalizedAllocation(loaded, allocation); !valid) return std::unexpected(valid.error());
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     const auto heldGeneration = allocation.heldGeneration;
     if (heldGeneration) { try { testReserveHeldWriter(*heldGeneration, table.table); } catch (const std::exception& error) { return std::unexpected(Error{"LocalizedSourcesUnavailable", error.what()}); } }
 #endif
@@ -719,7 +724,7 @@ Result<void> RadiclePluginBackend::stageQuestLocalizationMutationLocked(
     auto retained = std::make_unique<LocalizedStringAllocation>(std::move(allocation));
     CommitScope commit;
     std::scoped_lock staged(stagedStringsMutex_);
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     if (heldGeneration) { try { testReserveHeldStagedCopy(*heldGeneration); } catch (const std::exception& error) { return std::unexpected(Error{"LocalizedSourcesUnavailable", error.what()}); } }
 #endif
     const StagedStringKey key{loaded.name, table.file.language, source, table.file.path};

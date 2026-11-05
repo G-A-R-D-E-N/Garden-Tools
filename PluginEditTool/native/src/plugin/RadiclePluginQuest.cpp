@@ -225,7 +225,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             stringsDirectory = fo4::io::from_utf8(arguments[3]["stringsDirectory"].get<std::string>());
         }
         bool allowAbsent = false;
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
         allowAbsent = !stringsDirectory.empty() && !testJournalRoot_.empty() && !dataDirectory_.empty() &&
             support::sameLocalizedPath(stringsDirectory, loaded->path.parent_path() / "Strings");
 #endif
@@ -288,7 +288,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         if (maximum == std::numeric_limits<std::uint32_t>::max()) return std::unexpected(Error{"LocalizedLogTableFull", "localized string-table ID space is exhausted"});
         localizedTables->nextId = maximum + 1;
         bool heldSources = false;
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
         if (!testJournalRoot_.empty() && (!dataDirectory_.empty() ||
             (loaded->stagedAllocation && loaded->stagedAllocation->heldGeneration))) {
             if (!support::sameLocalizedPath(localizedTables->stringsPath.parent_path(), loaded->path.parent_path() / "Strings"))

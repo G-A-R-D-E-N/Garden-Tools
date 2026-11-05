@@ -15,7 +15,7 @@
 #include <utility>
 
 #include "RadiclePluginSupport.hpp"
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
 #include "RadiclePluginBa2Source.hpp"
 #endif
 
@@ -180,13 +180,15 @@ bool RadiclePluginBackend::isEditable(const LoadedPlugin& loaded) const {
 
 void RadiclePluginBackend::setDataDirectory(std::filesystem::path dataDirectory) {
     OpLock lock(*this, OpLock::Mode::Lifecycle);
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     testDataReadRoot_.reset();
+    dataReadRootError_.clear();
     if (!dataDirectory.empty()) {
         try {
             const auto root = std::filesystem::absolute(dataDirectory).lexically_normal();
             testDataReadRoot_ = std::make_shared<detail::Ba2ReadRoot>(detail::Ba2ReadRoot::authorize(root));
-        } catch (const std::exception&) {
+        } catch (const std::exception& error) {
+            dataReadRootError_ = error.what();
         }
     }
 #endif

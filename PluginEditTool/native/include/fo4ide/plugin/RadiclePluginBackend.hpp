@@ -29,7 +29,7 @@
 
 namespace fo4ide::plugin {
 
-#ifdef FO4IDE_TEST_HOOKS
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
 namespace detail { class Ba2ReadRoot; class HeldLocalizationGeneration; class JournalSession; struct JournalRoots; }
 #endif
 
@@ -65,7 +65,7 @@ struct LocalizedDirectorySnapshot {
 };
 
 struct LocalizedStringAllocation {
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     std::shared_ptr<detail::HeldLocalizationGeneration> heldGeneration;
     std::shared_ptr<const detail::Ba2ReadRoot> heldDataRoot{};
 #endif
@@ -171,12 +171,11 @@ public:
 #endif
 
 private:
-#ifdef FO4IDE_TEST_HOOKS
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     using TestReadRoots = std::map<std::filesystem::path, std::shared_ptr<const detail::Ba2ReadRoot>>;
-#ifdef __linux__
     std::shared_ptr<const detail::Ba2ReadRoot> testDataReadRoot_;
+    std::string dataReadRootError_;
     TestReadRoots testReadRoots_;
-#endif
     bool testRecoverJournal(detail::JournalSession& session, const std::vector<detail::JournalRoots>& approved,
                             const nlohmann::json& arguments, TestReadRoots& readRoots) const;
 #endif
@@ -235,10 +234,9 @@ private:
         std::shared_ptr<const std::vector<std::byte>> diskBaseline = plugin.original_data;
     };
 
-#ifdef FO4IDE_TEST_HOOKS
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
     static TestReadRoots testFilterReadRoots(const TestReadRoots& roots, const std::vector<LoadedPlugin>& loaded);
     static void testAuthorizeProfileReadRoots(const nlohmann::json& arguments, TestReadRoots& readRoots);
-#ifdef __linux__
     Result<std::shared_ptr<detail::HeldLocalizationGeneration>> testCaptureHeldGeneration(
         const LoadedPlugin& loaded, std::string_view language) const;
     Result<LocalizedStringAllocation> testOpenHeldLocalizedStrings(const LoadedPlugin& loaded, std::string_view language) const;
@@ -246,7 +244,6 @@ private:
     void testReserveHeldStagedCopy(detail::HeldLocalizationGeneration& generation) const;
     static void testReserveHeldWriter(detail::HeldLocalizationGeneration& generation,
                                       const fo4::localization::LocalizedStringTable& table);
-#endif
 #endif
 
     enum class StateHold { None, Shared, Exclusive };

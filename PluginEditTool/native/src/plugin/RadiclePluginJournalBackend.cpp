@@ -1,6 +1,6 @@
 #include "RadiclePluginSupport.hpp"
 #include "RadiclePluginJournalSession.hpp"
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
 #include "RadiclePluginJournalProfile.hpp"
 #include "RadiclePluginBa2Source.hpp"
 #include "RadiclePluginHeldLocalization.hpp"
@@ -28,9 +28,8 @@ void setJournalTimestampHook(JournalTimestampHook hook) { timestampHook = hook; 
 
 namespace fo4ide::plugin {
 
-#ifdef FO4IDE_TEST_HOOKS
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
 void RadiclePluginBackend::testAuthorizeProfileReadRoots(const nlohmann::json& arguments, TestReadRoots& readRoots) {
-#ifdef __linux__
     for (const auto& entry : arguments.at("plugins")) {
         if (!entry.is_object() || !entry.value("resolved", false)) continue;
         const auto name = entry.value("name", std::string{}), path = entry.value("path", std::string{});
@@ -44,28 +43,19 @@ void RadiclePluginBackend::testAuthorizeProfileReadRoots(const nlohmann::json& a
             catch (const std::exception&) { throw detail::JournalRecoveryProfileInvalid("unavailable profile plugin: " + name); }
         }
     }
-#else
-    (void)arguments; (void)readRoots;
-#endif
 }
 
 bool RadiclePluginBackend::testRecoverJournal(detail::JournalSession& session,
                                                const std::vector<detail::JournalRoots>& approved,
                                                const nlohmann::json& arguments, TestReadRoots& readRoots) const {
-#ifdef __linux__
     return session.recover(approved, [&](const auto& manifest, const auto& finalPlugin, auto& config) {
         detail::prepareJournalProfile(arguments, dataDirectory_, testDataReadRoot_, readRoots, manifest, finalPlugin, config);
     });
-#else
-    (void)arguments; (void)readRoots;
-    return session.recover(approved);
-#endif
 }
 
 RadiclePluginBackend::TestReadRoots RadiclePluginBackend::testFilterReadRoots(
     const TestReadRoots& roots, const std::vector<LoadedPlugin>& loaded) {
     TestReadRoots result;
-#ifdef __linux__
     for (const auto& plugin : loaded) {
         const auto path = std::filesystem::absolute(plugin.path).lexically_normal();
         const auto found = roots.find(path.parent_path());
@@ -82,9 +72,6 @@ RadiclePluginBackend::TestReadRoots RadiclePluginBackend::testFilterReadRoots(
         }
         result.emplace(found->first, found->second);
     }
-#else
-    (void)roots; (void)loaded;
-#endif
     return result;
 }
 #endif
@@ -149,7 +136,7 @@ Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
     std::string pendingName = loaded.name;
     if (output != loaded.path) return std::unexpected(Error{"SavePathNotAllowed", "Journal Save As is unavailable"});
     try {
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
         const auto held = loaded.stagedAllocation ? loaded.stagedAllocation->heldGeneration : nullptr;
         const auto dataRoot = held ? loaded.stagedAllocation->heldDataRoot : nullptr;
         if (held && stringsOnly) return std::unexpected(Error{"LocalizedSourceRecoveryUnavailable", "Selective saves require held-source rebasing"});
@@ -165,7 +152,7 @@ Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
         if (loaded.stagedAllocation) {
             auto valid = validateLocalizedAllocation(loaded, *loaded.stagedAllocation);
             if (!valid) return std::unexpected(valid.error());
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
             if (!held)
 #endif
             if (!dataDirectory_.empty()) {
@@ -173,7 +160,7 @@ Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
                 if (!std::filesystem::equivalent(dataDirectory_, loaded.path.parent_path(), ec) || ec)
                     return std::unexpected(Error{"LocalizedSourceRecoveryUnavailable", "Data source roots require recoverable read-only authorization"});
             }
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
             if (!held)
 #endif
             {
@@ -188,7 +175,7 @@ Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
         for (const auto& path : trustedSaveRoots_) roots.approvedRoots.push_back({path, JournalDestination::captureRoot(path)});
         std::vector<JournalArchiveInventory> archives;
         std::vector<JournalReadStringInventory> readStrings;
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
         if (held) {
             const auto& captured = held->archives();
             roots.approvedReadRoots = captured.readRoots();
@@ -199,9 +186,14 @@ Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
                 const auto approved = std::find_if(roots.approvedReadRoots.begin(), roots.approvedReadRoots.end(), [&](const auto& root) {
                     return root.lease && sameJournalIdentity(root.path, dataRoot->path()) && root.lease->sameRoot(*dataRoot);
                 });
-                if (approved == roots.approvedReadRoots.end()) throw std::runtime_error("held Data root changed");
+                if (approved == roots.approvedReadRoots.end()) return std::unexpected(Error{"LocalizedSidecarChangedOnDisk", "held Data root changed"});
                 roots.readStringDirectories.push_back({approved->path, {"Strings"}, {}});
-                readStrings.push_back(held->readOnlyInventory(approved->path, "Strings"));
+                try {
+                    held->verify();
+                    readStrings.push_back(held->readOnlyInventory(approved->path, "Strings"));
+                } catch (const std::exception& error) {
+                    return std::unexpected(Error{"LocalizedSidecarChangedOnDisk", error.what()});
+                }
             }
         }
 #endif
@@ -236,7 +228,7 @@ Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
             if (!defaultRoot || !archiveRoot) return std::unexpected(Error{"StringSavePathNotAllowed", "allocation roots are not approved"});
             sourceNames[{defaultRoot->rootSelector, defaultRoot->directories}];
             sourcePresence[{defaultRoot->rootSelector, defaultRoot->directories}] = loaded.stagedAllocation->defaultDirectoryExists;
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
             if (!held)
 #endif
             sourceSets.push_back({"archive-empty", archiveRoot->rootSelector, archiveRoot->directories, {}});
@@ -259,7 +251,7 @@ Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
             };
             auto included = addInventory(loaded.stagedAllocation->allocationSources, loaded.path.parent_path() / "Strings");
             if (!included) return std::unexpected(included.error());
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
             if (held) {
                 const auto& directories = held->directories();
                 if (directories.empty() || !support::sameLocalizedPath(directories.front().directory(), loaded.path.parent_path() / "Strings"))
@@ -366,7 +358,18 @@ Result<void> RadiclePluginBackend::persistJournalLocked(LoadedPlugin& loaded,
             sourceSets.push_back({"strings", location.first, location.second, std::move(names),
                                   sourcePresence.at(location)});
         }
-        session.publish(roots, inputs, sourceSets, archives, readStrings);
+        try {
+            session.publish(roots, inputs, sourceSets, archives, readStrings);
+        } catch (const JournalRecoveryRequired&) {
+            throw;
+        } catch (const std::exception&) {
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+            if (held) {
+                if (auto valid = validateLocalizedAllocation(loaded, *loaded.stagedAllocation); !valid) return std::unexpected(valid.error());
+            }
+#endif
+            throw;
+        }
         std::error_code ec;
         auto writtenTime = std::filesystem::last_write_time(output, ec);
 #ifdef FO4IDE_TEST_HOOKS

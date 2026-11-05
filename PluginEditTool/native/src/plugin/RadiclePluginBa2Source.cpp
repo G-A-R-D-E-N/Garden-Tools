@@ -160,7 +160,11 @@ struct Handle {
     Handle& operator=(const Handle&) = delete;
 };
 
-HANDLE openChild(HANDLE parent, std::wstring name, ACCESS_MASK access, ULONG options) {
+constexpr ULONG allSharing = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+constexpr ULONG archiveSharing = FILE_SHARE_READ;
+constexpr ULONG stringSharing = FILE_SHARE_READ | FILE_SHARE_DELETE;
+
+HANDLE openChild(HANDLE parent, std::wstring name, ACCESS_MASK access, ULONG options, ULONG sharing) {
     UNICODE_STRING component{};
     component.Length = static_cast<USHORT>(name.size() * sizeof(wchar_t));
     component.MaximumLength = component.Length;
@@ -173,14 +177,14 @@ HANDLE openChild(HANDLE parent, std::wstring name, ACCESS_MASK access, ULONG opt
     HANDLE handle = nullptr;
     IO_STATUS_BLOCK ioStatus{};
     const NTSTATUS status = NtCreateFile(&handle, access | FILE_READ_ATTRIBUTES | SYNCHRONIZE, &attributes, &ioStatus,
-                                         nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_OPEN,
+                                         nullptr, FILE_ATTRIBUTE_NORMAL, sharing, FILE_OPEN,
                                          options | FILE_SYNCHRONOUS_IO_NONALERT, nullptr, 0);
     if (status < 0) throw std::system_error(static_cast<int>(RtlNtStatusToDosError(status)), std::system_category(), "cannot open BA2 read source");
     return handle;
 }
 
-HANDLE openBase(const std::filesystem::path& base) {
-    const HANDLE handle = ::CreateFileW(base.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+HANDLE openBase(const std::filesystem::path& base, ULONG sharing) {
+    const HANDLE handle = ::CreateFileW(base.c_str(), GENERIC_READ, sharing, nullptr, OPEN_EXISTING,
                                         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
     if (handle == INVALID_HANDLE_VALUE) throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(), "cannot open BA2 read root");
     return handle;
@@ -232,6 +236,15 @@ bool plainDirectory(const Snapshot& s) {
     return (s.attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY;
 }
 
+bool sameObjectAt(HANDLE parent, const std::wstring& name, const Identity& expected, ULONG options) {
+    try {
+        const Handle current(openChild(parent, name, 0, options, allSharing));
+        return inspect(current.handle).identity == expected;
+    } catch (const std::system_error&) {
+        return false;
+    }
+}
+
 std::vector<std::wstring> components(const std::filesystem::path& path) {
     std::vector<std::wstring> result;
     for (const auto& part : path) {
@@ -249,14 +262,17 @@ struct Directories {
     std::vector<std::shared_ptr<Handle>> held{};
     std::vector<std::wstring> names{};
     void verify() const {
-        for (const auto& directory : held) {
-            if (!plainDirectory(inspect(directory->handle))) throw std::runtime_error("unsafe BA2 read directory");
+        for (std::size_t i = 0; i < held.size(); ++i) {
+            const auto current = inspect(held[i]->handle);
+            if (!plainDirectory(current)) throw std::runtime_error("unsafe BA2 read directory");
+            if (i > 0 && !sameObjectAt(held[i - 1]->handle, names[i - 1], current.identity, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT))
+                throw std::runtime_error("BA2 read directory replaced");
         }
     }
     void append(const std::wstring& name) {
         if (held.size() >= 129) throw std::runtime_error("BA2 source path too deep");
         std::shared_ptr<Handle> next;
-        try { next = std::make_shared<Handle>(openChild(held.back()->handle, name, FILE_LIST_DIRECTORY, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT)); }
+        try { next = std::make_shared<Handle>(openChild(held.back()->handle, name, FILE_LIST_DIRECTORY, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, allSharing)); }
         catch (const std::system_error& error) {
             if (error.code().value() != ERROR_FILE_NOT_FOUND && error.code().value() != ERROR_PATH_NOT_FOUND) throw;
             verify();
@@ -292,6 +308,10 @@ std::vector<std::string> listDirectory(const Directories& dirs, std::size_t maxE
     const auto before = inspect(directory);
     if (!plainDirectory(before)) throw std::runtime_error("unsafe BA2 read directory");
     const auto path = finalPath(directory);
+    const Handle pinned(openBase(path, FILE_SHARE_READ | FILE_SHARE_WRITE));
+    const auto pinnedSnapshot = inspect(pinned.handle);
+    if (!plainDirectory(pinnedSnapshot) || pinnedSnapshot.identity != before.identity)
+        throw std::runtime_error("BA2 source directory changed during enumeration");
     std::vector<std::string> names;
     for (const auto& entry : std::filesystem::directory_iterator(path)) {
         const auto name = entry.path().filename().wstring();
@@ -300,9 +320,7 @@ std::vector<std::string> listDirectory(const Directories& dirs, std::size_t maxE
         names.push_back(utf8Name(name));
     }
     const auto after = inspect(directory);
-    const Handle resolved(openBase(path));
-    const auto reopened = inspect(resolved.handle);
-    if (!identical(before, after) || !plainDirectory(after) || reopened.identity != before.identity || !plainDirectory(reopened))
+    if (!identical(before, after) || !plainDirectory(after))
         throw std::runtime_error("BA2 source directory changed during enumeration");
     dirs.verify();
     std::sort(names.begin(), names.end());
@@ -312,9 +330,9 @@ std::vector<std::string> listDirectory(const Directories& dirs, std::size_t maxE
 
 class Source final : public fo4::archive::Ba2ByteSource {
 public:
-    Source(Directories dirs, std::wstring name, std::uint64_t maxBytes)
+    Source(Directories dirs, std::wstring name, std::uint64_t maxBytes, ULONG sharing)
         : dirs_(std::move(dirs)), name_(std::move(name)),
-          file_(openChild(dirs_.held.back()->handle, name_, FILE_READ_DATA, FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT)) {
+          file_(openChild(dirs_.held.back()->handle, name_, FILE_READ_DATA, FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, sharing)) {
         initial_ = inspect(file_.handle);
         if (!regularFile(initial_) || initial_.size < 0 || static_cast<std::uint64_t>(initial_.size) > maxBytes)
             throw std::runtime_error("unsafe or oversized BA2 source");
@@ -346,6 +364,8 @@ private:
         dirs_.verify();
         const auto current = inspect(file_.handle);
         if (!identical(initial_, current) || !regularFile(current)) throw std::runtime_error("BA2 source changed");
+        if (!sameObjectAt(dirs_.held.back()->handle, name_, initial_.identity, FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT))
+            throw std::runtime_error("BA2 source replaced");
     }
     Directories dirs_;
     std::wstring name_;
@@ -378,7 +398,7 @@ Ba2ReadRoot Ba2ReadRoot::authorize(const std::filesystem::path& root) {
     auto impl = std::make_shared<Impl>();
     impl->root = root;
     impl->directories.base = root.root_path();
-    impl->directories.held.push_back(std::make_shared<Handle>(openBase(impl->directories.base)));
+    impl->directories.held.push_back(std::make_shared<Handle>(openBase(impl->directories.base, allSharing)));
     impl->directories.verify();
     for (const auto& name : names) impl->directories.append(name);
     return Ba2ReadRoot(std::move(impl));
@@ -416,7 +436,7 @@ bool Ba2ReadRoot::sameRoot(const Ba2ReadRoot& other) const {
 }
 
 std::shared_ptr<const fo4::archive::Ba2ByteSource> Ba2ReadRoot::open(
-    const std::filesystem::path& relative, std::uint64_t maxBytes) const {
+    const std::filesystem::path& relative, std::uint64_t maxBytes, bool shareDelete) const {
 #if defined(__linux__) || defined(_WIN32)
     if (!impl_ || relative.is_absolute()) throw std::runtime_error("invalid BA2 read authority");
     auto names = components(relative);
@@ -424,10 +444,17 @@ std::shared_ptr<const fo4::archive::Ba2ByteSource> Ba2ReadRoot::open(
     auto dirs = impl_->directories;
     dirs.verify();
     for (std::size_t i = 0; i + 1 < names.size(); ++i) dirs.append(names[i]);
+#ifdef _WIN32
+    const ULONG sharing = shareDelete ? stringSharing : archiveSharing;
+    return std::make_shared<Source>(std::move(dirs), std::move(names.back()), maxBytes, sharing);
+#else
+    (void)shareDelete;
     return std::make_shared<Source>(std::move(dirs), std::move(names.back()), maxBytes);
+#endif
 #else
     (void)relative;
     (void)maxBytes;
+    (void)shareDelete;
     throw std::runtime_error("held BA2 read sources require Linux");
 #endif
 }

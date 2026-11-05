@@ -1,6 +1,6 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
-#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
 #include "RadiclePluginBa2Source.hpp"
 #include "RadiclePluginHeldLocalization.hpp"
 #include "RadiclePluginJournalSession.hpp"
@@ -22,7 +22,7 @@ Result<std::shared_ptr<detail::HeldLocalizationGeneration>> RadiclePluginBackend
         const auto found = testReadRoots_.find(modPath);
         if (found == testReadRoots_.end() || !found->second) throw std::runtime_error("plugin read root is unavailable");
         auto modRoot = found->second;
-        if (!dataDirectory_.empty() && !testDataReadRoot_) throw std::runtime_error("Data read root is unavailable");
+        if (!dataDirectory_.empty() && !testDataReadRoot_) throw std::runtime_error("Data read root is unavailable: " + dataReadRootError_);
         const auto dataRoot = testDataReadRoot_;
         detail::JournalReadConfiguration config;
         std::vector<detail::HeldStringDirectoryInput> directories{{modRoot, "Strings"}};
@@ -83,6 +83,7 @@ Result<std::uint32_t> RadiclePluginBackend::testHeldMaximum(const LoadedPlugin& 
     catch (const std::exception& error) { return std::unexpected(Error{"LocalizedSourcesUnavailable", error.what()}); }
 }
 
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
 Result<std::uint32_t> RadiclePluginBackend::testHeldMaximumStringId(std::string_view plugin,
                                                                      std::string_view language) const {
     OpLock lock(*this, OpLock::Mode::Read);
@@ -92,6 +93,7 @@ Result<std::uint32_t> RadiclePluginBackend::testHeldMaximumStringId(std::string_
     if (!generation) return std::unexpected(generation.error());
     return testHeldMaximum(*loaded, **generation);
 }
+#endif
 
 namespace {
 void reserveTableCopy(detail::HeldLocalizationGeneration& generation, const fo4::localization::LocalizedStringTable& table) {
