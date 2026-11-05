@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -36,7 +37,7 @@ using fo4ide::papyrus::TypeChecker;
 std::string uniqueRoot() {
     const auto base = std::filesystem::temp_directory_path() / "fo4re-codegen";
     std::filesystem::create_directories(base);
-    return (base / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
+    return (base / fo4ide_test::uniqueTempName())
         .string();
 }
 

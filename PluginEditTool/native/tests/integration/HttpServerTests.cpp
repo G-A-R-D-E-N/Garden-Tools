@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <filesystem>
 #include <fstream>
 #include <cstddef>
@@ -39,8 +40,7 @@ struct ServerFixture {
 
     ServerFixture()
         : root(std::filesystem::temp_directory_path() /
-               ("fo4ide_http_" + std::to_string(
-                   std::chrono::steady_clock::now().time_since_epoch().count()))),
+               ("fo4ide_http_" + fo4ide_test::uniqueTempName())),
           server(rpc, events) {
         std::filesystem::create_directories(root / "assets");
         std::ofstream(root / "index.html") << "<html>native</html>";
