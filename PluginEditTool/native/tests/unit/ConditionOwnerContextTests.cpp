@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include "../helpers/TempRoot.hpp"
 #include <catch2/generators/catch_generators.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include <fo4/schema/ctda.hpp>
@@ -60,7 +61,7 @@ struct Cleanup {
 
 TEST_CASE("condition reads retain the matched plugin owner with unnamed lookup", "[condition-owner]") {
     const auto root = std::filesystem::temp_directory_path() /
-        ("condition_owner_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("condition_owner_" + fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     const bool ownTarget = GENERATE(false, true);

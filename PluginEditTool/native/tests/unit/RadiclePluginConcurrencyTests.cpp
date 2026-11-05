@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -24,9 +25,9 @@ namespace {
 using namespace std::chrono_literals;
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_radicle_concurrency_" + std::to_string(id));
+           ("fo4ide_radicle_concurrency_" + id);
 }
 
 struct Cleanup {

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -33,7 +34,7 @@ using fo4ide::papyrus::TypeKind;
 std::string uniqueRoot() {
     const auto base = std::filesystem::temp_directory_path() / "fo4re-resolve";
     std::filesystem::create_directories(base);
-    return (base / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
+    return (base / fo4ide_test::uniqueTempName())
         .string();
 }
 

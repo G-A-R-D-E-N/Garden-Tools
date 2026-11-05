@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <algorithm>
 #include <fo4/io/sha256.hpp>
 #include <array>
@@ -183,7 +184,7 @@ struct IntentHookReset {
 TEST_CASE("Windows persisted replacement resumes idempotently from validated intent") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
-    const auto root = std::filesystem::current_path() / ".probe" / ("intent_basic_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root = std::filesystem::current_path() / ".probe" / ("intent_basic_" + fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     PrivateRoot privateRoot(root);
@@ -212,7 +213,7 @@ TEST_CASE("Windows persisted replacement resumes idempotently from validated int
 TEST_CASE("Windows persisted replacement resumes legacy present intent without originalExists") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
-    const auto root = std::filesystem::current_path() / ".probe" / ("intent_legacy_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root = std::filesystem::current_path() / ".probe" / ("intent_legacy_" + fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     PrivateRoot privateRoot(root);
@@ -236,7 +237,7 @@ TEST_CASE("Windows persisted replacement resumes legacy present intent without o
 TEST_CASE("Windows persisted replacement refuses invalid intent and backup conflict") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
-    const auto root = std::filesystem::current_path() / ".probe" / ("intent_conflict_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root = std::filesystem::current_path() / ".probe" / ("intent_conflict_" + fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     PrivateRoot privateRoot(root);
@@ -357,7 +358,7 @@ TEST_CASE("Windows persisted replacement recovers in a fresh process after every
     for (int phase = 0; phase < 7; ++phase) {
         CAPTURE(phase);
         const auto root = std::filesystem::current_path() / ".probe" / ("intent_restart_" + std::to_string(phase) + "_" +
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            fo4ide_test::uniqueTempName());
         Cleanup cleanup{root};
         std::filesystem::create_directories(root);
         PrivateRoot privateRoot(root);
@@ -392,7 +393,7 @@ TEST_CASE("Windows persisted replacement recovers in a fresh process after every
 TEST_CASE("Windows persisted replacement preserves newcomers and backup conflicts after restart") {
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
-    const auto root = std::filesystem::current_path() / ".probe" / ("intent_restart_conflict_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root = std::filesystem::current_path() / ".probe" / ("intent_restart_conflict_" + fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     PrivateRoot privateRoot(root);
@@ -474,7 +475,7 @@ TEST_CASE("Windows absent original publishes without overwrite and resumes after
     for (const auto phase : {0, 1, 4, 5, 6}) {
         CAPTURE(phase);
         const auto root = std::filesystem::current_path() / ".probe" / ("intent_absent_restart_" + std::to_string(phase) + "_" +
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            fo4ide_test::uniqueTempName());
         Cleanup cleanup{root};
         std::filesystem::create_directories(root);
         PrivateRoot privateRoot(root);
@@ -505,7 +506,7 @@ TEST_CASE("Windows absent original retains unexpected destination and refuses ba
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
     const auto root = std::filesystem::current_path() / ".probe" / ("intent_absent_conflict_" +
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     PrivateRoot privateRoot(root);
@@ -536,7 +537,7 @@ TEST_CASE("Windows intent inspection binds caller manifest evidence before repla
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
     const auto root = std::filesystem::current_path() / ".probe" / ("intent_binding_" +
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     PrivateRoot privateRoot(root);
@@ -570,7 +571,7 @@ TEST_CASE("Windows independent intent inspections preserve artifacts when the se
 #if defined(_WIN32) && defined(FO4IDE_TEST_HOOKS)
     using namespace fo4ide::plugin::detail;
     const auto root = std::filesystem::current_path() / ".probe" / ("intent_batch_" +
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        fo4ide_test::uniqueTempName());
     Cleanup cleanup{root};
     std::filesystem::create_directories(root);
     PrivateRoot privateRoot(root);
@@ -604,7 +605,7 @@ TEST_CASE("Windows private intent inspection binds a separate ordinary ACL desti
     DWORD profileLength = static_cast<DWORD>(profile.size());
     REQUIRE(::GetUserProfileDirectoryW(token.value, profile.data(), &profileLength));
     const auto root = std::filesystem::path(profile.data()) / ("intent_separate_" +
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        fo4ide_test::uniqueTempName());
     REQUIRE(::CreateDirectoryW(root.c_str(), nullptr));
     Cleanup cleanup{root};
     REQUIRE(::CreateDirectoryW((root / "data").c_str(), nullptr));

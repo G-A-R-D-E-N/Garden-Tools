@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -26,8 +27,8 @@ constexpr std::uint32_t kMasterOwner = 0x01000000u;
 constexpr std::uint32_t kNextAfterOutOfRange = 0x5002u;
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_radicle_compact_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    return std::filesystem::temp_directory_path() / ("fo4ide_radicle_compact_" + id);
 }
 
 struct Cleanup {
