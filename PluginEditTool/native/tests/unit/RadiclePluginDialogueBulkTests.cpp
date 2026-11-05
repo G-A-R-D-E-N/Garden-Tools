@@ -91,7 +91,7 @@ TEST_CASE("Bulk topic creation splits long lines at sentence boundaries into num
             {"editorId", "BulkTopic"}, {"lines", nlohmann::json::array({
                 "Short line.",
                 "This is a longer line that we will split at the sentence end. Another sentence here."})},
-            {"maxChars", 40}}}))));
+            {"maxChars", 40}}})));
     REQUIRE(created.at("infos").size() == 2);
     const auto& first = created.at("infos").at(0).at("responses");
     REQUIRE(first.size() == 1);
@@ -149,7 +149,8 @@ TEST_CASE("Voice path helper names every stored response of an INFO") {
         "Patch.esp", quest, nlohmann::json{{"editorId", "VoiceTopic"}}}))).at("formKey").get<std::string>();
     const auto info = parseResult(backend.invokeBackend("CreateInfo", nlohmann::json::array({
         "Patch.esp", topic, nlohmann::json{{"responses", nlohmann::json::array({
-            nlohmann::json{{"text", "First"}}, nlohmann::json{{"text", "Second"}}}})}}}))).at("formKey").get<std::string>();
+            nlohmann::json{{"text", "First"}}, nlohmann::json{{"text", "Second"}}})}}})))
+            .at("formKey").get<std::string>();
 
     const auto paths = parseResult(backend.invokeBackend("GetVoicePath", nlohmann::json::array({
         "Patch.esp", info, "MaleEvenToned"})));
