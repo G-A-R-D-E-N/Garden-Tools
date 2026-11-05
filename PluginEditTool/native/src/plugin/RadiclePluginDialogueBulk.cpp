@@ -3,6 +3,7 @@
 
 #include <fo4/audio/voice_path.hpp>
 #include <fo4/forms/dialogue.hpp>
+#include <fo4/plugin/info_responses.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/signature.hpp>
 #include <fo4/text/encoding.hpp>
@@ -31,7 +32,6 @@ constexpr std::size_t k_default_response_limit = 160;
 constexpr std::size_t k_max_response_limit = 4000;
 
 constexpr auto k_info = fo4::Signature::from_string("INFO");
-constexpr auto k_trda = fo4::Signature::from_string("TRDA");
 
 std::optional<Error> requireKnownKeys(const nlohmann::json& object,
                                       bool (*known)(std::string_view),
@@ -171,12 +171,9 @@ std::string cp1252(const std::string& utf8) {
 
 std::vector<std::uint8_t> responseNumbers(const fo4::Record& record) {
     std::vector<std::uint8_t> numbers;
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != k_trda) continue;
-        if (subrecord.data.size() < 5) continue;
-        std::uint8_t number = 0;
-        std::memcpy(&number, subrecord.data.data() + 4, sizeof(number));
-        numbers.push_back(number);
+    for (const auto& response : fo4::read_info_responses(record)) {
+        if (response.malformed) continue;
+        numbers.push_back(response.number);
     }
     return numbers;
 }

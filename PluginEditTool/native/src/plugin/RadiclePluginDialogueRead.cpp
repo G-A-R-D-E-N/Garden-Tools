@@ -4,6 +4,7 @@
 #include "RadiclePluginReadJson.hpp"
 
 #include <fo4/forms/dialogue.hpp>
+#include <fo4/plugin/info_responses.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/ctda.hpp>
 #include <fo4/signature.hpp>
@@ -14,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace fo4ide::plugin {
@@ -31,7 +33,6 @@ constexpr auto k_knam = fo4::Signature::from_string("KNAM");
 constexpr auto k_tnam = fo4::Signature::from_string("TNAM");
 constexpr auto k_dnam = fo4::Signature::from_string("DNAM");
 constexpr auto k_enam = fo4::Signature::from_string("ENAM");
-constexpr auto k_trda = fo4::Signature::from_string("TRDA");
 constexpr auto k_nam1 = fo4::Signature::from_string("NAM1");
 constexpr auto k_nam2 = fo4::Signature::from_string("NAM2");
 
@@ -63,21 +64,23 @@ const fo4::Group* questChildrenOf(const fo4::Plugin& plugin, fo4::RawFormId ques
 
 nlohmann::json responsesOf(const fo4::Plugin& plugin, const fo4::Record& info) {
     nlohmann::json responses = nlohmann::json::array();
-    for (const auto& subrecord : info.subrecords) {
-        if (subrecord.signature == k_trda) {
-            responses.push_back({
-                {"emotion", linkJson(plugin, readAt<std::uint32_t>(subrecord.data, 0))},
-                {"number", readAt<std::uint8_t>(subrecord.data, 4)},
-                {"sound", linkJson(plugin, readAt<std::uint32_t>(subrecord.data, 5))},
-                {"interruptPercent", readAt<std::uint16_t>(subrecord.data, 10)},
-                {"cameraTargetAlias", readAt<std::int32_t>(subrecord.data, 12)},
-                {"cameraLocationAlias", readAt<std::int32_t>(subrecord.data, 16)},
-            });
-            continue;
+    for (const auto& response : fo4::read_info_responses(info)) {
+        if (response.malformed) continue;
+        nlohmann::json row{
+            {"emotion", linkJson(plugin, response.emotion)},
+            {"number", response.number},
+            {"sound", linkJson(plugin, response.sound)},
+            {"interruptPercent", response.interrupt_percent},
+            {"cameraTargetAlias", response.camera_target_alias},
+            {"cameraLocationAlias", response.camera_location_alias},
+        };
+        if (const auto* text = fo4::info_response_subrecord(info, response, k_nam1); text != nullptr) {
+            putText(row, "text", plugin, text->data);
         }
-        if (responses.empty()) continue;
-        if (subrecord.signature == k_nam1) putText(responses.back(), "text", plugin, subrecord.data);
-        if (subrecord.signature == k_nam2) putText(responses.back(), "scriptNotes", plugin, subrecord.data);
+        if (const auto* notes = fo4::info_response_subrecord(info, response, k_nam2); notes != nullptr) {
+            putText(row, "scriptNotes", plugin, notes->data);
+        }
+        responses.push_back(std::move(row));
     }
     return responses;
 }

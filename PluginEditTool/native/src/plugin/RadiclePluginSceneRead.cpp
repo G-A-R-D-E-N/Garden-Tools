@@ -5,6 +5,7 @@
 
 #include <fo4/environment/dialogue.hpp>
 #include <fo4/environment/scene_layout.hpp>
+#include <fo4/plugin/info_responses.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/condition_scopes.hpp>
 #include <fo4/schema/ctda.hpp>
@@ -32,7 +33,6 @@ namespace {
 constexpr auto k_scen = fo4::Signature::from_string("SCEN");
 constexpr auto k_dial = fo4::Signature::from_string("DIAL");
 constexpr auto k_info = fo4::Signature::from_string("INFO");
-constexpr auto k_trda = fo4::Signature::from_string("TRDA");
 constexpr auto k_nam1 = fo4::Signature::from_string("NAM1");
 
 using namespace readjson;
@@ -124,26 +124,15 @@ struct TopicInfo {
 std::optional<TopicInfo> infoOf(const fo4::Plugin& plugin, const fo4::Record& record) {
     TopicInfo out;
     out.key = record.form_key;
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != k_trda) continue;
-        if (!sized(subrecord, 20)) continue;
-        out.responses.emplace_back(readAt<std::uint8_t>(subrecord.data, 4), std::string{});
-    }
-    std::size_t at = 0;
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature == k_trda) {
-            ++at;
-            continue;
+    for (const auto& response : fo4::read_info_responses(record)) {
+        if (response.malformed) continue;
+        std::string text;
+        if (const auto* name = fo4::info_response_subrecord(record, response, k_nam1); name != nullptr) {
+            text = plugin.header.tes4_flags.is_localized() && name->data.size() == 4
+                       ? "#" + std::to_string(readAt<std::uint32_t>(name->data, 0))
+                       : cp1252Text(name->data);
         }
-        if (at == 0 || at > out.responses.size()) continue;
-        if (subrecord.signature == k_nam1) {
-            if (plugin.header.tes4_flags.is_localized() && subrecord.data.size() == 4) {
-                out.responses[at - 1].second =
-                    "#" + std::to_string(readAt<std::uint32_t>(subrecord.data, 0));
-            } else {
-                out.responses[at - 1].second = cp1252Text(subrecord.data);
-            }
-        }
+        out.responses.emplace_back(response.number, std::move(text));
     }
     return out;
 }

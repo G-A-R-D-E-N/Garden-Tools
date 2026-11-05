@@ -239,6 +239,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin/destructible_stage.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/subrecord_copy.cpp
+  src/plugin/info_responses.cpp
   src/plugin/scene_writer.cpp
   src/plugin/sound_writer.cpp
   src/plugin/scene_index.cpp
