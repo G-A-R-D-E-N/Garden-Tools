@@ -135,6 +135,38 @@ const std::string kSynthFragment =
     "    SetStage(10)\n"
     "EndFunction\n";
 
+std::string namespacedFragment(int stage) {
+    return "Scriptname Fragments:Quests:QF_Synth extends Quest\n"
+           "\n"
+           "Function Fragment_Stage_0010_Item_00()\n"
+           "    SetStage(" + std::to_string(stage) + ")\n"
+           "EndFunction\n";
+}
+
+// Constraint: a directory junction needs no elevation; a failed mklink makes the caller skip with a reason.
+bool makeJunction(const fs::path& link, const fs::path& target) {
+    std::error_code ec;
+    fs::create_directories(target, ec);
+    const auto command = "mklink /J \"" + link.string() + "\" \"" + target.string() + "\" >nul 2>&1";
+    return std::system(command.c_str()) == 0 && fs::is_directory(link, ec);
+}
+
+// Constraint: compiles against the base stubs like the staging path does, so the PEX bytes are real.
+std::vector<std::uint8_t> compiledPex(const std::string& source, const std::string& name) {
+    fo4ide::papyrus::ScriptIndex index;
+    index.addRoot(fo4::graph::test::baseStubs());
+    auto script = fo4ide::papyrus::Parser::parse(source, name + ".psc");
+    REQUIRE_FALSE(script.hasErrors());
+    fo4ide::papyrus::PapyrusCompileOptions options;
+    options.emitDebugInfo = false;
+    options.emitDebugOnlyCode = false;
+    options.emitBetaOnlyCode = false;
+    auto result = fo4ide::papyrus::compileScript(index, &script, name + ".psc", options);
+    REQUIRE(result.success());
+    REQUIRE(result.pex);
+    return result.pex->toBytes();
+}
+
 }  // namespace
 
 TEST_CASE("QuestScriptSafety.RefusesWindowsReservedScriptSegments") {
@@ -169,4 +201,49 @@ TEST_CASE("QuestScriptSafety.RefusesWindowsReservedScriptSegments") {
         REQUIRE_FALSE(fetched.has_value());
         CHECK(fetched.error().type == "QuestScriptNotFound");
     }
+}
+
+TEST_CASE("QuestScriptSafety.RefusesImportJunctionEscapingImportsRoot") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    const auto outside = root / "outside";
+    writeText(outside / "Quests" / "QF_Synth.psc", namespacedFragment(10));
+    if (!makeJunction(s.imports / "Fragments", outside)) {
+        SKIP("cannot create a directory junction with mklink /J on this host");
+    }
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    const auto fetched = getScript(backend, "Fragments:Quests:QF_Synth", s.imports);
+    REQUIRE_FALSE(fetched.has_value());
+    CHECK(fetched.error().type == "QuestScriptFailed");
+    CHECK(fetched.error().message.find("outside the imports directory") != std::string::npos);
+    const auto edited = editScript(backend, "Fragments:Quests:QF_Synth", s.out,
+                                   editsJson("SetStage(10)", "SetStage(20)"), s.imports);
+    REQUIRE_FALSE(edited.has_value());
+    CHECK(edited.error().message.find("outside the imports directory") != std::string::npos);
+    requireUnchanged(backend, s);
+}
+
+TEST_CASE("QuestScriptSafety.RefusesImportFileSymlinkEscapingImportsRoot") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    auto s = makeSandbox(root);
+    addStubData(s);
+    writeText(root / "outside" / "QF_Synth.psc", kSynthFragment);
+    std::error_code ec;
+    fs::create_symlink(root / "outside" / "QF_Synth.psc", s.imports / "QF_Synth.psc", ec);
+    if (ec) SKIP("cannot create a file symlink on this host (needs Developer Mode or elevation)");
+    RadiclePluginBackend backend;
+    backend.setDataDirectory(s.data);
+    loadPatch(backend, s.plugin);
+
+    const auto fetched = getScript(backend, "QF_Synth", s.imports);
+    REQUIRE_FALSE(fetched.has_value());
+    CHECK(fetched.error().type == "QuestScriptFailed");
+    CHECK(fetched.error().message.find("outside the imports directory") != std::string::npos);
+    requireUnchanged(backend, s);
 }

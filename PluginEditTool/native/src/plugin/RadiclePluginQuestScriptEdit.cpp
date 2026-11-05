@@ -196,15 +196,26 @@ std::optional<std::pair<std::string, std::vector<std::uint8_t>>> findVanillaPex(
     return std::nullopt;
 }
 
+// Constraint: an import file must resolve inside the imports root, so a junction or symlink under it cannot read another folder.
+void requireInsideImports(const fs::path& file, const fs::path& imports) {
+    if (!insideDirectory(file, imports)) {
+        throw std::runtime_error("import file resolves outside the imports directory: " + file.string());
+    }
+}
+
 std::optional<ScriptSource> loadQuestScriptSource(const fs::path& dataDirectory,
                                                   const std::optional<fs::path>& imports,
                                                   const std::string& canonical) {
     std::error_code ec;
     if (imports) {
         const auto psc = namespacedFile(*imports, canonical, ".psc");
-        if (fs::is_regular_file(psc, ec)) return ScriptSource{readBoundedFile(psc, kSourceLimit), "imports_psc", {}};
+        if (fs::is_regular_file(psc, ec)) {
+            requireInsideImports(psc, *imports);
+            return ScriptSource{readBoundedFile(psc, kSourceLimit), "imports_psc", {}};
+        }
         const auto pex = namespacedFile(*imports, canonical, ".pex");
         if (fs::is_regular_file(pex, ec)) {
+            requireInsideImports(pex, *imports);
             const auto raw = readBoundedFile(pex, kPexLimit);
             return ScriptSource{decompilePex(toBytes(raw), canonical), "imports_pex", {}};
         }
