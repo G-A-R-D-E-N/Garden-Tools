@@ -432,7 +432,7 @@ void JournalSession::publish(const JournalRoots& roots, const std::vector<Journa
         try {
             target = destination(entry, roots, paths[index]);
         } catch (const JournalDirectoryAbsent&) {
-            if (entry.originalExists || entry.verifyOnly || entry.rootSelector.empty()) throw;
+            if (entry.originalExists || entry.rootSelector.empty()) throw;
             targets.push_back(nullptr);
             continue;
         }
@@ -612,7 +612,14 @@ void JournalSession::replay(std::string_view manifestName, const JournalRoots& r
 #if defined(_WIN32)
         auto target = destination(entry, roots, paths[index]);
 #else
-        auto target = destination(entry, roots, paths[index], !entry.verifyOnly && !entry.originalExists);
+        std::unique_ptr<JournalDestination> target;
+        try { target = destination(entry, roots, paths[index], !entry.verifyOnly && !entry.originalExists); }
+        catch (const JournalDirectoryAbsent&) {
+            if (!entry.verifyOnly || entry.originalExists) throw;
+            needsWrite.push_back(false);
+            targets.push_back(nullptr);
+            continue;
+        }
 #endif
 #if !defined(_WIN32)
         const auto current = target->read(static_cast<std::size_t>(std::max(entry.originalSize, entry.finalSize)));
