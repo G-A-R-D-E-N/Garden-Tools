@@ -2,6 +2,7 @@
 
 #include "fo4/graph/check_errors.hpp"
 
+#include <cstddef>
 #include <map>
 #include <optional>
 #include <span>
@@ -24,6 +25,7 @@ struct DialogueCheckContext {
 
   std::map<FormKey, Winner> winners;
   std::map<FormKey, std::optional<FormKey>> topics;
+  std::map<FormKey, std::size_t> info_counts;
   std::map<FormKey, FormKey> branch_quests;
   std::vector<InfoCycle> info_cycles;
 };

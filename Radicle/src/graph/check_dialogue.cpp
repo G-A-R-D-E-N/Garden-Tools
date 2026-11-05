@@ -62,7 +62,7 @@ std::optional<std::int32_t> read_i32(const Subrecord& sub) {
 }
 
 std::optional<FormKey> resolve_label(RawFormId raw, const PluginFormIdContext& context) {
-  if (raw.is_null() || raw.is_created()) return FormKey{};
+  if (raw.is_null() || raw.is_created()) return std::nullopt;
   try {
     // Requires: out-of-range labels fold to the current plugin so they still resolve.
     return resolve_plugin_link(raw, context);
@@ -220,15 +220,14 @@ CheckFinding make_finding(const PluginKey& plugin, const FormKey& record, CheckC
 }
 
 void check_dial(const Plugin& plugin, const Record& record,
-                const std::map<FormKey, std::size_t>& info_counts,
                 const DialogueCheckContext& context, const PluginFormIdContext& id_context,
                 std::vector<CheckFinding>& out) {
   for (const auto& sub : record.subrecords) {
     if (sub.signature != sig_tifc) continue;
     const auto declared = read_u32(sub);
-    if (!declared) break;
-    const auto found = info_counts.find(record.form_key);
-    const auto stored = found == info_counts.end() ? std::size_t{0} : found->second;
+    if (!declared) continue;
+    const auto found = context.info_counts.find(record.form_key);
+    const auto stored = found == context.info_counts.end() ? std::size_t{0} : found->second;
     if (static_cast<std::size_t>(*declared) != stored) {
       out.push_back(make_finding(
           plugin.key, record.form_key, CheckCode::dialogue_info_count_mismatch,
@@ -261,7 +260,7 @@ void check_dlbr(const Plugin& plugin, const Record& record,
   for (const auto& sub : record.subrecords) {
     if (sub.signature != sig_tnam) continue;
     const auto value = read_u32(sub);
-    if (!value) break;
+    if (!value) continue;
     if (*value != 0 && *value != 1) {
       out.push_back(make_finding(plugin.key, record.form_key,
                                  CheckCode::dialogue_branch_category_invalid,
@@ -364,7 +363,8 @@ void check_scene_actions(const Plugin& plugin, const Record& record,
         }
       } else if (sub.signature == sig_snam || sub.signature == sig_enam) {
         const auto phase = read_u32(sub);
-        if (phase && static_cast<std::size_t>(*phase) >= layout.phases.size()) {
+        if (phase && *phase != 0xFFFFFFFFu &&
+            static_cast<std::size_t>(*phase) >= layout.phases.size()) {
           const auto label = sub.signature == sig_snam ? " start phase " : " end phase ";
           out.push_back(make_finding(
               plugin.key, record.form_key, CheckCode::scene_action_phase_out_of_range,
@@ -466,6 +466,9 @@ DialogueCheckContext make_dialogue_check_context(std::span<const Plugin* const> 
     }
   }
   context.info_cycles = find_info_cycles(load_order, context);
+  for (const auto& entry : context.topics) {
+    if (entry.second) ++context.info_counts[*entry.second];
+  }
   return context;
 }
 
@@ -473,10 +476,6 @@ std::vector<CheckFinding> check_dialogue(const Plugin& plugin,
                                          const DialogueCheckContext& context) {
   const auto id_context = plugin_form_id_context(plugin);
   const auto topics = plugin_topics(plugin);
-  std::map<FormKey, std::size_t> info_counts;
-  for (const auto& entry : topics) {
-    if (entry.second) ++info_counts[*entry.second];
-  }
 
   std::vector<CheckFinding> findings;
   for (const auto& cycle : context.info_cycles) {
@@ -490,7 +489,7 @@ std::vector<CheckFinding> check_dialogue(const Plugin& plugin,
   for (const auto* record : collect_first_records(plugin)) {
     const auto signature = record->header.signature;
     if (signature == sig_dial) {
-      check_dial(plugin, *record, info_counts, context, id_context, findings);
+      check_dial(plugin, *record, context, id_context, findings);
     } else if (signature == sig_dlbr) {
       check_dlbr(plugin, *record, findings);
     } else if (signature == sig_info) {

@@ -173,6 +173,51 @@ TEST_CASE("Scene authoring survives save and reload with the same read") {
     CHECK(sceneOf(restarted, scene) == readback);
 }
 
+TEST_CASE("Scene phases and actions move, remove and renumber as stored order") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root);
+    const auto quest = freshQuest(backend);
+    const auto scene = freshScene(backend, quest);
+    REQUIRE(backend.invokeBackend("AddScenePhase", nlohmann::json::array({
+        "Patch.esp", scene, 0, nlohmann::json{{"name", "P1"}}})).has_value());
+    REQUIRE(backend.invokeBackend("AddScenePhase", nlohmann::json::array({
+        "Patch.esp", scene, 1, nlohmann::json{{"name", "P2"}}})).has_value());
+    REQUIRE(backend.invokeBackend("AddSceneAction", nlohmann::json::array({"Patch.esp", scene, 0, 0})).has_value());
+    REQUIRE(backend.invokeBackend("AddSceneAction", nlohmann::json::array({"Patch.esp", scene, 1, 2})).has_value());
+    REQUIRE(backend.invokeBackend("SetSceneAction", nlohmann::json::array({
+        "Patch.esp", scene, 0, nlohmann::json{{"startPhase", 1}}})).has_value());
+
+    REQUIRE(backend.invokeBackend("MoveScenePhase", nlohmann::json::array({"Patch.esp", scene, 0, 1})).has_value());
+    REQUIRE(backend.invokeBackend("MoveSceneAction", nlohmann::json::array({"Patch.esp", scene, 1, 0})).has_value());
+    auto readback = sceneOf(backend, scene);
+    REQUIRE(readback.at("phases").size() == 2);
+    CHECK(readback.at("phases").at(0).at("name") == "P2");
+    CHECK(readback.at("phases").at(1).at("name") == "P1");
+    REQUIRE(readback.at("actions").size() == 2);
+    CHECK(readback.at("actions").at(0).at("type") == 2);
+    CHECK(readback.at("actions").at(0).at("actionIndex") == 0);
+    CHECK(readback.at("actions").at(1).at("type") == 0);
+    CHECK(readback.at("actions").at(1).at("actionIndex") == 1);
+
+    REQUIRE(backend.invokeBackend("RemoveScenePhase", nlohmann::json::array({"Patch.esp", scene, 1})).has_value());
+    REQUIRE(backend.invokeBackend("RemoveSceneAction", nlohmann::json::array({"Patch.esp", scene, 0})).has_value());
+    readback = sceneOf(backend, scene);
+    REQUIRE(readback.at("phases").size() == 1);
+    CHECK(readback.at("phases").at(0).at("name") == "P2");
+    REQUIRE(readback.at("actions").size() == 1);
+    CHECK(readback.at("actions").at(0).at("type") == 0);
+    CHECK(readback.at("actions").at(0).at("actionIndex") == 0);
+    CHECK(readback.at("lastActionIndex") == 1);
+
+    REQUIRE(backend.invokeBackend("SetScene", nlohmann::json::array({
+        "Patch.esp", scene, nlohmann::json{{"flags", 9}, {"index", 3}}})).has_value());
+    readback = sceneOf(backend, scene);
+    CHECK(readback.at("flags") == 9);
+    CHECK(readback.at("sceneIndex") == 3);
+}
+
 TEST_CASE("Scene dialogue actions resolve their topic and INFO response texts") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
