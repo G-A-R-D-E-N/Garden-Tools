@@ -149,7 +149,7 @@ TEST_CASE("Voice path helper names every stored response of an INFO") {
         "Patch.esp", quest, nlohmann::json{{"editorId", "VoiceTopic"}}}))).at("formKey").get<std::string>();
     const auto info = parseResult(backend.invokeBackend("CreateInfo", nlohmann::json::array({
         "Patch.esp", topic, nlohmann::json{{"responses", nlohmann::json::array({
-            nlohmann::json{{"text", "First"}}, nlohmann::json{{"text", "Second"}}})}}})))
+            nlohmann::json{{"text", "First"}, {"number", 1}}, nlohmann::json{{"text", "Second"}, {"number", 2}}})}}})))
             .at("formKey").get<std::string>();
 
     const auto paths = parseResult(backend.invokeBackend("GetVoicePath", nlohmann::json::array({
