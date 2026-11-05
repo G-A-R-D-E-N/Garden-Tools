@@ -319,9 +319,10 @@ Result<nlohmann::json> RadiclePluginBackend::editQuestScript(const nlohmann::jso
             return failure("QuestScriptNotQuest", name + " must extend Quest to be edited by edit_quest_script");
         }
 
+        // Constraint: imports are added first as snapshots, since ScriptIndex refuses to mix snapshot and filesystem roots.
         ScriptIndex index;
+        if (imports) index.addSnapshot(*imports, readPscDirectory(*imports));
         addVanillaImports(index, dataDirectory_, kVanillaImportFolders);
-        if (imports) index.addRoot(*imports, 10000);
         PapyrusCompileOptions options;
         options.emitDebugInfo = false;
         options.emitDebugOnlyCode = false;
