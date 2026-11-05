@@ -160,7 +160,7 @@ std::optional<Error> dialogueFailure(DialogueAuthorStatus status, const std::str
     case DialogueAuthorStatus::structure_invalid:
         return Error{"DialogueStructureInvalid", "Dialogue structure does not allow this edit: " + subject};
     case DialogueAuthorStatus::ok:
-        break;
+        return std::nullopt;
     }
     return Error{"DialogueAuthorFailed", "Dialogue authoring failed for " + subject};
 }
