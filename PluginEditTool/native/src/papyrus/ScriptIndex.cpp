@@ -329,4 +329,31 @@ const Declaration* ScriptIndex::findMemberOn(const Script* script, std::string_v
     return nullptr;
 }
 
+const Declaration* ScriptIndex::findCallableOn(const Script* script, std::string_view memberName) {
+    if (!script || memberName.empty()) return nullptr;
+    const auto match = [&](const auto& decl) {
+        return iequals(decl.name, memberName);
+    };
+
+    if (const auto it = std::find_if(script->functions.begin(), script->functions.end(), match);
+        it != script->functions.end()) {
+        return &*it;
+    }
+    if (const auto it = std::find_if(script->events.begin(), script->events.end(), match);
+        it != script->events.end()) {
+        return &*it;
+    }
+    for (const auto& state : script->states) {
+        if (const auto it = std::find_if(state.functions.begin(), state.functions.end(), match);
+            it != state.functions.end()) {
+            return &*it;
+        }
+        if (const auto it = std::find_if(state.events.begin(), state.events.end(), match);
+            it != state.events.end()) {
+            return &*it;
+        }
+    }
+    return nullptr;
+}
+
 }  // namespace fo4ide::papyrus
