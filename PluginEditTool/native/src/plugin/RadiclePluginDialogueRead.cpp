@@ -123,8 +123,8 @@ nlohmann::json fragmentsOf(const fo4::Record& info) {
     if (!extras) return fragments;
     unsigned bit = 0;
     for (const auto& fragment : extras->fragments) {
-        while (bit < 8 && (extras->flags & (1u << bit)) == 0) ++bit;
-        if (bit >= 8) break;
+        while (bit < 2 && (extras->flags & (1u << bit)) == 0) ++bit;
+        if (bit >= 2) break;
         fragments.push_back({{"index", bit},
                              {"script", fragment.script},
                              {"function", fragment.function}});

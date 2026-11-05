@@ -184,4 +184,6 @@ TEST_CASE("Scene phase fragments bind start and completion and read back per pha
         "Patch.esp", scene, 0, 3, "S", "F"}))) == "InvalidFragmentArgument");
     CHECK(errorType(backend.invokeBackend("RemoveScenePhaseFragment", nlohmann::json::array({
         "Patch.esp", scene, 0, 1}))) == "FragmentMissing");
+    CHECK(errorType(backend.invokeBackend("RemoveScenePhaseFragment", nlohmann::json::array({
+        "Patch.esp", scene, 0, 0}))) == "InvalidFragmentArgument");
 }

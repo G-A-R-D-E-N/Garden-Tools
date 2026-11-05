@@ -472,7 +472,11 @@ VmadStructureMutationStatus add_vmad_fragment(Plugin& plugin, const FormKey& rec
 }
 
 VmadStructureMutationStatus bootstrap_vmad_fragment_section(Plugin& plugin,
-                                                            const FormKey& record_key) {
+                                                            const FormKey& record_key,
+                                                            std::string_view script) {
+  if (script.empty() || script.size() > std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("VMAD fragment script name is required");
+  }
   auto* record = detail::find_mutable_record(plugin, record_key);
   if (record == nullptr) {
     assign_record_form_keys(plugin);
@@ -509,12 +513,17 @@ VmadStructureMutationStatus bootstrap_vmad_fragment_section(Plugin& plugin,
     if (scripts.unsupported) {
       throw schema::ScalarError("VMAD layout is unsupported, malformed or has unknown trailing bytes");
     }
-    if (scripts.trailing_bytes != 0) return VmadStructureMutationStatus::already_present;
+    if (scripts.trailing_bytes != 0) {
+      FragmentSection existing;
+      if (const auto refusal = load_fragment_section(plugin, record_key, existing)) return *refusal;
+      return VmadStructureMutationStatus::already_present;
+    }
   }
   std::vector<std::byte> scaffold;
   append_u8(scaffold, 3);
   append_u8(scaffold, 0);
-  append_u16(scaffold, 0);
+  append_u16(scaffold, static_cast<std::uint16_t>(script.size()));
+  for (const char ch : script) append_u8(scaffold, static_cast<std::uint8_t>(ch));
   append_u8(scaffold, 0);
   append_u16(scaffold, 0);
   if (signature == sig_scen) append_u16(scaffold, 0);
