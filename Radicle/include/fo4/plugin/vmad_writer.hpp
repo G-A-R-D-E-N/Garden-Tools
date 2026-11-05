@@ -92,8 +92,9 @@ VmadStructureMutationStatus set_vmad_fragment(Plugin& plugin, const FormKey& rec
 VmadStructureMutationStatus remove_vmad_fragment(Plugin& plugin, const FormKey& record,
                                                  std::uint32_t key);
 
-// Constraint: PACK, INFO and SCEN store no fragment section until one is bound; this appends the empty section once.
-VmadStructureMutationStatus bootstrap_vmad_fragment_section(Plugin& plugin, const FormKey& record);
+// Constraint: PACK, INFO and SCEN store no fragment section until one is bound; this appends the empty section once and names its fragment script.
+VmadStructureMutationStatus bootstrap_vmad_fragment_section(Plugin& plugin, const FormKey& record,
+                                                            std::string_view script);
 
 VmadStructureMutationStatus add_scene_vmad_phase_fragment(Plugin& plugin, const FormKey& record,
                                                           std::uint32_t phase_index,

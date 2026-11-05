@@ -171,4 +171,11 @@ TEST_CASE("Voice path helper names every stored response of an INFO") {
         "Patch.esp", topic, "MaleEvenToned"}))) == "RecordTypeMismatch");
     CHECK(errorType(backend.invokeBackend("GetVoicePath", nlohmann::json::array({
         "Patch.esp", info, ""}))) == "InvalidVoicePathArgument");
+    CHECK(errorType(backend.invokeBackend("GetVoicePath", nlohmann::json::array({
+        "Patch.esp", info, "MaleEvenToned", "", "wav"}))) == "InvalidVoicePathArgument");
+    const auto noResponses = parseResult(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json::object()})));
+    const auto emptyPaths = parseResult(backend.invokeBackend("GetVoicePath", nlohmann::json::array({
+        "Patch.esp", noResponses.at("formKey").get<std::string>(), "MaleEvenToned"})));
+    CHECK(emptyPaths.at("paths").empty());
 }

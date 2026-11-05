@@ -678,9 +678,9 @@ TEST(VmadFragments, InfoExtrasReadEachFragmentEntryAndItsFlagBits) {
 
 TEST(VmadFragments, BootstrapAddsTheFragmentSectionOnceSoTheFirstBindingCanLand) {
   auto info = read_plugin(fixture::plugin_bytes_without_vmad("INFO"), "Vmad.esp");
-  EXPECT_EQ(bootstrap_vmad_fragment_section(info, fixture::key()),
+  EXPECT_EQ(bootstrap_vmad_fragment_section(info, fixture::key(), "PF_Test"),
             VmadStructureMutationStatus::updated);
-  EXPECT_EQ(bootstrap_vmad_fragment_section(info, fixture::key()),
+  EXPECT_EQ(bootstrap_vmad_fragment_section(info, fixture::key(), "PF_Test"),
             VmadStructureMutationStatus::already_present);
   const auto data = fixture::subrecord(info).data;
   const auto scripts = read_vmad_scripts(data);
@@ -704,7 +704,7 @@ TEST(VmadFragments, BootstrapAddsTheFragmentSectionOnceSoTheFirstBindingCanLand)
   EXPECT_EQ(saved_extras.fragments[0].function, "Fragment_0");
 
   auto scene = read_plugin(fixture::plugin_bytes_without_vmad("SCEN"), "Vmad.esp");
-  EXPECT_EQ(bootstrap_vmad_fragment_section(scene, fixture::key()),
+  EXPECT_EQ(bootstrap_vmad_fragment_section(scene, fixture::key(), "PF_Test"),
             VmadStructureMutationStatus::updated);
   const auto scene_data = fixture::subrecord(scene).data;
   const auto scene_scripts = read_vmad_scripts(scene_data);
@@ -716,6 +716,6 @@ TEST(VmadFragments, BootstrapAddsTheFragmentSectionOnceSoTheFirstBindingCanLand)
   EXPECT_TRUE(scene_extras.phases.empty());
 
   auto misc = read_plugin(fixture::plugin_bytes_without_vmad("MISC"), "Vmad.esp");
-  EXPECT_EQ(bootstrap_vmad_fragment_section(misc, fixture::key()),
+  EXPECT_EQ(bootstrap_vmad_fragment_section(misc, fixture::key(), "PF_Test"),
             VmadStructureMutationStatus::not_authorable);
 }

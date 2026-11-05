@@ -67,7 +67,7 @@ std::optional<Error> bindFlaggedFragment(fo4::Plugin& plugin, const fo4::FormKey
     auto status = fo4::set_vmad_fragment(plugin, record, index, script, function);
     if (status == fo4::VmadStructureMutationStatus::binding_missing ||
         status == fo4::VmadStructureMutationStatus::subrecord_missing) {
-        const auto bootstrapped = fo4::bootstrap_vmad_fragment_section(plugin, record);
+        const auto bootstrapped = fo4::bootstrap_vmad_fragment_section(plugin, record, script);
         if (bootstrapped != fo4::VmadStructureMutationStatus::updated &&
             bootstrapped != fo4::VmadStructureMutationStatus::already_present) {
             return fragmentFailure(bootstrapped, subject);
@@ -84,7 +84,7 @@ std::optional<Error> bindScenePhaseFragment(fo4::Plugin& plugin, const fo4::Form
     auto status = fo4::set_scene_vmad_phase_fragment(plugin, record, phase, flag, script, function);
     if (status == fo4::VmadStructureMutationStatus::binding_missing ||
         status == fo4::VmadStructureMutationStatus::subrecord_missing) {
-        const auto bootstrapped = fo4::bootstrap_vmad_fragment_section(plugin, record);
+        const auto bootstrapped = fo4::bootstrap_vmad_fragment_section(plugin, record, script);
         if (bootstrapped != fo4::VmadStructureMutationStatus::updated &&
             bootstrapped != fo4::VmadStructureMutationStatus::already_present) {
             return fragmentFailure(bootstrapped, subject);
@@ -209,6 +209,10 @@ Result<nlohmann::json> RadiclePluginBackend::removeScenePhaseFragment(const nloh
     if (auto error = unsignedArgument(arguments, 2, "phase index", phase)) return std::unexpected(*error);
     std::uint32_t flag = 0;
     if (auto error = unsignedArgument(arguments, 3, "phase flag", flag)) return std::unexpected(*error);
+    if (flag == 0 || flag > 2) {
+        return std::unexpected(Error{"InvalidFragmentArgument",
+                                     "scene phase flag is 1 for start and 2 for completion"});
+    }
 
     OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);

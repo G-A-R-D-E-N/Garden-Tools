@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace fo4ide::plugin {
@@ -296,9 +297,8 @@ Result<nlohmann::json> RadiclePluginBackend::getVoicePath(const nlohmann::json& 
     const auto language = questStringArg(arguments, 3);
     std::string extension = questStringArg(arguments, 4);
     if (extension.empty()) extension = "fuz";
-    if (extension.find('.') != std::string::npos || extension.find('\\') != std::string::npos ||
-        extension.find('/') != std::string::npos) {
-        return std::unexpected(Error{"InvalidVoicePathArgument", "extension must be a bare file extension"});
+    if (extension != "fuz" && extension != "hkx") {
+        return std::unexpected(Error{"InvalidVoicePathArgument", "extension must be fuz or hkx"});
     }
 
     OpLock lock(*this, OpLock::Mode::Read);
@@ -315,8 +315,7 @@ Result<nlohmann::json> RadiclePluginBackend::getVoicePath(const nlohmann::json& 
         return std::unexpected(Error{"RecordTypeMismatch", "GetVoicePath requires an INFO record"});
     }
     try {
-        auto numbers = responseNumbers(*record);
-        if (numbers.empty()) numbers.push_back(1);
+        const auto numbers = responseNumbers(*record);
         nlohmann::json paths = nlohmann::json::array();
         const auto pluginFile = std::string(loaded->plugin.key.filename());
         for (const auto number : numbers) {
