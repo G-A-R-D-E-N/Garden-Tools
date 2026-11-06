@@ -399,8 +399,9 @@ TEST_F(DialogueWriterCApi, SceneActorAndActionAuthoringStatusesMapAndSurviveRelo
   EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, rkey(0x8FF), 0, "Ghost"), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, scene, 1, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, quest, 0, "Outside"), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 0), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 0), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, scene, 0), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 0), RADICLE_STATUS_OK);
 
   size_t count = 0;
   EXPECT_EQ(radicle_plugin_scene_group_count(plugin, scene, RADICLE_SCENE_PART_ACTOR, &count), RADICLE_STATUS_OK);
@@ -576,6 +577,42 @@ TEST_F(DialogueWriterCApi, UpdatedInfoSavesWithNewResponsesNoConditionsAndKeepsT
   EXPECT_EQ(second->previous_info.local_id, authored.first);
   radicle_dialogue_info_free(second);
   radicle_env_destroy(env);
+}
+
+// Regression guard: radicle_plugin_create_scene must map each status to its C code and append a SCEN that survives a save and reload.
+TEST_F(DialogueWriterCApi, CreateSceneMapsStatusesAndAppendsASceneThatSurvivesReload) {
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
+  const auto before = bytes_of(plugin);
+  radicle_scene_spec spec{};
+  spec.editor_id = "Made scene";
+  spec.flags = 0x24;
+  spec.index = 7;
+  radicle_form_key out = rkey(0x9999);
+
+  EXPECT_EQ(radicle_plugin_create_scene(nullptr, rkey(k_quest), &spec, &out), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_scene(plugin, rkey(k_quest), nullptr, &out), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_scene(plugin, rkey(k_quest), &spec, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_scene(plugin, rkey(k_topic), &spec, &out), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(out.plugin, nullptr);
+  EXPECT_FALSE(std::string(radicle_last_error()).empty());
+  EXPECT_EQ(radicle_plugin_create_scene(plugin, radicle_form_key{"Other.esm", k_quest}, &spec, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out.plugin, nullptr);
+  EXPECT_EQ(bytes_of(plugin), before);
+
+  ASSERT_EQ(radicle_plugin_create_scene(plugin, rkey(k_quest), &spec, &out), RADICLE_STATUS_OK);
+  EXPECT_STREQ(out.plugin, k_plugin);
+  const auto raw_bytes = bytes_of(plugin);
+  std::vector<std::byte> plugin_bytes(raw_bytes.size());
+  for (std::size_t index = 0; index < raw_bytes.size(); ++index) {
+    plugin_bytes[index] = static_cast<std::byte>(raw_bytes[index]);
+  }
+  const auto saved = fo4::test::dialogue::read(plugin_bytes);
+  EXPECT_EQ(order(saved, out.local_id), (Order{"EDID", "FNAM", "PNAM", "INAM", "VNAM", "XNAM"}));
+  EXPECT_EQ(payloads(saved, out.local_id, "FNAM"), std::vector<Bytes>{words({0x24})});
+  EXPECT_EQ(payloads(saved, out.local_id, "XNAM"), std::vector<Bytes>{words({7})});
+  radicle_plugin_destroy(plugin);
 }
 
 TEST_F(DialogueWriterCApi, AuthoringRefusalsCarryAStatusAndMessageAndLeaveThePluginAlone) {
