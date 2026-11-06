@@ -44,6 +44,19 @@ struct AssetListing {
   bool shadowed{false};
 };
 
+enum class ArchiveFailurePolicy : std::uint8_t {
+  fail,
+  skip,
+};
+
+struct ArchiveFailure {
+  std::size_t index{0};  // invariant: the position in the archive list the caller passed
+  std::filesystem::path path;
+  std::string message;
+};
+
+struct AssetOpenResult;
+
 // Immutable after open; const members are thread-safe.
 class AssetResolver {
 public:
@@ -51,6 +64,12 @@ public:
                             std::span<const std::filesystem::path> archives);
   static AssetResolver open_roots(std::span<const std::filesystem::path> roots,
                                   std::span<const std::filesystem::path> archives);
+
+  // Invariant: under ArchiveFailurePolicy::skip an archive that cannot be read is dropped and reported, and the readable archives keep their relative order.
+  // Invariant: under ArchiveFailurePolicy::fail the first unreadable archive throws, as open_roots does.
+  static AssetOpenResult open_roots(std::span<const std::filesystem::path> roots,
+                                    std::span<const std::filesystem::path> archives,
+                                    ArchiveFailurePolicy policy);
 
   const std::vector<std::filesystem::path>& roots() const noexcept { return roots_; }
   const std::vector<Ba2Reader>& archives() const noexcept { return archives_; }
@@ -63,6 +82,11 @@ public:
 private:
   std::vector<std::filesystem::path> roots_;
   std::vector<Ba2Reader> archives_;
+};
+
+struct AssetOpenResult {
+  AssetResolver resolver;
+  std::vector<ArchiveFailure> failures;
 };
 
 }  // namespace fo4::archive
