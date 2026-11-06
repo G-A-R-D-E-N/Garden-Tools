@@ -1,3 +1,7 @@
+import { QUEST_HELP_TOPICS } from '../quest/questHelpTopics';
+import { DIALOGUE_HELP_TOPICS } from '../dialogue/dialogueHelpTopics';
+import { SCENE_HELP_TOPICS } from '../scene/sceneHelpTopics';
+
 export interface HelpTopic {
   id: string;
   title: string;
@@ -5,7 +9,7 @@ export interface HelpTopic {
   related: readonly string[];
 }
 
-export const HELP_TOPICS: readonly HelpTopic[] = [
+const FOUNDATION_TOPICS: readonly HelpTopic[] = [
   {
     id: 'quest-stage',
     title: 'Quest stage',
@@ -36,6 +40,13 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     body: 'A scene phase is one step of a scripted scene, shown as a column on the timeline. Actions such as dialogue or movement run during a phase, and a phase can run a script when it starts or ends, for example to move the quest to a new stage.',
     related: ['quest-stage'],
   },
+];
+
+export const HELP_TOPICS: readonly HelpTopic[] = [
+  ...FOUNDATION_TOPICS,
+  ...QUEST_HELP_TOPICS,
+  ...DIALOGUE_HELP_TOPICS,
+  ...SCENE_HELP_TOPICS,
 ];
 
 export const GETTING_STARTED: readonly string[] = [
