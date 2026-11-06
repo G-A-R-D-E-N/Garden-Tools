@@ -33,7 +33,7 @@ def main(executable):
                 process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}}) + "\n")
                 process.stdin.flush()
                 line = process.stdout.readline()
-                assert line, "Native MCP exited or timed out before responding"
+                assert line, "Native MCP exited or timed out before responding: " + (errors.flush() or errors.seek(0) or errors.read())
                 response = json.loads(line)
                 assert response["id"] == request_id, response
                 assert "error" not in response, response
