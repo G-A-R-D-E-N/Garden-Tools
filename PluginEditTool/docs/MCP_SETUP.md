@@ -281,6 +281,10 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `set_light` | `plugin`, `light` | memory | Editor operation: set light. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `clean_unused` | `plugin`, `apply` | memory | Editor operation: clean unused. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `set_placed_reference_transform` | `form_key`, `patch_plugin`, `x`, `y`, `z`, `rx`, `ry`, `rz` | memory | Editor operation: set placed reference transform. Placed-reference or cell operation. |
+| `edit_placed_reference` | `form_key`, `patch_plugin`, `changes` | memory | Editor operation: edit a placed reference in a patch plugin. `changes` may hold `transform`, `scale` (number, or null to clear) and `editorId`. Recorded for undo and redo. |
+| `undo_cell_edit` | `patch_plugin` | memory | Editor operation: undo the last placed-reference edit in a patch plugin. |
+| `redo_cell_edit` | `patch_plugin` | memory | Editor operation: redo the last undone placed-reference edit in a patch plugin. |
+| `get_cell_edit_history` | `patch_plugin` | no | Editor query: undo and redo step counts for a patch plugin's placed-reference edits. |
 | `load_script` | `path` | no | Editor operation: load script. Same RPC the desktop editor uses. |
 | `script_analyze` | `text`, [`path`] | no | Editor query: analyze. Papyrus source operation. |
 | `script_symbol_at` | `text`, [`path`], [`offset`], [`imports`] | no | Editor operation: symbol at. Papyrus source operation. |
