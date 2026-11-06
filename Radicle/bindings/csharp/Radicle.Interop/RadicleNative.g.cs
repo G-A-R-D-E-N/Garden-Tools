@@ -3005,6 +3005,11 @@ public unsafe struct PapyrusVmadShape
     public int HasBoolean;
     public int Boolean;
     public IntPtr Object;
+    public IntPtr ElementType;
+    public IntPtr Elements;
+    public nuint ElementsLen;
+    public IntPtr Members;
+    public nuint MembersLen;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -3025,6 +3030,8 @@ public unsafe struct PapyrusBindReport
     public int Bound;
     public int Unsupported;
     public int SilentlyDefaulted;
+    public IntPtr UnsupportedShapes;
+    public nuint UnsupportedShapeCount;
     public IntPtr Report;
     public IntPtr Digest;
 }
