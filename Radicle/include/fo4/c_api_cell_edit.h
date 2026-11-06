@@ -198,6 +198,24 @@ RADICLE_API radicle_status radicle_plugin_edit_cell(radicle_plugin* patch,
                                                     const radicle_cell_edit* edit,
                                                     radicle_cell_edit_status* out_status);
 
+typedef struct radicle_edit_history radicle_edit_history;
+
+/* Must start with empty undo and redo stacks; the handle is released with radicle_plugin_history_destroy. */
+RADICLE_API radicle_status radicle_plugin_history_create(radicle_edit_history** out_history);
+RADICLE_API void radicle_plugin_history_destroy(radicle_edit_history* history);
+/* Must be called with the patch as it is before an edit; the history keeps its own copy of that snapshot. */
+RADICLE_API radicle_status radicle_plugin_history_record(radicle_edit_history* history,
+                                                         const radicle_plugin* before);
+/* Must replace patch only on success; an empty stack must refuse with INVALID_ARGUMENT and leave patch unchanged. */
+RADICLE_API radicle_status radicle_plugin_history_undo(radicle_edit_history* history, radicle_plugin* patch);
+/* Must replace patch only on success; an empty stack must refuse with INVALID_ARGUMENT and leave patch unchanged. */
+RADICLE_API radicle_status radicle_plugin_history_redo(radicle_edit_history* history, radicle_plugin* patch);
+RADICLE_API radicle_status radicle_plugin_history_undo_count(const radicle_edit_history* history, size_t* out_count);
+RADICLE_API radicle_status radicle_plugin_history_redo_count(const radicle_edit_history* history, size_t* out_count);
+/* Must advance on record, undo and redo, and never on a refusal. */
+RADICLE_API radicle_status radicle_plugin_history_revision(const radicle_edit_history* history,
+                                                           uint64_t* out_revision);
+
 #ifdef __cplusplus
 }
 #endif
