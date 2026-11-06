@@ -118,6 +118,30 @@ it('Detects: confirming Remove step saves an empty stage list and closes the pan
   expect(screen.queryByRole('complementary', { name: 'Stage 10 details' })).toBeNull();
 });
 
+it('Detects: a rejected stage save does not drop the stage it tried to remove from the next save', async () => {
+  const backend = stubBackend({
+    GetQuestStages: vi.fn(async () => JSON.stringify({ stages: [
+      { index: 10, flags: 0, logEntries: [{ logText: 'First', note: '', flags: 0 }] },
+      { index: 20, flags: 0, logEntries: [{ logText: 'Second', note: '', flags: 0 }] },
+    ] })),
+    SetQuestStages: vi.fn<(...args: string[]) => Promise<string>>()
+      .mockRejectedValueOnce(new Error('Native rejected the save'))
+      .mockResolvedValue('ok'),
+  });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  fireEvent.click(await screen.findByRole('button', { name: /^Stage 20/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove step' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Yes, remove stage 20' }));
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
+  fireEvent.click(await screen.findByRole('button', { name: /^Stage 10/ }));
+  const journal = await screen.findByLabelText('Stage 10 journal text');
+  fireEvent.change(journal, { target: { value: 'Changed' } });
+  fireEvent.blur(journal);
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(backend.SetQuestStages.mock.calls[1][2]).map((item: { index: number }) => item.index)).toEqual([10, 20]);
+});
+
 it('Detects: changing the outcome of a log entry with no journal text does not write an empty log text', async () => {
   const backend = stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify({ stages: [{ index: 10, flags: 0, logEntries: [{ logText: '', note: '', flags: 0 }] }] })),

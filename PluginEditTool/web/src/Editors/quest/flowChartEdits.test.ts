@@ -38,6 +38,11 @@ it('Detects: clearing an outcome removes that flag from every log entry, so a fl
   expect(setOutcome(stages, 10, 1, false)[0].logEntries.map(entry => entry.flags)).toEqual([6, 8]);
 });
 
+it('Detects: checking then unchecking an outcome on a stage with no log entry leaves no empty log entry behind', () => {
+  const checked = setOutcome([stage(10)], 10, 1, true);
+  expect(setOutcome(checked, 10, 1, false)[0].logEntries).toEqual([]);
+});
+
 it('Detects: editing journal text keeps the first entry note and flags', () => {
   const stages = [stage(10, [{ logText: 'Old', note: 'For the CK', flags: 2 }])];
   expect(setStageText(stages, 10, 'New text')[0].logEntries).toEqual([{ logText: 'New text', note: 'For the CK', flags: 2 }]);

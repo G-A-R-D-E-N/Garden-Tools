@@ -25,18 +25,21 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
     return () => { live = false; };
   }, [backend, plugin, formKey]);
 
-  const run = (job: () => Promise<unknown>, onDone: () => void) => {
+  const run = (job: () => Promise<unknown>, onDone: () => void, onFail?: () => void) => {
     setError(null);
-    job().then(onDone, (e: unknown) => setError(friendlyError(errorText(e))));
+    job().then(onDone, (e: unknown) => {
+      onFail?.();
+      setError(friendlyError(errorText(e)));
+    });
   };
 
   const commit = <T,>(label: string, prev: T, next: T, write: (value: T) => Promise<unknown>,
-                       store: (value: T) => void) => {
+                       store: (value: T) => void, onFail?: () => void) => {
     const apply = (value: T) => run(() => write(value), () => store(value));
     run(() => write(next), () => {
       store(next);
       push({ label, undo: () => apply(prev), redo: () => apply(next) });
-    });
+    }, onFail);
   };
 
   const storeField = <K extends keyof QuestSnapshot>(key: K) => (value: QuestSnapshot[K]) =>
@@ -51,7 +54,9 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
       latestStages.current = value;
       storeField('stages')(value);
     };
-    commit(label, prev, next, value => writeStages(backend, plugin, formKey, value), store);
+    commit(label, prev, next, value => writeStages(backend, plugin, formKey, value), store, () => {
+      if (latestStages.current === next) latestStages.current = prev;
+    });
   };
 
   const commitStages = (next: QuestStage[], label: string) => editStages(() => next, label);

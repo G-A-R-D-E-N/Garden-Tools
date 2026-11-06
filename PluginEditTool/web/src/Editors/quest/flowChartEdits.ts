@@ -40,11 +40,19 @@ export function setStageText(stages: QuestStage[], index: number, text: string):
   }));
 }
 
+function clearOutcome(entries: StageLogEntry[], bit: number): StageLogEntry[] {
+  return entries.flatMap(entry => {
+    const cleared = { ...entry, flags: toggleBit(entry.flags, bit, false) };
+    const emptied = (entry.flags & bit) !== 0 && cleared.flags === 0 && cleared.logText === '' && cleared.note === '';
+    return emptied ? [] : [cleared];
+  });
+}
+
 export function setOutcome(stages: QuestStage[], index: number, bit: number, on: boolean): QuestStage[] {
   return editStage(stages, index, stage => ({
     ...stage,
     logEntries: on
       ? editEntry(stage.logEntries, 0, entry => ({ ...entry, flags: toggleBit(entry.flags, bit, true) }))
-      : stage.logEntries.map(entry => ({ ...entry, flags: toggleBit(entry.flags, bit, false) })),
+      : clearOutcome(stage.logEntries, bit),
   }));
 }

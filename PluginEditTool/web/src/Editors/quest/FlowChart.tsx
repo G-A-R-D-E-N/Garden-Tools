@@ -16,9 +16,12 @@ export default function FlowChart({ stages, objectives, selected, onSelect, onEd
   const chart = buildFlowChart(stages, objectives);
   const current = stages.find(stage => stage.index === selected?.index);
   const addNext = (after: number) => {
-    const index = nextStageNumber(stages, after);
-    onEdit(latest => addStageAfter(latest, after), `Add stage ${index}`);
-    onSelect(index);
+    const added: { index?: number } = {};
+    onEdit(latest => {
+      added.index = nextStageNumber(latest, after);
+      return addStageAfter(latest, after);
+    }, `Add stage after ${after}`);
+    if (added.index !== undefined) onSelect(added.index);
   };
   return (
     <section className="quest-pane quest-flow" aria-labelledby="quest-flow-title">
