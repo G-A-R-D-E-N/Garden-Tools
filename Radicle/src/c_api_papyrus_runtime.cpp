@@ -12,6 +12,7 @@
 #include <memory>
 #include <new>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -39,7 +40,7 @@ using radicle_c_papyrus_detail::make_value;
 using radicle_c_papyrus_detail::to_c_status;
 
 std::optional<OwnerId> ownerFrom(radicle_papyrus_owner_kind kind, const char* base, const char* discriminator) {
-  if (base == nullptr) return std::nullopt;
+  if (base == nullptr || *base == '\0') return std::nullopt;
   const std::string baseKey(base);
   const std::string disc = discriminator == nullptr ? std::string() : std::string(discriminator);
   switch (kind) {
@@ -448,6 +449,111 @@ radicle_status radicle_papyrus_runtime_advance_clock(radicle_papyrus_runtime* ru
     *out_fired = runtime->runtime.registrations().advance(
         owner, delta_seconds,
         clock == RADICLE_PAPYRUS_CLOCK_GAME_TIME ? ClockSource::GameTime : ClockSource::RealTime);
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_attach_with_properties(
+    radicle_papyrus_runtime* runtime, const char* script, radicle_papyrus_owner_kind owner_kind,
+    const char* base_form_key, const char* discriminator, const char* const* names,
+    const radicle_papyrus_value* const* values, size_t count, uint64_t* out_instance) {
+  radicle_c_detail::clear_error();
+  if (out_instance != nullptr) *out_instance = 0;
+  if (runtime == nullptr || script == nullptr || out_instance == nullptr ||
+      (count != 0 && (names == nullptr || values == nullptr))) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, script, out_instance and the property arrays are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while attaching a script", [&] {
+    const std::optional<OwnerId> owner = ownerFrom(owner_kind, base_form_key, discriminator);
+    if (!owner.has_value()) {
+      return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the owner is not valid");
+    }
+    std::vector<std::pair<std::string, Value>> properties;
+    properties.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      if (names[i] == nullptr || values[i] == nullptr) {
+        return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                      "property names and values must not be null");
+      }
+      properties.emplace_back(names[i], values[i]->value);
+    }
+    const fo4::papyrus::AttachResult result =
+        runtime->runtime.attachWithProperties(script, *owner, properties);
+    if (result.refusal == fo4::papyrus::AttachRefusal::UnknownScript) {
+      return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, result.reason.c_str());
+    }
+    if (result.refusal != fo4::papyrus::AttachRefusal::None || !result.instance.has_value()) {
+      return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, result.reason.c_str());
+    }
+    *out_instance = *result.instance;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_get_property(const radicle_papyrus_runtime* runtime, uint64_t instance,
+                                                    const char* name, radicle_papyrus_value** out_value) {
+  radicle_c_detail::clear_error();
+  if (out_value != nullptr) *out_value = nullptr;
+  if (runtime == nullptr || name == nullptr || out_value == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, name and out_value are required");
+  }
+  const std::optional<Value> value = runtime->runtime.instanceProperty(instance, name);
+  if (!value.has_value()) return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the property is not set");
+  return make_value(*value, out_value);
+}
+
+radicle_status radicle_papyrus_runtime_register_remote_event(
+    radicle_papyrus_runtime* runtime, uint64_t instance, radicle_papyrus_owner_kind source_kind,
+    const char* source_base_form_key, const char* source_discriminator, const char* event_name,
+    int64_t* out_handle) {
+  radicle_c_detail::clear_error();
+  if (out_handle != nullptr) *out_handle = 0;
+  if (runtime == nullptr || event_name == nullptr || out_handle == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, event_name and out_handle are required");
+  }
+  const std::optional<OwnerId> owner = runtime->runtime.instanceOwner(instance);
+  if (!owner.has_value()) return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the instance does not exist");
+  return radicle_c_env_detail::guarded("unknown exception while registering a remote event", [&] {
+    const std::optional<OwnerId> source = ownerFrom(source_kind, source_base_form_key, source_discriminator);
+    if (!source.has_value()) {
+      return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the source owner is not valid");
+    }
+    try {
+      const auto* entry = runtime->runtime.registrations().registerRegistration(
+          *owner, ScriptRegistration::forRemoteEvent(*source, event_name));
+      *out_handle = entry->handle;
+    } catch (const std::invalid_argument& error) {
+      return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, error.what());
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_match_remote_event(
+    const radicle_papyrus_runtime* runtime, radicle_papyrus_owner_kind source_kind,
+    const char* source_base_form_key, const char* source_discriminator, const char* event_name,
+    int64_t* out_handles, uint64_t* out_instances, size_t capacity, size_t* out_count) {
+  radicle_c_detail::clear_error();
+  if (out_count != nullptr) *out_count = 0;
+  if (runtime == nullptr || event_name == nullptr || out_count == nullptr ||
+      (capacity != 0 && (out_handles == nullptr || out_instances == nullptr))) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, event_name, out_count and the output arrays are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while matching a remote event", [&] {
+    const std::optional<OwnerId> source = ownerFrom(source_kind, source_base_form_key, source_discriminator);
+    if (!source.has_value()) {
+      return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the source owner is not valid");
+    }
+    const auto matches = runtime->runtime.registrations().matchRemoteEvent(*source, event_name);
+    for (size_t i = 0; i < matches.size() && i < capacity; ++i) {
+      out_handles[i] = matches[i]->handle;
+      out_instances[i] = runtime->runtime.instanceForOwner(matches[i]->owner).value_or(0);
+    }
+    *out_count = matches.size();
     return RADICLE_STATUS_OK;
   });
 }

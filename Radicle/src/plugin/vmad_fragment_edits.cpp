@@ -471,6 +471,67 @@ VmadStructureMutationStatus add_vmad_fragment(Plugin& plugin, const FormKey& rec
   return VmadStructureMutationStatus::updated;
 }
 
+VmadStructureMutationStatus bootstrap_vmad_fragment_section(Plugin& plugin,
+                                                            const FormKey& record_key,
+                                                            std::string_view script) {
+  if (script.empty() || script.size() > std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("VMAD fragment script name is required");
+  }
+  auto* record = detail::find_mutable_record(plugin, record_key);
+  if (record == nullptr) {
+    assign_record_form_keys(plugin);
+    record = detail::find_mutable_record(plugin, record_key);
+  }
+  if (record == nullptr) return VmadStructureMutationStatus::record_missing;
+  const auto signature = record->header.signature;
+  if (signature != sig_pack && signature != sig_info && signature != sig_scen) {
+    return VmadStructureMutationStatus::not_authorable;
+  }
+  Subrecord* vmad = nullptr;
+  for (auto& sub : record->subrecords) {
+    if (sub.signature != k_vmad) continue;
+    vmad = &sub;
+    break;
+  }
+  if (vmad == nullptr) {
+    const auto added = add_vmad(plugin, record_key);
+    if (added != VmadStructureMutationStatus::updated &&
+        added != VmadStructureMutationStatus::already_present) {
+      return added;
+    }
+    record = detail::find_mutable_record(plugin, record_key);
+    if (record == nullptr) return VmadStructureMutationStatus::record_missing;
+    for (auto& sub : record->subrecords) {
+      if (sub.signature != k_vmad) continue;
+      vmad = &sub;
+      break;
+    }
+    if (vmad == nullptr) return VmadStructureMutationStatus::subrecord_missing;
+  }
+  {
+    const auto scripts = read_vmad_scripts(vmad->data);
+    if (scripts.unsupported) {
+      throw schema::ScalarError("VMAD layout is unsupported, malformed or has unknown trailing bytes");
+    }
+    if (scripts.trailing_bytes != 0) {
+      FragmentSection existing;
+      if (const auto refusal = load_fragment_section(plugin, record_key, existing)) return *refusal;
+      return VmadStructureMutationStatus::already_present;
+    }
+  }
+  std::vector<std::byte> scaffold;
+  append_u8(scaffold, 3);
+  append_u8(scaffold, 0);
+  append_u16(scaffold, static_cast<std::uint16_t>(script.size()));
+  for (const char ch : script) append_u8(scaffold, static_cast<std::uint8_t>(ch));
+  append_u8(scaffold, 0);
+  append_u16(scaffold, 0);
+  if (signature == sig_scen) append_u16(scaffold, 0);
+  vmad->data.insert(vmad->data.end(), scaffold.begin(), scaffold.end());
+  detail::mark_record_modified(plugin, *record);
+  return VmadStructureMutationStatus::updated;
+}
+
 VmadStructureMutationStatus set_vmad_fragment(Plugin& plugin, const FormKey& record_key,
                                               std::uint32_t key, std::string_view script,
                                               std::string_view function) {

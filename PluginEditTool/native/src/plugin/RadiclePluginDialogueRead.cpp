@@ -1,5 +1,6 @@
 #include "RadiclePluginSupport.hpp"
 #include "RadiclePluginQuestInternal.hpp"
+#include "RadiclePluginFragmentSupport.hpp"
 
 #include <fo4ide/plugin/ConditionCodec.hpp>
 
@@ -116,6 +117,22 @@ nlohmann::json responsesOf(const fo4::Plugin& plugin, const fo4::Record& info) {
     return responses;
 }
 
+nlohmann::json fragmentsOf(const fo4::Record& info) {
+    nlohmann::json fragments = nlohmann::json::array();
+    const auto extras = fragmentread::read_info_fragments(info);
+    if (!extras) return fragments;
+    unsigned bit = 0;
+    for (const auto& fragment : extras->fragments) {
+        while (bit < 2 && (extras->flags & (1u << bit)) == 0) ++bit;
+        if (bit >= 2) break;
+        fragments.push_back({{"index", bit},
+                             {"script", fragment.script},
+                             {"function", fragment.function}});
+        ++bit;
+    }
+    return fragments;
+}
+
 nlohmann::json infoJson(const fo4::Plugin& plugin, const fo4::Record& info) {
     const auto enam = payloadOf(info, k_enam);
     const auto resetEncoded = readAt<std::uint16_t>(enam, 2);
@@ -127,6 +144,7 @@ nlohmann::json infoJson(const fo4::Plugin& plugin, const fo4::Record& info) {
         {"previous", linkJson(plugin, readAt<std::uint32_t>(payloadOf(info, k_pnam), 0))},
         {"responses", responsesOf(plugin, info)},
         {"conditions", conditionsJson(plugin, info)},
+        {"fragments", fragmentsOf(info)},
     };
 }
 
