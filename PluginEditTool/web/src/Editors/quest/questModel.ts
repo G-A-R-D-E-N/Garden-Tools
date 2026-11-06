@@ -3,6 +3,7 @@ export type AliasKind = 'reference' | 'location' | 'collection';
 export interface StageLogEntry { logText: string; note: string; flags: number; }
 export interface QuestStage { index: number; flags: number; logEntries: StageLogEntry[]; }
 export interface StageSelection { index: number; }
+export interface StageJump { from: number; to: number; function: string; }
 export type StageEdit = (current: QuestStage[]) => QuestStage[];
 export interface ObjectiveTarget { alias: number; aliasName: string; flags: number; }
 export interface QuestObjective { index: number; flags: number; displayText: string; targets: ObjectiveTarget[]; }
@@ -13,6 +14,7 @@ export interface QuestAlias {
   name: string;
   flags: number | null;
   collectionEntries: CollectionEntry[];
+  fill?: Record<string, unknown>;
 }
 
 export interface FlagOption { bit: number; label: string; }
@@ -124,6 +126,7 @@ export function aliasesJson(aliases: QuestAlias[]): string {
       if (alias.flags !== null) row.flags = alias.flags;
     }
     if (alias.name) row.name = alias.name;
+    if (alias.fill) Object.assign(row, alias.fill);
     return row;
   }));
 }
@@ -132,10 +135,16 @@ export function toggleBit(flags: number, bit: number, on: boolean): number {
   return on ? flags | bit : flags & ~bit;
 }
 
-export function duplicateObjectiveNumbers(objectives: QuestObjective[]): number[] {
+export const normalizeFormKey = (formKey: string) => formKey.trim().toLowerCase();
+
+export function duplicateNumbers(values: number[]): number[] {
   const counts = new Map<number, number>();
-  for (const objective of objectives) counts.set(objective.index, (counts.get(objective.index) ?? 0) + 1);
-  return [...counts].filter(([, count]) => count > 1).map(([index]) => index).sort((a, b) => a - b);
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts].filter(([, count]) => count > 1).map(([value]) => value).sort((a, b) => a - b);
+}
+
+export function duplicateObjectiveNumbers(objectives: QuestObjective[]): number[] {
+  return duplicateNumbers(objectives.map(objective => objective.index));
 }
 
 export function duplicateObjectiveWarning(objectives: QuestObjective[]): string {

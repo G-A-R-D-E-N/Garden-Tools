@@ -29,6 +29,7 @@ function wizardBackend(overrides: Record<string, unknown> = {}) {
     SearchRecords: vi.fn(async (_query: string, typeFilter: string) => JSON.stringify([HITS[typeFilter]])),
     ResolveFormKeyLabels: vi.fn(async (csv: string) => JSON.stringify(Object.fromEntries(csv.split(',').map(key => [key, LABELS[key]])))),
     CreateRecord: vi.fn(async () => JSON.stringify({ formKey: CREATED })),
+    SetField: vi.fn(async () => 'ok'),
     ...overrides,
   });
 }
@@ -56,21 +57,31 @@ async function answerEveryStep() {
 
 it('Detects: finishing the wizard sends CreateRecord, then stages, aliases and objectives in that order, then opens the new quest', async () => {
   const createRecord = vi.fn(async () => JSON.stringify({ formKey: CREATED }));
-  const backend = wizardBackend({ CreateRecord: createRecord });
+  const setField = vi.fn(async () => 'ok');
+  const backend = wizardBackend({ CreateRecord: createRecord, SetField: setField });
   const onCreated = vi.fn();
   render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
   await answerEveryStep();
+  expect(screen.getByText(/start by itself with the game/)).toBeTruthy();
+  expect(screen.getByText(/places each item you picked at the location as a new copy/)).toBeTruthy();
+  expect(screen.queryByText(/\(not linked:/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
   expect(createRecord).toHaveBeenCalledWith('Patch.esp', 'QUST', { schema: true, editorId: 'The_Lost_Locket' });
+  expect(setField).toHaveBeenCalledWith('Patch.esp', CREATED, 'QUST\\Flags', '1');
   expect(backend.SetQuestStages).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('Go to Abandoned Mill and find Rusty Locket.'));
-  const [create, stages, aliases, objectives] = [
+  expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"uniqueActor":"000900:Patch.esp"'));
+  expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"specificLocation":"000A00:Patch.esp"'));
+  expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"createReference":{"object":"000B00:Patch.esp","alias":2,"create":"At"}'));
+  const [create, flags, stages, aliases, objectives] = [
     createRecord.mock.invocationCallOrder[0],
+    setField.mock.invocationCallOrder[0],
     backend.SetQuestStages.mock.invocationCallOrder[0],
     backend.SetQuestAliases.mock.invocationCallOrder[0],
     backend.SetQuestObjectives.mock.invocationCallOrder[0],
   ];
-  expect(create).toBeLessThan(stages);
+  expect(create).toBeLessThan(flags);
+  expect(flags).toBeLessThan(stages);
   expect(stages).toBeLessThan(aliases);
   expect(aliases).toBeLessThan(objectives);
 });
@@ -160,4 +171,11 @@ it('Detects: going Back from the quest the wizard just made, then choosing the Q
   fireEvent.click(screen.getByRole('button', { name: /Stages, objectives and aliases for one quest/ }));
   expect(await screen.findByText('Choose a quest to start editing it. Nothing changes until you edit a field.')).toBeTruthy();
   expect(screen.queryByText(`Editing ${CREATED}`)).toBeNull();
+});
+
+it('Detects: the template chooser dropping, renaming or reordering one of the five quest templates, so a beginner cannot start that kind of quest', () => {
+  wizardBackend();
+  const { container } = render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  const titles = Array.from(container.querySelectorAll('.editors-card-title'), node => node.textContent);
+  expect(titles).toEqual(['Fetch an item', 'Kill a target', 'Talk to someone', 'Escort', 'Choice with two endings']);
 });
