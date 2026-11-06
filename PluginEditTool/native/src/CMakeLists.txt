@@ -53,6 +53,10 @@ add_library(
     plugin/RadiclePluginQuestFragments.cpp
     plugin/RadiclePluginQuestScriptEdit.cpp
     plugin/RadiclePluginQuestReads.cpp
+    plugin/RadiclePluginDialogue.cpp
+    plugin/RadiclePluginDialogueRead.cpp
+    plugin/RadiclePluginScene.cpp
+    plugin/RadiclePluginSceneRead.cpp
     plugin/RadiclePluginStrings.cpp
     plugin/RadiclePluginStringLanguages.cpp
     plugin/RadiclePluginPathIdentity.cpp
