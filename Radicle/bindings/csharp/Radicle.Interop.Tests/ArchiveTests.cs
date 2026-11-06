@@ -137,4 +137,33 @@ public class ArchiveTests
             all.Skip(1).Select(a => a.Location.Origin));
         Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => assets.List("../x")).Status);
     }
+
+    [Fact]
+    public void ScriptSetOpensWithoutAnAssetHandleAndReportsSkippedArchives()
+    {
+        using var temp = new TempDirectory();
+        var data = System.IO.Path.Combine(temp.Path, "Data");
+        temp.Write("Data/Scripts/SyntheticObject.pex", PexModelTests.SyntheticPex());
+        temp.Write("Data/Scripts/Junk.pex", Encoding.ASCII.GetBytes("not a pex"));
+        var good = temp.Write("Mods/Good - Main.ba2", Ba2Writer.General(("Scripts\\Other.pex", Encoding.ASCII.GetBytes("other"))));
+        var broken = temp.Write("Mods/Broken.ba2", Encoding.ASCII.GetBytes("not a ba2"));
+
+        Assert.Throws<RadicleException>(() => ScriptSet.Open(new[] { data }, new[] { good, broken }));
+
+        using var set = ScriptSet.Open(new[] { data }, new[] { good, broken }, ArchiveFailurePolicy.Skip);
+        Assert.Equal(new[] { "junk", "other", "syntheticobject" }, set.Winners.Select(w => w.Name));
+        var failure = Assert.Single(set.Failures);
+        Assert.Equal(1, failure.ArchiveIndex);
+        Assert.Equal(broken, failure.Path);
+        Assert.NotEmpty(failure.Message);
+        Assert.Equal("other", Encoding.ASCII.GetString(set.Read(1)));
+
+        Assert.False(set.ParentChainValid("SyntheticObject"));
+        Assert.False(set.ParentChainValid("Junk"));
+        Assert.False(set.ParentChainValid("Missing"));
+        var census = set.Census();
+        Assert.Equal(1, census.Objects);
+        Assert.Equal(new[] { "junk", "other" }, census.Unreadable);
+        Assert.Empty(census.Sites);
+    }
 }

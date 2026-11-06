@@ -224,7 +224,6 @@ std::vector<std::byte> info_source_bytes(bool undecodable_info) {
   add_plain(out, "QUST", k_cell_id);
   const auto quest_children = fo4::test::begin_group(
       out, k_cell_label, static_cast<std::int32_t>(fo4::GroupType::cell_visible_distant_children));
-  const auto dial_top = fo4::test::begin_group(out, "DIAL", 0);
   add_dial(out, false);
   const auto topic = fo4::test::begin_group(
       out, k_reference_label, static_cast<std::int32_t>(fo4::GroupType::topic_children));
@@ -234,7 +233,6 @@ std::vector<std::byte> info_source_bytes(bool undecodable_info) {
     add_plain(out, "INFO", k_undecodable_id);
   }
   fo4::test::end_group(out, topic);
-  fo4::test::end_group(out, dial_top);
   fo4::test::end_group(out, quest_children);
   fo4::test::end_group(out, quest_top);
   return out.bytes;
@@ -247,12 +245,10 @@ std::vector<std::byte> info_target_bytes(bool undecodable_dial) {
   add_plain(out, "QUST", k_cell_id);
   const auto quest_children = fo4::test::begin_group(
       out, k_cell_label, static_cast<std::int32_t>(fo4::GroupType::cell_visible_distant_children));
-  const auto dial_top = fo4::test::begin_group(out, "DIAL", 0);
   add_dial(out, undecodable_dial);
   const auto topic = fo4::test::begin_group(
       out, k_reference_label, static_cast<std::int32_t>(fo4::GroupType::topic_children));
   fo4::test::end_group(out, topic);
-  fo4::test::end_group(out, dial_top);
   fo4::test::end_group(out, quest_children);
   fo4::test::end_group(out, quest_top);
   return out.bytes;

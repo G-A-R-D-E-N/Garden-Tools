@@ -51,7 +51,14 @@ add_library(
     plugin/RadiclePluginQuestLocalized.cpp
     plugin/RadiclePluginQuestObjectives.cpp
     plugin/RadiclePluginQuestFragments.cpp
+    plugin/RadiclePluginQuestScriptEdit.cpp
     plugin/RadiclePluginQuestReads.cpp
+    plugin/RadiclePluginDialogue.cpp
+    plugin/RadiclePluginDialogueRead.cpp
+    plugin/RadiclePluginScene.cpp
+    plugin/RadiclePluginSceneRead.cpp
+    plugin/RadiclePluginFragments.cpp
+    plugin/RadiclePluginDialogueBulk.cpp
     plugin/RadiclePluginStrings.cpp
     plugin/RadiclePluginStringLanguages.cpp
     plugin/RadiclePluginPathIdentity.cpp
@@ -90,7 +97,7 @@ add_library(
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )
-target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4 PRIVATE ZLIB::ZLIB)
+target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4 fo4ide_archive PRIVATE ZLIB::ZLIB)
 if(WIN32)
     target_sources(fo4ide_plugin PRIVATE plugin/RadiclePluginWindowsJournalDirectory.cpp plugin/RadiclePluginWindowsJournalIntent.cpp plugin/RadiclePluginWindowsJournalDestination.cpp plugin/RadiclePluginWindowsJournalSession.cpp)
     target_link_libraries(fo4ide_plugin PRIVATE advapi32 ntdll)
@@ -233,8 +240,9 @@ add_library(
     papyrus/SecureSourceSnapshot.cpp
     papyrus/SecureSourceSnapshotWindows.cpp
     papyrus/CompileScript.cpp
+    papyrus/VanillaScriptSources.cpp
 )
-target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4)
+target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4 PRIVATE ZLIB::ZLIB)
 if(WIN32)
     target_link_libraries(fo4ide_papyrus PRIVATE ntdll)
 endif()
