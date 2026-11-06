@@ -278,9 +278,15 @@ TEST(PapyrusQuestRules, ValuesThatCannotBeKeptExactlyAreRefusedNotTruncated) {
   EXPECT_EQ(reasonOf(report, "Tenth").rfind("Float: ", 0), 0u);
   EXPECT_EQ(reasonOf(report, "Huge").rfind("Float: ", 0), 0u);
   for (const auto& property : report.properties) {
-    if (property.name == "Low") EXPECT_EQ(property.value.integer, -2147483647 - 1);
-    if (property.name == "High") EXPECT_EQ(property.value.integer, 2147483647);
-    if (property.name == "Half") EXPECT_FLOAT_EQ(property.value.real, 1.5F);
+    if (property.name == "Low") {
+      EXPECT_EQ(property.value.integer, -2147483647 - 1);
+    }
+    if (property.name == "High") {
+      EXPECT_EQ(property.value.integer, 2147483647);
+    }
+    if (property.name == "Half") {
+      EXPECT_FLOAT_EQ(property.value.real, 1.5F);
+    }
   }
 }
 
