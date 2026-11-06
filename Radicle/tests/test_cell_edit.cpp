@@ -135,13 +135,12 @@ std::vector<std::byte> make_base() {
   const auto cell_802 = rec("CELL", 0x802, {{"DATA", {std::byte{0x02}, std::byte{0}}}, {"XCLC", bytes_of({1, 2, 0})}});
   const auto cell_803 = rec("CELL", 0x803, {{"DATA", {std::byte{0x02}, std::byte{0}}}, {"XCLC", bytes_of({2, 2, 0})}});
   const auto refs = grp(0x802, 6,
-                        {grp(0x802, 8,
+                        {grp(0x802, 9,
                              {rec("REFR", 0x814,
                                   {{"NAME", bytes_of({0x820})},
                                    {"DATA", floats({4196.0f, 8292.0f, 0.0f, 0.0f, 0.0f, 0.0f})}},
-                                  0x400)}),
-                         grp(0x802, 9,
-                             {rec("REFR", 0x811,
+                                  0x400),
+                              rec("REFR", 0x811,
                                   {{"EDID", zstring("Crate")},
                                    {"NAME", bytes_of({0x820})},
                                    {"DATA", floats({4196.0f, 8292.0f, 0.0f, 0.0f, 0.0f, 0.0f})},
@@ -246,6 +245,18 @@ TEST_F(CellEditTest, CopyCellAsOverrideIsIdempotent) {
   EXPECT_TRUE(fo4::write_plugin(patch) == first);
 }
 
+TEST_F(CellEditTest, CopyCellAsOverrideRejectsMissingAndNonCellSources) {
+  const auto env = fo4::env::Environment::load(paths_);
+  auto patch = empty_edit();
+  const auto before = fo4::write_plugin(patch);
+
+  EXPECT_EQ(fo4::forms::copy_cell_as_override(patch, plugin_named(env, "Base.esm"), fo4::FormKey::parse("000999:Base.esm")),
+            fo4::forms::CellOverrideStatus::source_missing);
+  EXPECT_EQ(fo4::forms::copy_cell_as_override(patch, plugin_named(env, "Base.esm"), fo4::FormKey::parse("000812:Base.esm")),
+            fo4::forms::CellOverrideStatus::not_a_cell);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
+}
+
 TEST_F(CellEditTest, EnsureOverrideCopiesFromWinningPlugin) {
   const auto env = fo4::env::Environment::load(paths_);
   const auto reference = fo4::FormKey::parse("000812:Base.esm");
@@ -319,7 +330,7 @@ TEST_F(CellEditTest, EditAppliesEveryFieldInOneCall) {
   fo4::forms::PlacedReferenceEdit edit;
   edit.scale = std::optional<float>{2.0f};
   edit.editor_id = std::string{"CrateMoved"};
-  edit.record_flags = 0x00000400u;
+  edit.record_flags = 0x00000C00u;
   edit.comments = std::optional<std::string>{"moved by test"};
   edit.location_reference = std::optional<fo4::FormKey>{fo4::FormKey::parse("000820:Base.esm")};
   edit.ownership = fo4::forms::OwnershipEdit{
@@ -344,7 +355,8 @@ TEST_F(CellEditTest, EditAppliesEveryFieldInOneCall) {
   ASSERT_TRUE(view.has_value());
   EXPECT_EQ(view->editor_id, "CrateMoved");
   EXPECT_FLOAT_EQ(view->scale, 2.0f);
-  EXPECT_TRUE(record->header.flags.is_persistent());
+  EXPECT_TRUE(record->header.flags.test(fo4::RecordFlags::initially_disabled));
+  EXPECT_FALSE(record->header.flags.is_persistent());
   for (const auto* signature :
        {"XSCL", "EDID", "MNAM", "XLRL", "XOWN", "XRNK", "XESP", "XLKR", "XTEL", "XPRM"}) {
     EXPECT_TRUE(has_subrecord(*record, signature)) << signature;
@@ -383,4 +395,21 @@ TEST_F(CellEditTest, FailedEditLeavesPatchUnchanged) {
   EXPECT_EQ(result.copied_from, "Patch.esp");
   EXPECT_TRUE(fo4::write_plugin(patch) == before);
   EXPECT_EQ(fo4::find_record(patch, reference), nullptr);
+}
+
+TEST_F(CellEditTest, EditReportsMissingAndDeletedReferencesWithoutChangingPatch) {
+  const auto env = fo4::env::Environment::load(paths_);
+  auto patch = empty_edit();
+  const auto before = fo4::write_plugin(patch);
+
+  fo4::forms::PlacedReferenceEdit edit;
+  edit.scale = std::optional<float>{3.0f};
+  const auto missing = fo4::forms::edit_placed_reference(patch, env, fo4::FormKey::parse("000999:Base.esm"), edit);
+  EXPECT_EQ(missing.status, fo4::forms::PlacedReferenceEditStatus::reference_missing);
+  EXPECT_FALSE(missing.message.empty());
+
+  const auto deleted = fo4::forms::edit_placed_reference(patch, env, fo4::FormKey::parse("000813:Base.esm"), edit);
+  EXPECT_EQ(deleted.status, fo4::forms::PlacedReferenceEditStatus::reference_deleted);
+  EXPECT_NE(deleted.message.find("Patch.esp"), std::string::npos);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
 }
