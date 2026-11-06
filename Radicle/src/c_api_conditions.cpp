@@ -51,28 +51,6 @@ const char* utf8_text(std::deque<std::string>& text, const std::optional<std::st
   return text.back().c_str();
 }
 
-bool convert_text(const char* utf8, std::optional<std::string>& out) {
-  if (utf8 == nullptr) return true;
-  auto converted = fo4::text::utf8_to_windows1252(utf8);
-  if (!converted) return false;
-  out = std::move(*converted);
-  return true;
-}
-
-bool to_ctda(const radicle_condition& row, fo4::CtdaCondition& out) {
-  out.flags_byte = row.flags_byte;
-  out.comparison_raw = row.comparison_raw;
-  out.function = row.function;
-  out.unknown2 = row.unknown2;
-  out.param1 = row.param1;
-  out.param2 = row.param2;
-  out.run_on = row.run_on;
-  out.reference = row.reference;
-  out.unknown3 = row.unknown3;
-  return convert_text(row.parameter1_string, out.parameter1_string) &&
-         convert_text(row.parameter2_string, out.parameter2_string);
-}
-
 bool matches_current(const fo4::schema::ScopedConditionsRead& current,
                      std::span<const fo4::CtdaCondition> wanted) {
   if (!current.ok || current.conditions.size() != wanted.size()) return false;

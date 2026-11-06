@@ -119,6 +119,23 @@ TEST(EditHistory, ByteBudgetKeepsTheNewestEntryWhenOneSnapshotExceedsTheBudget) 
   EXPECT_EQ(marker_of(*undone), 2);
 }
 
+TEST(EditHistory, RedoEnforcesTheByteBudgetForAGrownCurrent) {
+  fo4::PluginEditHistory history{2500};
+  history.record(marked_plugin(1, 1000));
+  history.record(marked_plugin(2, 1000));
+  const auto undone = history.undo(marked_plugin(3, 1000));
+  ASSERT_TRUE(undone.has_value());
+  EXPECT_EQ(marker_of(*undone), 2);
+  const auto redone = history.redo(marked_plugin(4, 2000));
+  ASSERT_TRUE(redone.has_value());
+  EXPECT_EQ(marker_of(*redone), 3);
+  EXPECT_EQ(history.undo_count(), 1u);
+  const auto older = history.undo(*redone);
+  ASSERT_TRUE(older.has_value());
+  EXPECT_EQ(marker_of(*older), 4);
+  EXPECT_FALSE(history.undo(*older).has_value());
+}
+
 TEST(EditHistory, UndoOnEmptyReturnsNullopt) {
   fo4::PluginEditHistory history;
   const auto revision = history.revision();

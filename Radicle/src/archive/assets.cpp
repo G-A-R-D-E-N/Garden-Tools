@@ -4,6 +4,8 @@
 #include "fo4/text/encoding.hpp"
 #include <algorithm>
 #include <cctype>
+#include <exception>
+#include <new>
 #include <fstream>
 #include <set>
 #include <system_error>
@@ -159,14 +161,33 @@ AssetResolver AssetResolver::open(const std::filesystem::path& data_dir,
 
 AssetResolver AssetResolver::open_roots(std::span<const std::filesystem::path> roots,
                                         std::span<const std::filesystem::path> archives) {
-  AssetResolver resolver;
+  return open_roots(roots, archives, ArchiveFailurePolicy::fail).resolver;
+}
+
+AssetOpenResult AssetResolver::open_roots(std::span<const std::filesystem::path> roots,
+                                          std::span<const std::filesystem::path> archives,
+                                          ArchiveFailurePolicy policy) {
+  AssetOpenResult result;
+  auto& resolver = result.resolver;
   std::set<std::string> seen;
   for (const auto& root : roots) {
     if (!root.empty() && seen.insert(root_key(root)).second) resolver.roots_.push_back(root);
   }
   resolver.archives_.reserve(archives.size());
-  for (const auto& path : archives) resolver.archives_.push_back(Ba2Reader::open(path));
-  return resolver;
+  for (std::size_t i = 0; i < archives.size(); ++i) {
+    if (policy == ArchiveFailurePolicy::fail) {
+      resolver.archives_.push_back(Ba2Reader::open(archives[i]));
+      continue;
+    }
+    try {
+      resolver.archives_.push_back(Ba2Reader::open(archives[i]));
+    } catch (const std::bad_alloc&) {
+      throw;
+    } catch (const std::exception& error) {
+      result.failures.push_back({i, archives[i], error.what()});
+    }
+  }
+  return result;
 }
 
 std::optional<AssetLocation> AssetResolver::locate(std::string_view data_relative_path) const {

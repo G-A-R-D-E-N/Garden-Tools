@@ -1,13 +1,14 @@
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/generators/catch_generators.hpp>
 
+#include <fo4/papyrus/decompiler.hpp>
+#include <fo4/pex/pex.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 #include <fo4ide/papyrus/QuestFragmentSource.hpp>
@@ -17,7 +18,6 @@
 
 #include "../helpers/GraphTestSupport.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
-#include "../../src/app/PapyrusStaging.hpp"
 
 #ifdef __linux__
 #include <fcntl.h>
@@ -194,6 +194,69 @@ TEST_CASE("Quest fragment source refuses unowned or ambiguous scripts") {
     CHECK_FALSE(updateQuestFragmentSource(typed, "QF_Test", 10, 0, actions));
 }
 
+TEST_CASE("Quest fragment source emits objective flags only when given") {
+    using namespace fo4ide::papyrus;
+    const auto plain = updateQuestFragmentSource({}, "QF_Flags", 10, 0,
+        {{QuestFragmentActionKind::Display, 3}, {QuestFragmentActionKind::Complete, 4}});
+    REQUIRE(plain.has_value());
+    CHECK(plain->find("SetObjectiveDisplayed(3)\n") != std::string::npos);
+    CHECK(plain->find("SetObjectiveCompleted(4)\n") != std::string::npos);
+    QuestFragmentAction hide{QuestFragmentActionKind::Display, 5};
+    hide.visible = false;
+    const auto hidden = updateQuestFragmentSource({}, "QF_Flags", 10, 0, {hide});
+    REQUIRE(hidden.has_value());
+    CHECK(hidden->find("SetObjectiveDisplayed(5, false, false)\n") != std::string::npos);
+    QuestFragmentAction force{QuestFragmentActionKind::Display, 6};
+    force.force = true;
+    const auto forced = updateQuestFragmentSource({}, "QF_Flags", 10, 0, {force});
+    REQUIRE(forced.has_value());
+    CHECK(forced->find("SetObjectiveDisplayed(6, true, true)\n") != std::string::npos);
+    QuestFragmentAction uncomplete{QuestFragmentActionKind::Complete, 7};
+    uncomplete.completed = false;
+    const auto reopened = updateQuestFragmentSource({}, "QF_Flags", 10, 0, {uncomplete});
+    REQUIRE(reopened.has_value());
+    CHECK(reopened->find("SetObjectiveCompleted(7, false)\n") != std::string::npos);
+    QuestFragmentAction done{QuestFragmentActionKind::Complete, 8};
+    done.completed = true;
+    const auto completed = updateQuestFragmentSource({}, "QF_Flags", 10, 0, {done});
+    REQUIRE(completed.has_value());
+    CHECK(completed->find("SetObjectiveCompleted(8, true)\n") != std::string::npos);
+}
+
+TEST_CASE("Quest fragment source refuses objective flags on the wrong action kind") {
+    using namespace fo4ide::papyrus;
+    QuestFragmentAction displayCompleted{QuestFragmentActionKind::Display, 1};
+    displayCompleted.completed = true;
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Flags", 10, 0, {displayCompleted}).has_value());
+    QuestFragmentAction completeVisible{QuestFragmentActionKind::Complete, 1};
+    completeVisible.visible = true;
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Flags", 10, 0, {completeVisible}).has_value());
+    QuestFragmentAction completeForce{QuestFragmentActionKind::Complete, 1};
+    completeForce.force = false;
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Flags", 10, 0, {completeForce}).has_value());
+    QuestFragmentAction stageFlag{QuestFragmentActionKind::SetStage, 20};
+    stageFlag.completed = true;
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Flags", 10, 0, {stageFlag}).has_value());
+}
+
+TEST_CASE("Quest fragment source removes one managed function and refuses unmanaged source") {
+    using namespace fo4ide::papyrus;
+    const std::vector<QuestFragmentAction> actions{{QuestFragmentActionKind::SetStage, 20}};
+    const auto first = updateQuestFragmentSource({}, "QF_Test", 10, 0, actions);
+    REQUIRE(first.has_value());
+    const auto both = updateQuestFragmentSource(*first, "QF_Test", 20, 0, actions);
+    REQUIRE(both.has_value());
+    REQUIRE(isManagedQuestFragmentSource(*both));
+    const auto removed = removeQuestFragmentSource(*both, "QF_Test", 10, 0);
+    REQUIRE(removed.has_value());
+    CHECK(removed->find("Fragment_Stage_0010_Item_00") == std::string::npos);
+    CHECK(removed->find("SetStage(20)") != std::string::npos);
+    CHECK_FALSE(Parser::parse(*removed).hasErrors());
+    CHECK_FALSE(removeQuestFragmentSource(*removed, "QF_Test", 10, 0).has_value());
+    CHECK_FALSE(removeQuestFragmentSource("Scriptname QF_Test Extends Quest\n", "QF_Test", 10, 0).has_value());
+    CHECK_FALSE(isManagedQuestFragmentSource("Scriptname QF_Test Extends Quest\n"));
+}
+
 namespace {
 
 struct PapyrusTargetFixture {
@@ -363,62 +426,6 @@ TEST_CASE("PapyrusTarget Compile refuses a ScriptName part with a character that
     CHECK(runner.last.executable.empty());
 }
 
-TEST_CASE("PapyrusStaging reports an unstageable namespace part as an error, not as no staging") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Good.psc";
-    touch(source, "ScriptName Good:Foo\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-    touch(staging / "Good");
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging refuses an unsafe ScriptName and writes nothing outside staging") {
-    const std::vector<std::tuple<std::string, std::string, std::string>> rows = {
-        {"ScriptName A:B?:C", "", "unsafe namespace part"},
-        {"ScriptName ..:..:Evil", "../Evil.psc", "Refused to compile"},
-        {"ScriptName A:..:B", "", "Refused to compile"},
-        {"ScriptName MyMod:/fo4ide_gt086_escape:Evil", "/fo4ide_gt086_escape/Evil.psc", "Refused to compile"},
-    };
-    const auto& [scriptLine, escapeText, fragment] =
-        rows[GENERATE(std::size_t{0}, std::size_t{1}, std::size_t{2}, std::size_t{3})];
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Evil.psc";
-    touch(source, scriptLine + "\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-    const bool hasEscape = !escapeText.empty();
-    const auto escaped = hasEscape ? root / escapeText : std::filesystem::path{};
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    const bool escapedWritten = hasEscape && std::filesystem::exists(escaped);
-    std::error_code ec;
-    if (hasEscape) std::filesystem::remove(escaped, ec);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "UnsafeScriptName");
-    CHECK(result.error().message.find(fragment) != std::string::npos);
-    if (hasEscape) CHECK_FALSE(escapedWritten);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging stages a namespaced script under its namespace folders") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Foo.psc";
-    touch(source, "ScriptName MyMod:Quests:Foo\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    REQUIRE(result.has_value());
-    REQUIRE(result->has_value());
-    CHECK(result->value() == staging);
-    CHECK(std::filesystem::is_regular_file(staging / "MyMod" / "Quests" / "Foo.psc"));
-}
-
 TEST_CASE("PapyrusTarget Decompile shows the NOT SAVED trailer without write") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -438,6 +445,37 @@ TEST_CASE("PapyrusTarget Decompile shows the NOT SAVED trailer without write") {
     const auto text = result->get<std::string>();
     CHECK(text.find("ScriptName Greeter") != std::string::npos);
     CHECK(text.find("NOT SAVED") != std::string::npos);
+
+    const auto bytes = readBytes(pex);
+    const auto file = fo4::pex::PexFile::fromBytes(
+        std::vector<std::uint8_t>(bytes.begin(), bytes.end()));
+    for (const bool assembly : {false, true}) {
+        auto shown = target.invoke(
+            "Decompile", nlohmann::json::array({pex.string(), "", assembly, false}));
+        REQUIRE(shown.has_value());
+        const auto expected = assembly ? fo4::papyrus::Decompiler::disassemble(file)
+                                       : fo4::papyrus::Decompiler::toSource(file);
+        CHECK(shown->get<std::string>().rfind(expected, 0) == 0);
+    }
+}
+
+TEST_CASE("PapyrusTarget Decompile reports a .pex it cannot read as a failure, not a throw") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto junk = root / "x.pex";
+    touch(junk, "junk");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto result =
+        target.invoke("Decompile", nlohmann::json::array({junk.string(), "", false, false}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().rfind("Decompile failed for x.pex", 0) == 0);
 }
 
 TEST_CASE("PapyrusTarget Decompile writes a namespaced .psc when asked") {
