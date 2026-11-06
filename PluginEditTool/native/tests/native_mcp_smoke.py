@@ -31,8 +31,11 @@ def main(executable):
                 debugger = shutil.which("gdb")
                 if debugger is None:
                     return " (no gdb on this runner)"
-                rerun = subprocess.run([debugger, "-batch", "-ex", "run", "-ex", "bt 30", "--args", executable, "--mcp", "--mo2", str(root)], input="", capture_output=True, text=True, env=environment, cwd=root, timeout=120)
-                return " " + rerun.stdout[-6000:]
+                try:
+                    rerun = subprocess.run([debugger, "-batch", "-ex", "run", "-ex", "bt 30", "--args", executable, "--mcp", "--mo2", str(root)], input="", capture_output=True, text=True, env=environment, cwd=root, timeout=30)
+                    return " " + rerun.stdout[-6000:]
+                except Exception as error:
+                    return " (gdb failed: " + str(error) + ")"
 
 
             def rpc(method, params=None):
