@@ -1,4 +1,4 @@
-#include "scene_layout.hpp"
+#include "fo4/environment/scene_layout.hpp"
 
 #include <algorithm>
 #include <array>

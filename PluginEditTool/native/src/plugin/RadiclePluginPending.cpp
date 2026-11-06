@@ -34,11 +34,16 @@ void RadiclePluginBackend::testSetJournalRoot(std::filesystem::path root) {
 #ifdef FO4IDE_TEST_HOOKS
 namespace {
 WriteOpLockedHook writeOpLockedHook = nullptr;
+WriteOpLockedHook writeOpPendingHook = nullptr;
 WriteOpLockedHook saveIoLockedHook = nullptr;
 }
 
 void setWriteOpLockedHook(WriteOpLockedHook hook) {
     writeOpLockedHook = hook;
+}
+
+void setWriteOpPendingHook(WriteOpLockedHook hook) {
+    writeOpPendingHook = hook;
 }
 
 void setSaveIoLockedHook(WriteOpLockedHook hook) {
@@ -81,6 +86,9 @@ thread_local RadiclePluginBackend::OpLock* RadiclePluginBackend::OpLock::current
 RadiclePluginBackend::OpLock::OpLock(const RadiclePluginBackend& backend, Mode mode,
                                      const std::vector<std::string_view>& names)
     : backend(backend), mode(mode), previous(current) {
+#ifdef FO4IDE_TEST_HOOKS
+    if (mode == Mode::Write && writeOpPendingHook != nullptr) writeOpPendingHook();
+#endif
     if (mode == Mode::Lifecycle) {
         backend.lifecycleMutex_.lock();
         state = StateHold::Exclusive;

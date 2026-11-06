@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <fo4/flags.hpp>
 #include <fo4/io/sha256.hpp>
+#include <fo4/pex/pex.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include "plugin_bytes.hpp"
@@ -771,8 +772,19 @@ TEST_CASE("Journal publishes a staged quest fragment script and PEX") {
     fo4ide::plugin::RadiclePluginBackend backend; backend.testSetJournalRoot(root / "journal");
     stageQuestFragment(backend, root);
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    CHECK(std::filesystem::exists(root / "QF_CoWelcome.psc"));
-    CHECK(std::filesystem::exists(root / "QF_CoWelcome.pex"));
+    REQUIRE(std::filesystem::exists(root / "QF_CoWelcome.psc"));
+    REQUIRE(std::filesystem::exists(root / "QF_CoWelcome.pex"));
+    const auto psc = readBytes(root / "QF_CoWelcome.psc");
+    const std::string source(reinterpret_cast<const char*>(psc.data()), psc.size());
+    CHECK(source.find("Function Fragment_Stage_0010_Item_00") != std::string::npos);
+    CHECK(source.find("SetStage(10)") != std::string::npos);
+    const auto pexBytes = readBytes(root / "QF_CoWelcome.pex");
+    std::vector<std::uint8_t> pex;
+    pex.reserve(pexBytes.size());
+    for (const auto byte : pexBytes) pex.push_back(std::to_integer<std::uint8_t>(byte));
+    const auto file = fo4::pex::PexFile::fromBytes(pex);
+    REQUIRE(file.objects.size() == 1);
+    CHECK(file.objects[0].name == "QF_CoWelcome");
 }
 
 TEST_CASE("Quest fragment save without a journal root is refused") {
