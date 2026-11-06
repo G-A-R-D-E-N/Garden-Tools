@@ -1,0 +1,79 @@
+{
+  "default": [],
+  "backend.SearchRecords": [
+    {"FormKey": "000800:Patch.esp", "EditorID": "MissingCourier", "Type": "QUST", "Plugin": "Patch.esp"},
+    {"FormKey": "000900:Patch.esp", "EditorID": "BagInTheAlley", "Type": "SCEN", "Plugin": "Patch.esp"}
+  ],
+  "backend.GetQuestStages": {"stages": [
+    {"index": 10, "flags": 2, "logEntries": [{"logText": "Find the courier's bag in the alley.", "flags": 0, "note": ""}]},
+    {"index": 20, "flags": 0, "logEntries": [{"logText": "The tracks lead north, toward the old rail yard.", "flags": 0, "note": ""}]},
+    {"index": 30, "flags": 0, "logEntries": [{"logText": "Return the bag to the courier's mother.", "flags": 1, "note": ""}]}
+  ]},
+  "backend.GetQuestObjectives": {"objectives": [
+    {"index": 10, "flags": 0, "displayText": "Search the alley", "targets": [{"alias": 2, "aliasName": "Alley", "flags": 0}]},
+    {"index": 20, "flags": 0, "displayText": "Reach the rail yard", "targets": []},
+    {"index": 30, "flags": 0, "displayText": "Deliver the bag to Mother", "targets": [{"alias": 0, "aliasName": "Mother", "flags": 0}]}
+  ]},
+  "backend.GetQuestAliases": {"nextAliasId": 3, "aliases": [
+    {"kind": "reference", "id": 0, "name": "Mother", "flags": 0},
+    {"kind": "reference", "id": 1, "name": "Guard", "flags": 0},
+    {"kind": "location", "id": 2, "name": "Alley", "flags": 0}
+  ]},
+  "backend.GetDialogue": {
+    "branches": [
+      {"formKey": "000801:Patch.esp", "editorId": "CourierBranch", "category": 0, "flags": 0, "topic": "000802:Patch.esp"}
+    ],
+    "topics": [
+      {
+        "formKey": "000802:Patch.esp", "editorId": "SeenMyson", "priority": 50, "branch": "000801:Patch.esp",
+        "keyword": null, "topicFlags": 0, "category": 0, "subtype": 0, "subtypeName": "",
+        "name": "Have you seen my son?",
+        "infos": [{
+          "formKey": "000803:Patch.esp", "flags": 0, "resetHours": 0, "resetTimeEncoded": 0, "previous": null,
+          "responses": [
+            {"text": "He went out to the alley last night and never came back.", "emotion": "000910:Fallout4.esm",
+             "sound": null, "number": 1, "interruptPercent": 0, "cameraTargetAlias": -1, "cameraLocationAlias": -1},
+            {"text": "Please, bring him home safe.", "emotion": null,
+             "sound": null, "number": 2, "interruptPercent": 0, "cameraTargetAlias": -1, "cameraLocationAlias": -1}
+          ],
+          "conditions": [], "fragments": []
+        }]
+      },
+      {
+        "formKey": "000804:Patch.esp", "editorId": "FoundBag", "priority": 50, "branch": "000801:Patch.esp",
+        "keyword": null, "topicFlags": 0, "category": 0, "subtype": 0, "subtypeName": "",
+        "name": "I found his bag",
+        "infos": [{
+          "formKey": "000805:Patch.esp", "flags": 0, "resetHours": 0, "resetTimeEncoded": 0, "previous": null,
+          "responses": [
+            {"text": "It was lying by the crates, next to the rail yard fence.", "emotion": null,
+             "sound": null, "number": 1, "interruptPercent": 0, "cameraTargetAlias": -1, "cameraLocationAlias": -1}
+          ],
+          "conditions": [], "fragments": []
+        }]
+      }
+    ]
+  },
+  "backend.ResolveFormKeyLabels": {"000910:Fallout4.esm": "Worried"},
+  "backend.GetScene": {
+    "formKey": "000900:Patch.esp", "editorId": "BagInTheAlley", "flags": 1,
+    "parentQuest": "000800:Patch.esp",
+    "phases": [
+      {"index": 0, "name": "Walk to the alley", "editorWidth": 120, "flags": 0},
+      {"index": 1, "name": "Talk to the guard", "editorWidth": 120, "flags": 0},
+      {"index": 2, "name": "Hand over the bag", "editorWidth": 120, "flags": 0, "questStageOnCompletion": 30}
+    ],
+    "actors": [
+      {"index": 0, "alias": 0, "flags": 0, "behaviorFlags": 0},
+      {"index": 1, "alias": 1, "flags": 0, "behaviorFlags": 0}
+    ],
+    "actions": [
+      {"index": 0, "type": 0, "typeName": "Dialogue", "name": "Mother asks", "actorAlias": 0, "flags": 0,
+       "startPhase": 0, "endPhase": 1, "payload": {"topic": "000802:Patch.esp", "loopingMin": 0, "loopingMax": 0}},
+      {"index": 1, "type": 0, "typeName": "Dialogue", "name": "Guard answers", "actorAlias": 1, "flags": 0,
+       "startPhase": 1, "endPhase": 2, "payload": {"topic": "000804:Patch.esp", "loopingMin": 0, "loopingMax": 0}},
+      {"index": 2, "type": 2, "typeName": "Timer", "name": "Short pause", "actorAlias": 0, "flags": 0,
+       "startPhase": 2, "endPhase": 2, "payload": {"timerMin": 2, "timerMax": 4}}
+    ]
+  }
+}

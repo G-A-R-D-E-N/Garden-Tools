@@ -30,6 +30,7 @@ struct SavedRegistration {
     double interval{0.0};
     bool repeats{false};
     std::string clock;
+    std::string sourceKey;
 };
 
 struct SavedTimer {
@@ -45,6 +46,7 @@ struct SavedObjective {
     std::int32_t state{0};
 };
 
+// Invariant: a RemoteEvent registration needs a non-blank sourceKey; capture, serialize, deserialize and restore refuse one without.
 // Invariant: version 2 is the only serialized form; capture sorts every list so the text and digest are stable.
 struct SaveState {
     static constexpr std::int32_t kVersion = 2;

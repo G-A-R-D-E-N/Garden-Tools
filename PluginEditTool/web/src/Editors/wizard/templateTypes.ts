@@ -1,0 +1,21 @@
+import type { AliasKind } from '../quest/questModel';
+
+export interface PluginQuestion { id: 'plugin'; kind: 'plugin'; label: string; help: string; }
+export interface TextQuestion { id: string; kind: 'text'; label: string; help: string; placeholder?: string; }
+export interface RecordQuestion { id: string; kind: 'record'; label: string; help: string; recordType: string; }
+export type TemplateQuestion = TextQuestion | RecordQuestion;
+export type WizardStep = PluginQuestion | TemplateQuestion;
+
+export interface TemplateStage { index: number; journal: string; completes?: boolean; }
+export interface TemplateObjective { index: number; text: string; targets: string[]; }
+export interface TemplateAlias { slot: string; name: string; kind: AliasKind; }
+
+export interface QuestTemplate {
+  id: string;
+  title: string;
+  summary: string;
+  questions: TemplateQuestion[];
+  stages: TemplateStage[];
+  objectives: TemplateObjective[];
+  aliases: TemplateAlias[];
+}

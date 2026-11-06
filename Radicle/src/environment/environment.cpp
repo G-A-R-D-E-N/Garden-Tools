@@ -132,11 +132,33 @@ Environment Environment::from_plugins(std::vector<Plugin> ordered_plugins) {
   for (const auto& plugin : env.loaded_) known.push_back({plugin.key, kind_of(plugin)});
   for (auto& plugin : env.loaded_) apply_master_kinds(plugin, known);
 
-  env.plugins_.reserve(env.loaded_.size());
-  env.plugin_records_.resize(env.loaded_.size());
+  env.view_.reserve(env.loaded_.size());
+  for (const auto& plugin : env.loaded_) env.view_.push_back(&plugin);
+  env.index_plugins();
+  return env;
+}
+
+Environment Environment::borrow(std::span<const Plugin* const> ordered) {
+  Environment env;
+  env.view_.reserve(ordered.size());
+  std::set<PluginKey> seen;
+  for (const auto* plugin : ordered) {
+    if (plugin == nullptr) throw EnvironmentError("null plugin in borrowed load order");
+    if (plugin->key.empty() || !seen.insert(plugin->key).second) {
+      throw EnvironmentError("duplicate or unnamed plugin in load order: " + utf8(plugin->path));
+    }
+    env.view_.push_back(plugin);
+  }
+  env.index_plugins();
+  return env;
+}
+
+void Environment::index_plugins() {
+  plugins_.reserve(view_.size());
+  plugin_records_.resize(view_.size());
   std::set<PluginKey> earlier;
-  for (std::size_t index = 0; index < env.loaded_.size(); ++index) {
-    const auto& plugin = env.loaded_[index];
+  for (std::size_t index = 0; index < view_.size(); ++index) {
+    const auto& plugin = *view_[index];
     PluginInfo info;
     info.key = plugin.key;
     info.path = plugin.path;
@@ -147,33 +169,32 @@ Environment Environment::from_plugins(std::vector<Plugin> ordered_plugins) {
       info.masters.push_back(master.key);
       if (!earlier.contains(master.key)) info.unresolved_masters.push_back(master.key);
     }
-    env.plugins_.push_back(std::move(info));
+    plugins_.push_back(std::move(info));
     earlier.insert(plugin.key);
 
-    env.contexts_.push_back(plugin_form_id_context(plugin));
-    env.owners_.insert(plugin.key);
-    for (const auto& master : plugin.header.masters) env.owners_.insert(master.key);
+    contexts_.push_back(plugin_form_id_context(plugin));
+    owners_.insert(plugin.key);
+    for (const auto& master : plugin.header.masters) owners_.insert(master.key);
     for (const auto& group : plugin.groups) {
-      env.index_group(index, group, RecordRef::k_no_container, RecordRef::k_no_container);
+      index_group(index, group, RecordRef::k_no_container, RecordRef::k_no_container);
     }
   }
 
   // Version vectors are final now, so pointers into them stay valid.
-  env.world_members_.resize(env.containers_.size());
-  env.cell_members_.resize(env.containers_.size());
-  for (std::size_t index = 0; index < env.loaded_.size(); ++index) {
-    for (const auto& key : env.plugin_records_[index]) {
-      for (const auto& ref : env.versions_.at(key)) {
+  world_members_.resize(containers_.size());
+  cell_members_.resize(containers_.size());
+  for (std::size_t index = 0; index < view_.size(); ++index) {
+    for (const auto& key : plugin_records_[index]) {
+      for (const auto& ref : versions_.at(key)) {
         if (ref.plugin != index) continue;
         if (ref.cell != RecordRef::k_no_container) {
-          env.cell_members_[ref.cell].push_back(&ref);
+          cell_members_[ref.cell].push_back(&ref);
         } else if (ref.world != RecordRef::k_no_container) {
-          env.world_members_[ref.world].push_back(&ref);
+          world_members_[ref.world].push_back(&ref);
         }
       }
     }
   }
-  return env;
 }
 
 std::uint32_t Environment::intern_container(std::size_t plugin, const GroupHeader& header) {
@@ -181,10 +202,10 @@ std::uint32_t Environment::intern_container(std::size_t plugin, const GroupHeade
   try {
     key = resolve_plugin_form_id(RawFormId{header.label_as_u32()}, contexts_[plugin]);
   } catch (const std::exception& error) {
-    throw EnvironmentError("unresolvable group label in " + utf8(loaded_[plugin].path) + ": " + error.what());
+    throw EnvironmentError("unresolvable group label in " + utf8(view_[plugin]->path) + ": " + error.what());
   }
   if (key.owner().empty()) {
-    throw EnvironmentError("null group label in " + utf8(loaded_[plugin].path));
+    throw EnvironmentError("null group label in " + utf8(view_[plugin]->path));
   }
   const auto [it, inserted] =
       container_index_.try_emplace(key, static_cast<std::uint32_t>(containers_.size()));
@@ -208,13 +229,13 @@ void Environment::index_group(std::size_t plugin,
     if (record.form_key.owner().empty()) {
       if (record.header.form_id.is_null()) continue;
       throw EnvironmentError(std::format("record {:08X} in {} uses master index {} past its {}-entry master table",
-                                         record.header.form_id.value(), utf8(loaded_[plugin].path),
+                                         record.header.form_id.value(), utf8(view_[plugin]->path),
                                          record.header.form_id.index_byte(), contexts_[plugin].masters.size()));
     }
     auto& versions = versions_[record.form_key];
     if (!versions.empty() && versions.back().plugin == plugin) {
       throw EnvironmentError("record " + record.form_key.to_string() + " appears more than once in " +
-                             utf8(loaded_[plugin].path));
+                             utf8(view_[plugin]->path));
     }
     versions.push_back({plugin, &record, type, world, cell});
     plugin_records_[plugin].push_back(record.form_key);
@@ -246,7 +267,7 @@ const RecordRef* Environment::winner(const FormKey& key) const noexcept {
 const RecordRef* Environment::find_by_editor_id(std::string_view editor_id,
                                                 std::optional<Signature> signature) const {
   if (editor_id.find_first_not_of(" \t\r\n\v\f") == std::string_view::npos) return nullptr;
-  for (std::size_t index = loaded_.size(); index-- > 0;) {
+  for (std::size_t index = view_.size(); index-- > 0;) {
     for (const auto& key : plugin_records_[index]) {
       for (const auto& ref : versions(key)) {
         if (ref.plugin != index) continue;
@@ -261,7 +282,7 @@ const RecordRef* Environment::find_by_editor_id(std::string_view editor_id,
 
 std::vector<const RecordRef*> Environment::winners_of(Signature signature) const {
   std::vector<const RecordRef*> result;
-  for (std::size_t index = loaded_.size(); index-- > 0;) {
+  for (std::size_t index = view_.size(); index-- > 0;) {
     for (const auto& key : plugin_records_[index]) {
       const auto* win = winner(key);
       if (win == nullptr || win->plugin != index) continue;
@@ -386,7 +407,7 @@ const RecordRef* Environment::cell_landscape(const FormKey& cell) const {
 
 RecordMetadata Environment::metadata(const RecordRef& ref) const {
   const auto& record = *ref.record;
-  const auto& owner = loaded_.at(ref.plugin);
+  const auto& owner = plugin(ref.plugin);
   RecordMetadata meta;
   meta.form_key = record.form_key;
   meta.signature = record.header.signature;

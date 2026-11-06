@@ -207,6 +207,18 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
               {"alias", "integer", true}, {"element", "integer", true}})) return false;
     if (!add("remove_script_property", "Remove one property from a script in memory by property index. Call save_plugin to persist", "backend", "RemoveScriptProperty",
              {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}, {"property_index", "integer"}})) return false;
+    if (!add("set_info_fragment", "Bind or replace one INFO script fragment in memory. index is 0 OnBegin or 1 OnEnd; the VMAD and its fragment section are created when absent. Call save_plugin to persist", "backend", "SetInfoFragment",
+             {{"plugin", "string"}, {"info_form_key", "string"}, {"index", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
+    if (!add("add_info_fragment", "Add one INFO script fragment at index in memory; refuses when that index is already bound and when the record has no fragment section yet (use set_info_fragment to create it). index is 0 OnBegin or 1 OnEnd. Call save_plugin to persist", "backend", "AddInfoFragment",
+             {{"plugin", "string"}, {"info_form_key", "string"}, {"index", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
+    if (!add("remove_info_fragment", "Remove the INFO script fragment at index in memory and clear its flag bit. Call save_plugin to persist", "backend", "RemoveInfoFragment",
+             {{"plugin", "string"}, {"info_form_key", "string"}, {"index", "integer"}})) return false;
+    if (!add("set_scene_phase_fragment", "Bind or replace a scene phase script fragment in memory. phase_flag is 1 for start and 2 for completion. Call save_plugin to persist", "backend", "SetScenePhaseFragment",
+             {{"plugin", "string"}, {"scene_form_key", "string"}, {"phase_index", "integer"}, {"phase_flag", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
+    if (!add("add_scene_phase_fragment", "Add a scene phase script fragment in memory at phase_index and phase_flag; refuses when that pair is already bound and when the scene has no fragment section yet (use set_scene_phase_fragment to create it). phase_flag is 1 for start and 2 for completion. Call save_plugin to persist", "backend", "AddScenePhaseFragment",
+             {{"plugin", "string"}, {"scene_form_key", "string"}, {"phase_index", "integer"}, {"phase_flag", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
+    if (!add("remove_scene_phase_fragment", "Remove a scene phase script fragment in memory by phase_index and phase_flag (1 start, 2 completion). Call save_plugin to persist", "backend", "RemoveScenePhaseFragment",
+             {{"plugin", "string"}, {"scene_form_key", "string"}, {"phase_index", "integer"}, {"phase_flag", "integer"}})) return false;
     if (!add("add_alias_script", "Add a script to a QUST quest alias in memory, creating the alias entry (at its ascending alias_id position, with one script) when the quest has none for alias_id. script is the Papyrus script name; flags is the optional script flags byte and index the optional script-list position within the alias. Call save_plugin to persist", "backend", "AddAliasScript",
              {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script", "string"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
     if (!add("remove_alias_script", "Remove one script from a QUST quest alias in memory by script index. Removing the alias's last script removes the whole alias entry. Call save_plugin to persist", "backend", "RemoveAliasScript",
