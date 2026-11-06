@@ -246,6 +246,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
         const auto lowered = light ? fo4::lowered_light_next_form_id(loaded->plugin) : std::nullopt;
         auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
         loaded->plugin = std::move(mutated);
+        dropBorrowedEnvironmentLocked();
         loaded->dirty = true;
         ++mutationEpoch_;
 

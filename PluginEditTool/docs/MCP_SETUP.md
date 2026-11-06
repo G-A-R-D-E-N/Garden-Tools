@@ -231,6 +231,7 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `get_texture` | `rel_model_path`, `rel_tex_path` | no | Editor query: get texture. Same RPC the desktop editor uses. |
 | `get_placed_references` | `cell_id` | no | Editor query: get placed references. Placed-reference or cell operation. |
 | `get_placed_references_at_grid` | `worldspace`, `grid_x`, `grid_y` | no | Editor query: get placed references at grid. Placed-reference or cell operation. |
+| `resolve_worldspace` | `cell_id` | no | Editor query: resolve the worldspace that owns a cell. Placed-reference or cell operation. |
 | `search_worldspaces` | `query`, [`limit`] | no | Editor query: search worldspaces. Placed-reference or cell operation. |
 | `get_geometry_batch` | `rel_model_paths_json` | no | Editor query: get geometry batch. Same RPC the desktop editor uses. |
 | `search_cells` | `query`, [`limit`] | no | Editor query: search cells. Placed-reference or cell operation. |

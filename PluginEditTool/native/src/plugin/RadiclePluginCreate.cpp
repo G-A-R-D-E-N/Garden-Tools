@@ -276,6 +276,7 @@ Result<RadiclePluginBackend::LoadedPlugin*> RadiclePluginBackend::createPluginLo
             .dirty = false,
             .stagedLocalization = std::nullopt,
         });
+        dropBorrowedEnvironmentLocked();
         try {
             markGraphDirtyLocked();
         } catch (...) {
@@ -370,10 +371,12 @@ Result<void> RadiclePluginBackend::discardCreatedPlugin(std::string_view name) {
     const auto index = static_cast<std::size_t>(std::distance(plugins_.begin(), it));
     auto removed = std::move(*it);
     plugins_.erase(plugins_.begin() + static_cast<std::ptrdiff_t>(index));
+    dropBorrowedEnvironmentLocked();
     try {
         markGraphDirtyLocked();
     } catch (const std::exception& error) {
         plugins_.insert(plugins_.begin() + static_cast<std::ptrdiff_t>(index), std::move(removed));
+        dropBorrowedEnvironmentLocked();
         try {
             markGraphDirtyLocked();
         } catch (...) {
@@ -385,6 +388,7 @@ Result<void> RadiclePluginBackend::discardCreatedPlugin(std::string_view name) {
     const bool removedFile = std::filesystem::remove(canonicalPath, removeEc);
     if (removeEc || !removedFile) {
         plugins_.insert(plugins_.begin() + static_cast<std::ptrdiff_t>(index), std::move(removed));
+        dropBorrowedEnvironmentLocked();
         try {
             markGraphDirtyLocked();
         } catch (...) {

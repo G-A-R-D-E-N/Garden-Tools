@@ -27,6 +27,8 @@
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
+namespace fo4::env { class Environment; }
+
 namespace fo4ide::plugin {
 
 #if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
@@ -122,6 +124,7 @@ public:
     Result<nlohmann::json> lootCleaningReport(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> resolveWorldspace(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
     Result<nlohmann::json> createPlacedObject(const nlohmann::json& arguments) override;
     Result<nlohmann::json> createInteriorCell(const nlohmann::json& arguments) override;
@@ -575,6 +578,8 @@ private:
     void markGraphDirtyLocked() const;
     void reapIdleConflictGraph(std::stop_token stop_token);
     void dropConflictGraphLocked() const;
+    std::shared_ptr<const fo4::env::Environment> borrowedEnvironment() const;
+    void dropBorrowedEnvironmentLocked();
     std::string dirtyPluginListLocked() const;
 
     // Constraint: references from this proxy must not be held across a stage, because the next access may rebuild the graph.
@@ -601,6 +606,9 @@ private:
     ConflictGraphProxy graph_{this};
     mutable std::mutex graphMutex_;
     mutable std::shared_ptr<const fo4::ConflictGraph> graphStorage_;
+    mutable std::mutex environmentMutex_;
+    mutable std::shared_ptr<const fo4::env::Environment> borrowedEnvironment_;
+    mutable std::uint64_t borrowedEnvironmentEpoch_{0};
     mutable bool graphDirty_{true};
     mutable std::chrono::steady_clock::time_point graphLastUse_{};
     mutable std::chrono::seconds graphIdleLimit_{60};
