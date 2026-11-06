@@ -1,5 +1,6 @@
 #include "RadiclePluginSupport.hpp"
 #include "RadiclePluginQuestInternal.hpp"
+#include "RadiclePluginFragmentSupport.hpp"
 
 #include <fo4ide/plugin/ConditionCodec.hpp>
 
@@ -212,7 +213,7 @@ const fo4::Subrecord* firstOfIn(const fo4::Record& record, std::size_t begin, st
 }
 
 nlohmann::json phaseJson(const fo4::Plugin& plugin, const fo4::Record& record, std::size_t index,
-                         const PhaseSpan& span) {
+                         const PhaseSpan& span, const fo4::SceneVmadExtras* fragments) {
     nlohmann::json phase{{"index", index}};
     if (const auto* name = firstOfIn(record, span.open + 1, span.close,
                                      fo4::Signature::from_string("NAM0")); name != nullptr) {
@@ -237,6 +238,17 @@ nlohmann::json phaseJson(const fo4::Plugin& plugin, const fo4::Record& record, s
     putConditions(phase, "startConditions", plugin, conditionsIn(record, span.open + 1, span.firstNext));
     putConditions(phase, "completionConditions", plugin,
                   conditionsIn(record, span.firstNext + 1, span.secondNext));
+    if (fragments != nullptr) {
+        for (const auto& fragment : fragments->phases) {
+            if (fragment.index != index) continue;
+            nlohmann::json binding{{"script", fragment.script}, {"function", fragment.function}};
+            if (fragment.flag == 1) {
+                phase["startFragment"] = std::move(binding);
+            } else if (fragment.flag == 2) {
+                phase["completionFragment"] = std::move(binding);
+            }
+        }
+    }
     return phase;
 }
 
@@ -466,8 +478,10 @@ nlohmann::json sceneJson(const fo4::Plugin& plugin, const fo4::Record& record) {
         flags != nullptr && sized(*flags, 4)) {
         out["flags"] = readAt<std::uint32_t>(flags->data, 0);
     }
+    const auto sceneFragments = fragmentread::read_scene_fragments(record);
+    const auto* fragments = sceneFragments ? &*sceneFragments : nullptr;
     for (std::size_t index = 0; index < layout->phases.size(); ++index) {
-        out["phases"].push_back(phaseJson(plugin, record, index, layout->phases[index]));
+        out["phases"].push_back(phaseJson(plugin, record, index, layout->phases[index], fragments));
     }
     for (std::size_t index = 0; index < layout->actors.size(); ++index) {
         out["actors"].push_back(actorJson(record, layout->actors[index]));
