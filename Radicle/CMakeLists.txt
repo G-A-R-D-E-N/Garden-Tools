@@ -280,6 +280,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/graph/reachability.cpp
   src/environment/environment.cpp
   src/environment/cell_view.cpp
+  src/environment/cell_references.cpp
   src/environment/world.cpp
   src/environment/region.cpp
   src/environment/placed.cpp
