@@ -1186,6 +1186,10 @@ int main() {
   printf("DialogueTopicSpec.Category %zu\n", offsetof(radicle_dialogue_topic_spec, category));
   printf("DialogueTopicSpec.Subtype %zu\n", offsetof(radicle_dialogue_topic_spec, subtype));
   printf("DialogueTopicSpec.SubtypeName %zu\n", offsetof(radicle_dialogue_topic_spec, subtype_name));
+  printf("SceneSpec %zu\n", sizeof(radicle_scene_spec));
+  printf("SceneSpec.EditorId %zu\n", offsetof(radicle_scene_spec, editor_id));
+  printf("SceneSpec.Flags %zu\n", offsetof(radicle_scene_spec, flags));
+  printf("SceneSpec.Index %zu\n", offsetof(radicle_scene_spec, index));
   printf("DialogueResponseSpec %zu\n", sizeof(radicle_dialogue_response_spec));
   printf("DialogueResponseSpec.Text %zu\n", offsetof(radicle_dialogue_response_spec, text));
   printf("DialogueResponseSpec.ScriptNotes %zu\n", offsetof(radicle_dialogue_response_spec, script_notes));
