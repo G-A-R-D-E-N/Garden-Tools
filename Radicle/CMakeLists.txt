@@ -402,6 +402,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/pex_analysis/script_set.cpp
+  src/pex_analysis/script_library.cpp
   src/abc/abc_file.cpp
   src/abc/abc_write.cpp
   src/abc/byte_reader.cpp
@@ -1020,10 +1021,12 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_structs.cpp
     tests/test_papyrus_runtime.cpp
     tests/test_papyrus_save_state.cpp
+    tests/test_papyrus_attach_remote.cpp
     tests/test_papyrus_quest_rules.cpp
     tests/test_c_api_papyrus.cpp
     tests/test_c_api_papyrus_save_quest.cpp
     tests/test_c_api_papyrus_runtime.cpp
+    tests/test_c_api_papyrus_attach_remote.cpp
     tests/test_c_api_script_set.cpp
     tests/test_pex_analysis.cpp
     tests/test_pex_analysis_c_api.cpp
