@@ -1,7 +1,9 @@
 #include "fo4/forms/cell_edit.hpp"
 
 #include "fo4/forms/cell.hpp"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/record_flags.hpp"
 #include "placed_reference_copy_internal.hpp"
 
 #include <optional>
@@ -46,6 +48,16 @@ void ensure_move_target(Plugin& next,
     if (!metadata.deleted) copy_cell_as_override(next, env.plugin(cell->plugin), metadata.form_key);
     return;
   }
+}
+
+std::optional<FormKey> patch_cell_of(const Plugin& patch, const FormKey& reference) {
+  const auto located = detail::locate_record(patch, reference);
+  for (const auto* group : located.path) {
+    if (group->header.group_type == static_cast<std::int32_t>(GroupType::cell_children)) {
+      return resolve_plugin_form_id(RawFormId{group->header.label_as_u32()}, plugin_form_id_context(patch));
+    }
+  }
+  return std::nullopt;
 }
 
 }  // namespace
@@ -153,6 +165,81 @@ PlacedReferenceEditResult edit_placed_reference(Plugin& patch,
   next.original_range.clear();
   patch = std::move(next);
   return {PlacedReferenceEditStatus::edited, copied_from, relocated, {}};
+}
+
+DuplicateResult duplicate_placed_reference(Plugin& patch,
+                                           const fo4::env::Environment& env,
+                                           const FormKey& reference,
+                                           const DuplicateOptions& options) {
+  const auto* local = find_record(patch, reference);
+  const auto* winner = env.winner(reference);
+  if (local == nullptr && winner == nullptr) return {DuplicateStatus::reference_missing, {}};
+  const auto deleted = local != nullptr ? local->header.flags.is_deleted()
+                                        : winner->record->header.flags.is_deleted();
+  if (deleted) return {DuplicateStatus::reference_deleted, {}};
+  const auto cell = local != nullptr ? patch_cell_of(patch, reference) : env.cell_of(*winner);
+  if (!cell.has_value()) return {DuplicateStatus::parent_cell_missing, {}};
+
+  auto next = patch;
+  if (find_record(patch, *cell) == nullptr) {
+    const auto* cell_winner = env.winner(*cell);
+    if (cell_winner == nullptr || cell_winner->record->header.flags.is_deleted()) {
+      return {DuplicateStatus::parent_cell_missing, {}};
+    }
+    copy_cell_as_override(next, env.plugin(cell_winner->plugin), *cell);
+  }
+
+  const auto patch_copy = local != nullptr ? std::optional<Plugin>{patch} : std::nullopt;
+  const auto& source = patch_copy ? *patch_copy : env.plugin(winner->plugin);
+  const auto copied = copy_placed_reference_as_new(next, source, reference);
+  if (copied.status == PlacedReferenceCopyNewStatus::source_missing) {
+    return {DuplicateStatus::reference_missing, {}};
+  }
+  if (copied.status == PlacedReferenceCopyNewStatus::unsupported_signature) {
+    return {DuplicateStatus::unsupported_signature, {}};
+  }
+  if (copied.status == PlacedReferenceCopyNewStatus::parent_cell_missing) {
+    return {DuplicateStatus::parent_cell_missing, {}};
+  }
+
+  const auto new_key = copied.new_reference;
+  if (!options.keep_editor_id) require_applied(set_placed_reference_editor_id(next, new_key, ""));
+  const auto view = decode_placed_reference(next, *find_record(next, new_key));
+  if (!view.has_value()) throw PlacedReferenceError("duplicated placed reference is malformed");
+  auto transform = view->transform;
+  transform.x += options.offset.x;
+  transform.y += options.offset.y;
+  transform.z += options.offset.z;
+  transform.rx += options.offset.rx;
+  transform.ry += options.offset.ry;
+  transform.rz += options.offset.rz;
+  require_applied(set_placed_reference_transform(next, new_key, transform));
+
+  next.original_range.clear();
+  patch = std::move(next);
+  return {DuplicateStatus::duplicated, new_key};
+}
+
+DeleteResult delete_placed_reference(Plugin& patch,
+                                     const fo4::env::Environment& env,
+                                     const FormKey& reference) {
+  if (reference.owner() == patch.key) {
+    const auto removed = delete_local_record(patch, reference);
+    if (removed == RecordDeleteStatus::deleted) return {DeleteStatus::deleted};
+    if (removed == RecordDeleteStatus::referenced) return {DeleteStatus::referenced};
+    return {DeleteStatus::reference_missing};
+  }
+
+  auto next = patch;
+  const auto ensured = ensure_reference_override(next, env, reference);
+  if (ensured.status == EnsureOverrideStatus::reference_missing) return {DeleteStatus::reference_missing};
+  if (ensured.status == EnsureOverrideStatus::reference_deleted) return {DeleteStatus::already_deleted};
+  const auto marked = mark_override_deleted(next, reference);
+  if (marked == MarkDeletedStatus::already_deleted) return {DeleteStatus::already_deleted};
+  if (marked != MarkDeletedStatus::marked) return {DeleteStatus::reference_missing};
+  next.original_range.clear();
+  patch = std::move(next);
+  return {DeleteStatus::marked_deleted};
 }
 
 }  // namespace fo4::forms
