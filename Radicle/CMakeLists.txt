@@ -307,6 +307,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/papyrus/sha256.cpp
   src/papyrus/save_state.cpp
   src/papyrus/quest_rules.cpp
+  src/papyrus/quest_lifecycle.cpp
+  src/papyrus/quest_alias_lifecycle.cpp
+  src/papyrus/event_fanout.cpp
   src/papyrus/runtime.cpp
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
@@ -544,7 +547,7 @@ set(RADICLE_C_SOURCES
   src/c_api_nif.cpp src/c_api_dds.cpp
   src/c_api_graph.cpp src/c_api_papyrus_source.cpp
   src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp
-  src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp
+  src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp src/c_api_papyrus_lifecycle.cpp
   src/c_api_papyrus_compiler.cpp src/c_api_papyrus_analysis.cpp
   src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp
   src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_verbs.cpp src/c_api_swf_abc_write.cpp
@@ -1023,6 +1026,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_save_state.cpp
     tests/test_papyrus_attach_remote.cpp
     tests/test_papyrus_quest_rules.cpp
+    tests/test_papyrus_quest_lifecycle.cpp
+    tests/test_papyrus_event_fanout.cpp
+    tests/test_c_api_papyrus_lifecycle.cpp
     tests/test_c_api_papyrus.cpp
     tests/test_c_api_papyrus_save_quest.cpp
     tests/test_c_api_papyrus_runtime.cpp
