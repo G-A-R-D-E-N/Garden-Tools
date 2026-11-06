@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { diffDraft, type Run, type SceneChanges } from './sceneChanges';
 import {
-  ACTION_FLAGS, actionTitle, aliasLabel, payloadFieldsFor, phaseName, typeLabel, unrestorableReason,
+  ACTION_FLAGS, actionTitle, aliasLabel, payloadFieldsFor, phaseName, typeLabel, toNumber, unrestorableReason,
   type SceneAction, type SceneDto, type Spec,
 } from './sceneModel';
-import { Field, FlagBoxes, Notice, RemovePanel, toNumber } from './sceneFormParts';
+import { Field, FlagBoxes, Notice, RemovePanel } from './sceneFormParts';
 
 interface Props {
   scene: SceneDto;

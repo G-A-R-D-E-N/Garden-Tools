@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Undo2 } from 'lucide-react';
 import { getBackend } from '../../backend';
 import ConditionsEditor from '../../ConditionsEditor';
@@ -35,16 +35,16 @@ export default function SceneWorkspace({ sceneKey, plugin, onPickScene }: Props)
   const [conditions, setConditions] = useState<ConditionsTarget | null>(null);
   const changes = b && sceneKey ? sceneChanges(b, plugin, sceneKey) : null;
 
-  const load = useCallback(() => {
+  const load = () => {
     if (!b || !sceneKey) return Promise.resolve();
     return Promise.resolve()
       .then(() => b.GetScene(plugin, sceneKey))
       .then(raw => { setScene(parseScene(raw)); setLoadError(null); })
       .catch(e => setLoadError(errorText(e)))
       .finally(() => setRevision(current => current + 1));
-  }, [b, sceneKey, plugin]);
+  };
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [b, sceneKey, plugin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const replay = (step: () => Promise<void>) => () => {
     setFailure(null);

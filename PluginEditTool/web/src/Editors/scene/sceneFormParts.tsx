@@ -3,11 +3,6 @@ import { Trash2 } from 'lucide-react';
 import HelpTip from '../help/HelpTip';
 import { hasBit, plural, withBit, type FlagName } from './sceneModel';
 
-export const toNumber = (text: string): number => {
-  const value = Number(text);
-  return Number.isFinite(value) ? value : 0;
-};
-
 export function Field({ label, topic, children }: { label: string; topic: string; children: (id: string) => ReactNode }) {
   const id = useId();
   return (

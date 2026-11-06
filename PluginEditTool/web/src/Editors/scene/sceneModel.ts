@@ -216,3 +216,8 @@ export function actionColumns(action: SceneAction, phaseCount: number): { first:
   const clamp = (value: number) => Math.min(Math.max(value, 0), phaseCount - 1);
   return { first: clamp(Math.min(start, end)), last: clamp(Math.max(start, end)) };
 }
+
+export const toNumber = (text: string): number => {
+  const value = Number(text);
+  return Number.isFinite(value) ? value : 0;
+};
