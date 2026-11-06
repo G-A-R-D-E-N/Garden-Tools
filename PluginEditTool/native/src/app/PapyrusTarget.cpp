@@ -402,6 +402,11 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
     } catch (const fo4::papyrus::CompileStagingError& ex) {
         return nlohmann::json(ex.what());
     }
+    struct StagingCleanup {
+        const fo4::papyrus::CompilePlan& plan;
+        ~StagingCleanup() { fo4::papyrus::removeCompileStaging(plan); }
+    };
+    const StagingCleanup stagingCleanup{plan};
 
     auto flags = stripQuotes(stringArgument(args, 3));
     if (flags.empty()) flags = "Institute_Papyrus_Flags.flg";
@@ -486,7 +491,6 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
         const auto hint = diagnoseDependencies(combined);
         if (!hint.empty()) sb << "\n" << hint;
     }
-    fo4::papyrus::removeCompileStaging(plan);
     return nlohmann::json(sb.str());
 }
 

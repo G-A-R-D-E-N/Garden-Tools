@@ -65,6 +65,20 @@ std::vector<std::uint8_t> readFileBytes(const std::filesystem::path& path) {
                                      std::istreambuf_iterator<char>());
 }
 
+#ifdef _WIN32
+bool isJunctionOrSymlink(const std::filesystem::path& path) {
+    WIN32_FIND_DATAW data{};
+    const auto handle = FindFirstFileW(path.c_str(), &data);
+    if (handle == INVALID_HANDLE_VALUE) {
+        throw std::runtime_error("Cannot inspect '" + path.string() + "': Windows error " +
+                                 std::to_string(GetLastError()));
+    }
+    FindClose(handle);
+    return (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 &&
+           (data.dwReserved0 == IO_REPARSE_TAG_MOUNT_POINT || data.dwReserved0 == IO_REPARSE_TAG_SYMLINK);
+}
+#endif
+
 std::vector<std::filesystem::path> enumeratePexFiles(const std::filesystem::path& root) {
     std::vector<std::filesystem::path> files;
     std::vector<std::filesystem::path> stack{root};
@@ -81,15 +95,10 @@ std::vector<std::filesystem::path> enumeratePexFiles(const std::filesystem::path
             const auto status = entry.symlink_status(statusEc);
             if (statusEc) throw std::runtime_error("Cannot inspect '" + entry.path().string() + "': " + statusEc.message());
             if (std::filesystem::is_symlink(status)) continue;
-#ifdef _WIN32
-            const auto attributes = GetFileAttributesW(entry.path().c_str());
-            if (attributes == INVALID_FILE_ATTRIBUTES) {
-                throw std::runtime_error("Cannot inspect '" + entry.path().string() + "': Windows error " +
-                                         std::to_string(GetLastError()));
-            }
-            if (attributes & FILE_ATTRIBUTE_REPARSE_POINT) continue;
-#endif
             if (std::filesystem::is_directory(status)) {
+#ifdef _WIN32
+                if (isJunctionOrSymlink(entry.path())) continue;
+#endif
                 stack.push_back(entry.path());
             } else if (std::filesystem::is_regular_file(status) &&
                        endsWithIgnoreCase(entry.path().extension().string(), ".pex")) {
@@ -266,14 +275,16 @@ std::string DecompileService::decompile(const std::string& source, const std::st
         const auto outDir = output.empty()
                                 ? std::filesystem::absolute(source).parent_path().string()
                                 : output;
+        const auto stem = std::filesystem::path(source).stem().string();
         std::string outPath;
         try {
-            outPath = namespacedOutPath(outDir, text,
-                                        std::filesystem::path(source).stem().string(), ext,
-                                        assembly);
+            outPath = namespacedOutPath(outDir, text, stem, ext, assembly);
             writeFileText(outPath, text);
         } catch (const std::exception& ex) {
-            return ("Cannot write '" + outPath + "': " + ex.what());
+            const auto target = outPath.empty()
+                                    ? (std::filesystem::path(outDir) / (stem + ext)).string()
+                                    : outPath;
+            return ("Cannot write '" + target + "': " + ex.what());
         }
         return ("SAVED -> " + outPath + "\n\n--- preview (first 40 lines) ---\n" +
                               firstLines(text, 40));
