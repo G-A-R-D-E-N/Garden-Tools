@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { Backend } from '../../backend';
 import { buildFlowChart, type FlowArrow, type FlowChart } from './flowChartModel';
-import { parseStageJumps, readStageJumps } from './questBackend';
+import { parseStageJumps, readFragments } from './questBackend';
 import type { QuestObjective, QuestStage } from './questModel';
 
 const stage = (index: number, logText = '', flags = 0): QuestStage =>
@@ -118,7 +118,7 @@ it('Detects: a script whose source cannot be read is skipped, and the other scri
       return JSON.stringify({ script: name, source: 'Function Fragment_Stage_0020_Item_00()\n  SetStage(40)\nEndFunction' });
     },
   };
-  expect(await readStageJumps(backend as unknown as Backend, 'Patch.esp', '000800:Patch.esp'))
+  expect((await readFragments(backend as unknown as Backend, 'Patch.esp', '000800:Patch.esp')).jumps)
     .toEqual([{ from: 20, to: 40, function: 'Fragment_Stage_0020_Item_00' }]);
 });
 
@@ -130,7 +130,7 @@ it('Detects: the imports folder is passed to GetQuestScript, so a script written
     ]),
     GetQuestScript,
   };
-  await readStageJumps(backend as unknown as Backend, 'Patch.esp', '000800:Patch.esp', 'C:/Out');
+  await readFragments(backend as unknown as Backend, 'Patch.esp', '000800:Patch.esp', 'C:/Out');
   expect(GetQuestScript).toHaveBeenCalledWith('QF_Courier', 'C:/Out');
 });
 

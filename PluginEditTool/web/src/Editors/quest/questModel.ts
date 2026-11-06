@@ -133,10 +133,16 @@ export function toggleBit(flags: number, bit: number, on: boolean): number {
   return on ? flags | bit : flags & ~bit;
 }
 
-export function duplicateObjectiveNumbers(objectives: QuestObjective[]): number[] {
+export const normalizeFormKey = (formKey: string) => formKey.trim().toLowerCase();
+
+export function duplicateNumbers(values: number[]): number[] {
   const counts = new Map<number, number>();
-  for (const objective of objectives) counts.set(objective.index, (counts.get(objective.index) ?? 0) + 1);
-  return [...counts].filter(([, count]) => count > 1).map(([index]) => index).sort((a, b) => a - b);
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts].filter(([, count]) => count > 1).map(([value]) => value).sort((a, b) => a - b);
+}
+
+export function duplicateObjectiveNumbers(objectives: QuestObjective[]): number[] {
+  return duplicateNumbers(objectives.map(objective => objective.index));
 }
 
 export function duplicateObjectiveWarning(objectives: QuestObjective[]): string {

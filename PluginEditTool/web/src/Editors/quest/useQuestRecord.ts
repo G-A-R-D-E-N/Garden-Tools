@@ -3,7 +3,7 @@ import { getBackend } from '../../backend';
 import { errorText } from '../../errors';
 import { friendlyError, type FriendlyMessage } from '../friendlyErrors';
 import type { UndoEntry } from '../useUndoStack';
-import { readQuest, readStageJumps, writeAliases, writeObjectives, writeStages, type QuestSnapshot } from './questBackend';
+import { readFragments, readQuest, writeAliases, writeObjectives, writeStages, type QuestSnapshot } from './questBackend';
 import type { QuestAlias, QuestObjective, QuestStage, StageEdit } from './questModel';
 
 export function useQuestRecord(plugin: string, formKey: string, push: (entry: UndoEntry) => void) {
@@ -11,7 +11,7 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
   const [snapshot, setSnapshot] = useState<QuestSnapshot | null>(null);
   const [error, setError] = useState<FriendlyMessage | null>(() => (backend ? null : { text: 'No backend bridge.' }));
   const latestStages = useRef<QuestStage[]>([]);
-  const jumpRequest = useRef(0);
+  const fragmentRequest = useRef(0);
 
   useEffect(() => {
     if (!backend) return;
@@ -72,13 +72,17 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
     commit(label, snapshot.aliases, next, value => writeAliases(backend, plugin, formKey, value), storeField('aliases'));
   };
 
-  const refreshJumps = (importsDir: string) => {
+  const refreshFragments = (importsDir: string) => {
     if (!backend) return;
-    const request = ++jumpRequest.current;
-    readStageJumps(backend, plugin, formKey, importsDir).then(jumps => {
-      if (request === jumpRequest.current) storeField('jumps')(jumps);
-    }, () => undefined);
+    const request = ++fragmentRequest.current;
+    readFragments(backend, plugin, formKey, importsDir).then(fragments => {
+      if (request !== fragmentRequest.current) return;
+      storeField('jumps')(fragments.jumps);
+      storeField('fragmentScripts')(fragments.scripts);
+    }, () => {
+      if (request === fragmentRequest.current) storeField('fragmentScripts')(null);
+    });
   };
 
-  return { snapshot, error, commitStages, editStages, commitObjectives, commitAliases, refreshJumps };
+  return { snapshot, error, commitStages, editStages, commitObjectives, commitAliases, refreshFragments };
 }

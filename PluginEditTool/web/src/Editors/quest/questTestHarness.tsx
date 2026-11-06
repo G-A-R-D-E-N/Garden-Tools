@@ -29,6 +29,9 @@ export function stubBackend(overrides: Record<string, unknown> = {}) {
       async () => ({ script: 'QF_Courier_0010', function: 'Fragment_Stage_0010_Item_00', source: 'C:/Out/QF_Courier_0010.psc', pex: 'C:/Out/QF_Courier_0010.pex' })),
     GetQuestFragments: vi.fn(async () => '[]'),
     GetQuestScript: vi.fn(async () => { throw new Error('QuestScriptNotFound'); }),
+    GetDialogue: vi.fn(async () => '{"branches":[],"topics":[]}'),
+    GetReferencedBy: vi.fn(async () => '[]'),
+    CheckForErrors: vi.fn(async () => '[]'),
     ...overrides,
   };
   vi.stubGlobal('chrome', { webview: { hostObjects: { backend } } });

@@ -67,6 +67,9 @@ function firstJournalLine(stage: QuestStage): string {
   return entry ? journalLine(entry.logText) : '';
 }
 
+export const isProblemStage = (stage: QuestStage, objectiveNumbers: ReadonlySet<number>) =>
+  firstJournalLine(stage) === '' && !objectiveNumbers.has(stage.index);
+
 export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[], jumps: StageJump[] = []): FlowChart {
   const ordered = [...stages].sort((a, b) => a.index - b.index);
   const objectiveNumbers = new Set(objectives.map(objective => objective.index));
@@ -91,7 +94,7 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
       ...endings.map(ending => ending.badge),
     ];
     const id = stageId(stage.index);
-    const state: FlowState = !text && !objectiveNumbers.has(stage.index) ? 'problem' : endings.length > 0 ? 'ending' : 'ok';
+    const state: FlowState = isProblemStage(stage, objectiveNumbers) ? 'problem' : endings.length > 0 ? 'ending' : 'ok';
     boxes.push({
       id, kind: 'stage', stageIndex: stage.index, x, y: top, width: BOX_WIDTH, height: STAGE_HEIGHT, text, badges, state,
     });
