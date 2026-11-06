@@ -179,6 +179,14 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
         auto backendLoad = plugins_.invoke(
             "environment.LoadMo2", backendEnvironment(*loaded, discardPending));
         if (!backendLoad) return std::unexpected(backendLoad.error());
+        if (backendLoad->is_object()) {
+            for (const auto& warning : backendLoad->value("warnings", nlohmann::json::array())) {
+                if (!warning.is_object()) continue;
+                const auto plugin = warning.value("plugin", std::string{});
+                const auto text = warning.value("warning", std::string{});
+                loaded->warnings.push_back(plugin.empty() ? text : plugin + ": " + text);
+            }
+        }
         auto outputRoot = plugins_.setTrustedNewPluginRoot(loaded->instance.overwriteFolder);
         if (!outputRoot) {
             return std::unexpected(

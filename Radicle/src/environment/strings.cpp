@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <fstream>
+#include <limits>
 #include <system_error>
 
 namespace fo4::env {
@@ -57,17 +59,17 @@ std::string plugin_stem(std::string_view filename) {
   return std::string(dot == std::string_view::npos ? filename : filename.substr(0, dot));
 }
 
-std::vector<PluginStringTable> resolve_plugin_tables(const std::vector<FileIndex>& dirs,
+std::vector<PluginStringTableSnapshot> resolve_plugin_tables(const std::vector<FileIndex>& dirs,
                                                      const Plugin& plugin,
                                                      std::string_view language,
                                                      const archive::AssetResolver* archives) {
-  std::vector<PluginStringTable> tables;
+  std::vector<PluginStringTableSnapshot> tables;
   if (!plugin.header.tes4_flags.is_localized()) return tables;
   const auto prefix = plugin_stem(plugin.key.filename()) + "_" + std::string(language) + ".";
   for (const auto source : {StringSource::normal, StringSource::dl, StringSource::il}) {
     const auto name = prefix + std::string(string_source_extension(source));
     PluginStringTable found{source, {}, {}, {}};
-    std::vector<std::byte> archived;
+    std::vector<std::byte> bytes;
     bool loose = false;
     for (const auto& files : dirs) {
       const auto it = files.find(text::fold(name));
@@ -89,15 +91,28 @@ std::vector<PluginStringTable> resolve_plugin_tables(const std::vector<FileIndex
       std::replace(entry_path.begin(), entry_path.end(), '\\', '/');
       found.path = reader.path() / entry_path;
       found.archive = utf8(reader.path().filename());
-      archived = archives->read(*location);
+      bytes = archives->read(*location);
     }
     try {
-      found.table = loose ? localization::read_string_table_file(found.path, table_kind(source))
-                          : localization::read_string_table(archived, table_kind(source));
+      if (loose) {
+        std::ifstream stream(found.path, std::ios::binary | std::ios::ate);
+        if (!stream) throw localization::StringTableError("could not open localized string file");
+        const auto end = static_cast<std::streamoff>(stream.tellg());
+        if (end < 0 || static_cast<std::uintmax_t>(end) > static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max()) ||
+            static_cast<std::uintmax_t>(end) > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
+          throw localization::StringTableError("localized string file has invalid size");
+        }
+        bytes.resize(static_cast<std::size_t>(end));
+        stream.seekg(0);
+        if (!bytes.empty() && !stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()))) {
+          throw localization::StringTableError("could not read localized string file");
+        }
+      }
+      found.table = localization::read_string_table(bytes, table_kind(source));
     } catch (const localization::StringTableError& error) {
       throw EnvironmentError("malformed string table " + utf8(found.path) + ": " + error.what());
     }
-    tables.push_back(std::move(found));
+    tables.push_back({std::move(found), std::move(bytes)});
   }
   return tables;
 }
@@ -108,6 +123,16 @@ std::vector<PluginStringTable> load_plugin_string_tables(std::span<const std::fi
                                                          const Plugin& plugin,
                                                          std::string_view language,
                                                          const archive::AssetResolver* archives) {
+  auto snapshots = load_plugin_string_table_snapshots(strings_dirs, plugin, language, archives);
+  std::vector<PluginStringTable> tables;
+  tables.reserve(snapshots.size());
+  for (auto& snapshot : snapshots) tables.push_back(std::move(snapshot.resolved));
+  return tables;
+}
+
+std::vector<PluginStringTableSnapshot> load_plugin_string_table_snapshots(
+    std::span<const std::filesystem::path> strings_dirs, const Plugin& plugin,
+    std::string_view language, const archive::AssetResolver* archives) {
   validate_language(language);
   std::vector<FileIndex> dirs;
   dirs.reserve(strings_dirs.size());
@@ -144,7 +169,8 @@ StringTables StringTables::load(const Environment& env,
   result.tables_.resize(env.plugins().size());
   const std::vector<FileIndex> dirs{list_directory(strings_dir)};
   for (std::size_t plugin = 0; plugin < env.plugins().size(); ++plugin) {
-    for (auto& found : resolve_plugin_tables(dirs, env.plugin(plugin), result.language_, archives)) {
+    for (auto& snapshot : resolve_plugin_tables(dirs, env.plugin(plugin), result.language_, archives)) {
+      auto& found = snapshot.resolved;
       Table table;
       table.path = std::move(found.path);
       table.strings.reserve(found.table.entries.size());

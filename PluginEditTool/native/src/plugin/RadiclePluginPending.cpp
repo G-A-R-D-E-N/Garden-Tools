@@ -9,16 +9,41 @@
 #include <fo4/io/atomic_write.hpp>
 #include <fo4/plugin/writer.hpp>
 
+#include "RadiclePluginSupport.hpp"
+
 namespace fo4ide::plugin {
+
+std::string RadiclePluginBackend::dirtyPluginListLocked() const {
+    std::string pendingList;
+    for (const auto& item : plugins_) {
+        if (!item.dirty && !hasStagedStringTables(item.name)) continue;
+        if (!pendingList.empty()) pendingList += ", ";
+        pendingList += item.name;
+    }
+    return pendingList;
+}
+
+
+#ifdef FO4IDE_TEST_HOOKS
+void RadiclePluginBackend::testSetJournalRoot(std::filesystem::path root) {
+    OpLock lock(*this, OpLock::Mode::Lifecycle);
+    testJournalRoot_ = std::move(root);
+}
+#endif
 
 #ifdef FO4IDE_TEST_HOOKS
 namespace {
 WriteOpLockedHook writeOpLockedHook = nullptr;
+WriteOpLockedHook writeOpPendingHook = nullptr;
 WriteOpLockedHook saveIoLockedHook = nullptr;
 }
 
 void setWriteOpLockedHook(WriteOpLockedHook hook) {
     writeOpLockedHook = hook;
+}
+
+void setWriteOpPendingHook(WriteOpLockedHook hook) {
+    writeOpPendingHook = hook;
 }
 
 void setSaveIoLockedHook(WriteOpLockedHook hook) {
@@ -45,11 +70,25 @@ std::vector<std::byte> readFileBytes(const std::filesystem::path& path) {
 
 }
 
+bool RadiclePluginBackend::diskMatchesBaseline(const LoadedPlugin& loaded) const {
+    try {
+        std::error_code error;
+        const auto size = std::filesystem::file_size(loaded.path, error);
+        return loaded.diskBaseline && !error && size == loaded.diskBaseline->size() &&
+               readFileBytes(loaded.path) == *loaded.diskBaseline;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
 thread_local RadiclePluginBackend::OpLock* RadiclePluginBackend::OpLock::current = nullptr;
 
 RadiclePluginBackend::OpLock::OpLock(const RadiclePluginBackend& backend, Mode mode,
                                      const std::vector<std::string_view>& names)
     : backend(backend), mode(mode), previous(current) {
+#ifdef FO4IDE_TEST_HOOKS
+    if (mode == Mode::Write && writeOpPendingHook != nullptr) writeOpPendingHook();
+#endif
     if (mode == Mode::Lifecycle) {
         backend.lifecycleMutex_.lock();
         state = StateHold::Exclusive;
@@ -149,48 +188,55 @@ void RadiclePluginBackend::stageLocalizationMutationLocked(
     ++mutationEpoch_;
 }
 
+bool RadiclePluginBackend::stageQuestFragmentMutationLocked(
+    LoadedPlugin& loaded, fo4::Plugin mutated, StagedQuestFragments fragments) {
+    CommitScope commit;
+    for (const auto& other : plugins_) {
+        if (&other == &loaded || !other.stagedQuestFragments) continue;
+        const auto& pending = *other.stagedQuestFragments;
+        if (support::asciiLower(pending.sourcePath.generic_string()) ==
+                support::asciiLower(fragments.sourcePath.generic_string()) ||
+            support::asciiLower(pending.pexPath.generic_string()) ==
+                support::asciiLower(fragments.pexPath.generic_string())) return false;
+    }
+    loaded.plugin = std::move(mutated);
+    loaded.stagedQuestFragments = std::move(fragments);
+    loaded.dirty = true;
+    ++mutationEpoch_;
+    markGraphDirtyLocked();
+    return true;
+}
+
 Result<void> RadiclePluginBackend::persistPluginLocked(
     LoadedPlugin& loaded, const std::filesystem::path& output) {
+    if (!testJournalRoot_.empty() && (loaded.stagedQuestFragments || loaded.stagedLocalization || hasStagedStringTables(loaded.name)))
+        return persistJournalLocked(loaded, output);
+    if (loaded.stagedQuestFragments.has_value()) {
+        return std::unexpected(Error{"QuestFragmentSaveUnavailable",
+            "Quest fragments cannot be saved until recoverable script and plugin publication is available; discard the pending edit."});
+    }
+    if (loaded.stagedLocalization.has_value() || hasStagedStringTables(loaded.name)) {
+        return std::unexpected(Error{"LocalizedSaveUnavailable", "Pending string tables require recoverable publication."});
+    }
     try {
         StateReleased released;
         std::unique_lock saveIo(saveIoMutex_);
 #ifdef FO4IDE_TEST_HOOKS
         if (saveIoLockedHook != nullptr) saveIoLockedHook();
 #endif
-        if (loaded.stagedLocalization.has_value()) {
-            if (output != loaded.path) {
-                return std::unexpected(Error{
-                    "SavePathNotAllowed",
-                    "Refusing Save As while localization sidecars are pending; "
-                    "save in place or discard first: " + loaded.name
-                });
-            }
-            const auto& staged = *loaded.stagedLocalization;
-            if (readFileBytes(staged.stringsPath) != staged.originalStringsBytes ||
-                readFileBytes(staged.dlstringsPath) != staged.originalDlstringsBytes ||
-                readFileBytes(staged.ilstringsPath) != staged.originalIlstringsBytes) {
-                return std::unexpected(Error{
-                    "LocalizedSidecarChangedOnDisk",
-                    "localized sibling table changed after it was staged; "
-                    "discard or reload before saving"
-                });
-            }
-            const auto pluginBytes = fo4::write_plugin(loaded.plugin, output);
-            fo4::io::write_file_pair_dependency_first(
-                staged.dlstringsPath,
-                staged.dlstringsBytes,
-                output,
-                pluginBytes);
-        } else {
-            fo4::write_plugin_file(loaded.plugin, output);
+        if (!diskMatchesBaseline(loaded)) {
+            return std::unexpected(Error{"PluginChangedOnDisk", "Plugin bytes changed after loading: " + loaded.name});
         }
+        const auto pluginBytes = std::make_shared<const std::vector<std::byte>>(fo4::write_plugin(loaded.plugin, output));
+        fo4::io::write_file_atomic(output, *pluginBytes);
         std::error_code ec;
         const auto writtenTime = std::filesystem::last_write_time(output, ec);
         saveIo.unlock();
         CommitScope commit;
         loaded.path = output;
+        loaded.diskBaseline = pluginBytes;
         loaded.loadedTime = writtenTime;
-        loaded.stagedLocalization.reset();
+        loaded.stagedLocalization.reset(); loaded.stagedAllocation.reset(); loaded.stagedPluginLanguages.clear(); loaded.stagedPluginStringIds.clear();
         loaded.dirty = false;
         return {};
     } catch (const std::exception& error) {

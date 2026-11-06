@@ -529,6 +529,14 @@ jobs:
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File PluginEditTool\package.ps1 -BuildDir build\fo4ide-package
 
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fo4ide-package
+          path: PluginEditTool/dist/FO4RecordEditor-*.zip
+          if-no-files-found: error
+          retention-days: 14
+
   report:
     name: Report to the private PR
     needs: [native-linux, radicle-windows-cross, plugineditool-native-windows-cross, native-windows-tests, fo4ide-package]

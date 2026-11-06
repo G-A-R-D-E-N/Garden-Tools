@@ -87,18 +87,15 @@ InfoContainment resolve_info_containment(
     const Plugin& source,
     RecordLocation info,
     const PluginFormIdContext& source_context) {
-  if (info.path.size() != 4) {
+  if (info.path.size() != 3) {
     throw InfoCopyError("INFO containment must use the complete QUST/DIAL ancestry");
   }
   const auto* quest_top = info.path[0];
   const auto* quest_children = info.path[1];
-  const auto* dial_top = info.path[2];
-  const auto* topic_children = info.path[3];
+  const auto* topic_children = info.path[2];
   if (quest_top->header.group_type != static_cast<std::int32_t>(GroupType::top) ||
       quest_top->header.top_label() != k_qust ||
       quest_children->header.group_type != k_quest_children_group ||
-      dial_top->header.group_type != static_cast<std::int32_t>(GroupType::top) ||
-      dial_top->header.top_label() != k_dial ||
       topic_children->header.group_type !=
           static_cast<std::int32_t>(GroupType::topic_children)) {
     throw InfoCopyError("INFO is not in the approved QUST/DIAL containment");
@@ -115,18 +112,17 @@ InfoContainment resolve_info_containment(
     throw InfoCopyError("INFO Quest Children label does not resolve to its parent QUST");
   }
   if (out.dial.record == nullptr || out.dial.record->header.signature != k_dial ||
-      out.dial.path.size() != 3 ||
-      !path_matches(out.dial.path, {quest_top, quest_children, dial_top})) {
+      out.dial.path.size() != 2 ||
+      !path_matches(out.dial.path, {quest_top, quest_children})) {
     throw InfoCopyError("INFO Topic Children label does not resolve to its parent DIAL");
   }
-  if (!path_matches(out.info.path, {quest_top, quest_children, dial_top, topic_children})) {
+  if (!path_matches(out.info.path, {quest_top, quest_children, topic_children})) {
     throw InfoCopyError("INFO and DIAL do not share the approved containment prefix");
   }
   std::size_t topic_group_count = 0;
-  for (const auto& child : dial_top->children) {
+  for (const auto& child : quest_children->children) {
     const auto* group = std::get_if<Group>(&child);
-    if (group == nullptr ||
-        group->header.group_type != static_cast<std::int32_t>(GroupType::topic_children)) {
+    if (group == nullptr || !same_group_identity(group->header, topic_children->header)) {
       continue;
     }
     ++topic_group_count;
@@ -180,7 +176,7 @@ std::optional<std::size_t> direct_record_index(Group& group, const FormKey& key)
 }
 
 Group* ensure_topic_children_group(
-    Group& dial_group,
+    Group& quest_children,
     const GroupHeader& source_header,
     const FormKey& dial_key,
     const PluginFormIdContext& source_context,
@@ -192,12 +188,9 @@ Group* ensure_topic_children_group(
 
   Group* found = nullptr;
   std::optional<std::size_t> found_index;
-  for (std::size_t index = 0; index < dial_group.children.size(); ++index) {
-    auto* group = std::get_if<Group>(&dial_group.children[index]);
-    if (group == nullptr || group->header.group_type != wanted.group_type) continue;
-    if (!same_group_identity(group->header, wanted)) {
-      throw InfoCopyError("DIAL contains an unexpected Topic Children group");
-    }
+  for (std::size_t index = 0; index < quest_children.children.size(); ++index) {
+    auto* group = std::get_if<Group>(&quest_children.children[index]);
+    if (group == nullptr || !same_group_identity(group->header, wanted)) continue;
     if (found != nullptr) {
       throw InfoCopyError("DIAL contains duplicate Topic Children groups");
     }
@@ -205,7 +198,7 @@ Group* ensure_topic_children_group(
     found_index = index;
   }
 
-  const auto dial_index = direct_record_index(dial_group, dial_key);
+  const auto dial_index = direct_record_index(quest_children, dial_key);
   if (!dial_index.has_value()) {
     throw InfoCopyError("destination DIAL record disappeared before Topic Children insertion");
   }
@@ -218,9 +211,9 @@ Group* ensure_topic_children_group(
 
   Group created;
   created.header = wanted;
-  auto it = dial_group.children.begin() +
+  auto it = quest_children.children.begin() +
             static_cast<std::ptrdiff_t>(*dial_index + 1);
-  return &std::get<Group>(*dial_group.children.insert(it, std::move(created)));
+  return &std::get<Group>(*quest_children.children.insert(it, std::move(created)));
 }
 
 enum class InfoPnamState {
@@ -373,10 +366,10 @@ InfoCopyNewResult copy_info_as_new(
     throw InfoCopyError("destination DIAL QNAM does not match its Quest Children parent");
   }
 
-  auto* dial_group = existing_group_path(
+  auto* quest_children = existing_group_path(
       next, containment.dial.path, source_context, destination_context);
   auto* topic = ensure_topic_children_group(
-      dial_group[0], containment.info.path.back()->header, containment.dial_key,
+      quest_children[0], containment.info.path.back()->header, containment.dial_key,
       source_context, destination_context);
 
   bool at_head = false;
@@ -416,6 +409,7 @@ InfoCopyNewResult copy_info_as_new(
   insert_info(topic[0], std::move(copied), at_head, after);
 
   next.original_range.clear();
+  next.original_structure_fingerprint = 0;
   destination = std::move(next);
   return {InfoCopyNewStatus::created, new_key};
 }

@@ -4,6 +4,7 @@
 #include "fo4/c_api_env.h"
 #include "fo4/environment/strings.hpp"
 #include "fo4/io/atomic_write.hpp"
+#include "fo4/io/sha256.hpp"
 #include "fo4/localization/strings.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "ba2_fixture.hpp"
@@ -12,11 +13,15 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,6 +37,8 @@ using fo4::archive::Ba2Error;
 using fo4::archive::Ba2GeneralArchive;
 using fo4::archive::Ba2GeneralEntry;
 using fo4::archive::Ba2Reader;
+using fo4::archive::Ba2ByteSource;
+using fo4::archive::Ba2Snapshot;
 using fo4::archive::Ba2TextureArchive;
 using fo4::archive::Ba2TextureEntry;
 
@@ -49,6 +56,40 @@ bool create_directory_alias(const std::filesystem::path& target, const std::file
 }
 
 }  // namespace
+
+namespace {
+
+class MutableBa2Source final : public Ba2ByteSource {
+public:
+  explicit MutableBa2Source(std::vector<std::byte> bytes) : bytes(std::move(bytes)) {}
+
+  std::uint64_t size() const noexcept override { return bytes.size(); }
+  void read(std::uint64_t offset, std::span<std::byte> out) const override {
+    if (offset > bytes.size() || out.size() > bytes.size() - offset) throw Ba2Error("test source truncated");
+    if (offset == watch_offset && out.size() == watch_size) ++watched_reads;
+    std::copy_n(bytes.begin() + static_cast<std::ptrdiff_t>(offset), out.size(), out.begin());
+    if (mutate_after_read) { mutate_after_read = false; bytes.at(mutation_offset) ^= std::byte{1}; }
+  }
+
+  mutable std::vector<std::byte> bytes;
+  mutable bool mutate_after_read{false};
+  std::size_t mutation_offset{0};
+  std::uint64_t watch_offset{std::numeric_limits<std::uint64_t>::max()};
+  std::size_t watch_size{0};
+  mutable std::size_t watched_reads{0};
+};
+
+}  // namespace
+
+// Detects: held source hashing must include every byte across buffer boundaries without requiring an archive parse.
+TEST_F(Ba2ReaderTest, HeldSourceHashIncludesAllChunks) {
+  std::vector<std::byte> data(150000, std::byte{42});
+  data[65536] = std::byte{7};
+  auto source = std::make_shared<MutableBa2Source>(data);
+  EXPECT_EQ(fo4::archive::hash_byte_source(source), fo4::io::sha256_hex(data));
+  source->bytes.back() ^= std::byte{1};
+  EXPECT_NE(fo4::archive::hash_byte_source(source), fo4::io::sha256_hex(data));
+}
 
 TEST_F(Ba2ReaderTest, IndexesGeneralArchiveAndExtractsOnDemand) {
   const auto path = write_general("Mod - Main.ba2", {general("Meshes\\Weapons\\Gun.nif", "gun-bytes"),
@@ -71,6 +112,71 @@ TEST_F(Ba2ReaderTest, IndexesGeneralArchiveAndExtractsOnDemand) {
   EXPECT_THROW(static_cast<void>(reader.extract(2)), std::out_of_range);
 }
 
+// Detects: a held archive snapshot must bound extraction and reject source mutation or truncation.
+TEST_F(Ba2ReaderTest, SnapshotHashesBoundedPayloadAndRejectsSourceMutation) {
+  Ba2GeneralArchive archive;
+  archive.entries.push_back(general("Meshes\\Weapons\\Gun.nif", "gun-bytes"));
+  archive.entries.push_back(general("Strings\\Small.txt", std::string(16, 'x'), true));
+  const auto archive_bytes = fo4::archive::write_ba2_general(archive);
+  auto source = std::make_shared<MutableBa2Source>(archive_bytes);
+  auto snapshot = Ba2Snapshot::open(source);
+  // Detects: a crafted archive count or index footprint must be rejected before allocating an oversized snapshot index.
+  EXPECT_THROW(static_cast<void>(Ba2Snapshot::open(source, {1, 1024 * 1024})), Ba2Error);
+  EXPECT_THROW(static_cast<void>(Ba2Snapshot::open(source, {100, 1})), Ba2Error);
+  auto huge_count = archive_bytes;
+  std::fill_n(huge_count.begin() + 12, 4, std::byte{0xff});
+  try {
+    static_cast<void>(Ba2Snapshot::open(std::make_shared<MutableBa2Source>(std::move(huge_count))));
+    FAIL() << "oversized snapshot index was accepted";
+  } catch (const Ba2Error& error) {
+    EXPECT_NE(std::string(error.what()).find("index entry limit"), std::string::npos);
+  }
+  EXPECT_EQ(snapshot.archive_sha256().size(), 64u);
+  ASSERT_EQ(snapshot.find("meshes/weapons/gun.nif"), std::optional<std::size_t>{0});
+  const auto payload = snapshot.extract(0, 64);
+  EXPECT_EQ(text_of(payload.bytes), "gun-bytes");
+  EXPECT_EQ(payload.size, 9u);
+  EXPECT_EQ(payload.sha256, "87b7698dfa70ccec8bad7082415d04af8f9a4e87233bbeefdd3766df77b9fcdb");
+  EXPECT_THROW(static_cast<void>(snapshot.extract(0, 8)), Ba2Error);
+  ASSERT_GT(snapshot.entries()[1].chunks[0].packed_size, 1u);
+  EXPECT_THROW(static_cast<void>(snapshot.extract(1, 1)), Ba2Error);
+  const std::array<std::size_t, 2> indices{0, 1};
+  const auto batch = snapshot.extract_many(indices, 64);
+  ASSERT_EQ(batch.size(), 2u);
+  EXPECT_EQ(batch[0].bytes, payload.bytes);
+  EXPECT_EQ(batch[1].size, 16u);
+  EXPECT_THROW(static_cast<void>(snapshot.extract_many(indices, 10)), Ba2Error);
+  // Detects: a multi-table batch must perform a constant number of whole-source hashes, independent of table count.
+  auto counted = std::make_shared<MutableBa2Source>(archive_bytes);
+  counted->watch_offset = 0; counted->watch_size = archive_bytes.size();
+  const auto countedSnapshot = Ba2Snapshot::open(counted);
+  ASSERT_EQ(counted->watched_reads, 2u);
+  ASSERT_EQ(countedSnapshot.extract_many(indices, 64).size(), 2u);
+  EXPECT_EQ(counted->watched_reads, 4u);
+  const std::array<std::size_t, 8> repeated{0, 1, 0, 1, 0, 1, 0, 1};
+  ASSERT_EQ(countedSnapshot.extract_many(repeated, 512).size(), repeated.size());
+  EXPECT_EQ(counted->watched_reads, 6u);
+
+  auto changing_open_source = std::make_shared<MutableBa2Source>(archive_bytes);
+  changing_open_source->mutation_offset = static_cast<std::size_t>(snapshot.entries()[0].chunks[0].offset);
+  changing_open_source->mutate_after_read = true;
+  EXPECT_THROW(static_cast<void>(Ba2Snapshot::open(changing_open_source)), Ba2Error);
+
+  auto changing_source = std::make_shared<MutableBa2Source>(archive_bytes);
+  const auto changing = Ba2Snapshot::open(changing_source);
+  changing_source->mutate_after_read = true;
+  EXPECT_THROW(static_cast<void>(changing.extract(0, 64)), Ba2Error);
+
+  source->bytes.at(static_cast<std::size_t>(snapshot.entries()[0].chunks[0].offset)) =
+      std::byte{static_cast<unsigned char>('X')};
+  EXPECT_THROW(static_cast<void>(snapshot.extract(0, 64)), Ba2Error);
+
+  auto truncated_source = std::make_shared<MutableBa2Source>(archive_bytes);
+  auto truncated = Ba2Snapshot::open(truncated_source);
+  truncated_source->bytes.resize(10);
+  EXPECT_THROW(static_cast<void>(truncated.extract(0, 64)), Ba2Error);
+}
+
 TEST_F(Ba2ReaderTest, RebuildsDdsForTextureArchives) {
   Ba2TextureArchive archive;
   Ba2TextureEntry entry;
@@ -90,6 +196,67 @@ TEST_F(Ba2ReaderTest, RebuildsDdsForTextureArchives) {
   ASSERT_EQ(dds.size(), 128u + 16u);
   EXPECT_EQ(text_of({dds.begin(), dds.begin() + 4}), "DDS ");
   EXPECT_EQ(dds.back(), std::byte{0x5A});
+}
+
+// Detects: texture snapshot extraction must preserve DDS data and enforce the caller's byte limit.
+TEST_F(Ba2ReaderTest, SnapshotExtractsDx10TextureWithinCallerLimit) {
+  Ba2TextureArchive archive;
+  Ba2TextureEntry entry;
+  entry.path = "Textures\\Rock_d.dds";
+  entry.texture = {4, 8, 1, 71, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(std::vector<std::byte>(16, std::byte{0x5A})));
+  archive.entries.push_back(entry);
+  const auto path = data() / "Snapshot - Textures.ba2";
+  fo4::archive::write_ba2_texture_file(archive, path);
+  std::ifstream stream(path, std::ios::binary | std::ios::ate);
+  ASSERT_TRUE(stream);
+  const auto file_size = stream.tellg();
+  ASSERT_GE(file_size, 0);
+  std::vector<std::byte> archive_bytes(static_cast<std::size_t>(file_size));
+  stream.seekg(0);
+  stream.read(reinterpret_cast<char*>(archive_bytes.data()), static_cast<std::streamsize>(archive_bytes.size()));
+  ASSERT_TRUE(stream);
+  const auto snapshot = Ba2Snapshot::open(std::make_shared<MutableBa2Source>(std::move(archive_bytes)));
+  const auto payload = snapshot.extract(0, 304);
+  ASSERT_EQ(payload.bytes.size(), 144u);
+  EXPECT_EQ(text_of({payload.bytes.begin(), payload.bytes.begin() + 4}), "DDS ");
+  EXPECT_EQ(payload.bytes.back(), std::byte{0x5A});
+  EXPECT_THROW(static_cast<void>(snapshot.extract(0, 303)), Ba2Error);
+  const std::array<std::size_t, 1> indices{0};
+  EXPECT_EQ(snapshot.extract_many(indices, 304)[0].bytes, payload.bytes);
+}
+
+// Detects: texture snapshot extraction must reject an undersized output budget before reading its chunk.
+TEST_F(Ba2ReaderTest, SnapshotPreflightsThe148ByteDx10Header) {
+  Ba2TextureArchive archive;
+  Ba2TextureEntry entry;
+  entry.path = "Textures\\Modern.dds";
+  entry.texture = {4, 8, 1, 95, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(std::vector<std::byte>(16, std::byte{0x5A})));
+  archive.entries.push_back(entry);
+  const auto path = data() / "Snapshot - DX10.ba2";
+  fo4::archive::write_ba2_texture_file(archive, path);
+  std::ifstream stream(path, std::ios::binary | std::ios::ate);
+  ASSERT_TRUE(stream);
+  const auto file_size = stream.tellg();
+  ASSERT_GE(file_size, 0);
+  std::vector<std::byte> archive_bytes(static_cast<std::size_t>(file_size));
+  stream.seekg(0);
+  stream.read(reinterpret_cast<char*>(archive_bytes.data()), static_cast<std::streamsize>(archive_bytes.size()));
+  ASSERT_TRUE(stream);
+
+  auto source = std::make_shared<MutableBa2Source>(std::move(archive_bytes));
+  const auto snapshot = Ba2Snapshot::open(source);
+  const auto chunk = snapshot.entries()[0].chunks[0];
+  source->watch_offset = chunk.offset;
+  source->watch_size = chunk.unpacked_size;
+  EXPECT_THROW(static_cast<void>(snapshot.extract(0, 343)), Ba2Error);
+  EXPECT_EQ(source->watched_reads, 0u);
+
+  const auto payload = snapshot.extract(0, 344);
+  ASSERT_EQ(payload.bytes.size(), 164u);
+  EXPECT_EQ(text_of({payload.bytes.begin(), payload.bytes.begin() + 4}), "DDS ");
+  EXPECT_EQ(source->watched_reads, 1u);
 }
 
 TEST_F(Ba2ReaderTest, FindsByHashWithoutNameTable) {

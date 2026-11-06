@@ -1,6 +1,7 @@
 #include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +21,11 @@
 
 namespace fo4ide::plugin {
 
+#ifdef FO4IDE_TEST_HOOKS
+namespace { std::atomic<LegacyStringResolverHook> legacyStringResolverHook{nullptr}; }
+void setLegacyStringResolverHook(LegacyStringResolverHook hook) { legacyStringResolverHook.store(hook); }
+#endif
+
 namespace {
 
 const fo4::env::PluginStringTable* findTable(const std::vector<fo4::env::PluginStringTable>& tables,
@@ -34,6 +40,9 @@ const fo4::env::PluginStringTable* findTable(const std::vector<fo4::env::PluginS
 
 std::shared_ptr<const fo4::archive::AssetResolver> RadiclePluginBackend::stringAssets(
     const LoadedPlugin& loaded, std::vector<SkippedStringArchive>* skipped) const {
+#ifdef FO4IDE_TEST_HOOKS
+    if (const auto hook = legacyStringResolverHook.load()) hook();
+#endif
     std::vector<std::string> names;
     names.reserve(plugins_.size());
     for (const auto& plugin : plugins_) names.push_back(plugin.name);
@@ -83,15 +92,20 @@ std::shared_ptr<const fo4::archive::AssetResolver> RadiclePluginBackend::stringA
 
 Result<std::vector<fo4::env::PluginStringTable>> RadiclePluginBackend::readStringTables(
     const LoadedPlugin& loaded, std::string_view language,
-    std::vector<SkippedStringArchive>* skipped) const {
+    std::vector<SkippedStringArchive>* skipped,
+    std::vector<fo4::env::PluginStringTableSnapshot>* snapshots) const {
     try {
         std::vector<std::filesystem::path> directories{loaded.path.parent_path() / "Strings"};
         if (!dataDirectory_.empty()) directories.push_back(dataDirectory_ / "Strings");
-        auto tables = fo4::env::load_plugin_string_tables(directories, loaded.plugin, language);
-        if (tables.size() != 3 && loaded.plugin.header.tes4_flags.is_localized()) {
+        auto captured = fo4::env::load_plugin_string_table_snapshots(directories, loaded.plugin, language);
+        if (captured.size() != 3 && loaded.plugin.header.tes4_flags.is_localized()) {
             const auto assets = stringAssets(loaded, skipped);
-            tables = fo4::env::load_plugin_string_tables(directories, loaded.plugin, language, assets.get());
+            captured = fo4::env::load_plugin_string_table_snapshots(directories, loaded.plugin, language, assets.get());
         }
+        std::vector<fo4::env::PluginStringTable> tables;
+        tables.reserve(captured.size());
+        for (const auto& snapshot : captured) tables.push_back(snapshot.resolved);
+        if (snapshots != nullptr) *snapshots = std::move(captured);
         overlayStagedStringTables(loaded, language, tables);
         return tables;
     } catch (const std::exception& error) {

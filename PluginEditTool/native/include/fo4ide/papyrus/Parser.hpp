@@ -24,6 +24,8 @@ public:
     // Reads and parses a .psc file; nullopt on any I/O failure (mirrors the
     // C# ParseFile's try/catch returning null).
     static std::optional<Script> parseFile(const std::filesystem::path& path);
+    static std::optional<Script> parseFile(const std::filesystem::path& path,
+                                           std::size_t maxBytes, std::size_t* bytesRead);
 
 private:
     Parser(const std::vector<Token>& tokens, DiagnosticBag& diagnostics);

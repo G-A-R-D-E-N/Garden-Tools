@@ -11,6 +11,8 @@
 
 namespace fo4::archive {
 
+inline constexpr std::size_t k_max_extract_total_bytes = std::size_t{1} << 30;
+
 class Ba2Error : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;

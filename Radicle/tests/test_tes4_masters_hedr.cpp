@@ -75,8 +75,7 @@ TEST(HedrRebuild, LongerHedrKeepsTrailingBytesAcrossRebuild) {
     write_hedr(out, 999, true);
   });
   auto plugin = fo4::read_plugin(bytes, "Patch.esp");
-  plugin.original_range.clear();
-  plugin.tes4.original_range.clear();
+  fo4::repair_hedr_record_count(plugin);
 
   const auto written = fo4::write_plugin(plugin);
   const auto reread = fo4::read_plugin(written, "Patch.esp");

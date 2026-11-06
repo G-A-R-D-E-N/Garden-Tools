@@ -334,6 +334,7 @@ TEST_CASE("Native CreateRecord writes localized PERK text as string IDs past the
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, masterPath, patchPath);
+    backend.testSetJournalRoot(root / "journal");
     const auto formKey = createPerk(backend, nlohmann::json{
         {"editorId", "LocalPerk"}, {"full", "New name"}, {"desc", "New description"}
     });
@@ -363,6 +364,23 @@ TEST_CASE("Native CreateRecord writes localized PERK text as string IDs past the
     REQUIRE(descriptionRows.size() == 2u);
     CHECK(descriptionRows[0] == nlohmann::json{{"id", 9}, {"text", "Existing description"}});
     CHECK(descriptionRows[1] == nlohmann::json{{"id", 11}, {"text", "New description"}});
+}
+
+// Detects: mixed-case PERK language tokens must compose with pending edits to the same localized table.
+TEST_CASE("Native localized PERK composes mixed-case pending table edits") {
+    const auto root = tempRoot(); Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esp", patchPath = root / "Patch.esp";
+    writeBytes(masterPath, makeMasterPlugin()); writeBytes(patchPath, makePatchPlugin(0x80));
+    writeStringTable(root / "Strings" / "Patch_en.STRINGS", fo4::localization::StringTableKind::strings, 7, "Old");
+    writeStringTable(root / "Strings" / "Patch_en.DLSTRINGS", fo4::localization::StringTableKind::dlstrings, 9, "Old description");
+    fo4ide::plugin::RadiclePluginBackend backend; loadBackend(backend, masterPath, patchPath);
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "EN", "STRINGS", 7, "Edited"})).has_value());
+    static_cast<void>(createPerk(backend, nlohmann::json{{"editorId", "MixedPerk"}, {"language", "eN"}, {"full", "New"}}));
+    const auto exported = backend.invoke("strings.ExportStrings", nlohmann::json::array({"Patch.esp", "en", "STRINGS"}));
+    REQUIRE(exported.has_value());
+    const auto rows = nlohmann::json::parse(exported->get<std::string>())["rows"];
+    CHECK(std::any_of(rows.begin(), rows.end(), [](const auto& row) { return row.at("id") == 7 && row.at("text") == "Edited"; }));
+    CHECK(std::any_of(rows.begin(), rows.end(), [](const auto& row) { return row.at("id") == 10 && row.at("text") == "New"; }));
 }
 
 // Detects: set_perk_sound and set_perk_swf must insert, rewrite and remove SNAM and FNAM, and must refuse a sound that is not an SNDR by name.

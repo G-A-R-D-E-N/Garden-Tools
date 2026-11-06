@@ -103,6 +103,8 @@ struct Plugin {
   std::shared_ptr<const std::vector<std::byte>> original_data;
   OriginalByteRange original_range;
   std::uint64_t original_structure_fingerprint{0};
+  std::optional<Record> tes4_after_hedr_repair;
+  std::vector<std::byte> tes4_repaired_bytes;
 };
 
 [[nodiscard]] std::span<const std::byte> plugin_original_bytes(const Plugin& plugin);

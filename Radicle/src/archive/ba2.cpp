@@ -25,11 +25,6 @@ constexpr std::size_t k_header_size = 24;
 constexpr std::size_t k_entry_size = 16;
 constexpr std::size_t k_chunk_record_size = 20;
 
-// Upper bound on a single entry's decompressed size. Far above anything a
-// real FO4 asset needs, but small enough that a hostile archive cannot turn
-// a few packed bytes into an unbounded allocation.
-constexpr std::size_t k_max_extract_total_bytes = std::size_t{1} << 30;
-
 std::uint64_t read_u64(binary::Cursor& cursor) {
   const auto low = static_cast<std::uint64_t>(cursor.read_u32());
   const auto high = static_cast<std::uint64_t>(cursor.read_u32());

@@ -590,4 +590,20 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
     }.dump());
 }
 
+Result<nlohmann::json> RadiclePluginBackend::getPlugins() const {
+    nlohmann::json rows = nlohmann::json::array();
+    OpLock lock(*this, OpLock::Mode::Read);
+    for (const auto& loaded : plugins_) {
+        rows.push_back({
+            {"Key", loaded.name},
+            {"ConflictStatus", 0},
+            {"IsRecordNode", false},
+            {"HasChildren", !loaded.plugin.groups.empty()},
+            {"FilePath", loaded.path.string()},
+            {"Pending", loaded.dirty || hasStagedStringTables(loaded.name)}
+        });
+    }
+    return nlohmann::json(rows.dump());
+}
+
 }

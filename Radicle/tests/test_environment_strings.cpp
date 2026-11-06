@@ -220,6 +220,34 @@ TEST_F(StringsEnvironmentTest, PluginTablesResolveLooseThenArchivesAndSkipNonLoc
   EXPECT_TRUE(fo4::env::load_plugin_string_tables(dirs, env.plugin(2), "en").empty());
 }
 
+// Detects: allocation snapshots must retain the exact bytes parsed from loose and archive-backed tables when either source later changes.
+TEST_F(StringsEnvironmentTest, PluginTableSnapshotsRetainParsedLooseAndArchiveBytes) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto archived_bytes = fo4::localization::write_string_table(
+      table(fo4::localization::StringTableKind::ilstrings, {{0x30, "Archive original"}}));
+  fo4::archive::Ba2GeneralEntry entry;
+  entry.path = "Strings\\Base_en.ILSTRINGS";
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(archived_bytes));
+  fo4::archive::Ba2GeneralArchive archive;
+  archive.entries.push_back(std::move(entry));
+  const auto archive_path = root_ / "Base - Main.ba2";
+  fo4::archive::write_ba2_general_file(archive, archive_path);
+  const std::vector<std::filesystem::path> archives{archive_path};
+  const auto assets = fo4::archive::AssetResolver::open(root_, archives);
+  const std::vector<std::filesystem::path> dirs{strings_};
+  const auto snapshots = fo4::env::load_plugin_string_table_snapshots(dirs, env.plugin(0), "en", &assets);
+  ASSERT_EQ(snapshots.size(), 3u);
+  const auto original_loose = snapshots[0].bytes;
+  EXPECT_EQ(fo4::localization::read_string_table(original_loose, fo4::localization::StringTableKind::strings)
+                .entries[0].text, bytes_of("Commonwealth"));
+  EXPECT_EQ(snapshots[2].bytes, archived_bytes);
+  EXPECT_EQ(snapshots[2].resolved.archive, "Base - Main.ba2");
+  fo4::localization::write_string_table_file(
+      table(fo4::localization::StringTableKind::strings, {{0x10, "Changed"}}), strings_ / "base_EN.strings");
+  EXPECT_EQ(snapshots[0].bytes, original_loose);
+  EXPECT_EQ(snapshots[0].resolved.table.entries[0].text, bytes_of("Commonwealth"));
+}
+
 TEST_F(StringsEnvironmentTest, PluginTablesPreferTheEarliestDirectoryAndFallBackToLaterOnes) {
   const auto env = fo4::env::Environment::load(paths_);
   const auto second = root_ / "Strings2";

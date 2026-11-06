@@ -49,11 +49,15 @@ using fo4::papyrus::TypeChecker;
 using fo4::papyrus::declarationCheck;
 using fo4::papyrus::test::firstDifference;
 using fo4::papyrus::test::stratifiedSample;
+using fo4::pex::PexDebugFunction;
 using fo4::pex::PexFile;
 using fo4::pex::PexFunction;
 using fo4::pex::PexInstruction;
 using fo4::pex::PexObject;
 using fo4::pex::PexState;
+using fo4::pex::PexStruct;
+using fo4::pex::PexStructMember;
+using fo4::pex::PexStructOrder;
 using fo4::pex::PexTypedName;
 using fo4::pex::PexValue;
 using fo4::pex::PexValueType;
@@ -693,6 +697,178 @@ TEST(PapyrusDecompiler, CompositeRoundTripScriptRoundTrips) {
   DecompileFixture f2;
   f2.write("RoundTrip", text);
   ASSERT_TRUE(f2.compile("RoundTrip") != nullptr);
+}
+
+TEST(PapyrusDecompiler, PropertyGroupsAreEmittedAsGroupBlocksInOriginalOrder) {
+  // Invariant: ungrouped properties print first, then each named group with its doc, in PEX order.
+  DecompileFixture f;
+  f.writeWithScriptObject();
+  f.write("Grouped",
+          "Scriptname Grouped\n"
+          "int Property Loose Auto\n"
+          "Group Stats\n"
+          "{ Stat block }\n"
+          "int Property Health = 100 Auto\n"
+          "int Property Mana Auto\n"
+          "EndGroup\n");
+  auto original = f.compile("Grouped");
+  ASSERT_TRUE(original != nullptr);
+  const std::string text = Decompiler::toSource(*original);
+  SCOPED_TRACE("decompiled source:\n" + text);
+
+  const auto loose = text.find("Int Property Loose");
+  const auto group = text.find("Group Stats\n");
+  const auto doc = text.find("{  Stat block  }");
+  const auto health = text.find("Int Property Health");
+  const auto mana = text.find("Int Property Mana");
+  const auto end = text.find("EndGroup\n");
+  ASSERT_TRUE(loose != std::string::npos && group != std::string::npos && doc != std::string::npos);
+  ASSERT_TRUE(health != std::string::npos && mana != std::string::npos && end != std::string::npos);
+  EXPECT_LT(loose, group);
+  EXPECT_LT(group, doc);
+  EXPECT_LT(doc, health);
+  EXPECT_LT(health, mana);
+  EXPECT_LT(mana, end);
+
+  const auto shapeOf = [](const PexFile& pex) {
+    std::vector<std::pair<std::string, std::vector<std::string>>> shape;
+    for (const auto& entry : pex.propertyGroups) shape.emplace_back(entry.groupName, entry.propertyNames);
+    return shape;
+  };
+  DecompileFixture g;
+  g.writeWithScriptObject();
+  g.write("Grouped", text);
+  auto recompiled = g.compile("Grouped");
+  ASSERT_TRUE(recompiled != nullptr);
+  EXPECT_EQ(shapeOf(*recompiled), shapeOf(*original));
+}
+
+TEST(PapyrusDecompiler, StructMembersFollowTheDebugStructOrder) {
+  // Invariant: members print in the order the PEX struct order lists them, not their stored order.
+  auto file = scriptWith(makeFunction("Go", {}, {}, {step("return", {PexValue{}})}));
+  PexStructMember key;
+  key.name = "iKey";
+  key.type = "int";
+  PexStructMember value;
+  value.name = "sValue";
+  value.type = "string";
+  PexStruct pair;
+  pair.name = "Pair";
+  pair.members = {key, value};
+  file.objects[0].structs.push_back(pair);
+  file.structOrders.push_back(PexStructOrder{"Probe", "Pair", {"sValue", "iKey"}});
+  EXPECT_EQ(Decompiler::toSource(file),
+            "ScriptName Probe extends ScriptObject\n\n"
+            "Struct Pair\n"
+            "\tstring sValue\n"
+            "\tint iKey\n"
+            "EndStruct\n"
+            "\n"
+            "Function Go()\n"
+            "\tReturn\n"
+            "EndFunction\n");
+}
+
+TEST(PapyrusDecompiler, OnPrefixAloneDoesNotMakeAFunctionAnEvent) {
+  // Invariant: only names in the FO4 event table or remote events become Event blocks; an On prefix alone does not.
+  auto file = scriptWith(makeFunction("OnlyOnce", {}, {}, {step("return", {PexValue{}})}));
+  file.objects[0].states[0].functions.push_back(
+      makeFunction("OnFoo", {}, {}, {step("return", {PexValue{}})}));
+  EXPECT_EQ(Decompiler::toSource(file),
+            "ScriptName Probe extends ScriptObject\n\n"
+            "Function OnlyOnce()\n"
+            "\tReturn\n"
+            "EndFunction\n"
+            "\n"
+            "Function OnFoo()\n"
+            "\tReturn\n"
+            "EndFunction\n");
+}
+
+TEST(PapyrusDecompiler, KnownEventNamesAreEventsWhateverTheDebugFunctionTypes) {
+  // Invariant: event detection reads only name, return type and global flag, so absent, consistent or conflicting debug records cannot change it.
+  const std::vector<std::string> names{"OnInit", "OnActivate", "OnHit", "OnCellAttach", "OnlyOnce"};
+  const auto build = [&](const std::vector<std::uint8_t>* debugTypes) {
+    auto file = scriptWith(makeFunction(names[0], {}, {}, {step("return", {PexValue{}})}));
+    for (std::size_t i = 1; i < names.size(); ++i) {
+      file.objects[0].states[0].functions.push_back(
+          makeFunction(names[i], {}, {}, {step("return", {PexValue{}})}));
+    }
+    if (debugTypes != nullptr) {
+      file.hasDebugInfo = true;
+      for (std::size_t i = 0; i < names.size(); ++i) {
+        file.debugFunctions.push_back(PexDebugFunction{"Probe", "", names[i], (*debugTypes)[i], {}});
+      }
+    }
+    return file;
+  };
+  const std::vector<std::uint8_t> consistent{0, 0, 0, 0, 0};
+  const std::vector<std::uint8_t> conflicting{2, 250, 1, 0, 2};
+  const std::string expected =
+      "ScriptName Probe extends ScriptObject\n\n"
+      "Event OnInit()\n"
+      "\tReturn\n"
+      "EndEvent\n"
+      "\n"
+      "Event OnActivate()\n"
+      "\tReturn\n"
+      "EndEvent\n"
+      "\n"
+      "Event OnHit()\n"
+      "\tReturn\n"
+      "EndEvent\n"
+      "\n"
+      "Event OnCellAttach()\n"
+      "\tReturn\n"
+      "EndEvent\n"
+      "\n"
+      "Function OnlyOnce()\n"
+      "\tReturn\n"
+      "EndFunction\n";
+  EXPECT_EQ(Decompiler::toSource(build(nullptr)), expected);
+  EXPECT_EQ(Decompiler::toSource(build(&consistent)), expected);
+  EXPECT_EQ(Decompiler::toSource(build(&conflicting)), expected);
+}
+
+TEST(PapyrusDecompiler, ScriptLocalNameThatIsNotAnEngineEventStaysAFunction) {
+  // Invariant: a None-returning function named like a script-local event (flee) is a Function, because only the engine event table makes an Event.
+  const auto fn = makeFunction("flee", {}, {}, {step("return", {PexValue{}})});
+  EXPECT_EQ(Decompiler::toSource(scriptWith(fn)),
+            "ScriptName Probe extends ScriptObject\n\n"
+            "Function flee()\n"
+            "\tReturn\n"
+            "EndFunction\n");
+}
+
+TEST(PapyrusDecompiler, GlobalNativeFunctionsStayFunctionsEvenWithAnEventName) {
+  // Invariant: a global function is never an Event, even when its name is in the event table (OnLoad) or it returns None (Hide).
+  PexFunction hide;
+  hide.name = "Hide";
+  hide.isGlobal = true;
+  hide.isNative = true;
+  hide.params = {{"asName", "string"}};
+  PexFunction onLoad;
+  onLoad.name = "OnLoad";
+  onLoad.isGlobal = true;
+  onLoad.isNative = true;
+  auto file = scriptWith(hide);
+  file.objects[0].states[0].functions.push_back(onLoad);
+  EXPECT_EQ(Decompiler::toSource(file),
+            "ScriptName Probe extends ScriptObject\n\n"
+            "Function Hide(string asName) Global Native\n"
+            "\n"
+            "Function OnLoad() Global Native\n");
+}
+
+TEST(PapyrusDecompiler, TempReadBeforeItsAssignmentIsFlaggedInTheDecompile) {
+  // Invariant: a compiler temporary read before any assignment is named in a warning line, not silently printed as _temp0.
+  const auto fn = makeFunction("Go", {}, {{"i", "int"}},
+                               {step("assign", {identifier("i"), identifier("::temp0")}),
+                                step("return", {PexValue{}})});
+  const std::string text = Decompiler::toSource(scriptWith(fn));
+  EXPECT_NE(text.find("\t; [decompile warning: compiler temporary ::temp0 is read before it is assigned; "
+                      "decompiled as _temp0]\n"),
+            std::string::npos);
 }
 
 namespace {

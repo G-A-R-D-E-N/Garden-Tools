@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -33,7 +34,7 @@ using fo4ide::papyrus::TypeKind;
 std::string uniqueRoot() {
     const auto base = std::filesystem::temp_directory_path() / "fo4re-resolve";
     std::filesystem::create_directories(base);
-    return (base / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
+    return (base / fo4ide_test::uniqueTempName())
         .string();
 }
 
@@ -598,4 +599,37 @@ TEST_CASE("Resolver a complete script with a genuine typo is reported") {
     CHECK(r.baseChainComplete);
     REQUIRE(r.diagnostics.size() == 1);
     CHECK(r.diagnostics[0].code == DiagnosticCode::UnresolvedName);
+}
+
+TEST_CASE("Resolver a struct imported by the script resolves as a local declaration type") {
+    Fixture f;
+    f.write("S", "\nScriptName S\nStruct Point\n    int X\n    float Y\nEndStruct");
+    f.write("A",
+            "\nScriptName A\nImport S\nFunction Go()\n    Point p = new Point\n    float y = p.Y\n"
+            "EndFunction");
+    const auto r = f.resolve("A");
+
+    CHECK(only(r, "p").type == Type::structOf("S", "Point"));
+    bool sawY = false;
+    for (const auto& [key, value] : r.bindings) {
+        if (value.kind == BindingKind::StructMember && value.name == "Y") sawY = true;
+    }
+    CHECK(sawY);
+    CHECK(r.diagnostics.empty());
+}
+
+TEST_CASE("Resolver a property typed by a struct its own script imports resolves for other scripts") {
+    Fixture f;
+    f.write("S", "\nScriptName S\nStruct Point\n    int X\nEndStruct");
+    f.write("B", "\nScriptName B\nImport S\nPoint[] Property Pts Auto Const");
+    f.write("A",
+            "\nScriptName A\nFunction Go(B other)\n    int x = other.Pts[0].X\nEndFunction");
+    const auto r = f.resolve("A");
+
+    bool sawX = false;
+    for (const auto& [key, value] : r.bindings) {
+        if (value.kind == BindingKind::StructMember && value.name == "X") sawX = true;
+    }
+    CHECK(sawX);
+    CHECK(r.diagnostics.empty());
 }

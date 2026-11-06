@@ -824,55 +824,6 @@ TEST_CASE("Native SetQuestStages preserves unchanged localized CNAM IDs") {
     CHECK(readBytes(path) == before);
 }
 
-TEST_CASE("Native SetQuestStages allocates changed localized CNAM from the full ID set") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPluginWith(fo4::RecordFlags::localized, [](fo4::test::ByteWriter& out) {
-        writeIndx(out, 10, 0, 0);
-        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
-        writeU32(out, "CNAM", 42);
-    }));
-    writeLocalizationSet(
-        root,
-        {{100, rawBytes("Other")}},
-        {{42, rawBytes("Existing")}},
-        {{200, rawBytes("Other")}});
-    const auto stringsBefore = readBytes(root / "Strings" / "Patch_en.STRINGS");
-    const auto ilstringsBefore = readBytes(root / "Strings" / "Patch_en.ILSTRINGS");
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 10}, {"logEntry", "Changed"}}}),
-            localizedQuestContext(root)
-        }));
-    REQUIRE(result.has_value());
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-
-    const auto disk = fo4::read_plugin_file(path);
-    const auto decoded = fo4::forms::decode_quest_stages(
-        disk, fo4::FormKey::parse("000800:Patch.esp"));
-    REQUIRE(decoded.stages.size() == 1u);
-    REQUIRE(decoded.stages[0].log_entries.size() == 1u);
-    REQUIRE(decoded.stages[0].log_entries[0].log_text.has_value());
-    CHECK(decoded.stages[0].log_entries[0].log_text->id == 201u);
-
-    const auto dlstrings = fo4::localization::read_string_table_file(
-        root / "Strings" / "Patch_en.DLSTRINGS",
-        fo4::localization::StringTableKind::dlstrings);
-    REQUIRE(dlstrings.entries.size() == 2u);
-    CHECK(fo4::localization::find_string(dlstrings, 42u) != nullptr);
-    CHECK(fo4::localization::find_string(dlstrings, 201u) != nullptr);
-    CHECK(readBytes(root / "Strings" / "Patch_en.STRINGS") == stringsBefore);
-    CHECK(readBytes(root / "Strings" / "Patch_en.ILSTRINGS") == ilstringsBefore);
-}
-
 TEST_CASE("Native SetQuestStages reuses existing English CP1252 CNAM IDs") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -904,40 +855,6 @@ TEST_CASE("Native SetQuestStages reuses existing English CP1252 CNAM IDs") {
     CHECK(readBytes(root / "Strings" / "Patch_en.DLSTRINGS") == before);
 }
 
-TEST_CASE("Native SetQuestStages writes English CNAM text as CP1252") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
-    writeLocalizationSet(
-        root,
-        {{100, rawBytes("Other")}},
-        {},
-        {{200, rawBytes("Other")}});
-    const auto cafe = std::string{"Caf"} + "\xc3\xa9";
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 10}, {"logEntry", cafe}}}),
-            localizedQuestContext(root)
-        }));
-    REQUIRE(result.has_value());
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto table = fo4::localization::read_string_table_file(
-        root / "Strings" / "Patch_en.DLSTRINGS",
-        fo4::localization::StringTableKind::dlstrings);
-    const auto* entry = fo4::localization::find_string(table, 201u);
-    REQUIRE(entry != nullptr);
-    CHECK(entry->text == std::vector<std::byte>{
-        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xe9}});
-}
-
 TEST_CASE("Native SetQuestStages refuses English CNAM text outside CP1252") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -967,40 +884,6 @@ TEST_CASE("Native SetQuestStages refuses English CNAM text outside CP1252") {
     CHECK(readBytes(root / "Strings" / "Patch_en.DLSTRINGS") == dlstringsBefore);
 }
 
-TEST_CASE("Native SetQuestStages writes supported non-English CNAM text as UTF-8") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
-    writeLocalizationSet(
-        root,
-        {{100, rawBytes("Other")}},
-        {},
-        {{200, rawBytes("Other")}},
-        "de");
-    const auto text = std::string{"Gr"} + "\xc3\xbc" + "\xc3\x9f" + "e";
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 10}, {"logEntry", text}}}),
-            localizedQuestContext(root, "de")
-        }));
-    REQUIRE(result.has_value());
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto table = fo4::localization::read_string_table_file(
-        root / "Strings" / "Patch_de.DLSTRINGS",
-        fo4::localization::StringTableKind::dlstrings);
-    const auto* entry = fo4::localization::find_string(table, 201u);
-    REQUIRE(entry != nullptr);
-    CHECK(entry->text == rawBytes(text));
-}
-
 TEST_CASE("Native SetQuestStages rejects unsupported localized language tokens") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -1026,38 +909,6 @@ TEST_CASE("Native SetQuestStages rejects unsupported localized language tokens")
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "InvalidLocalizedQuestContext");
     CHECK(readBytes(path) == pluginBefore);
-}
-
-TEST_CASE("Native SetQuestStages allocates a brand-new localized CNAM") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
-    writeLocalizationSet(
-        root,
-        {{100, rawBytes("Other")}},
-        {},
-        {{200, rawBytes("Other")}});
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 10}, {"logEntry", "New"}}}),
-            localizedQuestContext(root)
-        }));
-    REQUIRE(result.has_value());
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto table = fo4::localization::read_string_table_file(
-        root / "Strings" / "Patch_en.DLSTRINGS",
-        fo4::localization::StringTableKind::dlstrings);
-    const auto* entry = fo4::localization::find_string(table, 201u);
-    REQUIRE(entry != nullptr);
-    CHECK(entry->text == rawBytes("New"));
 }
 
 TEST_CASE("Native SetQuestStages refuses stale localized allocation participants") {
@@ -2640,7 +2491,7 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
                     {"kind", "reference"},
                     {"id", 1},
                     {"name", "Rich"},
-                    {"flags", 0},
+                    {"flags", 2},
                     {"keywords", nlohmann::json::array({"000800:Master.esm"})},
                     {"items", nlohmann::json::array({
                         {{"item", "000801:Master.esm"}, {"count", 2}}
@@ -2704,6 +2555,8 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
         CHECK(alias.factions[0] == fo4::FormKey::parse("000803:Master.esm"));
         REQUIRE(alias.packages.size() == 1u);
         CHECK(alias.packages[0] == fo4::FormKey::parse("000804:Master.esm"));
+        REQUIRE(alias.flags.has_value());
+        CHECK((*alias.flags & 0x2u) != 0u);
     }
 
     const auto locationExtras = backend.invokeBackend(

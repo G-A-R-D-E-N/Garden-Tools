@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -17,8 +18,8 @@
 namespace {
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_radicle_masters_" + std::to_string(id));
+    const auto id = fo4ide_test::uniqueTempName();
+    return std::filesystem::temp_directory_path() / ("fo4ide_radicle_masters_" + id);
 }
 
 struct Cleanup {
@@ -292,6 +293,25 @@ TEST_CASE("Native plugin kind follows the filename when the TES4 flags are clear
     const auto user = parseStringResult(backend.invoke("masters.List", nlohmann::json::array({"User.esp"})));
     REQUIRE(user.at("masters").size() == 1);
     CHECK(user.at("masters")[0].at("kind") == "light");
+}
+
+// Detects: explicit HEDR repair must stage and persist the recursive count without changing the plugin first.
+TEST_CASE("Native HEDR repair stages and saves a stale count") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto masterA = root / "MasterA.esm";
+    const auto masterB = root / "MasterB.esp";
+    writeBytes(masterA, makeMaster("MasterAKeyword"));
+    writeBytes(masterB, makeMaster("MasterBKeyword"));
+    writeBytes(path, makePatch());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, masterA, masterB, path);
+    REQUIRE(fo4::read_plugin_file(path).header.record_count == 1u);
+    REQUIRE(backend.invoke("backend.RepairHedrCount", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(fo4::read_plugin_file(path).header.record_count == 1u);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(fo4::read_plugin_file(path).header.record_count == 2u);
 }
 
 TEST_CASE("Native UpdateOnam treats a filename .esm without the master flag as a master") {

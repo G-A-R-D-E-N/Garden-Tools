@@ -432,6 +432,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveElementFromSelected") return backend_.removeElementFromSelected(args);
         if (method == "CleanUnusedMasters") return backend_.cleanUnusedMasters(args);
         if (method == "UpdateOnam") return backend_.updateOnam(args);
+        if (method == "RepairHedrCount") return backend_.repairHedrCount(args);
         if (method == "CopyAsDisabledOverride") return backend_.copyAsDisabledOverride(args);
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
@@ -496,6 +497,15 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveScript") return backend_.removeScript(args);
         if (method == "AddScriptProperty") return backend_.addScriptProperty(args);
         if (method == "RemoveScriptProperty") return backend_.removeScriptProperty(args);
+        if (method == "RemoveQuestFragment") return backend_.removeQuestFragment(args);
+        if (method == "GetQuestFragments") return backend_.getQuestFragments(args);
+        if (method == "GetQuestScript") return backend_.getQuestScript(args);
+        if (method == "EditQuestScript") return backend_.editQuestScript(args);
+        if (method == "AddAliasScript") return backend_.addAliasScript(args);
+        if (method == "RemoveAliasScript") return backend_.removeAliasScript(args);
+        if (method == "AddAliasScriptProperty") return backend_.addAliasScriptProperty(args);
+        if (method == "RemoveAliasScriptProperty") return backend_.removeAliasScriptProperty(args);
+        if (method == "SetAliasScriptValue") return backend_.setAliasScriptValue(args);
         if (method == "EditNpcEntries") return backend_.editNpcEntries(args);
         if (method == "GetPerkEffects") return backend_.getPerkEffects(args);
         if (method == "SetPerkEffects") return backend_.setPerkEffects(args);

@@ -55,6 +55,11 @@ VmadStructureMutationStatus replace_vmad_property(Plugin& plugin, const FormKey&
                                                   std::size_t script, std::size_t index,
                                                   const VmadProperty& property);
 
+VmadStructureMutationStatus bootstrap_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
+                                                          std::uint16_t stage, std::int32_t stage_index,
+                                                          std::string_view script,
+                                                          std::string_view function);
+
 VmadStructureMutationStatus add_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
                                                     std::uint16_t stage, std::int32_t stage_index,
                                                     std::string_view script,
@@ -75,6 +80,27 @@ VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const For
 VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
                                                        std::uint16_t stage,
                                                        std::int32_t stage_index);
+
+VmadStructureMutationStatus add_quest_alias_script(Plugin& plugin, const FormKey& record,
+                                                   std::int16_t alias_id, std::size_t index,
+                                                   std::string_view name, std::uint8_t flags);
+
+VmadStructureMutationStatus remove_quest_alias_script(Plugin& plugin, const FormKey& record,
+                                                      std::int16_t alias_id, std::size_t index);
+
+VmadStructureMutationStatus add_quest_alias_script_property(Plugin& plugin, const FormKey& record,
+                                                            std::int16_t alias_id, std::size_t script,
+                                                            std::size_t index,
+                                                            const VmadProperty& property);
+
+VmadStructureMutationStatus remove_quest_alias_script_property(Plugin& plugin, const FormKey& record,
+                                                               std::int16_t alias_id,
+                                                               std::size_t script, std::size_t index);
+
+VmadStructureMutationStatus set_quest_alias_script_value(Plugin& plugin, const FormKey& record,
+                                                  std::int16_t alias_id, std::size_t script,
+                                                  std::size_t property, const VmadValue& value,
+                                                  std::size_t element = 0);
 
 VmadStructureMutationStatus add_vmad_fragment(Plugin& plugin, const FormKey& record,
                                               std::uint32_t key, std::string_view script,

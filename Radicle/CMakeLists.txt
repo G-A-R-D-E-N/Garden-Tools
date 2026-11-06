@@ -191,6 +191,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
+  src/forms/dialogue_authoring.cpp
   src/forms/copy_as_new.cpp
   src/forms/copy_as_wrapper.cpp
   src/forms/placed_reference_edit.cpp
@@ -282,6 +283,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/environment/vegetation.cpp
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
+  src/environment/package_create.cpp
   src/environment/package_procedure.cpp
   src/environment/package_procedure_tree.cpp
   src/environment/dialogue.cpp
@@ -329,6 +331,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/papyrus/creation_kit_fidelity.cpp
   src/papyrus/compile_script.cpp
   src/papyrus/analysis_service.cpp
+  src/papyrus/completion.cpp
+  src/papyrus/references.cpp
+  src/papyrus/workspace_symbols.cpp
   src/f4se/binding_validator.cpp
   src/f4se/cpp_emitter.cpp
   src/f4se/cpp_scanner.cpp
@@ -665,6 +670,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_undecodable_record.cpp
     tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
+    tests/test_hedr_count_real.cpp
     tests/test_row_roundtrip_real.cpp
     tests/test_actor_value_perk_real.cpp
     tests/test_perk_effects_real.cpp
@@ -745,6 +751,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_copy_as_new.cpp
     tests/test_copy_as_wrapper.cpp
     tests/test_info_copy_new.cpp
+    tests/test_dialogue_authoring.cpp
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp

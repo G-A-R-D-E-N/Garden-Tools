@@ -32,8 +32,6 @@ constexpr std::uint32_t k_dds_dx10_fourcc = 0x30315844u;
 constexpr std::size_t k_dds_header_size = 128;
 constexpr std::size_t k_dds_dx10_header_size = 148;
 
-constexpr std::size_t k_max_extract_total_bytes = std::size_t{1} << 30;
-
 std::uint64_t read_u64(binary::Cursor& cursor) {
   const auto low = static_cast<std::uint64_t>(cursor.read_u32());
   const auto high = static_cast<std::uint64_t>(cursor.read_u32());
@@ -336,6 +334,12 @@ Ba2TextureArchive read_ba2_texture_impl(std::span<const std::byte> data) {
 
 bool is_supported_ba2_texture_version(std::uint32_t version) noexcept {
   return version == 1u || version == 7u || version == 8u;
+}
+
+std::size_t ba2_texture_max_dds_header_size(const Ba2TextureInfo& info,
+                                            std::string_view path) noexcept {
+  if (!is_dds_path(path)) return 0;
+  return dx9_format(info) ? k_dds_header_size : k_dds_dx10_header_size;
 }
 
 Ba2TextureArchive read_ba2_texture(std::span<const std::byte> data) {

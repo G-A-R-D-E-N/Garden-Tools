@@ -82,8 +82,9 @@ public sealed class PapyrusTypeChecker
 
         public PapyrusType? ReturnType;
 
-        public void Report(string code, string message, PapyrusSpan span) =>
-            Diagnostics.Add(new PapyrusDiagnostic(code, PapyrusSeverity.Error, message, span, File));
+        public void Report(string code, string message, PapyrusSpan span,
+            PapyrusSeverity severity = PapyrusSeverity.Error) =>
+            Diagnostics.Add(new PapyrusDiagnostic(code, severity, message, span, File));
     }
 
 
@@ -259,6 +260,17 @@ public sealed class PapyrusTypeChecker
                 CheckExpression(state, index.Index);
                 return;
 
+            case PapyrusNewArrayExpression newArray:
+                CheckExpression(state, newArray.Size);
+                if (LiteralArrayLengthOverLimit(newArray.Size))
+                {
+                    state.Report(
+                        PapyrusDiagnosticCodes.ArrayLengthLimit,
+                        "A literal array length above 128 is over the Creation Kit limit.",
+                        newArray.Span, PapyrusSeverity.Warning);
+                }
+                return;
+
             default:
                 foreach (var child in expr.Children)
                 {
@@ -266,6 +278,24 @@ public sealed class PapyrusTypeChecker
                 }
                 return;
         }
+    }
+
+    private const int CreationKitMaxArrayLength = 128;
+
+    private static bool LiteralArrayLengthOverLimit(PapyrusExpression? size)
+    {
+        if (size is not PapyrusLiteralExpression literal) return false;
+        if (literal.Kind != PapyrusLiteralKind.Int) return false;
+
+        var text = literal.Text;
+        var hex = text.Length > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X');
+        var digits = hex ? text[2..] : text;
+        var style = hex
+            ? System.Globalization.NumberStyles.HexNumber
+            : System.Globalization.NumberStyles.Integer;
+        if (!ulong.TryParse(digits, style, System.Globalization.CultureInfo.InvariantCulture,
+                out var value)) return true;
+        return value > CreationKitMaxArrayLength;
     }
 
 

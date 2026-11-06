@@ -157,6 +157,7 @@ RecordFlagStatus relocate_reference(Plugin& plugin,
   if (destination == source) {
     if (!has_type(bucket.header, target)) {
       forms::detail::move_reference_to_bucket(*located, target, context);
+      next.original_structure_fingerprint = 0;
     }
     plugin = std::move(next);
     return RecordFlagStatus::changed;
@@ -180,6 +181,7 @@ RecordFlagStatus relocate_reference(Plugin& plugin,
   forms::detail::ensure_reference_bucket(*destination_children,
                                          forms::detail::group_header(target, label), context, context)
       ->children.emplace_back(std::move(moved));
+  next.original_structure_fingerprint = 0;
   plugin = std::move(next);
   return RecordFlagStatus::changed;
 }

@@ -1,4 +1,5 @@
 #include <fo4ide/papyrus/TypeChecker.hpp>
+#include <fo4ide/papyrus/Resolver.hpp>
 
 #include <cctype>
 #include <string>
@@ -60,10 +61,26 @@ void visitChildExpressions(const Node* node, const auto& visitor) {
     }
 }
 
+constexpr unsigned long long kCreationKitMaxArrayLength = 128;
+
+bool literalArrayLengthOverLimit(const Expression* size) {
+    const auto* literal = dynamic_cast<const LiteralExpression*>(size);
+    if (!literal || literal->kind != LiteralKind::Int) return false;
+    try {
+        const auto& text = literal->text;
+        const bool hex = text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X');
+        const auto value = hex ? std::stoull(text.substr(2), nullptr, 16) : std::stoull(text);
+        return value > kCreationKitMaxArrayLength;
+    } catch (...) {
+        return true;
+    }
+}
+
 }  // namespace
 
-void TypeChecker::State::report(DiagnosticCode code, std::string message, const Span& span) {
-    diagnostics.push_back(Diagnostic{code, Severity::Error, std::move(message), span, file});
+void TypeChecker::State::report(DiagnosticCode code, std::string message, const Span& span,
+                                Severity severity) {
+    diagnostics.push_back(Diagnostic{code, severity, std::move(message), span, file});
 }
 
 std::vector<Diagnostic> TypeChecker::check(const Resolution& resolution) {
@@ -256,6 +273,17 @@ void TypeChecker::checkExpression(State& state, const Node* expression) {
             return;
         }
 
+        case NodeKind::NewArrayExpression: {
+            const auto* newArray = static_cast<const NewArrayExpression*>(expression);
+            checkExpression(state, newArray->size.get());
+            if (literalArrayLengthOverLimit(newArray->size.get())) {
+                state.report(DiagnosticCode::ArrayLengthLimit,
+                             "A literal array length above 128 is over the Creation Kit limit.",
+                             newArray->span, Severity::Warning);
+            }
+            return;
+        }
+
         default:
             visitChildExpressions(expression,
                                   [&](const Node* child) { checkExpression(state, child); });
@@ -327,28 +355,10 @@ void TypeChecker::checkCall(State& state, const CallExpression& call) {
 }
 
 Type TypeChecker::parameterType(const Parameter& parameter, const Script* owner) {
-    const std::string& name = parameter.type.name;
-    std::optional<Type> resolved;
-    if (const Type* primitive = Type::primitive(name)) resolved = *primitive;
-
-    if (!resolved && owner) {
-        for (const Script* level : index_.baseChain(owner)) {
-            for (const auto& s : level->structs) {
-                if (iequals(s.name, name)) {
-                    resolved = Type::structOf(level->name, name);
-                    break;
-                }
-            }
-            if (resolved) break;
-        }
-    }
-
-    if (!resolved) {
-        const Script* script = index_.resolve(name);
-        resolved = script ? Type::object(script->name) : Type::error();
-    }
-
-    return parameter.type.isArray ? Type::arrayOf(*resolved) : *resolved;
+    // The parameter type must resolve exactly as the resolver does, so Script#Struct splits on its owner.
+    const auto resolved = Resolver::resolveTypeName(index_, parameter.type.name, owner);
+    const Type type = resolved ? *resolved : Type::error();
+    return parameter.type.isArray ? Type::arrayOf(type) : type;
 }
 
 void TypeChecker::checkAssignable(State& state, const Type& target, const Type& value,

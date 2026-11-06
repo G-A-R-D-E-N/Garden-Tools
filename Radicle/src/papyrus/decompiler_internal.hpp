@@ -68,6 +68,7 @@ struct BodyState {
     std::unordered_map<std::string, int> tempDefinition;
     std::unordered_map<int, std::string> tempExpression;
     std::vector<int> tempWasRead;
+    std::string leftTemp;
 
     std::ostringstream out;
 
@@ -99,6 +100,7 @@ struct BodyState {
                 if (def != tempDefinition.end()) tempWasRead.push_back(def->second);
                 return found->second;
             }
+            if (leftTemp.empty()) leftTemp = n;
         }
         return san(resolveName(n));
     }

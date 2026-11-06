@@ -227,6 +227,7 @@ Result<const fo4::Plugin*> RadiclePluginBackend::versionPlugin(std::string_view 
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getNpc(const nlohmann::json& arguments) const {
+    if (const auto error = testRecoveryGate("GetNpc", arguments)) return std::unexpected(*error);
     const auto key = support::formKeyArgument(support::stringArgument(arguments, 0));
     if (!key) return std::unexpected(key.error());
 

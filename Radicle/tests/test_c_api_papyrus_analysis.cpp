@@ -314,3 +314,178 @@ TEST(PapyrusAnalysisCApi, BaseImportsRefuseNullEntryAndMissingArray) {
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(text, nullptr);
 }
+
+TEST(PapyrusAnalysisCApi, CompletionJsonRoundTripsBufferAndMatchesService) {
+  const std::string text =
+      "ScriptName A\nInt Property Health Auto\nFunction F()\n  he\nEndFunction\n";
+  const auto offset = static_cast<int32_t>(text.find("he\n") + 2);
+
+  uint8_t* reply = nullptr;
+  size_t reply_size = 0;
+  ASSERT_EQ(radicle_papyrus_completion_json(as_bytes(text), text.size(), nullptr, offset, nullptr,
+                                            nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const auto reply_text = take_text(reply, reply_size);
+  EXPECT_EQ(reply_text, AnalysisService::completionJson(text, nullptr, offset));
+  EXPECT_EQ(nlohmann::json::parse(reply_text)["replaceLength"].get<int>(), 2);
+}
+
+TEST(PapyrusAnalysisCApi, SignatureHelpJsonRoundTripsBufferAndMatchesService) {
+  const std::string text =
+      "ScriptName A\nFunction Pick(Int first, Int second)\nEndFunction\n"
+      "Function F()\n  Pick(1, \nEndFunction\n";
+  const auto offset = static_cast<int32_t>(text.find("Pick(1, ") + 8);
+
+  uint8_t* reply = nullptr;
+  size_t reply_size = 0;
+  ASSERT_EQ(radicle_papyrus_signature_help_json(as_bytes(text), text.size(), nullptr, offset,
+                                                nullptr, nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const auto reply_text = take_text(reply, reply_size);
+  EXPECT_EQ(reply_text, AnalysisService::signatureHelpJson(text, nullptr, offset));
+  EXPECT_EQ(nlohmann::json::parse(reply_text)["activeParameter"].get<int>(), 1);
+}
+
+TEST(PapyrusAnalysisCApi, CheckTextJsonRoundTripsRevisionAndBufferNotDisk) {
+  ScratchRoot root;
+  const auto file = root.write("A.psc", "ScriptName A\nFunction F()\nEndFunction\n");
+  const std::string buffer = "ScriptName A\nFunction F()\n    int n = nope\nEndFunction\n";
+
+  uint8_t* reply = nullptr;
+  size_t reply_size = 0;
+  ASSERT_EQ(radicle_papyrus_check_text_json(as_bytes(buffer), buffer.size(), file.c_str(), 9,
+                                            nullptr, nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const auto reply_text = take_text(reply, reply_size);
+  EXPECT_EQ(reply_text, AnalysisService::checkTextJson(buffer, &file, 9));
+  const auto json = nlohmann::json::parse(reply_text);
+  EXPECT_EQ(json["revision"].get<int>(), 9);
+  EXPECT_EQ(json["errorCount"].get<int>(), 1);
+}
+
+TEST(PapyrusAnalysisCApi, BufferCompletionAndSignatureRefuseOffsetOutsideTheText) {
+  const std::string text = "ScriptName A\n";
+  const auto size = static_cast<int32_t>(text.size());
+  uint8_t* reply = nullptr;
+  size_t reply_size = 0;
+
+  EXPECT_EQ(radicle_papyrus_completion_json(as_bytes(text), text.size(), nullptr, -1, nullptr,
+                                            nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(reply, nullptr);
+  EXPECT_EQ(reply_size, 0u);
+  EXPECT_STREQ(radicle_last_error(), "offset is outside the text");
+
+  EXPECT_EQ(radicle_papyrus_signature_help_json(as_bytes(text), text.size(), nullptr, size + 1,
+                                                nullptr, nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(reply, nullptr);
+  EXPECT_EQ(reply_size, 0u);
+
+  ASSERT_EQ(radicle_papyrus_completion_json(as_bytes(text), text.size(), nullptr, size, nullptr,
+                                            nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  take_text(reply, reply_size);
+}
+
+TEST(PapyrusAnalysisCApi, BufferExportsRefuseNullTextWithOutParamsCleared) {
+  uint8_t sentinel = 0;
+  uint8_t* reply = nullptr;
+  size_t reply_size = 0;
+  auto arm = [&] {
+    reply = &sentinel;
+    reply_size = 7;
+  };
+
+  arm();
+  EXPECT_EQ(radicle_papyrus_completion_json(nullptr, 0, nullptr, 0, nullptr, nullptr, 0, &reply,
+                                            &reply_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(reply, nullptr);
+  EXPECT_EQ(reply_size, 0u);
+  EXPECT_STREQ(radicle_last_error(), "text is required");
+
+  arm();
+  EXPECT_EQ(radicle_papyrus_signature_help_json(nullptr, 0, nullptr, 0, nullptr, nullptr, 0,
+                                                &reply, &reply_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(reply, nullptr);
+  EXPECT_EQ(reply_size, 0u);
+
+  arm();
+  EXPECT_EQ(radicle_papyrus_check_text_json(nullptr, 0, nullptr, 1, nullptr, nullptr, 0, &reply,
+                                            &reply_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(reply, nullptr);
+  EXPECT_EQ(reply_size, 0u);
+}
+
+TEST(PapyrusAnalysisCApi, NavigationExportsMatchServiceReplies) {
+  ScratchRoot root;
+  const std::string text = "ScriptName A\nFunction F()\n  Int n = 1\n  Int m = n\nEndFunction\n";
+  const auto file = root.write("A.psc", text);
+  root.write("Alpha.psc", "ScriptName Alpha\nFunction GetActor()\nEndFunction\n");
+  const auto offset = static_cast<int32_t>(text.find("Int n = 1") + 4);
+  const std::string imports = root.path();
+
+  uint8_t* reply = nullptr;
+  size_t reply_size = 0;
+  ASSERT_EQ(radicle_papyrus_references_json(as_bytes(text), text.size(), file.c_str(), offset,
+                                            nullptr, nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(take_text(reply, reply_size), AnalysisService::referencesJson(text, &file, offset));
+
+  ASSERT_EQ(radicle_papyrus_rename_json(as_bytes(text), text.size(), file.c_str(), offset, "total",
+                                        nullptr, nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(take_text(reply, reply_size),
+            AnalysisService::renameJson(text, &file, offset, "total"));
+
+  ASSERT_EQ(radicle_papyrus_workspace_symbols_json("getactor", 100, imports.c_str(), nullptr, 0,
+                                                   &reply, &reply_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(take_text(reply, reply_size),
+            AnalysisService::workspaceSymbolsJson("getactor", 100, &imports));
+}
+
+TEST(PapyrusAnalysisCApi, NavigationExportsRefuseMissingArgumentsWithOutParamsCleared) {
+  const std::string text = "ScriptName A\n";
+  uint8_t sentinel = 0;
+  uint8_t* reply = nullptr;
+  size_t reply_size = 0;
+  auto arm = [&] {
+    reply = &sentinel;
+    reply_size = 7;
+  };
+
+  arm();
+  EXPECT_EQ(radicle_papyrus_references_json(as_bytes(text), text.size(), nullptr, -1, nullptr,
+                                            nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(reply, nullptr);
+  EXPECT_EQ(reply_size, 0u);
+  EXPECT_STREQ(radicle_last_error(), "offset is outside the text");
+
+  arm();
+  EXPECT_EQ(radicle_papyrus_rename_json(as_bytes(text), text.size(), nullptr, 0, nullptr, nullptr,
+                                        nullptr, 0, &reply, &reply_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(reply, nullptr);
+  EXPECT_EQ(reply_size, 0u);
+  EXPECT_STREQ(radicle_last_error(), "new_name is required");
+
+  arm();
+  EXPECT_EQ(radicle_papyrus_workspace_symbols_json(nullptr, 100, nullptr, nullptr, 0, &reply,
+                                                   &reply_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(reply, nullptr);
+  EXPECT_EQ(reply_size, 0u);
+  EXPECT_STREQ(radicle_last_error(), "query is required");
+}

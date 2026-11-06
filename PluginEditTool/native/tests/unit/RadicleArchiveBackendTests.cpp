@@ -1,4 +1,5 @@
 #include <fo4ide/archive/ArchiveService.hpp>
+#include "../helpers/TempRoot.hpp"
 #include <fo4ide/archive/RadicleArchiveBackend.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -19,9 +20,9 @@
 namespace {
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_radicle_archive_" + std::to_string(id));
+           ("fo4ide_radicle_archive_" + id);
 }
 
 struct Cleanup {

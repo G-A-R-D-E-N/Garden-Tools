@@ -20,6 +20,9 @@
 
 namespace fo4ide::plugin::questinternal {
 
+std::optional<std::filesystem::path> allowedVanillaFragmentImports(
+    const std::filesystem::path& candidate, const std::filesystem::path& dataDirectory);
+
 #ifdef FO4IDE_TEST_HOOKS
 inline LocalizedQuestBeforeCommitHook localizedQuestBeforeCommitHook = nullptr;
 inline LocalizedQuestAfterTableParseHook localizedQuestAfterTableParseHook = nullptr;
@@ -41,6 +44,9 @@ struct LocalizedQuestTables {
     std::vector<std::byte> originalStringsBytes;
     std::vector<std::byte> originalDlstringsBytes;
     std::vector<std::byte> originalIlstringsBytes;
+    bool stringsExist{false};
+    bool dlstringsExist{false};
+    bool ilstringsExist{false};
     fo4::localization::LocalizedStringTable strings;
     fo4::localization::LocalizedStringTable dlstrings;
     fo4::localization::LocalizedStringTable ilstrings;
@@ -130,6 +136,7 @@ std::optional<Error> encodeLocalizedText(std::string_view language,
 std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
                                               const std::filesystem::path& pluginPath,
                                               const std::filesystem::path& directory,
-                                              LocalizedQuestTables& result);
+                                              LocalizedQuestTables& result,
+                                              bool allowAbsent = false);
 
 }

@@ -45,6 +45,8 @@ struct Ba2TextureArchive {
 
 // Supported versions: 1, 7 (seen on NG/AE installs), 8 (seen on AE 1.11.240.0).
 bool is_supported_ba2_texture_version(std::uint32_t version) noexcept;
+std::size_t ba2_texture_max_dds_header_size(const Ba2TextureInfo& info,
+                                            std::string_view path) noexcept;
 
 Ba2TextureArchive read_ba2_texture(std::span<const std::byte> data);
 Ba2TextureArchive read_ba2_texture_file(const std::filesystem::path& path);
