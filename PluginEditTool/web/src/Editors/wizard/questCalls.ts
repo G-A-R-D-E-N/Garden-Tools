@@ -59,14 +59,21 @@ export function buildQuestCalls(template: QuestTemplate, answers: Answers): Back
 const createdKey = (raw: unknown): string | undefined =>
   ((typeof raw === 'string' ? JSON.parse(raw) : raw) as { formKey?: string } | null)?.formKey;
 
-const argValue = (arg: unknown, run: QuestRun): unknown => {
-  if (arg === NEW_RECORD) return run.formKey;
-  return typeof arg === 'string' ? (run.made.get(arg) ?? arg) : arg;
+const resolveArg = (value: unknown, run: QuestRun): unknown => {
+  if (typeof value === 'string') {
+    if (value === NEW_RECORD) return run.formKey;
+    return run.made.get(value) ?? value;
+  }
+  if (Array.isArray(value)) return value.map(item => resolveArg(item, run));
+  if (value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveArg(item, run)]));
+  }
+  return value;
 };
 
 export async function runQuestCalls(b: Backend, calls: BackendCall[], run: QuestRun): Promise<void> {
   for (const call of calls) {
-    const args = call.args.map(arg => argValue(arg, run));
+    const args = call.args.map(arg => resolveArg(arg, run));
     const send = b[call.method] as unknown as (...params: unknown[]) => Promise<unknown>;
     const raw = await send.apply(b, args);
     if (call.method === 'CreateRecord') {
