@@ -23,6 +23,7 @@ interface Props {
   plugin: string;
   formKey: string;
   push: (entry: UndoEntry) => void;
+  onWritten: (importsDir: string) => void;
 }
 
 const ACTION_LABELS: Record<ActionKind, string> = {
@@ -35,7 +36,7 @@ const EMPTY_FORM: FragmentArgs = { stage: 0, entry: 0, scriptName: '', outputDir
 
 const keyOf = (args: FragmentArgs) => `${args.stage}:${args.entry}`;
 
-export default function FragmentsPane({ plugin, formKey, push }: Props) {
+export default function FragmentsPane({ plugin, formKey, push, onWritten }: Props) {
   const backend = getBackend();
   const [form, setForm] = useState<FragmentArgs>(EMPTY_FORM);
   const [result, setResult] = useState('');
@@ -51,6 +52,7 @@ export default function FragmentsPane({ plugin, formKey, push }: Props) {
       setResult(typeof raw === 'string'
         ? raw
         : `Wrote function ${raw.function} in script ${raw.script}. Save the plugin to keep the change.`);
+      onWritten(args.importsDir);
       onDone?.();
     }, (e: unknown) => setError(friendlyError(errorText(e))));
   };

@@ -3,7 +3,7 @@ import { getBackend } from '../../backend';
 import { errorText } from '../../errors';
 import { friendlyError, type FriendlyMessage } from '../friendlyErrors';
 import type { UndoEntry } from '../useUndoStack';
-import { readQuest, writeAliases, writeObjectives, writeStages, type QuestSnapshot } from './questBackend';
+import { readQuest, readStageJumps, writeAliases, writeObjectives, writeStages, type QuestSnapshot } from './questBackend';
 import type { QuestAlias, QuestObjective, QuestStage, StageEdit } from './questModel';
 
 export function useQuestRecord(plugin: string, formKey: string, push: (entry: UndoEntry) => void) {
@@ -71,5 +71,10 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
     commit(label, snapshot.aliases, next, value => writeAliases(backend, plugin, formKey, value), storeField('aliases'));
   };
 
-  return { snapshot, error, commitStages, editStages, commitObjectives, commitAliases };
+  const refreshJumps = (importsDir: string) => {
+    if (!backend) return;
+    readStageJumps(backend, plugin, formKey, importsDir).then(storeField('jumps'), () => undefined);
+  };
+
+  return { snapshot, error, commitStages, editStages, commitObjectives, commitAliases, refreshJumps };
 }

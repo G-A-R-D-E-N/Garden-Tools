@@ -1,19 +1,20 @@
 import { addStageAfter, nextStageNumber } from './flowChartEdits';
 import { buildFlowChart } from './flowChartModel';
 import FlowChartPanel from './FlowChartPanel';
-import type { QuestObjective, QuestStage, StageEdit, StageSelection } from './questModel';
+import type { QuestObjective, QuestStage, StageEdit, StageJump, StageSelection } from './questModel';
 import './FlowChart.css';
 
 interface Props {
   stages: QuestStage[];
   objectives: QuestObjective[];
+  jumps: StageJump[];
   selected: StageSelection | null;
   onSelect: (index: number | null) => void;
   onEdit: (edit: StageEdit, label: string) => void;
 }
 
-export default function FlowChart({ stages, objectives, selected, onSelect, onEdit }: Props) {
-  const chart = buildFlowChart(stages, objectives);
+export default function FlowChart({ stages, objectives, jumps, selected, onSelect, onEdit }: Props) {
+  const chart = buildFlowChart(stages, objectives, jumps);
   const current = stages.find(stage => stage.index === selected?.index);
   const addNext = (after: number) => {
     const added: { index?: number } = {};
@@ -45,7 +46,12 @@ export default function FlowChart({ stages, objectives, selected, onSelect, onEd
                     <path className="quest-flow-head" d="M0,0 L10,5 L0,10 z" />
                   </marker>
                 </defs>
-                {chart.arrows.map((arrow, at) => (
+                {chart.arrows.map((arrow, at) => arrow.d ? (
+                  <path key={`${at}:${arrow.id}`} className={`quest-flow-arrow quest-flow-arrow-${arrow.kind}`} d={arrow.d}
+                    markerEnd="url(#quest-flow-head)">
+                    <title>{arrow.title}</title>
+                  </path>
+                ) : (
                   <line key={`${at}:${arrow.id}`} className={`quest-flow-arrow quest-flow-arrow-${arrow.kind}`}
                     x1={arrow.x1} y1={arrow.y1} x2={arrow.x2} y2={arrow.y2} markerEnd="url(#quest-flow-head)">
                     <title>{arrow.title}</title>
@@ -84,6 +90,7 @@ export default function FlowChart({ stages, objectives, selected, onSelect, onEd
       <p className="quest-note quest-flow-legend">
         <span className="quest-flow-legend-problem">Red border</span>: no journal text and no objective with this
         number. <span className="quest-flow-legend-ending">Blue border</span>: completes or fails the quest. Grey: fine.
+        <span className="quest-flow-legend-jump">Amber arc</span>: a script function on this quest sets another stage.
       </p>
     </section>
   );
