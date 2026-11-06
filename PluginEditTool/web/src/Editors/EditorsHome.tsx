@@ -15,7 +15,7 @@ const CARDS = [
   { kind: 'quest', title: 'Quest', text: 'Stages, objectives and aliases for one quest.', icon: <Flag size={24} strokeWidth={1.5} /> },
   { kind: 'dialogue', title: 'Dialogue', text: 'Topics and the responses an NPC gives, for one quest.', icon: <MessageSquare size={24} strokeWidth={1.5} /> },
   { kind: 'scene', title: 'Scene', text: 'Phases, actors and actions of one scripted scene.', icon: <Clapperboard size={24} strokeWidth={1.5} /> },
-  { kind: 'wizard', title: 'New quest from template', text: 'Answer a few plain questions and get a working quest to edit.', icon: <FilePlus2 size={24} strokeWidth={1.5} /> },
+  { kind: 'wizard', title: 'New quest from template', text: 'Answer a few plain questions and get a quest draft to finish in the editor.', icon: <FilePlus2 size={24} strokeWidth={1.5} /> },
 ] as const;
 
 export default function EditorsHome({ onClose }: { onClose: () => void }) {
@@ -23,7 +23,10 @@ export default function EditorsHome({ onClose }: { onClose: () => void }) {
   const [createdQuest, setCreatedQuest] = useState<PickedRecord | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const tour = useTour();
-  const back = () => setScreen(null);
+  const back = () => {
+    setScreen(null);
+    setCreatedQuest(null);
+  };
 
   return (
     <>

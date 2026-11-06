@@ -38,7 +38,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     (async () => {
       try {
         const list = JSON.parse(await backend.GetActivePlugins()) as ActivePlugin[];
-        if (live) setPlugins(list.filter(plugin => plugin.Kind !== 'master'));
+        if (live) setPlugins(list.filter(plugin => plugin.Editable));
       } catch (e) {
         if (live) setError(friendlyError(errorText(e)));
       }
@@ -49,7 +49,11 @@ export default function NewQuestWizard({ onBack, onCreated }: {
   const flow: WizardStep[] = template ? [PLUGIN_QUESTION, ...template.questions] : [];
   const current = flow[step];
   const answered = (question: WizardStep) => (answers[question.id] ?? '').trim() !== '';
-  const setAnswer = (id: string, value: string) => setAnswers(prev => ({ ...prev, [id]: value }));
+  const setAnswer = (id: string, value: string) => {
+    setAnswers(prev => ({ ...prev, [id]: value }));
+    setMadeKey(null);
+    setError(null);
+  };
 
   const choose = (next: QuestTemplate) => {
     setTemplate(next);
@@ -82,7 +86,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     } catch (e) {
       const failure = friendlyError(errorText(e));
       setError(run.formKey
-        ? { ...failure, text: `${failure.text} The quest ${run.formKey} was made but is not finished.` }
+        ? { ...failure, text: `${failure.text} Part of the quest was made. Open it to see what is there.` }
         : failure);
       setMadeKey(run.formKey);
     } finally {
@@ -99,8 +103,8 @@ export default function NewQuestWizard({ onBack, onCreated }: {
           onClick={() => setHelpOpen(open => !open)}>Help</button>
       </header>
       <p className="editor-purpose">
-        Answer a few plain questions. The wizard makes a quest with stages, objectives and aliases, then opens it in
-        the Quest editor.
+        Answer a few plain questions. The wizard makes a quest draft with stages, objectives and aliases, then opens
+        it in the Quest editor.
       </p>
       {error && <ErrorNote error={error} />}
 
@@ -150,8 +154,10 @@ export default function NewQuestWizard({ onBack, onCreated }: {
       {template !== null && step === flow.length && (
         <div className="wizard-body">
           <p className="editor-purpose">
-            Check the answers. The wizard writes the quest name, stages, objectives and alias names. It does not yet
-            link the quest giver, location or item to the quest. Set those in the Creation Kit after you create it.
+            Check the answers. The wizard writes the internal name, the journal lines, the objectives and the alias
+            names. It does not link the quest giver, location or item to the quest, so set those in the Creation Kit.
+            The quest will not start by itself. Set it to start with the game, and add something that moves it to
+            stage 10.
           </p>
           <dl className="wizard-review">
             {flow.map(question => (

@@ -1,11 +1,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { stubBackend } from '../quest/questTestHarness';
+import EditorsHome from '../EditorsHome';
+import { TOUR_STORAGE_KEY } from '../help/useTour';
 import NewQuestWizard from './NewQuestWizard';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
 
 const CREATED = '000D00:Patch.esp';
+const NAME_LABEL = 'What is the quest\'s internal name?';
 const HITS: Record<string, object> = {
   NPC_: { FormKey: '000900:Patch.esp', EditorID: 'CourierBob', Type: 'NPC_', Plugin: 'Patch.esp' },
   LCTN: { FormKey: '000A00:Patch.esp', EditorID: 'MillSite', Type: 'LCTN', Plugin: 'Patch.esp' },
@@ -16,10 +19,13 @@ const LABELS: Record<string, string> = {
   '000A00:Patch.esp': 'Abandoned Mill',
   '000B00:Patch.esp': 'Rusty Locket',
 };
+const PLUGINS = [
+  { Name: 'Patch.esp', Kind: 'plugin', LoadOrder: 1, Editable: true, Size: 1 },
+];
 
 function wizardBackend(overrides: Record<string, unknown> = {}) {
   return stubBackend({
-    GetActivePlugins: vi.fn(async () => JSON.stringify([{ Name: 'Patch.esp', Kind: 'plugin', LoadOrder: 1, Editable: true, Size: 1 }])),
+    GetActivePlugins: vi.fn(async () => JSON.stringify(PLUGINS)),
     SearchRecords: vi.fn(async (_query: string, typeFilter: string) => JSON.stringify([HITS[typeFilter]])),
     ResolveFormKeyLabels: vi.fn(async (csv: string) => JSON.stringify(Object.fromEntries(csv.split(',').map(key => [key, LABELS[key]])))),
     CreateRecord: vi.fn(async () => JSON.stringify({ formKey: CREATED })),
@@ -39,7 +45,7 @@ async function answerEveryStep() {
   await screen.findByRole('option', { name: 'Patch.esp' });
   fireEvent.change(screen.getByLabelText('Which plugin should the quest go in?'), { target: { value: 'Patch.esp' } });
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-  fireEvent.change(screen.getByLabelText('What is the quest called?'), { target: { value: 'The Lost Locket' } });
+  fireEvent.change(screen.getByLabelText(NAME_LABEL), { target: { value: 'The Lost Locket' } });
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   await pickRecord('CourierBob', 'Courier Bob');
   await pickRecord('MillSite', 'Abandoned Mill');
@@ -48,7 +54,7 @@ async function answerEveryStep() {
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 }
 
-it('Detects: finishing the wizard sends CreateRecord, then stages, objectives and aliases in that order, then opens the new quest', async () => {
+it('Detects: finishing the wizard sends CreateRecord, then stages, aliases and objectives in that order, then opens the new quest', async () => {
   const createRecord = vi.fn(async () => JSON.stringify({ formKey: CREATED }));
   const backend = wizardBackend({ CreateRecord: createRecord });
   const onCreated = vi.fn();
@@ -58,19 +64,19 @@ it('Detects: finishing the wizard sends CreateRecord, then stages, objectives an
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
   expect(createRecord).toHaveBeenCalledWith('Patch.esp', 'QUST', { schema: true, editorId: 'The_Lost_Locket' });
   expect(backend.SetQuestStages).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('Go to Abandoned Mill and find Rusty Locket.'));
-  const [create, stages, objectives, aliases] = [
+  const [create, stages, aliases, objectives] = [
     createRecord.mock.invocationCallOrder[0],
     backend.SetQuestStages.mock.invocationCallOrder[0],
-    backend.SetQuestObjectives.mock.invocationCallOrder[0],
     backend.SetQuestAliases.mock.invocationCallOrder[0],
+    backend.SetQuestObjectives.mock.invocationCallOrder[0],
   ];
   expect(create).toBeLessThan(stages);
-  expect(stages).toBeLessThan(objectives);
-  expect(objectives).toBeLessThan(aliases);
+  expect(stages).toBeLessThan(aliases);
+  expect(aliases).toBeLessThan(objectives);
 });
 
-it('Detects: when the objectives call fails, the wizard stops, names the half-made quest, and sends no aliases', async () => {
-  const backend = wizardBackend({
+it('Detects: when the objectives call fails, the wizard stops, says part of the quest was made, and does not show the form key', async () => {
+  wizardBackend({
     SetQuestObjectives: vi.fn(async () => { throw new Error('duplicate objective index'); }),
   });
   const onCreated = vi.fn();
@@ -78,14 +84,26 @@ it('Detects: when the objectives call fails, the wizard stops, names the half-ma
   await answerEveryStep();
   fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
   const alert = await screen.findByRole('alert');
-  expect(alert.textContent).toContain(CREATED);
-  expect(backend.SetQuestAliases).not.toHaveBeenCalled();
+  expect(alert.textContent).toContain('Part of the quest was made');
+  expect(alert.textContent).not.toContain(CREATED);
   expect(onCreated).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Create quest' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Open the quest anyway' })).toBeTruthy();
 });
 
-it('Detects: when CreateRecord fails, no stage, objective or alias call is sent and Create quest stays available to retry', async () => {
+it('Detects: when the aliases call fails, no objectives call is sent, because the game rejects objective targets that are not aliases yet', async () => {
+  const backend = wizardBackend({
+    SetQuestAliases: vi.fn(async () => { throw new Error('alias write failed'); }),
+  });
+  render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  await answerEveryStep();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('Part of the quest was made');
+  expect(backend.SetQuestStages).toHaveBeenCalledTimes(1);
+  expect(backend.SetQuestObjectives).not.toHaveBeenCalled();
+});
+
+it('Detects: when CreateRecord fails, no stage, alias or objective call is sent and Create quest stays available to retry', async () => {
   const backend = wizardBackend({
     CreateRecord: vi.fn(async () => { throw new Error('Editor ID already exists.'); }),
   });
@@ -94,7 +112,47 @@ it('Detects: when CreateRecord fails, no stage, objective or alias call is sent 
   fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
   const alert = await screen.findByRole('alert');
   expect(alert.textContent).toContain('Editor ID already exists.');
-  expect(alert.textContent).not.toContain('was made');
+  expect(alert.textContent).not.toContain('Part of the quest was made');
   expect(backend.SetQuestStages).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Create quest' })).toBeTruthy();
+});
+
+it('Detects: when CreateRecord returns no form key, the wizard stops before any setter and says the game did not confirm the quest', async () => {
+  const backend = wizardBackend({
+    CreateRecord: vi.fn(async () => JSON.stringify({})),
+  });
+  render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  await answerEveryStep();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toContain('The game did not confirm that the quest was made.');
+  expect(alert.textContent).not.toContain('Part of the quest was made');
+  expect(backend.SetQuestStages).not.toHaveBeenCalled();
+});
+
+it('Detects: a plugin that is not open for editing is not offered as the place for the new quest', async () => {
+  wizardBackend({
+    GetActivePlugins: vi.fn(async () => JSON.stringify([
+      ...PLUGINS,
+      { Name: 'Base.esp', Kind: 'plugin', LoadOrder: 2, Editable: false, Size: 1 },
+    ])),
+  });
+  render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /Fetch an item/ }));
+  await screen.findByRole('option', { name: 'Patch.esp' });
+  expect(screen.queryByRole('option', { name: 'Base.esp' })).toBeNull();
+});
+
+it('Detects: going Back from the quest the wizard just made, then choosing the Quest card, opens an empty editor instead of that quest', async () => {
+  localStorage.setItem(TOUR_STORAGE_KEY, 'done');
+  wizardBackend();
+  render(<EditorsHome onClose={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: /^New quest from template/ }));
+  await answerEveryStep();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  await screen.findByText(`Editing ${CREATED}`);
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+  fireEvent.click(screen.getByRole('button', { name: /Stages, objectives and aliases for one quest/ }));
+  expect(await screen.findByText('Choose a quest to start editing it. Nothing changes until you edit a field.')).toBeTruthy();
+  expect(screen.queryByText(`Editing ${CREATED}`)).toBeNull();
 });

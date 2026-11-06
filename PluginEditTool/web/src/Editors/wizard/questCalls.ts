@@ -44,11 +44,13 @@ export function buildQuestCalls(template: QuestTemplate, answers: Answers): Back
   const aliases: QuestAlias[] = template.aliases.map((alias, id) => ({
     id, kind: alias.kind, name: alias.name, flags: null, collectionEntries: [],
   }));
+  const editorId = editorIdFrom(answers.name);
+  if (!editorId) throw new Error('The quest name needs at least one letter or number.');
   return [
-    { method: 'CreateRecord', args: [plugin, 'QUST', { schema: true, editorId: editorIdFrom(answers.name) }] },
+    { method: 'CreateRecord', args: [plugin, 'QUST', { schema: true, editorId }] },
     { method: 'SetQuestStages', args: [plugin, NEW_RECORD, stagesJson(stages)] },
-    { method: 'SetQuestObjectives', args: [plugin, NEW_RECORD, objectivesJson(objectives)] },
     { method: 'SetQuestAliases', args: [plugin, NEW_RECORD, aliasesJson(aliases)] },
+    { method: 'SetQuestObjectives', args: [plugin, NEW_RECORD, objectivesJson(objectives)] },
   ];
 }
 
@@ -59,7 +61,7 @@ export async function runQuestCalls(b: Backend, calls: BackendCall[], run: Quest
     const raw = await send.apply(b, args);
     if (call.method === 'CreateRecord') {
       const created = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { formKey?: string } | null;
-      if (!created?.formKey) throw new Error(`CreateRecord did not return a form key: ${JSON.stringify(raw)}`);
+      if (!created?.formKey) throw new Error('The game did not confirm that the quest was made.');
       run.formKey = created.formKey;
     }
   }

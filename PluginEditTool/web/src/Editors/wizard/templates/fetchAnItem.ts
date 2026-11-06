@@ -5,7 +5,7 @@ export const FETCH_AN_ITEM: QuestTemplate = {
   title: 'Fetch an item',
   summary: 'Go to a place, pick up an item, and bring it back to the quest giver.',
   questions: [
-    { id: 'name', kind: 'text', label: 'What is the quest called?', help: 'wizard-name', placeholder: 'The Lost Locket' },
+    { id: 'name', kind: 'text', label: 'What is the quest\'s internal name?', help: 'wizard-name', placeholder: 'The Lost Locket' },
     { id: 'questGiver', kind: 'record', label: 'Who gives the quest?', help: 'wizard-quest-giver', recordType: 'NPC_' },
     { id: 'location', kind: 'record', label: 'Where is the item?', help: 'wizard-location', recordType: 'LCTN' },
     { id: 'item', kind: 'record', label: 'Which item does the player fetch?', help: 'wizard-item', recordType: 'MISC' },
