@@ -94,7 +94,7 @@ typedef struct radicle_placed_edit {
   uint32_t primitive_type;
 } radicle_placed_edit;
 
-/* copied_from must borrow from the env until radicle_env_destroy; NULL when the patch already held the reference. */
+/* copied_from must borrow from env and dangles once env is destroyed or reloaded; it must be NULL unless status is EDITED. */
 typedef struct radicle_placed_edit_result {
   radicle_placed_edit_status status;
   const char* copied_from;
@@ -167,6 +167,7 @@ typedef struct radicle_cell_edit {
   size_t region_count;
 } radicle_cell_edit;
 
+/* env is a disk snapshot, so an edit to patch must stay invisible to it until patch is written and env is reloaded. */
 /* Status pointers must be written only once the arguments validate; a refusal must return an error status with radicle_last_error text. */
 RADICLE_API radicle_status radicle_plugin_edit_placed_reference(radicle_plugin* patch,
                                                                 const radicle_env* env,
@@ -174,6 +175,7 @@ RADICLE_API radicle_status radicle_plugin_edit_placed_reference(radicle_plugin* 
                                                                 const radicle_placed_edit* edit,
                                                                 radicle_placed_edit_result* out_result);
 /* options may be NULL and must then mean a zero offset; out_new must be set only when the status is DUPLICATED. */
+/* out_new must borrow its plugin name from patch and dangles once patch is destroyed; it must not refer to env. */
 RADICLE_API radicle_status radicle_plugin_duplicate_placed_reference(radicle_plugin* patch,
                                                                      const radicle_env* env,
                                                                      radicle_form_key reference,
@@ -185,6 +187,7 @@ RADICLE_API radicle_status radicle_plugin_delete_placed_reference(radicle_plugin
                                                                   radicle_form_key reference,
                                                                   radicle_delete_status* out_status);
 /* The source must be a different handle from patch; an already present CELL reports ALREADY_EXISTS with OK. */
+/* cell must be located in source by its full FormKey, so its owner may name a master of source; it is not ignored. */
 RADICLE_API radicle_status radicle_plugin_copy_cell_override(radicle_plugin* patch,
                                                              const radicle_plugin* source,
                                                              radicle_form_key cell,

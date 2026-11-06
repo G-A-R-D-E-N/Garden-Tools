@@ -241,6 +241,13 @@ radicle_status cell_edit_outcome(fo4::forms::CellEditStatus status) {
 
 }  // namespace
 
+static_assert(static_cast<int>(fo4::forms::PlacedReferenceEditStatus::field_absent) == RADICLE_PLACED_EDIT_FIELD_ABSENT);
+static_assert(static_cast<int>(fo4::forms::DuplicateStatus::unsupported_signature) ==
+              RADICLE_DUPLICATE_UNSUPPORTED_SIGNATURE);
+static_assert(static_cast<int>(fo4::forms::DeleteStatus::already_deleted) == RADICLE_DELETE_ALREADY_DELETED);
+static_assert(static_cast<int>(fo4::forms::CellOverrideStatus::not_a_cell) == RADICLE_CELL_OVERRIDE_NOT_A_CELL);
+static_assert(static_cast<int>(fo4::forms::CellEditStatus::malformed) == RADICLE_CELL_EDIT_MALFORMED);
+
 extern "C" {
 
 radicle_status radicle_plugin_edit_placed_reference(radicle_plugin* patch,
@@ -261,7 +268,9 @@ radicle_status radicle_plugin_edit_placed_reference(radicle_plugin* patch,
     }
     const auto result = fo4::forms::edit_placed_reference(patch->value, env->value, *key, native);
     out_result->status = static_cast<radicle_placed_edit_status>(result.status);
-    out_result->copied_from = borrowed_plugin_name(*env, result.copied_from);
+    out_result->copied_from = result.status == fo4::forms::PlacedReferenceEditStatus::edited
+                                  ? borrowed_plugin_name(*env, result.copied_from)
+                                  : nullptr;
     out_result->relocated = result.relocated ? 1 : 0;
     return placed_edit_outcome(result.status, result.message);
   });
@@ -289,7 +298,7 @@ radicle_status radicle_plugin_duplicate_placed_reference(radicle_plugin* patch,
     const auto result = fo4::forms::duplicate_placed_reference(patch->value, env->value, *key, native);
     *out_status = static_cast<radicle_duplicate_status>(result.status);
     if (result.status != fo4::forms::DuplicateStatus::duplicated) return duplicate_outcome(result.status);
-    *out_new = to_c_key(*env, result.new_reference);
+    *out_new = {patch->value.key.filename().data(), result.new_reference.local().value()};
     return RADICLE_STATUS_OK;
   });
 }
