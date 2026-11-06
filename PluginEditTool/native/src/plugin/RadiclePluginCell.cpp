@@ -118,8 +118,9 @@ std::shared_ptr<const fo4::env::Environment> RadiclePluginBackend::borrowedEnvir
     return borrowedEnvironment_;
 }
 
-void RadiclePluginBackend::dropBorrowedEnvironmentLocked() const {
+void RadiclePluginBackend::dropBorrowedEnvironmentLocked() {
     std::scoped_lock lock(environmentMutex_);
+    ++mutationEpoch_;
     borrowedEnvironment_.reset();
 }
 

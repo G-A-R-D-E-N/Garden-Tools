@@ -516,7 +516,7 @@ private:
     void reapIdleConflictGraph(std::stop_token stop_token);
     void dropConflictGraphLocked() const;
     std::shared_ptr<const fo4::env::Environment> borrowedEnvironment() const;
-    void dropBorrowedEnvironmentLocked() const;
+    void dropBorrowedEnvironmentLocked();
     std::string dirtyPluginListLocked() const;
 
     // Constraint: references from this proxy must not be held across a stage, because the next access may rebuild the graph.

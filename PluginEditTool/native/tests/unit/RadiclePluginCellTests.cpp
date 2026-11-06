@@ -478,3 +478,97 @@ TEST_CASE("Native cell environment cache is dropped after a staged edit") {
     REQUIRE(afterSecond.at("references").size() == 1);
     CHECK(afterSecond.at("references")[0].at("position").at("x") == 500.0f);
 }
+
+TEST_CASE("Native cell reads stay current after openPlugin adds a plugin") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Moved.esp", movedPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto oldCellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto before = parseStringResult(backend.getPlacedReferences(oldCellView));
+    REQUIRE(before.at("references").size() == 1);
+
+    REQUIRE(backend.invoke(
+        "backend.OpenPlugin", nlohmann::json::array({(root / "Moved.esp").string()})).has_value());
+
+    const auto oldCell = parseStringResult(backend.getPlacedReferences(oldCellView));
+    CHECK(oldCell.at("references").empty());
+    const auto newCell = parseStringResult(
+        backend.getPlacedReferences(nlohmann::json::array({"000900:Moved.esp"})));
+    REQUIRE(newCell.at("references").size() == 1);
+    CHECK(newCell.at("references")[0].at("formKey") == "000801:Base.esm");
+}
+
+TEST_CASE("Native cell reads stay current after openPlugin reloads a changed file") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto oldCellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto before = parseStringResult(backend.getPlacedReferences(oldCellView));
+    REQUIRE(before.at("references").size() == 1);
+
+    writeBytes(root / "Source.esp", movedPlugin());
+    REQUIRE(backend.invoke(
+        "backend.OpenPlugin", nlohmann::json::array({(root / "Source.esp").string()})).has_value());
+
+    CHECK_FALSE(backend.getPlacedReferences(oldCellView).has_value());
+    const auto newCell = parseStringResult(
+        backend.getPlacedReferences(nlohmann::json::array({"000900:Source.esp"})));
+    REQUIRE(newCell.at("references").size() == 1);
+    CHECK(newCell.at("references")[0].at("formKey") == "000801:Base.esm");
+    CHECK(newCell.at("references")[0].at("position").at("x") == 10.0f);
+}
+
+TEST_CASE("Native cell reads the disk value again after discardPlugin") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto before = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(before.at("references").size() == 1);
+
+    REQUIRE(backend.setPlacedReferenceTransform(nlohmann::json::array({
+        "000801:Base.esm", "Source.esp", 100.0, 200.0, 300.0, 1.5, 2.5, 3.5
+    })).has_value());
+    const auto pending = parseStringResult(backend.getPlacedReferences(cellView));
+    CHECK(pending.at("references")[0].at("position").at("x") == 100.0f);
+
+    REQUIRE(backend.invoke(
+        "backend.DiscardPlugin", nlohmann::json::array({"Source.esp"})).has_value());
+    const auto discarded = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(discarded.at("references").size() == 1);
+    CHECK(discarded.at("references")[0].at("position").at("x") == 10.0f);
+}

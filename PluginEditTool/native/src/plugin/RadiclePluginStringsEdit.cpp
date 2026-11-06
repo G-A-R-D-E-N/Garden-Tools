@@ -741,6 +741,7 @@ Result<void> RadiclePluginBackend::stageQuestLocalizationMutationLocked(
     static_assert(std::is_nothrow_swappable_v<LocalizedReferences> && std::is_nothrow_swappable_v<std::set<std::string>> && std::is_nothrow_swappable_v<decltype(loaded.stagedAllocation)>);
     using std::swap;
     swap(loaded.plugin, mutated);
+    dropBorrowedEnvironmentLocked();
     loaded.stagedAllocation.swap(retained);
     loaded.stagedPluginLanguages.swap(dependentLanguages);
     loaded.stagedPluginStringIds.swap(dependentIds);
