@@ -50,6 +50,16 @@ void ensure_move_target(Plugin& next,
   }
 }
 
+std::optional<FormKey> patch_cell_of(const Plugin& patch, const FormKey& reference) {
+  const auto located = detail::locate_record(patch, reference);
+  for (const auto* group : located.path) {
+    if (group->header.group_type == static_cast<std::int32_t>(GroupType::cell_children)) {
+      return resolve_plugin_form_id(RawFormId{group->header.label_as_u32()}, plugin_form_id_context(patch));
+    }
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 EnsureOverrideResult ensure_reference_override(Plugin& patch,
@@ -161,20 +171,26 @@ DuplicateResult duplicate_placed_reference(Plugin& patch,
                                            const fo4::env::Environment& env,
                                            const FormKey& reference,
                                            const DuplicateOptions& options) {
+  const auto* local = find_record(patch, reference);
   const auto* winner = env.winner(reference);
-  if (winner == nullptr) return {DuplicateStatus::reference_missing, {}};
-  if (winner->record->header.flags.is_deleted()) return {DuplicateStatus::reference_deleted, {}};
-  const auto cell = env.cell_of(*winner);
+  if (local == nullptr && winner == nullptr) return {DuplicateStatus::reference_missing, {}};
+  const auto deleted = local != nullptr ? local->header.flags.is_deleted()
+                                        : winner->record->header.flags.is_deleted();
+  if (deleted) return {DuplicateStatus::reference_deleted, {}};
+  const auto cell = local != nullptr ? patch_cell_of(patch, reference) : env.cell_of(*winner);
   if (!cell.has_value()) return {DuplicateStatus::parent_cell_missing, {}};
-  const auto* cell_winner = env.winner(*cell);
-  if (cell_winner == nullptr || cell_winner->record->header.flags.is_deleted()) {
-    return {DuplicateStatus::parent_cell_missing, {}};
+
+  auto next = patch;
+  if (find_record(patch, *cell) == nullptr) {
+    const auto* cell_winner = env.winner(*cell);
+    if (cell_winner == nullptr || cell_winner->record->header.flags.is_deleted()) {
+      return {DuplicateStatus::parent_cell_missing, {}};
+    }
+    copy_cell_as_override(next, env.plugin(cell_winner->plugin), *cell);
   }
 
-  const auto patch_copy = find_record(patch, reference) != nullptr ? std::optional<Plugin>{patch} : std::nullopt;
+  const auto patch_copy = local != nullptr ? std::optional<Plugin>{patch} : std::nullopt;
   const auto& source = patch_copy ? *patch_copy : env.plugin(winner->plugin);
-  auto next = patch;
-  copy_cell_as_override(next, env.plugin(cell_winner->plugin), *cell);
   const auto copied = copy_placed_reference_as_new(next, source, reference);
   if (copied.status == PlacedReferenceCopyNewStatus::source_missing) {
     return {DuplicateStatus::reference_missing, {}};
@@ -194,6 +210,9 @@ DuplicateResult duplicate_placed_reference(Plugin& patch,
   transform.x += options.offset.x;
   transform.y += options.offset.y;
   transform.z += options.offset.z;
+  transform.rx += options.offset.rx;
+  transform.ry += options.offset.ry;
+  transform.rz += options.offset.rz;
   require_applied(set_placed_reference_transform(next, new_key, transform));
 
   next.original_range.clear();

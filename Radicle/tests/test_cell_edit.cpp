@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -135,7 +136,12 @@ std::vector<std::byte> make_base() {
   const auto cell_802 = rec("CELL", 0x802, {{"DATA", {std::byte{0x02}, std::byte{0}}}, {"XCLC", bytes_of({1, 2, 0})}});
   const auto cell_803 = rec("CELL", 0x803, {{"DATA", {std::byte{0x02}, std::byte{0}}}, {"XCLC", bytes_of({2, 2, 0})}});
   const auto refs = grp(0x802, 6,
-                        {grp(0x802, 9,
+                        {grp(0x802, 8,
+                             {rec("REFR", 0x815,
+                                  {{"NAME", bytes_of({0x820})},
+                                   {"DATA", floats({4190.0f, 8290.0f, 0.0f, 0.0f, 0.0f, 0.0f})}},
+                                  0x400)}),
+                         grp(0x802, 9,
                              {rec("REFR", 0x814,
                                   {{"NAME", bytes_of({0x820})},
                                    {"DATA", floats({4196.0f, 8292.0f, 0.0f, 0.0f, 0.0f, 0.0f})}},
@@ -197,6 +203,25 @@ bool has_reference(const fo4::Plugin& plugin, const fo4::FormKey& cell, const fo
     if (view.record->form_key == reference) return true;
   }
   return false;
+}
+
+std::optional<std::int32_t> bucket_type_of(const fo4::Group& group, const fo4::FormKey& key) {
+  for (const auto& child : group.children) {
+    if (const auto* record = std::get_if<fo4::Record>(&child); record != nullptr && record->form_key == key) {
+      return group.header.group_type;
+    }
+    if (const auto* nested = std::get_if<fo4::Group>(&child)) {
+      if (const auto type = bucket_type_of(*nested, key)) return type;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<std::int32_t> bucket_type_of(const fo4::Plugin& plugin, const fo4::FormKey& key) {
+  for (const auto& group : plugin.groups) {
+    if (const auto type = bucket_type_of(group, key)) return type;
+  }
+  return std::nullopt;
 }
 
 class CellEditTest : public ::testing::Test {
@@ -438,6 +463,8 @@ TEST_F(CellEditTest, DuplicateOfPatchLocalReferenceDoesNotAlias) {
   auto patch = empty_edit();
   ASSERT_EQ(fo4::forms::ensure_reference_override(patch, env, reference).status,
             fo4::forms::EnsureOverrideStatus::copied);
+  ASSERT_TRUE(fo4::forms::set_placed_reference_transform(
+      patch, reference, fo4::forms::PositionRotation{.x = 123.0f, .y = 8300.0f}));
 
   const auto result = fo4::forms::duplicate_placed_reference(patch, env, reference, {});
 
@@ -451,8 +478,46 @@ TEST_F(CellEditTest, DuplicateOfPatchLocalReferenceDoesNotAlias) {
   const auto copy_view = fo4::forms::decode_placed_reference(patch, *copy);
   ASSERT_TRUE(original_view.has_value());
   ASSERT_TRUE(copy_view.has_value());
-  EXPECT_FLOAT_EQ(original_view->transform.x, 99.0f);
-  EXPECT_FLOAT_EQ(copy_view->transform.x, 99.0f);
+  EXPECT_FLOAT_EQ(original_view->transform.x, 123.0f);
+  EXPECT_FLOAT_EQ(copy_view->transform.x, 123.0f);
+
+  const auto* winner = env.winner(reference);
+  ASSERT_NE(winner, nullptr);
+  const auto winner_view = fo4::forms::decode_placed_reference(env.plugin(winner->plugin), *winner->record);
+  ASSERT_TRUE(winner_view.has_value());
+  EXPECT_FLOAT_EQ(winner_view->transform.x, 99.0f);
+}
+
+TEST_F(CellEditTest, DuplicateOfDuplicateCreatedLocalReferenceUsesPatchRecord) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto cell = fo4::FormKey::parse("000802:Base.esm");
+  auto patch = empty_edit();
+
+  const auto first = fo4::forms::duplicate_placed_reference(
+      patch, env, fo4::FormKey::parse("000811:Base.esm"), {});
+  ASSERT_EQ(first.status, fo4::forms::DuplicateStatus::duplicated);
+  const auto second = fo4::forms::duplicate_placed_reference(patch, env, first.new_reference, {});
+
+  EXPECT_EQ(second.status, fo4::forms::DuplicateStatus::duplicated);
+  EXPECT_FALSE(second.new_reference == first.new_reference);
+  EXPECT_TRUE(has_reference(patch, cell, second.new_reference));
+}
+
+TEST_F(CellEditTest, DuplicateOfRelocatedOverrideStaysInPatchCell) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto reference = fo4::FormKey::parse("000811:Base.esm");
+  const auto target_cell = fo4::FormKey::parse("000803:Base.esm");
+  auto patch = empty_edit();
+
+  fo4::forms::PlacedReferenceEdit edit;
+  edit.transform = fo4::forms::PositionRotation{.x = 8292.0f, .y = 8292.0f};
+  ASSERT_EQ(fo4::forms::edit_placed_reference(patch, env, reference, edit).status,
+            fo4::forms::PlacedReferenceEditStatus::edited);
+
+  const auto result = fo4::forms::duplicate_placed_reference(patch, env, reference, {});
+
+  ASSERT_EQ(result.status, fo4::forms::DuplicateStatus::duplicated);
+  EXPECT_TRUE(has_reference(patch, target_cell, result.new_reference));
 }
 
 TEST_F(CellEditTest, DuplicateAppliesOffset) {
@@ -464,6 +529,7 @@ TEST_F(CellEditTest, DuplicateAppliesOffset) {
   fo4::forms::DuplicateOptions options;
   options.offset.x = 4000.0f;
   options.offset.z = 5.0f;
+  options.offset.rz = 90.0f;
   const auto result = fo4::forms::duplicate_placed_reference(patch, env, reference, options);
 
   ASSERT_EQ(result.status, fo4::forms::DuplicateStatus::duplicated);
@@ -475,6 +541,7 @@ TEST_F(CellEditTest, DuplicateAppliesOffset) {
   EXPECT_FLOAT_EQ(view->transform.x, 8196.0f);
   EXPECT_FLOAT_EQ(view->transform.y, 8292.0f);
   EXPECT_FLOAT_EQ(view->transform.z, 5.0f);
+  EXPECT_FLOAT_EQ(view->transform.rz, 90.0f);
 }
 
 TEST_F(CellEditTest, DuplicateKeepsCellContainmentPersistentVsTemporary) {
@@ -485,7 +552,7 @@ TEST_F(CellEditTest, DuplicateKeepsCellContainmentPersistentVsTemporary) {
   const auto temporary = fo4::forms::duplicate_placed_reference(
       patch, env, fo4::FormKey::parse("000811:Base.esm"), {});
   const auto persistent = fo4::forms::duplicate_placed_reference(
-      patch, env, fo4::FormKey::parse("000814:Base.esm"), {});
+      patch, env, fo4::FormKey::parse("000815:Base.esm"), {});
 
   ASSERT_EQ(temporary.status, fo4::forms::DuplicateStatus::duplicated);
   ASSERT_EQ(persistent.status, fo4::forms::DuplicateStatus::duplicated);
@@ -497,6 +564,10 @@ TEST_F(CellEditTest, DuplicateKeepsCellContainmentPersistentVsTemporary) {
   ASSERT_NE(persistent_copy, nullptr);
   EXPECT_FALSE(temporary_copy->header.flags.is_persistent());
   EXPECT_TRUE(persistent_copy->header.flags.is_persistent());
+  EXPECT_EQ(bucket_type_of(patch, temporary.new_reference),
+            static_cast<std::int32_t>(fo4::GroupType::cell_temporary_children));
+  EXPECT_EQ(bucket_type_of(patch, persistent.new_reference),
+            static_cast<std::int32_t>(fo4::GroupType::cell_persistent_children));
 }
 
 TEST_F(CellEditTest, DeleteLocalReferenceRemovesRecord) {
@@ -545,4 +616,57 @@ TEST_F(CellEditTest, DeleteMasterReferenceWritesDeletedOverrideKeepingNameOnly) 
   EXPECT_FALSE(has_subrecord(*record, "EDID"));
   EXPECT_EQ(fo4::forms::delete_placed_reference(patch, env, reference).status,
             fo4::forms::DeleteStatus::already_deleted);
+}
+
+TEST_F(CellEditTest, DuplicateOfMissingReferenceIsRefusedWithoutChangingPatch) {
+  const auto env = fo4::env::Environment::load(paths_);
+  auto patch = empty_edit();
+  const auto before = fo4::write_plugin(patch);
+
+  EXPECT_EQ(fo4::forms::duplicate_placed_reference(patch, env, fo4::FormKey::parse("000999:Base.esm"), {}).status,
+            fo4::forms::DuplicateStatus::reference_missing);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
+}
+
+TEST_F(CellEditTest, DuplicateOfDeletedWinnerIsRefusedWithoutChangingPatch) {
+  const auto env = fo4::env::Environment::load(paths_);
+  auto patch = empty_edit();
+  const auto before = fo4::write_plugin(patch);
+
+  EXPECT_EQ(fo4::forms::duplicate_placed_reference(patch, env, fo4::FormKey::parse("000813:Base.esm"), {}).status,
+            fo4::forms::DuplicateStatus::reference_deleted);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
+}
+
+TEST_F(CellEditTest, DuplicateOfDeletedOverrideStubIsRefusedInsteadOfMalformed) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto reference = fo4::FormKey::parse("000811:Base.esm");
+  auto patch = empty_edit();
+  ASSERT_EQ(fo4::forms::delete_placed_reference(patch, env, reference).status,
+            fo4::forms::DeleteStatus::marked_deleted);
+  const auto before = fo4::write_plugin(patch);
+
+  EXPECT_EQ(fo4::forms::duplicate_placed_reference(patch, env, reference, {}).status,
+            fo4::forms::DuplicateStatus::reference_deleted);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
+}
+
+TEST_F(CellEditTest, DeleteOfMissingReferenceIsRefusedWithoutChangingPatch) {
+  const auto env = fo4::env::Environment::load(paths_);
+  auto patch = empty_edit();
+  const auto before = fo4::write_plugin(patch);
+
+  EXPECT_EQ(fo4::forms::delete_placed_reference(patch, env, fo4::FormKey::parse("000999:Base.esm")).status,
+            fo4::forms::DeleteStatus::reference_missing);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
+}
+
+TEST_F(CellEditTest, DeleteOfMasterDeletedReferenceReportsAlreadyDeletedWithoutChangingPatch) {
+  const auto env = fo4::env::Environment::load(paths_);
+  auto patch = empty_edit();
+  const auto before = fo4::write_plugin(patch);
+
+  EXPECT_EQ(fo4::forms::delete_placed_reference(patch, env, fo4::FormKey::parse("000813:Base.esm")).status,
+            fo4::forms::DeleteStatus::already_deleted);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
 }
