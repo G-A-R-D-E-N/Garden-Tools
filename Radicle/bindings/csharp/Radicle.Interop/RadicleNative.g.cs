@@ -3028,7 +3028,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 110u;
+    public const uint CompiledAbiVersion = 117u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3872,6 +3872,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_dialogue_info")]
     public static extern Status PluginCreateDialogueInfo(IntPtr plugin, FormKey topic, DialogueInfoSpec* spec, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_update_dialogue_info")]
+    public static extern Status PluginUpdateDialogueInfo(IntPtr plugin, FormKey info, DialogueInfoSpec* spec);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_dialogue_info")]
     public static extern Status PluginRemoveDialogueInfo(IntPtr plugin, FormKey info);

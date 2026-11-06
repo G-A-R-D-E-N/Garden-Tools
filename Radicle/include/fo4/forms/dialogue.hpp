@@ -57,11 +57,20 @@ struct DialogueResponseSpec {
   std::int32_t camera_location_alias{-1};
 };
 
+inline constexpr double k_info_reset_units_per_hour = 2730.625;
+
 struct DialogueInfoSpec {
   std::uint16_t flags{0};
   std::uint16_t reset_hours{0};
   std::vector<DialogueResponseSpec> responses;
   std::vector<CtdaCondition> conditions;
+};
+
+struct DialogueInfoPatch {
+  std::optional<std::uint16_t> flags;
+  std::optional<std::uint16_t> reset_hours;
+  std::optional<std::vector<DialogueResponseSpec>> responses;
+  std::optional<std::vector<CtdaCondition>> conditions;
 };
 
 // Constraint: the quest must be local to the plugin.
@@ -82,6 +91,16 @@ DialogueAuthorStatus set_dialogue_branch_start(Plugin& plugin,
 DialogueCreateResult create_dialogue_info(Plugin& plugin,
                                           const FormKey& topic,
                                           const DialogueInfoSpec& spec);
+
+// Constraint: full replace of ENAM, the response run and the condition run; PNAM and the chain position are kept.
+DialogueAuthorStatus update_dialogue_info(Plugin& plugin,
+                                          const FormKey& info,
+                                          const DialogueInfoSpec& spec);
+
+// Constraint: an unset field keeps its subrecords, an empty list clears its run; PNAM and the chain position are kept.
+DialogueAuthorStatus update_dialogue_info(Plugin& plugin,
+                                          const FormKey& info,
+                                          const DialogueInfoPatch& patch);
 
 // Constraint: the following INFO is relinked and an empty topic group is dropped.
 DialogueAuthorStatus remove_dialogue_info(Plugin& plugin, const FormKey& info);

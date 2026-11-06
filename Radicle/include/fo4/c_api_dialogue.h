@@ -249,6 +249,9 @@ RADICLE_API radicle_status radicle_plugin_create_dialogue_info(radicle_plugin* p
                                                                radicle_form_key topic,
                                                                const radicle_dialogue_info_spec* spec,
                                                                radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_plugin_update_dialogue_info(radicle_plugin* plugin,
+                                                               radicle_form_key info,
+                                                               const radicle_dialogue_info_spec* spec);
 RADICLE_API radicle_status radicle_plugin_remove_dialogue_info(radicle_plugin* plugin,
                                                                radicle_form_key info);
 

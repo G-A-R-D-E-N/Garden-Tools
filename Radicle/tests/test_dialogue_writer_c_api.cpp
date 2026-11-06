@@ -535,6 +535,49 @@ TEST_F(DialogueWriterCApi, RemovingInfosRelinksTheChainAndDropsTheEmptyTopicGrou
   EXPECT_EQ(payloads(reloaded, authored.topic, "TIFC"), std::vector<Bytes>{words({0})});
 }
 
+TEST_F(DialogueWriterCApi, UpdatedInfoSavesWithNewResponsesNoConditionsAndKeepsTheChain) {
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
+  const auto authored = author_topic_with_two_infos(plugin);
+  radicle_dialogue_response_spec response{};
+  response.text = "Updated line";
+  response.number = 3;
+  response.camera_target_alias = -1;
+  response.camera_location_alias = -1;
+  radicle_dialogue_info_spec spec{};
+  spec.flags = 0x0100;
+  spec.reset_time_encoded = 12;
+  spec.responses = &response;
+  spec.response_count = 1;
+  EXPECT_EQ(radicle_plugin_update_dialogue_info(plugin, rkey(authored.first), &spec), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const auto saved = (root.path / "out" / k_plugin).string();
+  ASSERT_EQ(radicle_plugin_write_file(plugin, saved.c_str()), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+
+  const char* paths[] = {saved.c_str()};
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* record = nullptr;
+  const radicle_dialogue_info* first = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, rkey(authored.first), &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_dialogue_info_decode(env, record, &first), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(first->flags, 0x0100);
+  EXPECT_EQ(first->reset_time_encoded, 12);
+  EXPECT_EQ(first->condition_count, 0u);
+  ASSERT_EQ(first->response_count, 1u);
+  EXPECT_STREQ(first->responses[0].text.text, "Updated line");
+  EXPECT_EQ(first->responses[0].number, 3);
+  radicle_dialogue_info_free(first);
+
+  const radicle_dialogue_info* second = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, rkey(authored.second), &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_dialogue_info_decode(env, record, &second), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(second->previous_info.local_id, authored.first);
+  radicle_dialogue_info_free(second);
+  radicle_env_destroy(env);
+}
+
 TEST_F(DialogueWriterCApi, AuthoringRefusalsCarryAStatusAndMessageAndLeaveThePluginAlone) {
   radicle_plugin* plugin = nullptr;
   ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
@@ -559,6 +602,8 @@ TEST_F(DialogueWriterCApi, AuthoringRefusalsCarryAStatusAndMessageAndLeaveThePlu
   EXPECT_EQ(radicle_plugin_set_dialogue_branch_start(nullptr, rkey(k_dlbr), rkey(k_topic)),
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_remove_dialogue_info(nullptr, rkey(k_info)), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_update_dialogue_info(nullptr, rkey(k_info), &info_spec), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_update_dialogue_info(plugin, rkey(k_info), nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
 
   EXPECT_EQ(radicle_plugin_create_dialogue_branch(plugin, rkey(k_topic), &branch_spec, &out),
             RADICLE_STATUS_NOT_FOUND);

@@ -220,6 +220,13 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "GetQuestObjectives") return getQuestObjectives(arguments);
     if (method == "GetQuestStages") return getQuestStages(arguments);
     if (method == "GetQuestAliases") return getQuestAliases(arguments);
+    if (method == "CreateDialogueBranch") return createDialogueBranch(arguments);
+    if (method == "CreateDialogueTopic") return createDialogueTopic(arguments);
+    if (method == "SetDialogueBranchStart") return setDialogueBranchStart(arguments);
+    if (method == "CreateInfo") return createInfo(arguments);
+    if (method == "SetInfo") return setInfo(arguments);
+    if (method == "RemoveInfo") return removeInfo(arguments);
+    if (method == "GetDialogue") return getDialogue(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (method == "CopyElementToSelected") return copyElementToSelected(arguments);

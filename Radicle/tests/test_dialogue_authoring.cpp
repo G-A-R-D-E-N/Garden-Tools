@@ -14,15 +14,19 @@
 #include <functional>
 #include <initializer_list>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
 namespace {
 
-void write_header(fo4::test::ByteWriter& out, std::initializer_list<std::string_view> masters) {
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+void write_header(fo4::test::ByteWriter& out,
+                  std::initializer_list<std::string_view> masters,
+                  std::uint32_t tes4_flags = 0) {
+  const auto tes4 = fo4::test::begin_record(out, "TES4", tes4_flags, 0);
   fo4::test::ByteWriter hedr;
   hedr.f32(1.0f);
   hedr.u32(0);
@@ -76,9 +80,10 @@ void topic_pair_and_scene(fo4::test::ByteWriter& out) {
 
 std::vector<std::byte> quest_plugin(std::initializer_list<std::string_view> masters,
                                     bool with_quest,
-                                    const std::function<void(fo4::test::ByteWriter&)>& quest_children = {}) {
+                                    const std::function<void(fo4::test::ByteWriter&)>& quest_children = {},
+                                    std::uint32_t tes4_flags = 0) {
   fo4::test::ByteWriter out;
-  write_header(out, masters);
+  write_header(out, masters, tes4_flags);
   if (!with_quest) return out.bytes;
   const auto quest_top = fo4::test::begin_group(out, "QUST", 0);
   const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800u);
@@ -194,6 +199,71 @@ std::string text_of(const fo4::Subrecord& subrecord) {
     text.push_back(static_cast<char>(byte));
   }
   return text;
+}
+
+std::vector<std::string> sub_tags(const fo4::Record& record) {
+  std::vector<std::string> tags;
+  for (const auto& subrecord : record.subrecords) tags.push_back(subrecord.signature.to_string());
+  return tags;
+}
+
+std::vector<std::pair<std::string, std::vector<std::byte>>> subrecords_of(const fo4::Record& record) {
+  std::vector<std::pair<std::string, std::vector<std::byte>>> out;
+  for (const auto& subrecord : record.subrecords) {
+    out.emplace_back(subrecord.signature.to_string(), subrecord.data);
+  }
+  return out;
+}
+
+void rich_info(fo4::test::ByteWriter& out) {
+  const auto info = fo4::test::begin_record(out, "INFO", 0, 0x00000802u);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Rich\0", 5});
+  fo4::test::write_subrecord(out, "ENAM", std::string_view{"\x01\x00\x05\x00", 4});
+  fo4::test::write_subrecord(out, "TPIC", std::string_view{"\x01\x08\x00\x00", 4});
+  fo4::test::write_subrecord(out, "PNAM", std::string_view{"\0\0\0\0", 4});
+  fo4::test::write_subrecord(out, "DNAM", std::string_view{"\x07\x00", 2});
+  fo4::test::write_subrecord(out, "GNAM", std::string_view{"\x09\x00\x00\x00", 4});
+  fo4::test::write_subrecord(out, "IOVR", std::string_view{"\x0a\x00\x00\x00", 4});
+  fo4::test::write_subrecord(out, "TRDA", std::string(20, '\0'));
+  fo4::test::write_subrecord(out, "NAM1", std::string_view{"Old text\0", 9});
+  fo4::test::write_subrecord(out, "NAM2", std::string_view{"\0", 1});
+  fo4::test::write_subrecord(out, "SNAM", std::string(4, '\0'));
+  fo4::test::write_subrecord(out, "LNAM", std::string(4, '\0'));
+  fo4::test::write_subrecord(out, "TNAM", std::string_view{"\x05\x00", 2});
+  fo4::test::write_subrecord(out, "SRAF", std::string(4, '\0'));
+  fo4::test::write_subrecord(out, "WZMD", std::string_view{});
+  const auto old_condition = fo4::serialize_ctda_condition(fo4::CtdaCondition{});
+  fo4::test::write_subrecord(out, "CTDA", std::span<const std::byte>{old_condition});
+  fo4::test::write_subrecord(out, "NAM0", std::string_view{"\0", 1});
+  fo4::test::write_subrecord(out, "INAM", std::string_view{"\x01\x00\x00\x00", 4});
+  fo4::test::end_record(out, info);
+}
+
+void bare_info(fo4::test::ByteWriter& out) {
+  const auto info = fo4::test::begin_record(out, "INFO", 0, 0x00000802u);
+  fo4::test::write_subrecord(out, "ENAM", std::string_view{"\x01\x00\x05\x00", 4});
+  fo4::test::write_subrecord(out, "PNAM", std::string_view{"\0\0\0\0", 4});
+  fo4::test::write_subrecord(out, "RNAM", std::string_view{"\0", 1});
+  fo4::test::write_subrecord(out, "NAM0", std::string_view{"\0", 1});
+  fo4::test::write_subrecord(out, "INAM", std::string_view{"\x01\x00\x00\x00", 4});
+  fo4::test::end_record(out, info);
+}
+
+void inam_info(fo4::test::ByteWriter& out) {
+  const auto info = fo4::test::begin_record(out, "INFO", 0, 0x00000802u);
+  fo4::test::write_subrecord(out, "ENAM", std::string_view{"\x01\x00\x05\x00", 4});
+  fo4::test::write_subrecord(out, "PNAM", std::string_view{"\0\0\0\0", 4});
+  fo4::test::write_subrecord(out, "INAM", std::string_view{"\x01\x00\x00\x00", 4});
+  fo4::test::end_record(out, info);
+}
+
+std::function<void(fo4::test::ByteWriter&)> topic_with(void (*info)(fo4::test::ByteWriter&)) {
+  return [info](fo4::test::ByteWriter& out) {
+    write_node(out, "DIAL", 0x00000801u);
+    const auto topic = begin_group_raw(out, 0x00000801u, fo4::GroupType::topic_children);
+    info(out);
+    end_group_raw(out, topic);
+  };
 }
 
 }
@@ -509,4 +579,254 @@ TEST(DialogueAuthoring, CreatedRecordsPassAuthoringPreflight) {
       }
     }
   }
+}
+
+TEST(DialogueAuthoring, UpdateReplacesResponsesConditionsAndEnamAndKeepsTheRestOfTheChain) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  const auto first = fo4::forms::create_dialogue_info(plugin, topic.key, info_spec());
+  const auto second = fo4::forms::create_dialogue_info(plugin, topic.key, info_spec());
+  ASSERT_EQ(first.status, fo4::forms::DialogueAuthorStatus::ok);
+  ASSERT_EQ(second.status, fo4::forms::DialogueAuthorStatus::ok);
+  const auto topic_before = subrecords_of(*fo4::find_record(plugin, topic.key));
+  const auto second_before = subrecords_of(*fo4::find_record(plugin, second.key));
+
+  fo4::forms::DialogueInfoSpec spec;
+  fo4::forms::DialogueResponseSpec response;
+  response.text = "Changed";
+  response.number = 2;
+  spec.responses.push_back(response);
+  spec.flags = 0x0200;
+  spec.reset_hours = 24;
+  fo4::CtdaCondition condition;
+  condition.function = 72;
+  condition.comparison_raw = 0x3f800000u;
+  condition.reference = 0x800u;
+  spec.conditions.push_back(condition);
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, first.key, spec),
+            fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* updated = fo4::find_record(reread, first.key);
+  ASSERT_NE(updated, nullptr);
+  EXPECT_EQ(sub_tags(*updated),
+            (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3", "NAM4",
+                                      "CTDA", "NAM0", "INAM"}));
+  EXPECT_EQ(u32_of(*updated, "ENAM"), 0x00180200u);
+  EXPECT_EQ(u32_of(*updated, "PNAM"), 0u);
+  EXPECT_EQ(text_of(*find_subrecord(*updated, "NAM1")), "Changed");
+  const auto* trda = find_subrecord(*updated, "TRDA");
+  ASSERT_NE(trda, nullptr);
+  EXPECT_EQ(trda->data.at(4), std::byte{2});
+  EXPECT_EQ(find_subrecord(*updated, "CTDA")->data, fo4::serialize_ctda_condition(condition));
+
+  EXPECT_EQ(subrecords_of(*fo4::find_record(reread, topic.key)), topic_before);
+  EXPECT_EQ(subrecords_of(*fo4::find_record(reread, second.key)), second_before);
+  const auto* topic_group =
+      find_group(reread, fo4::GroupType::topic_children, topic.key.local().value());
+  ASSERT_NE(topic_group, nullptr);
+  EXPECT_EQ(child_key(*topic_group, 0), first.key);
+  EXPECT_EQ(child_key(*topic_group, 1), second.key);
+}
+
+TEST(DialogueAuthoring, UpdateKeepsHeadSubrecordsAndPlacesNewResponsesBeforeNam0Inam) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true, topic_with(rich_info)), "Q.esp");
+  const auto key = fo4::FormKey::parse("000802:Q.esp");
+  const auto before = subrecords_of(*fo4::find_record(plugin, key));
+
+  fo4::forms::DialogueInfoSpec spec;
+  for (const auto* text : {"New one", "New two"}) {
+    fo4::forms::DialogueResponseSpec response;
+    response.text = text;
+    spec.responses.push_back(response);
+  }
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, spec), fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* updated = fo4::find_record(reread, key);
+  ASSERT_NE(updated, nullptr);
+  EXPECT_EQ(sub_tags(*updated),
+            (std::vector<std::string>{"EDID", "ENAM", "TPIC", "PNAM", "DNAM", "GNAM", "IOVR", "TRDA",
+                                      "NAM1", "NAM2", "NAM3", "NAM4", "TRDA", "NAM1", "NAM2", "NAM3",
+                                      "NAM4", "NAM0", "INAM"}));
+  const auto after = subrecords_of(*updated);
+  EXPECT_EQ(after.front(), before.front());
+  EXPECT_EQ(std::vector(after.begin() + 2, after.begin() + 7),
+            std::vector(before.begin() + 2, before.begin() + 7));
+  EXPECT_EQ(text_of(*find_subrecord(*updated, "NAM1")), "New one");
+}
+
+TEST(DialogueAuthoring, UpdateRefusesMasterOwnedInfoAndWritesNothing) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  ASSERT_EQ(topic.status, fo4::forms::DialogueAuthorStatus::ok);
+  ASSERT_EQ(fo4::forms::create_dialogue_info(plugin, topic.key, info_spec()).status,
+            fo4::forms::DialogueAuthorStatus::ok);
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_EQ(fo4::forms::update_dialogue_info(
+                plugin, fo4::FormKey::parse("000802:Base.esm"), info_spec()),
+            fo4::forms::DialogueAuthorStatus::not_local);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(DialogueAuthoring, UpdateOfMissingOrNonInfoKeyIsInfoMissingAndWritesNothing) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, topic.key, info_spec()),
+            fo4::forms::DialogueAuthorStatus::info_missing);
+  EXPECT_EQ(fo4::forms::update_dialogue_info(
+                plugin, fo4::FormKey::parse("000A00:Q.esp"), info_spec()),
+            fo4::forms::DialogueAuthorStatus::info_missing);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(DialogueAuthoring, ReplacingResponsesDropsIdleCameraAndWaitSubrecords) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true, topic_with(rich_info)), "Q.esp");
+  const auto key = fo4::FormKey::parse("000802:Q.esp");
+
+  fo4::forms::DialogueInfoPatch patch;
+  fo4::forms::DialogueResponseSpec response;
+  response.text = "New";
+  patch.responses = std::vector<fo4::forms::DialogueResponseSpec>{response};
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, patch),
+            fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* updated = fo4::find_record(reread, key);
+  ASSERT_NE(updated, nullptr);
+  EXPECT_EQ(sub_tags(*updated),
+            (std::vector<std::string>{"EDID", "ENAM", "TPIC", "PNAM", "DNAM", "GNAM", "IOVR", "TRDA",
+                                      "NAM1", "NAM2", "NAM3", "NAM4", "CTDA", "NAM0", "INAM"}));
+  EXPECT_EQ(text_of(*find_subrecord(*updated, "NAM1")), "New");
+}
+
+TEST(DialogueAuthoring, ConditionsOnlyPatchKeepsResponsesFlagsAndResetHours) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true, topic_with(rich_info)), "Q.esp");
+  const auto key = fo4::FormKey::parse("000802:Q.esp");
+  auto expected = subrecords_of(*fo4::find_record(plugin, key));
+
+  fo4::CtdaCondition condition;
+  condition.function = 72;
+  condition.comparison_raw = 0x3f800000u;
+  condition.reference = 0x800u;
+  fo4::forms::DialogueInfoPatch patch;
+  patch.conditions = std::vector<fo4::CtdaCondition>{condition};
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, patch),
+            fo4::forms::DialogueAuthorStatus::ok);
+
+  for (auto& [signature, data] : expected) {
+    if (signature == "CTDA") data = fo4::serialize_ctda_condition(condition);
+  }
+  EXPECT_EQ(subrecords_of(*fo4::find_record(plugin, key)), expected);
+}
+
+TEST(DialogueAuthoring, FlagsOnlyPatchRewritesOnlyTheFlagsHalfOfEnam) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true, topic_with(rich_info)), "Q.esp");
+  const auto key = fo4::FormKey::parse("000802:Q.esp");
+  auto expected = subrecords_of(*fo4::find_record(plugin, key));
+
+  fo4::forms::DialogueInfoPatch patch;
+  patch.flags = std::uint16_t{0x0100};
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, patch),
+            fo4::forms::DialogueAuthorStatus::ok);
+
+  for (auto& [signature, data] : expected) {
+    if (signature == "ENAM") {
+      data = {std::byte{0x00}, std::byte{0x01}, std::byte{0x05}, std::byte{0x00}};
+    }
+  }
+  EXPECT_EQ(subrecords_of(*fo4::find_record(plugin, key)), expected);
+}
+
+TEST(DialogueAuthoring, EmptyPatchListsClearTheirRuns) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true, topic_with(rich_info)), "Q.esp");
+  const auto key = fo4::FormKey::parse("000802:Q.esp");
+
+  fo4::forms::DialogueInfoPatch patch;
+  patch.responses = std::vector<fo4::forms::DialogueResponseSpec>{};
+  patch.conditions = std::vector<fo4::CtdaCondition>{};
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, patch),
+            fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* updated = fo4::find_record(reread, key);
+  ASSERT_NE(updated, nullptr);
+  EXPECT_EQ(sub_tags(*updated),
+            (std::vector<std::string>{"EDID", "ENAM", "TPIC", "PNAM", "DNAM", "GNAM", "IOVR", "NAM0",
+                                      "INAM"}));
+  EXPECT_EQ(u32_of(*updated, "ENAM"), 0x00050001u);
+}
+
+TEST(DialogueAuthoring, NewRunsGoBeforeTheFirstAfterConditionsSubrecordWhenNoOldRunExists) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true, topic_with(bare_info)), "Q.esp");
+  const auto key = fo4::FormKey::parse("000802:Q.esp");
+
+  fo4::forms::DialogueResponseSpec response;
+  response.text = "Only";
+  fo4::forms::DialogueInfoPatch responses;
+  responses.responses = std::vector<fo4::forms::DialogueResponseSpec>{response};
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, responses),
+            fo4::forms::DialogueAuthorStatus::ok);
+  EXPECT_EQ(sub_tags(*fo4::find_record(plugin, key)),
+            (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3", "NAM4", "RNAM",
+                                      "NAM0", "INAM"}));
+
+  fo4::CtdaCondition condition;
+  condition.function = 72;
+  condition.comparison_raw = 0x3f800000u;
+  condition.reference = 0x800u;
+  fo4::forms::DialogueInfoPatch conditions;
+  conditions.conditions = std::vector<fo4::CtdaCondition>{condition};
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, conditions),
+            fo4::forms::DialogueAuthorStatus::ok);
+  EXPECT_EQ(sub_tags(*fo4::find_record(plugin, key)),
+            (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3", "NAM4", "CTDA",
+                                      "RNAM", "NAM0", "INAM"}));
+}
+
+TEST(DialogueAuthoring, NewRunsGoBeforeInamWhenInamIsTheOnlyTailSubrecord) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true, topic_with(inam_info)), "Q.esp");
+  const auto key = fo4::FormKey::parse("000802:Q.esp");
+
+  fo4::forms::DialogueResponseSpec response;
+  response.text = "Only";
+  fo4::forms::DialogueInfoPatch responses;
+  responses.responses = std::vector<fo4::forms::DialogueResponseSpec>{response};
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, responses),
+            fo4::forms::DialogueAuthorStatus::ok);
+  EXPECT_EQ(sub_tags(*fo4::find_record(plugin, key)),
+            (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3", "NAM4", "INAM"}));
+
+  fo4::CtdaCondition condition;
+  condition.function = 72;
+  condition.comparison_raw = 0x3f800000u;
+  condition.reference = 0x800u;
+  fo4::forms::DialogueInfoPatch conditions;
+  conditions.conditions = std::vector<fo4::CtdaCondition>{condition};
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, key, conditions),
+            fo4::forms::DialogueAuthorStatus::ok);
+  EXPECT_EQ(sub_tags(*fo4::find_record(plugin, key)),
+            (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3", "NAM4", "CTDA",
+                                      "INAM"}));
+}
+
+TEST(DialogueAuthoring, LocalizedPluginRefusesResponseTextAndWritesNothing) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true, {}, 0x80u), "Q.esp");
+  fo4::forms::DialogueTopicSpec topic;
+  topic.editor_id = "RadicleTopic";
+  const auto dial = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic);
+  ASSERT_EQ(dial.status, fo4::forms::DialogueAuthorStatus::ok);
+  const auto info =
+      fo4::forms::create_dialogue_info(plugin, dial.key, fo4::forms::DialogueInfoSpec{});
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_EQ(fo4::forms::create_dialogue_info(plugin, dial.key, info_spec()).status,
+            fo4::forms::DialogueAuthorStatus::localized_unsupported);
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, info.key, info_spec()),
+            fo4::forms::DialogueAuthorStatus::localized_unsupported);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
