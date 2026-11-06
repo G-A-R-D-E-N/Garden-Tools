@@ -3,6 +3,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/signature.hpp"
+#include "../environment/scene_layout.hpp"
 #include "../plugin/record_edit.hpp"
 
 #include <algorithm>
@@ -372,6 +373,24 @@ std::vector<ScopeRange> quest_target_ranges(const Record& record) {
   return ranges;
 }
 
+std::optional<std::vector<ScopeRange>> scene_phase_ranges(const Record& record, bool completion) {
+  fo4::env::detail::SceneLayout layout;
+  try {
+    layout = fo4::env::detail::scene_layout(record.subrecords);
+  } catch (const fo4::env::detail::SceneLayoutError&) {
+    return std::nullopt;
+  }
+  std::vector<ScopeRange> ranges;
+  for (const auto& span : layout.phases) {
+    if (completion) {
+      ranges.push_back(ScopeRange{span.first_next + 1, span.second_next, span.second_next, true});
+    } else {
+      ranges.push_back(ScopeRange{span.open + 1, span.first_next, span.first_next, true});
+    }
+  }
+  return ranges;
+}
+
 std::vector<ScopeRange> perk_effect_tab_ranges(const Record& record) {
   const auto& subs = record.subrecords;
   std::vector<ScopeRange> ranges;
@@ -455,6 +474,10 @@ std::optional<std::vector<ScopeRange>> scope_ranges(const Record& record,
       return terminal_body_text_ranges(record);
     case ConditionScopeKind::terminal_menu_item:
       return terminal_menu_item_ranges(record);
+    case ConditionScopeKind::scene_phase_start:
+      return scene_phase_ranges(record, false);
+    case ConditionScopeKind::scene_phase_completion:
+      return scene_phase_ranges(record, true);
   }
   return std::nullopt;
 }

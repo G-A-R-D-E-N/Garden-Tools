@@ -192,6 +192,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
   src/forms/dialogue_authoring.cpp
+  src/forms/scene_authoring.cpp
   src/forms/copy_as_new.cpp
   src/forms/copy_as_wrapper.cpp
   src/forms/placed_reference_edit.cpp
@@ -272,6 +273,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/graph/conflict_kind.cpp
   src/graph/check_errors.cpp
   src/graph/check_errors_records.cpp
+  src/graph/check_dialogue.cpp
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
@@ -533,6 +535,7 @@ set(RADICLE_C_SOURCES
   src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp
   src/c_api_conditions.cpp
   src/c_api_dialogue.cpp src/c_api_dialogue_author.cpp
+  src/c_api_scene_author.cpp
   src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp
   src/c_api_cell.cpp
   src/c_api_patch.cpp

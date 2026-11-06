@@ -5,6 +5,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "placed_reference_copy_internal.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -32,6 +33,7 @@ constexpr auto k_qnam = Signature::from_string("QNAM");
 constexpr auto k_knam = Signature::from_string("KNAM");
 constexpr auto k_data = Signature::from_string("DATA");
 constexpr auto k_snam = Signature::from_string("SNAM");
+constexpr auto k_lnam = Signature::from_string("LNAM");
 constexpr auto k_tifc = Signature::from_string("TIFC");
 constexpr auto k_tnam = Signature::from_string("TNAM");
 constexpr auto k_dnam = Signature::from_string("DNAM");
@@ -42,7 +44,27 @@ constexpr auto k_nam1 = Signature::from_string("NAM1");
 constexpr auto k_nam2 = Signature::from_string("NAM2");
 constexpr auto k_nam3 = Signature::from_string("NAM3");
 constexpr auto k_nam4 = Signature::from_string("NAM4");
+constexpr auto k_nam5 = Signature::from_string("NAM5");
+constexpr auto k_nam6 = Signature::from_string("NAM6");
+constexpr auto k_nam7 = Signature::from_string("NAM7");
+constexpr auto k_nam8 = Signature::from_string("NAM8");
+constexpr auto k_nam9 = Signature::from_string("NAM9");
+constexpr auto k_ctda = Signature::from_string("CTDA");
+constexpr auto k_cis1 = Signature::from_string("CIS1");
+constexpr auto k_cis2 = Signature::from_string("CIS2");
 constexpr auto k_inam = Signature::from_string("INAM");
+constexpr auto k_sraf = Signature::from_string("SRAF");
+constexpr auto k_wzmd = Signature::from_string("WZMD");
+constexpr auto k_rnam = Signature::from_string("RNAM");
+constexpr auto k_anam = Signature::from_string("ANAM");
+constexpr auto k_tsce = Signature::from_string("TSCE");
+constexpr auto k_intv = Signature::from_string("INTV");
+constexpr auto k_alfa = Signature::from_string("ALFA");
+constexpr auto k_onam = Signature::from_string("ONAM");
+constexpr auto k_gree = Signature::from_string("GREE");
+constexpr auto k_tiqs = Signature::from_string("TIQS");
+constexpr auto k_incc = Signature::from_string("INCC");
+constexpr auto k_modq = Signature::from_string("MODQ");
 
 constexpr std::uint32_t k_none_link = 0xFFFFFFFFu;
 
@@ -352,21 +374,99 @@ std::vector<Subrecord> response_subrecords(const Plugin& plugin,
   return out;
 }
 
+std::optional<DialogueAuthorStatus> response_refusal(const Plugin& plugin,
+                                                     const std::vector<DialogueResponseSpec>& responses) {
+  for (const auto& response : responses) {
+    if (contains_nul(response.text) || contains_nul(response.script_notes)) {
+      return DialogueAuthorStatus::invalid_argument;
+    }
+  }
+  if (plugin.header.tes4_flags.is_localized()) {
+    for (const auto& response : responses) {
+      if (!response.text.empty()) return DialogueAuthorStatus::localized_unsupported;
+    }
+  }
+  return std::nullopt;
+}
+
+std::vector<Subrecord> response_run(const Plugin& plugin,
+                                    const std::vector<DialogueResponseSpec>& responses) {
+  std::vector<Subrecord> out;
+  for (const auto& response : responses) {
+    auto parts = response_subrecords(plugin, response, plugin.header.tes4_flags.is_localized());
+    for (auto& part : parts) out.push_back(std::move(part));
+  }
+  return out;
+}
+
+bool is_response_signature(Signature signature) {
+  return signature == k_trda || signature == k_nam1 || signature == k_nam2 ||
+         signature == k_nam3 || signature == k_nam4 || signature == k_nam5 ||
+         signature == k_nam6 || signature == k_nam7 || signature == k_nam8 ||
+         signature == k_nam9 || signature == k_snam || signature == k_lnam ||
+         signature == k_tnam || signature == k_sraf || signature == k_wzmd;
+}
+
+bool is_condition_signature(Signature signature) {
+  return signature == k_ctda || signature == k_cis1 || signature == k_cis2;
+}
+
+bool is_after_conditions_signature(Signature signature) {
+  return signature == k_rnam || signature == k_anam || signature == k_tsce ||
+         signature == k_intv || signature == k_alfa || signature == k_onam ||
+         signature == k_gree || signature == k_tiqs || signature == k_nam0 ||
+         signature == k_incc || signature == k_modq || signature == k_inam;
+}
+
+bool starts_condition_tail(Signature signature) {
+  return is_condition_signature(signature) || is_after_conditions_signature(signature);
+}
+
+void splice_run(Record& record,
+                bool (*in_run)(Signature),
+                bool (*starts_tail)(Signature),
+                std::vector<Subrecord> block) {
+  auto& subrecords = record.subrecords;
+  const auto in_run_at = [in_run](const Subrecord& subrecord) {
+    return in_run(subrecord.signature);
+  };
+  const auto tail_at = [starts_tail](const Subrecord& subrecord) {
+    return starts_tail(subrecord.signature);
+  };
+  auto anchor = std::find_if(subrecords.begin(), subrecords.end(), in_run_at);
+  if (anchor == subrecords.end()) anchor = std::find_if(subrecords.begin(), subrecords.end(), tail_at);
+  std::vector<Subrecord> rebuilt;
+  for (auto it = subrecords.begin(); it != anchor; ++it) rebuilt.push_back(std::move(*it));
+  for (auto& part : block) rebuilt.push_back(std::move(part));
+  for (auto it = anchor; it != subrecords.end(); ++it) {
+    if (!in_run(it->signature)) rebuilt.push_back(std::move(*it));
+  }
+  subrecords = std::move(rebuilt);
+}
+
+void set_info_enam(Record& record, const DialogueInfoPatch& patch) {
+  auto* enam = unique_subrecord(record, k_enam);
+  if (enam == nullptr) throw std::runtime_error("INFO record is missing ENAM");
+  if (enam->data.size() != 4) throw std::runtime_error("INFO ENAM must be exactly 4 bytes");
+  std::uint16_t flags = 0;
+  std::uint16_t reset_hours = 0;
+  std::memcpy(&flags, enam->data.data(), sizeof(flags));
+  std::memcpy(&reset_hours, enam->data.data() + sizeof(flags), sizeof(reset_hours));
+  enam->data = packed(patch.flags.value_or(flags), patch.reset_hours.value_or(reset_hours));
+}
+
+void require_topic_info_path(const fo4::detail::MutableLocation& location) {
+  if (location.path.size() != 3 ||
+      location.path[2]->header.group_type != static_cast<std::int32_t>(GroupType::topic_children)) {
+    throw std::runtime_error("INFO is not in a Topic Children group");
+  }
+}
+
 DialogueCreateResult info_impl(Plugin& plugin,
                                const FormKey& topic,
                                const DialogueInfoSpec& spec) {
   if (topic.owner() != plugin.key) return {DialogueAuthorStatus::not_local, {}};
-  for (const auto& response : spec.responses) {
-    if (contains_nul(response.text) || contains_nul(response.script_notes)) {
-      return {DialogueAuthorStatus::invalid_argument, {}};
-    }
-  }
-  const bool localized = plugin.header.tes4_flags.is_localized();
-  if (localized) {
-    for (const auto& response : spec.responses) {
-      if (!response.text.empty()) return {DialogueAuthorStatus::localized_unsupported, {}};
-    }
-  }
+  if (auto refused = response_refusal(plugin, spec.responses)) return {*refused, {}};
   auto next = plugin;
   assign_record_form_keys(next);
   auto topic_location = fo4::detail::find_mutable_location(next, topic);
@@ -396,12 +496,10 @@ DialogueCreateResult info_impl(Plugin& plugin,
   std::vector<Subrecord> subrecords;
   subrecords.push_back(Subrecord{k_enam, packed(spec.flags, spec.reset_hours), false});
   subrecords.push_back(Subrecord{k_pnam, packed(previous), false});
-  for (const auto& response : spec.responses) {
-    auto parts = response_subrecords(next, response, localized);
-    for (auto& part : parts) subrecords.push_back(std::move(part));
-  }
+  auto responses = response_run(next, spec.responses);
+  for (auto& part : responses) subrecords.push_back(std::move(part));
   auto conditions = serialize_ctda_run(spec.conditions);
-  for (auto& condition : conditions) subrecords.push_back(std::move(condition));
+  for (auto& part : conditions) subrecords.push_back(std::move(part));
   subrecords.push_back(Subrecord{k_nam0, zstring_bytes(""), false});
   subrecords.push_back(Subrecord{k_inam, packed(std::uint32_t{1}), false});
 
@@ -413,6 +511,36 @@ DialogueCreateResult info_impl(Plugin& plugin,
   return {DialogueAuthorStatus::ok, key};
 }
 
+DialogueAuthorStatus update_impl(Plugin& plugin,
+                                 const FormKey& info,
+                                 const DialogueInfoPatch& patch) {
+  if (info.owner() != plugin.key) return DialogueAuthorStatus::not_local;
+  if (patch.responses.has_value()) {
+    if (auto refused = response_refusal(plugin, *patch.responses)) return *refused;
+  }
+  auto next = plugin;
+  assign_record_form_keys(next);
+  auto info_location = fo4::detail::find_mutable_location(next, info);
+  if (auto refused = refusal(info_location, k_info, DialogueAuthorStatus::info_missing)) {
+    return *refused;
+  }
+  require_topic_info_path(*info_location);
+
+  auto& record = info_location->record();
+  if (patch.flags.has_value() || patch.reset_hours.has_value()) set_info_enam(record, patch);
+  if (patch.responses.has_value()) {
+    splice_run(record, is_response_signature, starts_condition_tail,
+               response_run(next, *patch.responses));
+  }
+  if (patch.conditions.has_value()) {
+    splice_run(record, is_condition_signature, is_after_conditions_signature,
+               serialize_ctda_run(*patch.conditions));
+  }
+  fo4::detail::mark_record_modified(next, record);
+  commit(plugin, next);
+  return DialogueAuthorStatus::ok;
+}
+
 DialogueAuthorStatus remove_impl(Plugin& plugin, const FormKey& info) {
   if (info.owner() != plugin.key) return DialogueAuthorStatus::not_local;
   auto next = plugin;
@@ -421,11 +549,7 @@ DialogueAuthorStatus remove_impl(Plugin& plugin, const FormKey& info) {
   if (auto refused = refusal(info_location, k_info, DialogueAuthorStatus::info_missing)) {
     return *refused;
   }
-  if (info_location->path.size() != 3 ||
-      info_location->path[2]->header.group_type !=
-          static_cast<std::int32_t>(GroupType::topic_children)) {
-    throw std::runtime_error("INFO is not in a Topic Children group");
-  }
+  require_topic_info_path(*info_location);
 
   auto& quest_children = *info_location->path[1];
   auto& topic_children = *info_location->path[2];
@@ -514,6 +638,23 @@ DialogueCreateResult create_dialogue_info(Plugin& plugin,
   } catch (...) {
     return {DialogueAuthorStatus::structure_invalid, {}};
   }
+}
+
+DialogueAuthorStatus update_dialogue_info(Plugin& plugin,
+                                          const FormKey& info,
+                                          const DialogueInfoPatch& patch) {
+  try {
+    return update_impl(plugin, info, patch);
+  } catch (...) {
+    return DialogueAuthorStatus::structure_invalid;
+  }
+}
+
+DialogueAuthorStatus update_dialogue_info(Plugin& plugin,
+                                          const FormKey& info,
+                                          const DialogueInfoSpec& spec) {
+  return update_dialogue_info(
+      plugin, info, DialogueInfoPatch{spec.flags, spec.reset_hours, spec.responses, spec.conditions});
 }
 
 DialogueAuthorStatus remove_dialogue_info(Plugin& plugin, const FormKey& info) {
