@@ -36,7 +36,7 @@ LOG_DIR = ROOT / "logs"
 LOCK = ROOT / "run.lock"
 QUEUED = ROOT / "queued.json"
 RUNNER_ENV = Path(r"C:\tools\github-runner\fo4-data\.env")
-RUNNER_KEYS = ("FO4_DATA_DIR", "CMAKE_BUILD_PARALLEL_LEVEL", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA",
+RUNNER_KEYS = ("FO4_DATA_DIR", "CMAKE_BUILD_PARALLEL_LEVEL", "CTEST_PARALLEL_LEVEL", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA",
                "TEMP", "TMP")
 RUN_SCRIPT = Path(__file__).resolve().with_name("run_real_data.ps1")
 TIMEOUT = 3 * 3600
