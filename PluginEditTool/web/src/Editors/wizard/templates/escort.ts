@@ -27,4 +27,13 @@ export const ESCORT: QuestTemplate = {
     { slot: 'escortee', name: 'Escortee', kind: 'reference' },
     { slot: 'destination', name: 'Destination', kind: 'location' },
   ],
+  scene: {
+    phases: ['Meet', 'Walk', 'Arrive'],
+    actors: ['escortee'],
+    actions: [{ kind: 'dialogue', phase: 0, actor: 'escortee' }],
+  },
+  dialogue: {
+    topic: 'Do you need an escort to {destination}?',
+    replies: ['Yes. I will walk with you to {destination}.', 'Stay close, and do not let me get hurt.'],
+  },
 };
