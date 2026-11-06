@@ -7,19 +7,21 @@ import type { QuestTemplate } from './templateTypes';
 export const NEW_RECORD = '$newQuest';
 
 export type Answers = Record<string, string>;
-export type BackendMethod = 'CreateRecord' | 'SetQuestStages' | 'SetQuestObjectives' | 'SetQuestAliases';
-export interface BackendCall { method: BackendMethod; args: unknown[]; }
-export interface QuestRun { formKey: string | null; }
+export type BackendMethod = 'CreateRecord' | 'SetQuestStages' | 'SetQuestObjectives' | 'SetQuestAliases'
+  | 'CreateScene' | 'AddScenePhase' | 'AddSceneActor' | 'SetSceneActor' | 'AddSceneAction' | 'SetSceneAction'
+  | 'CreateDialogueBranch' | 'CreateDialogueTopic' | 'CreateInfo';
+export interface BackendCall { method: BackendMethod; args: unknown[]; produces?: string; }
+export interface QuestRun { formKey: string | null; made: Map<string, string>; }
 
-const fill = (text: string, answers: Answers): string => text.replace(/\{(\w+)\}/g, (_, key: string) => {
+export const fill = (text: string, answers: Answers): string => text.replace(/\{(\w+)\}/g, (_, key: string) => {
   const value = answers[key];
   if (value === undefined) throw new Error(`No answer for {${key}}.`);
   return value;
 });
 
-const editorIdFrom = (name: string): string => name.trim().replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+export const editorIdFrom = (name: string): string => name.trim().replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
-const aliasIndex = (template: QuestTemplate, slot: string): number => {
+export const aliasIndex = (template: QuestTemplate, slot: string): number => {
   const index = template.aliases.findIndex(alias => alias.slot === slot);
   if (index < 0) throw new Error(`Template ${template.id} has no alias slot ${slot}.`);
   return index;
@@ -54,15 +56,27 @@ export function buildQuestCalls(template: QuestTemplate, answers: Answers): Back
   ];
 }
 
+const createdKey = (raw: unknown): string | undefined =>
+  ((typeof raw === 'string' ? JSON.parse(raw) : raw) as { formKey?: string } | null)?.formKey;
+
+const argValue = (arg: unknown, run: QuestRun): unknown => {
+  if (arg === NEW_RECORD) return run.formKey;
+  return typeof arg === 'string' ? (run.made.get(arg) ?? arg) : arg;
+};
+
 export async function runQuestCalls(b: Backend, calls: BackendCall[], run: QuestRun): Promise<void> {
   for (const call of calls) {
-    const args = call.args.map(arg => (arg === NEW_RECORD ? run.formKey : arg));
+    const args = call.args.map(arg => argValue(arg, run));
     const send = b[call.method] as unknown as (...params: unknown[]) => Promise<unknown>;
     const raw = await send.apply(b, args);
     if (call.method === 'CreateRecord') {
-      const created = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { formKey?: string } | null;
-      if (!created?.formKey) throw new Error('The game did not confirm that the quest was made.');
-      run.formKey = created.formKey;
+      const formKey = createdKey(raw);
+      if (!formKey) throw new Error('The game did not confirm that the quest was made.');
+      run.formKey = formKey;
+    } else if (call.produces) {
+      const formKey = createdKey(raw);
+      if (!formKey) throw new Error('The game did not confirm that the scene or dialogue was made.');
+      run.made.set(call.produces, formKey);
     }
   }
 }

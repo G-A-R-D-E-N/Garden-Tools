@@ -91,4 +91,16 @@ export const WIZARD_HELP_TOPICS: readonly HelpTopic[] = [
     body: 'The reward the final journal line names when the player makes the second choice, such as "20 caps". Writing it here does not give the player anything by itself.',
     related: ['quest-stage'],
   },
+  {
+    id: 'wizard-scene',
+    title: 'Scene',
+    body: 'A scene is a short piece of staged action: parts that play in order, and a character who takes part. The wizard makes a starter scene with the parts listed in the review. Nothing starts the scene when the quest starts, so set that in the scene editor.',
+    related: ['scene-timeline'],
+  },
+  {
+    id: 'wizard-dialogue',
+    title: 'Starter dialogue',
+    body: 'The line the player says and the reply the character gives. The lines use your answers, such as the character\'s name. The wizard does not attach this dialogue to a character, so set that in the dialogue editor.',
+    related: ['dialogue-branch'],
+  },
 ];

@@ -23,12 +23,32 @@ const PLUGINS = [
   { Name: 'Patch.esp', Kind: 'plugin', LoadOrder: 1, Editable: true, Size: 1 },
 ];
 
+const BRANCH = '000E00:Patch.esp';
+const TOPIC = '000F00:Patch.esp';
+const INFO = '001000:Patch.esp';
+const SCENE = '001100:Patch.esp';
+
+function sceneStubs() {
+  return {
+    CreateDialogueBranch: vi.fn(async () => JSON.stringify({ formKey: BRANCH })),
+    CreateDialogueTopic: vi.fn(async () => JSON.stringify({ formKey: TOPIC })),
+    CreateInfo: vi.fn(async () => JSON.stringify({ formKey: INFO })),
+    CreateScene: vi.fn(async () => JSON.stringify({ formKey: SCENE })),
+    AddScenePhase: vi.fn(async () => 'ok'),
+    AddSceneActor: vi.fn(async () => 'ok'),
+    SetSceneActor: vi.fn(async () => 'ok'),
+    AddSceneAction: vi.fn(async () => 'ok'),
+    SetSceneAction: vi.fn(async () => 'ok'),
+  };
+}
+
 function wizardBackend(overrides: Record<string, unknown> = {}) {
   return stubBackend({
     GetActivePlugins: vi.fn(async () => JSON.stringify(PLUGINS)),
     SearchRecords: vi.fn(async (_query: string, typeFilter: string) => JSON.stringify([HITS[typeFilter]])),
     ResolveFormKeyLabels: vi.fn(async (csv: string) => JSON.stringify(Object.fromEntries(csv.split(',').map(key => [key, LABELS[key]])))),
     CreateRecord: vi.fn(async () => JSON.stringify({ formKey: CREATED })),
+    ...sceneStubs(),
     ...overrides,
   });
 }
@@ -50,6 +70,19 @@ async function answerEveryStep() {
   await pickRecord('CourierBob', 'Courier Bob');
   await pickRecord('MillSite', 'Abandoned Mill');
   await pickRecord('RustyLocket', 'Rusty Locket');
+  fireEvent.change(screen.getByLabelText('What does the player get as a reward?'), { target: { value: '50 caps' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+}
+
+async function answerTalkSteps() {
+  fireEvent.click(screen.getByRole('button', { name: /Talk to someone/ }));
+  await screen.findByRole('option', { name: 'Patch.esp' });
+  fireEvent.change(screen.getByLabelText('Which plugin should the quest go in?'), { target: { value: 'Patch.esp' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.change(screen.getByLabelText(NAME_LABEL), { target: { value: 'The Old Friend' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await pickRecord('CourierBob', 'Courier Bob');
+  await pickRecord('MillSite', 'Abandoned Mill');
   fireEvent.change(screen.getByLabelText('What does the player get as a reward?'), { target: { value: '50 caps' } });
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 }
@@ -167,4 +200,38 @@ it('Detects: the template chooser dropping, renaming or reordering one of the fi
   const { container } = render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
   const titles = Array.from(container.querySelectorAll('.editors-card-title'), node => node.textContent);
   expect(titles).toEqual(['Fetch an item', 'Kill a target', 'Talk to someone', 'Escort', 'Choice with two endings']);
+});
+
+it('Detects: finishing Talk to someone making the dialogue and scene in an order where the scene action links to a topic that is not made yet', async () => {
+  const stubs = sceneStubs();
+  const createRecord = vi.fn(async () => JSON.stringify({ formKey: CREATED }));
+  const backend = wizardBackend({ CreateRecord: createRecord, ...stubs });
+  const onCreated = vi.fn();
+  render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
+  await answerTalkSteps();
+  expect(screen.getByText('A scene with 2 parts: Meet, then Talk.')).toBeTruthy();
+  expect(screen.getByText('Courier Bob speaks in the Talk part.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
+  const order = (mock: { mock: { invocationCallOrder: number[] } }) => mock.mock.invocationCallOrder[0];
+  expect(order(createRecord)).toBeLessThan(order(stubs.CreateDialogueBranch));
+  expect(order(stubs.CreateDialogueBranch)).toBeLessThan(order(stubs.CreateDialogueTopic));
+  expect(order(stubs.CreateDialogueTopic)).toBeLessThan(order(stubs.CreateInfo));
+  expect(order(stubs.CreateInfo)).toBeLessThan(order(stubs.CreateScene));
+  expect(order(stubs.CreateScene)).toBeLessThan(order(stubs.AddScenePhase));
+  expect(order(stubs.CreateDialogueTopic)).toBeLessThan(order(stubs.SetSceneAction));
+  expect(stubs.CreateDialogueTopic).toHaveBeenCalledWith('Patch.esp', CREATED, expect.objectContaining({ branch: BRANCH, name: 'Are you Courier Bob? I was sent to speak with you.' }));
+  expect(stubs.SetSceneAction).toHaveBeenCalledWith('Patch.esp', SCENE, 0, { actorAlias: 0, startPhase: 1, endPhase: 1, topic: TOPIC });
+  expect(backend.SetQuestStages).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('Find Courier Bob at Abandoned Mill'));
+});
+
+it('Detects: finishing Fetch an item sending any scene or dialogue call, because that template has no skeleton and must make only the quest', async () => {
+  const stubs = sceneStubs();
+  wizardBackend(stubs);
+  const onCreated = vi.fn();
+  render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
+  await answerEveryStep();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
+  for (const mock of Object.values(stubs)) expect(mock).not.toHaveBeenCalled();
 });

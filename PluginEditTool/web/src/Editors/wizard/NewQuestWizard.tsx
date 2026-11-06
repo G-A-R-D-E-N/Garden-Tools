@@ -9,6 +9,7 @@ import HelpTip from '../help/HelpTip';
 import { SCREEN_TOPICS } from '../help/helpContent';
 import { ErrorNote } from '../quest/questControls';
 import { buildQuestCalls, runQuestCalls, type Answers, type QuestRun } from './questCalls';
+import { buildSceneCalls, describeSceneAndDialogue } from './sceneCalls';
 import type { PluginQuestion, QuestTemplate, RecordQuestion, WizardStep } from './templateTypes';
 import { QUEST_TEMPLATES } from './templates/registry';
 import './NewQuestWizard.css';
@@ -75,9 +76,9 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     setBusy(true);
     setError(null);
     setMadeKey(null);
-    const run: QuestRun = { formKey: null };
+    const run: QuestRun = { formKey: null, made: new Map() };
     try {
-      await runQuestCalls(backend, buildQuestCalls(template, answers), run);
+      await runQuestCalls(backend, [...buildQuestCalls(template, answers), ...buildSceneCalls(template, answers)], run);
       onCreated({ formKey: run.formKey ?? '', plugin: answers.plugin });
     } catch (e) {
       const failure = friendlyError(errorText(e));
@@ -163,6 +164,17 @@ export default function NewQuestWizard({ onBack, onCreated }: {
               </div>
             ))}
           </dl>
+          {(template.scene || template.dialogue) && (
+            <div className="wizard-extras">
+              <h4>Scene and starter dialogue <HelpTip topicId="wizard-scene" /></h4>
+              <ul>
+                {describeSceneAndDialogue(template, answers).map(line => <li key={line}>{line}</li>)}
+              </ul>
+              <p className="editor-purpose">
+                The scene does not start by itself, and the dialogue is not linked to a character.
+              </p>
+            </div>
+          )}
           <div className="wizard-nav">
             <button type="button" className="sidebar-action-btn" disabled={busy}
               onClick={() => setStep(step - 1)}>Previous</button>
