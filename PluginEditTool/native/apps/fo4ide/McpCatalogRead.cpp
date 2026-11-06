@@ -29,6 +29,7 @@ const CatalogTool kTools[] = {
     {"get_placed_references_at_grid", "cell", "GetPlacedReferencesAtGrid", "worldspace:string,grid_x:integer,grid_y:integer", "Editor query: get placed references at grid. Placed-reference or cell operation."},
     {"resolve_worldspace", "cell", "ResolveWorldspace", "cell_id:string", "Editor query: resolve the worldspace that owns a cell. Placed-reference or cell operation."},
     {"search_worldspaces", "cell", "SearchWorldspaces", "query:string,limit:integer?", "Editor query: search worldspaces. Placed-reference or cell operation."},
+    {"get_cell_properties", "cell", "GetCellProperties", "cell_id:string", "Editor query: get cell properties (lighting, water, owner, regions and so on) with the descriptors that set_cell_properties accepts. Placed-reference or cell operation."},
     {"get_geometry_batch", "cell", "GetGeometryBatch", "rel_model_paths_json:string", "Editor query: get geometry batch. Same RPC the desktop editor uses."},
     {"search_cells", "cell", "SearchCells", "query:string,limit:integer?", "Editor query: search cells. Placed-reference or cell operation."},
     {"get_geometry_batch_progress", "cell", "GetGeometryBatchProgress", "", "Editor query: get geometry batch progress. Same RPC the desktop editor uses."},

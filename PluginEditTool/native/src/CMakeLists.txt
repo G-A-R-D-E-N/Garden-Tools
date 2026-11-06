@@ -81,6 +81,7 @@ add_library(
     plugin/RadiclePluginReadApi.cpp
     plugin/RadiclePluginEsl.cpp
     plugin/RadiclePluginCell.cpp
+    plugin/RadiclePluginCellProperties.cpp
     plugin/RadiclePluginTypedRecords.cpp
     plugin/RadiclePluginSound.cpp
     plugin/RadiclePluginPackage.cpp

@@ -535,6 +535,10 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "UndoCellEdit") return backend_.undoCellEdit(args);
         if (method == "RedoCellEdit") return backend_.redoCellEdit(args);
         if (method == "GetCellEditHistory") return backend_.getCellEditHistory(args);
+        if (method == "DuplicatePlacedReference") return backend_.duplicatePlacedReference(args);
+        if (method == "DeletePlacedReference") return backend_.deletePlacedReference(args);
+        if (method == "GetCellProperties") return backend_.getCellProperties(args);
+        if (method == "SetCellProperties") return backend_.setCellProperties(args);
     }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);
 }

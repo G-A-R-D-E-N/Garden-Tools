@@ -72,6 +72,46 @@ std::optional<Error> placedReferenceEditError(const fo4::forms::PlacedReferenceE
     return Error{"PlacedReferenceEditFailed", result.message};
 }
 
+std::optional<Error> duplicateError(const fo4::forms::DuplicateResult& result,
+                                    std::string_view patchName,
+                                    const std::string& formKeyText) {
+    using Status = fo4::forms::DuplicateStatus;
+    switch (result.status) {
+        case Status::duplicated:
+            return std::nullopt;
+        case Status::reference_missing:
+            return Error{"PlacedReferenceNotFound",
+                         "Placed reference is not present in " + std::string(patchName) + ": " + formKeyText};
+        case Status::reference_deleted:
+            return Error{"PlacedReferenceDeleted", "Placed reference is deleted: " + formKeyText};
+        case Status::parent_cell_missing:
+            return Error{"PlacedReferenceParentCellMissing", "No loaded cell holds the parent of " + formKeyText};
+        case Status::unsupported_signature:
+            return Error{"PlacedReferenceUnsupported", "Placed reference " + formKeyText + " cannot be duplicated"};
+    }
+    return Error{"PlacedReferenceDuplicateFailed", formKeyText};
+}
+
+std::optional<Error> deleteError(const fo4::forms::DeleteResult& result,
+                                 std::string_view patchName,
+                                 const std::string& formKeyText) {
+    using Status = fo4::forms::DeleteStatus;
+    switch (result.status) {
+        case Status::deleted:
+        case Status::marked_deleted:
+            return std::nullopt;
+        case Status::referenced:
+            return Error{"PlacedReferenceReferenced",
+                         formKeyText + " is referenced by other records and cannot be deleted"};
+        case Status::reference_missing:
+            return Error{"PlacedReferenceNotFound",
+                         "Placed reference is not present in " + std::string(patchName) + ": " + formKeyText};
+        case Status::already_deleted:
+            return Error{"PlacedReferenceDeleted", "Placed reference is already deleted: " + formKeyText};
+    }
+    return Error{"PlacedReferenceDeleteFailed", formKeyText};
+}
+
 nlohmann::json cellEditHistoryJson(std::string_view pluginName, std::size_t undo, std::size_t redo) {
     return {{"plugin", std::string(pluginName)}, {"undoCount", undo}, {"redoCount", redo}};
 }
@@ -465,6 +505,121 @@ Result<nlohmann::json> RadiclePluginBackend::getCellEditHistory(const nlohmann::
     }
     return nlohmann::json(cellEditHistoryJson(loaded->name, history->second.undo_count(),
                                               history->second.redo_count()).dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::duplicatePlacedReference(const nlohmann::json& arguments) {
+    const auto formKeyText = support::stringArgument(arguments, 0);
+    const auto patchName = support::stringArgument(arguments, 1);
+    const auto offset = arguments.is_array() && arguments.size() > 2 ? arguments[2] : nlohmann::json();
+    if (formKeyText.empty() || patchName.empty()) {
+        return std::unexpected(Error{
+            "PlacedDuplicateArgumentsMissing",
+            "DuplicatePlacedReference requires FormKey and patch plugin"
+        });
+    }
+
+    fo4::forms::DuplicateOptions options;
+    if (!offset.is_null()) {
+        const auto transform = transformField(offset);
+        if (!transform) {
+            return std::unexpected(Error{
+                "PlacedTransformArgumentsMissing",
+                "DuplicatePlacedReference offset requires numeric x, y, z, rx, ry and rz"
+            });
+        }
+        options.offset = *transform;
+    }
+
+    fo4::FormKey key;
+    try {
+        key = fo4::FormKey::parse(formKeyText);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+
+    OpLock lock(*this, OpLock::Mode::Write, {patchName});
+    auto* patch = findPlugin(patchName);
+    if (patch == nullptr) {
+        return std::unexpected(Error{
+            "TargetPluginNotLoaded",
+            "Patch plugin is not loaded yet: " + patchName
+        });
+    }
+    if (auto guard = writeGuard(*patch); guard.has_value()) return std::unexpected(*guard);
+
+    try {
+        const auto result = duplicatePlacedReferenceLocked(*patch, key, options);
+        if (!result) return std::unexpected(result.error());
+        return nlohmann::json(nlohmann::json{
+            {"plugin", patchName},
+            {"formKey", key.to_string()},
+            {"newFormKey", result->new_reference.to_string()}
+        }.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"PlacedReferenceDuplicateFailed", error.what()});
+    }
+}
+
+Result<fo4::forms::DuplicateResult> RadiclePluginBackend::duplicatePlacedReferenceLocked(
+    LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::DuplicateOptions& options) {
+    CommitScope commit;
+    const auto env = borrowedEnvironment();
+    auto mutated = patch.plugin;
+    const auto result = fo4::forms::duplicate_placed_reference(mutated, *env, key, options);
+    if (const auto error = duplicateError(result, patch.name, key.to_string())) return std::unexpected(*error);
+    stageCellEditLocked(patch, std::move(mutated));
+    return result;
+}
+
+Result<nlohmann::json> RadiclePluginBackend::deletePlacedReference(const nlohmann::json& arguments) {
+    const auto formKeyText = support::stringArgument(arguments, 0);
+    const auto patchName = support::stringArgument(arguments, 1);
+    if (formKeyText.empty() || patchName.empty()) {
+        return std::unexpected(Error{
+            "PlacedDeleteArgumentsMissing",
+            "DeletePlacedReference requires FormKey and patch plugin"
+        });
+    }
+
+    fo4::FormKey key;
+    try {
+        key = fo4::FormKey::parse(formKeyText);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+
+    OpLock lock(*this, OpLock::Mode::Write, {patchName});
+    auto* patch = findPlugin(patchName);
+    if (patch == nullptr) {
+        return std::unexpected(Error{
+            "TargetPluginNotLoaded",
+            "Patch plugin is not loaded yet: " + patchName
+        });
+    }
+    if (auto guard = writeGuard(*patch); guard.has_value()) return std::unexpected(*guard);
+
+    try {
+        const auto result = deletePlacedReferenceLocked(*patch, key);
+        if (!result) return std::unexpected(result.error());
+        return nlohmann::json(nlohmann::json{
+            {"plugin", patchName},
+            {"formKey", key.to_string()},
+            {"status", result->status == fo4::forms::DeleteStatus::deleted ? "deleted" : "markedDeleted"}
+        }.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"PlacedReferenceDeleteFailed", error.what()});
+    }
+}
+
+Result<fo4::forms::DeleteResult> RadiclePluginBackend::deletePlacedReferenceLocked(
+    LoadedPlugin& patch, const fo4::FormKey& key) {
+    CommitScope commit;
+    const auto env = borrowedEnvironment();
+    auto mutated = patch.plugin;
+    const auto result = fo4::forms::delete_placed_reference(mutated, *env, key);
+    if (const auto error = deleteError(result, patch.name, key.to_string())) return std::unexpected(*error);
+    stageCellEditLocked(patch, std::move(mutated));
+    return result;
 }
 
 Result<nlohmann::json> RadiclePluginBackend::createPlacedObject(const nlohmann::json& arguments) {

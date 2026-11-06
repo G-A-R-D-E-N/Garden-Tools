@@ -57,6 +57,9 @@ const CatalogTool kTools[] = {
     {"undo_cell_edit", "cell", "UndoCellEdit", "patch_plugin:string", "Editor operation: undo the last placed-reference edit in a patch plugin. In memory until save_plugin."},
     {"redo_cell_edit", "cell", "RedoCellEdit", "patch_plugin:string", "Editor operation: redo the last undone placed-reference edit in a patch plugin. In memory until save_plugin."},
     {"get_cell_edit_history", "cell", "GetCellEditHistory", "patch_plugin:string", "Editor query: undo and redo step counts for a patch plugin's placed-reference edits."},
+    {"duplicate_placed_reference", "cell", "DuplicatePlacedReference", "form_key:string,patch_plugin:string,offset:object?", "Editor operation: duplicate a placed reference into a patch plugin. offset adds {x,y,z,rx,ry,rz} to the copy's transform. Recorded for undo_cell_edit and redo_cell_edit; in memory until save_plugin."},
+    {"delete_placed_reference", "cell", "DeletePlacedReference", "form_key:string,patch_plugin:string", "Editor operation: delete a placed reference in a patch plugin. Returns status deleted or markedDeleted. Recorded for undo_cell_edit and redo_cell_edit; in memory until save_plugin."},
+    {"set_cell_properties", "cell", "SetCellProperties", "form_key:string,patch_plugin:string,changes:object", "Editor operation: edit cell properties in a patch plugin. changes keys are the names from get_cell_properties; a null link clears it. Recorded for undo_cell_edit and redo_cell_edit; in memory until save_plugin."},
 };
 
 }
