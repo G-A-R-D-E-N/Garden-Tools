@@ -456,7 +456,11 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       const saveMsg = await backend.SavePlugin(patch, '');
       appendLog(`• ${label} -> ${patch}`);
       if (/error|fail/i.test(saveMsg)) appendLog('✗ save: ' + saveMsg);
-      await reloadReferences(select, from);
+      try {
+        await reloadReferences(select, from);
+      } catch (e) {
+        appendLog('✗ reload failed: ' + errorText(e));
+      }
       return true;
     } catch (e) {
       appendLog(`✗ ${label} failed: ` + errorText(e));
@@ -515,6 +519,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     const c = getCell();
     const backend = getBackend();
     if (!c || !backend) return;
+    if (busyRef.current) { appendLog('x move not saved -- another edit is running.'); return; }
     const moved = await exclusive(async () => {
       const patch = await ensurePatch();
       if (!patch) { appendLog('x move not saved -- no patch plugin chosen.'); return false; }

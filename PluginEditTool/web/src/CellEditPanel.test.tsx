@@ -242,7 +242,7 @@ describe('Cell Viewer reference editing', () => {
 });
 
 const keyEvent = (key: string, mods: { ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean } = {}) =>
-  ({ key, ctrlKey: false, altKey: false, shiftKey: false, repeat: false, ...mods });
+  ({ key, ctrlKey: false, altKey: false, shiftKey: false, ...mods });
 
 describe('cellEditKey', () => {
   const cases: [string, { ctrlKey?: boolean }, CellEditKey | null][] = [
@@ -255,8 +255,5 @@ describe('cellEditKey', () => {
   ];
   it.each(cases)('maps %s with %o to %s', (key, mods, expected) => {
     expect(cellEditKey(keyEvent(key, mods))).toBe(expected);
-  });
-  it('ignores an auto-repeated key so holding Ctrl+Z does not undo again and again', () => {
-    expect(cellEditKey({ ...keyEvent('z', { ctrlKey: true }), repeat: true })).toBeNull();
   });
 });

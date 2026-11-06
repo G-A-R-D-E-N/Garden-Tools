@@ -88,7 +88,7 @@ export default function CellViewport(
 
 
   const worldCenterRef = useRef(new THREE.Vector3());
-  const savedViewRef = useRef<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const savedViewRef = useRef<{ position: THREE.Vector3; target: THREE.Vector3; near: number; far: number } | null>(null);
   const gizmoModeRef = useRef<'translate' | 'rotate'>('translate');
 
 
@@ -662,8 +662,10 @@ export default function CellViewport(
     setOrbitTarget(selectedKey ?? null);
     const savedView = savedViewRef.current;
     if (savedView) {
-      camera.position.copy(savedView.position);
-      controls.target.copy(savedView.target);
+      camera.position.copy(savedView.position).sub(worldCenter);
+      controls.target.copy(savedView.target).sub(worldCenter);
+      camera.near = savedView.near;
+      camera.far = savedView.far;
       camera.updateProjectionMatrix();
       controls.update();
     }
@@ -679,11 +681,16 @@ export default function CellViewport(
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const k = e.key.toLowerCase();
       const editKey = cellEditKey(e);
-      if (editKey === 'delete') { onDeleteSelectedRef.current?.(); e.preventDefault(); }
-      else if (editKey === 'duplicate') { onDuplicateSelectedRef.current?.(); e.preventDefault(); }
-      else if (editKey === 'undo') { onUndoEditRef.current?.(); e.preventDefault(); }
-      else if (editKey === 'redo') { onRedoEditRef.current?.(); e.preventDefault(); }
-      else if (k === '1' && e.altKey) { onUnhideAllRef.current?.(); e.preventDefault(); }
+      if (editKey) {
+        e.preventDefault();
+        if (e.repeat) return;
+        if (editKey === 'delete') onDeleteSelectedRef.current?.();
+        else if (editKey === 'duplicate') onDuplicateSelectedRef.current?.();
+        else if (editKey === 'undo') onUndoEditRef.current?.();
+        else onRedoEditRef.current?.();
+        return;
+      }
+      if (k === '1' && e.altKey) { onUnhideAllRef.current?.(); e.preventDefault(); }
       else if (k === '1') { onHideSelectedRef.current?.(); e.preventDefault(); }
       else if (k === 'd' && !e.ctrlKey && !e.altKey && !e.shiftKey) { onSelectRef.current?.(null); e.preventDefault(); }
       else if (k === 'f' && e.shiftKey) { focusOn(selectedKeyRef.current ?? null); e.preventDefault(); }
@@ -748,7 +755,12 @@ export default function CellViewport(
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('keydown', onKeyDown);
       if (texStatsTimer) clearTimeout(texStatsTimer);
-      savedViewRef.current = { position: camera.position.clone(), target: controls.target.clone() };
+      savedViewRef.current = {
+        position: camera.position.clone().add(worldCenterRef.current),
+        target: controls.target.clone().add(worldCenterRef.current),
+        near: camera.near,
+        far: camera.far,
+      };
       transformControls.dispose();
       controls.dispose();
       disposables.forEach(d => d.dispose());
