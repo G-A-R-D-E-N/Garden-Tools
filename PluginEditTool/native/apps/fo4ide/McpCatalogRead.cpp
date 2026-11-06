@@ -34,7 +34,10 @@ const CatalogTool kTools[] = {
     {"resolve_worldspace", "cell", "ResolveWorldspace", "cell_id:string", "Editor query: resolve the worldspace that owns a cell. Placed-reference or cell operation."},
     {"search_worldspaces", "cell", "SearchWorldspaces", "query:string,limit:integer?", "Editor query: search worldspaces. Placed-reference or cell operation."},
     {"get_cell_properties", "cell", "GetCellProperties", "cell_id:string", "Editor query: get cell properties (lighting, water, owner, regions and so on) with the descriptors that set_cell_properties accepts. Placed-reference or cell operation."},
+<<<<<<< HEAD
     {"plan_cell_cleanup", "cell", "PlanCellCleanup", "cell_id:string,patch_plugin:string,mode:string,max_count:integer?,by_model:boolean?", "Editor query: plan removing duplicate or excess placed references from a cell in a patch plugin. mode is dedupe or excess; max_count is the kept count for excess. Read-only: the patch is not changed."},
+=======
+>>>>>>> tmp/q2bc
     {"get_geometry_batch", "cell", "GetGeometryBatch", "rel_model_paths_json:string", "Editor query: get geometry batch. Same RPC the desktop editor uses."},
     {"search_cells", "cell", "SearchCells", "query:string,limit:integer?", "Editor query: search cells. Placed-reference or cell operation."},
     {"get_geometry_batch_progress", "cell", "GetGeometryBatchProgress", "", "Editor query: get geometry batch progress. Same RPC the desktop editor uses."},
