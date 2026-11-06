@@ -161,3 +161,10 @@ it('Detects: going Back from the quest the wizard just made, then choosing the Q
   expect(await screen.findByText('Choose a quest to start editing it. Nothing changes until you edit a field.')).toBeTruthy();
   expect(screen.queryByText(`Editing ${CREATED}`)).toBeNull();
 });
+
+it('Detects: the template chooser dropping, renaming or reordering one of the five quest templates, so a beginner cannot start that kind of quest', () => {
+  wizardBackend();
+  const { container } = render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  const titles = Array.from(container.querySelectorAll('.editors-card-title'), node => node.textContent);
+  expect(titles).toEqual(['Fetch an item', 'Kill a target', 'Talk to someone', 'Escort', 'Choice with two endings']);
+});

@@ -18,9 +18,9 @@
 
 #include <fo4ide/archive/Ba2Reader.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
-#include <fo4ide/papyrus/Decompiler.hpp>
+#include <fo4/papyrus/decompiler.hpp>
+#include <fo4/pex/pex.hpp>
 #include <fo4ide/papyrus/Parser.hpp>
-#include <fo4ide/papyrus/Pex.hpp>
 #include <fo4ide/papyrus/ScriptIndex.hpp>
 #include <fo4ide/papyrus/VanillaScriptSources.hpp>
 
@@ -29,10 +29,10 @@ namespace {
 namespace fs = std::filesystem;
 using fo4ide::archive::Ba2Reader;
 using fo4ide::papyrus::Diagnostic;
-using fo4ide::papyrus::Decompiler;
+using fo4::papyrus::Decompiler;
 using fo4ide::papyrus::PapyrusCompileOptions;
-using fo4ide::papyrus::PexFile;
-using fo4ide::papyrus::PexObject;
+using fo4::pex::PexFile;
+using fo4::pex::PexObject;
 using fo4ide::papyrus::Parser;
 using fo4ide::papyrus::Script;
 using fo4ide::papyrus::ScriptIndex;
