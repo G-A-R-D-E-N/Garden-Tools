@@ -32,6 +32,12 @@
   stroke-dasharray: 4 3;
 }
 
+.quest-flow-arrow-jump {
+  stroke: var(--status-warning);
+  stroke-width: 2;
+  stroke-dasharray: 2 3;
+}
+
 .quest-flow-head {
   fill: var(--text-secondary);
 }
@@ -132,6 +138,10 @@
 
 .quest-flow-legend-ending {
   color: var(--accent-info);
+}
+
+.quest-flow-legend-jump {
+  color: var(--status-warning);
 }
 
 .quest-flow-panel {
