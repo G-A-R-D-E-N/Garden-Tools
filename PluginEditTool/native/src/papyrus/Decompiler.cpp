@@ -29,6 +29,10 @@ bool startsWith(std::string_view text, std::string_view prefix) {
     return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
 }
 
+bool endsWith(std::string_view text, std::string_view suffix) {
+    return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
+}
+
 std::string cap(std::string s) {
     if (s.empty()) return s;
     s[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
@@ -196,7 +200,9 @@ void Decompiler::emitFunction(std::ostringstream& sb, const PexObject& obj,
         auto rest = fn.name.substr(std::string("::remote_").size());
         std::string type = fn.params.empty() ? "" : fn.params[0].type;
         std::string ev = rest;
-        if (!type.empty() && startsWith(rest, type + "_")) {
+        // Prefix matching must ignore case: MQ00Script and mq00script name the same script.
+        if (!type.empty() && rest.size() > type.size() && iequals(rest.substr(0, type.size()), type) &&
+            rest[type.size()] == '_') {
             ev = rest.substr(type.size() + 1);
         } else {
             const auto idx = rest.find("_On");
@@ -277,7 +283,14 @@ struct BodyState {
 
     std::string resolveName(const std::string& n) const {
         const auto it = backing.find(n);
-        return it == backing.end() ? n : it->second;
+        if (it != backing.end()) return it->second;
+        // Inherited auto property backing vars must map back to the property name.
+        constexpr std::string_view kSuffix = "_var";
+        if (startsWith(n, "::") && n.size() > 2 + kSuffix.size() && endsWith(n, kSuffix) &&
+            !types.contains(n)) {
+            return n.substr(2, n.size() - 2 - kSuffix.size());
+        }
+        return n;
     }
 
     static std::string san(std::string_view n) {

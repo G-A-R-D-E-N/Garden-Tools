@@ -6,9 +6,11 @@ import './RecordPicker.css';
 
 const back = () => window.chrome?.webview?.hostObjects?.backend;
 
+export interface PickedRecord { formKey: string; plugin: string; }
+
 export default function RecordPicker(
   { title, refType, refTypes, onPick, onClose }:
-  { title: string; refType: string | null; refTypes: string | null; onPick: (formKey: string) => void; onClose: () => void }
+  { title: string; refType: string | null; refTypes: string | null; onPick: (formKey: string, plugin: string) => void; onClose: () => void }
 ) {
   const [query, setQueryState] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
@@ -55,7 +57,7 @@ export default function RecordPicker(
           {hits === null ? <div className="rp-note">Searching…</div>
             : hits.length === 0 ? <div className="rp-note">{error ? `Search failed: ${error}` : 'No matches.'}</div>
             : hits.map(h => (
-              <div key={h.Plugin + h.FormKey} className="rp-row" onClick={() => onPick(h.FormKey)}>
+              <div key={h.Plugin + h.FormKey} className="rp-row" onClick={() => onPick(h.FormKey, h.Plugin)}>
                 <span className="rp-type">{h.Type}</span>
                 <span className="rp-id">{h.EditorID || '(no EditorID)'}</span>
                 <span className="rp-fk">{h.FormKey}</span>

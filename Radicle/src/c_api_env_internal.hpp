@@ -6,6 +6,7 @@
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/world.hpp"
 #include "fo4/graph/conflict_graph.hpp"
+#include "fo4/schema/ctda.hpp"
 #include "fo4/text/encoding.hpp"
 
 #include <cstdlib>
@@ -18,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 struct radicle_assets {
@@ -121,6 +123,29 @@ inline radicle_form_key to_c_key(const radicle_env& env, const std::optional<fo4
   const auto* owner = env.value.stable_owner(*key);
   if (owner == nullptr) throw fo4::env::EnvironmentError("FormKey owner is not in the environment");
   return {owner->filename().data(), key->local().value()};
+}
+
+inline bool convert_text(const char* utf8, std::optional<std::string>& out) {
+  if (utf8 == nullptr) return true;
+  auto converted = fo4::text::utf8_to_windows1252(utf8);
+  if (!converted) return false;
+  out = std::move(*converted);
+  return true;
+}
+
+template <class Row>
+bool to_ctda(const Row& row, fo4::CtdaCondition& out) {
+  out.flags_byte = row.flags_byte;
+  out.comparison_raw = row.comparison_raw;
+  out.function = row.function;
+  out.unknown2 = row.unknown2;
+  out.param1 = row.param1;
+  out.param2 = row.param2;
+  out.run_on = row.run_on;
+  out.reference = row.reference;
+  out.unknown3 = row.unknown3;
+  return convert_text(row.parameter1_string, out.parameter1_string) &&
+         convert_text(row.parameter2_string, out.parameter2_string);
 }
 
 radicle_status load_strings(const radicle_env* env,

@@ -3,8 +3,10 @@
 #include "sha256.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -69,6 +71,34 @@ const char* boundKindName(BoundKind kind) {
     return "unsupported";
 }
 
+const char* boundKindLabel(BoundKind kind) {
+    switch (kind) {
+        case BoundKind::Int:
+            return "Int";
+        case BoundKind::Float:
+            return "Float";
+        case BoundKind::Bool:
+            return "Bool";
+        case BoundKind::String:
+            return "String";
+        case BoundKind::Object:
+            return "Object";
+        case BoundKind::AliasBound:
+            return "AliasBound";
+        case BoundKind::Array:
+            return "Array";
+        case BoundKind::Struct:
+            return "Struct";
+        case BoundKind::Variable:
+            return "Variable";
+        case BoundKind::Unknown:
+            return "Unknown";
+        case BoundKind::Unsupported:
+            return "Unsupported";
+    }
+    return "Unsupported";
+}
+
 const char* aliasKindName(AliasFillKind kind) {
     switch (kind) {
         case AliasFillKind::ForcedReference:
@@ -96,7 +126,7 @@ BoundProperty unsupported(const OwnerId& owner, const VmadValueShape& shape, Bou
     property.name = shape.name;
     property.kind = BoundKind::Unsupported;
     property.value = noneValue();
-    property.reason = std::string(boundKindName(kind)) + ": " + std::move(reason);
+    property.reason = std::string(boundKindLabel(kind)) + ": " + std::move(reason);
     return property;
 }
 
@@ -109,20 +139,32 @@ std::string requireText(const std::optional<std::string>& value, const char* wha
 
 BoundProperty bindShape(const OwnerId& owner, const VmadValueShape& shape, const std::string& declaredType);
 
+bool isBlank(const std::string& text) {
+    return std::all_of(text.begin(), text.end(), [](char ch) {
+        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\v' || ch == '\f';
+    });
+}
+
+bool fitsFloat(double value) {
+    if (!std::isfinite(value)) return true;
+    if (std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) return false;
+    return static_cast<double>(static_cast<float>(value)) == value;
+}
+
 bool isBindableScalar(const std::string& type) {
     return type == "int" || type == "float" || type == "bool" || type == "string" || type == "object";
 }
 
 BoundProperty bindArray(const OwnerId& owner, const VmadValueShape& shape) {
-    if (!isBindableScalar(lower(shape.elementType))) {
-        return unsupported(owner, shape, BoundKind::Array,
-                           "the array's " + shape.elementType + " elements are not a bindable scalar type");
-    }
     if (!shape.elementCount.has_value() ||
         *shape.elementCount != static_cast<std::int32_t>(shape.elements.size())) {
         return unsupported(owner, shape, BoundKind::Array,
                            "the array's " + std::to_string(shape.elementCount.value_or(0)) +
                                " elements are not decoded yet");
+    }
+    if (!isBindableScalar(lower(shape.elementType))) {
+        return unsupported(owner, shape, BoundKind::Array,
+                           "the array's " + shape.elementType + " elements are not a bindable scalar type");
     }
     auto array = std::make_shared<Array>();
     array->elementType = declaredValueType(shape.elementType);
@@ -144,7 +186,7 @@ BoundProperty bindArray(const OwnerId& owner, const VmadValueShape& shape) {
 }
 
 BoundProperty bindStruct(const OwnerId& owner, const VmadValueShape& shape) {
-    if (!shape.elementCount.has_value() ||
+    if (shape.members.empty() || !shape.elementCount.has_value() ||
         *shape.elementCount != static_cast<std::int32_t>(shape.members.size())) {
         return unsupported(owner, shape, BoundKind::Struct,
                            "the struct's " + std::to_string(shape.elementCount.value_or(0)) +
@@ -177,14 +219,22 @@ BoundProperty bindShape(const OwnerId& owner, const VmadValueShape& shape, const
     property.name = shape.name;
     const std::string type = lower(declaredType);
     if (type == "int") {
-        if (shape.integer.has_value()) {
+        if (shape.integer.has_value() && (*shape.integer < std::numeric_limits<std::int32_t>::min() ||
+                                          *shape.integer > std::numeric_limits<std::int32_t>::max())) {
+            property = unsupported(owner, shape, BoundKind::Int,
+                                   "an integer property's value " + std::to_string(*shape.integer) +
+                                       " does not fit a 32-bit Papyrus int");
+        } else if (shape.integer.has_value()) {
             property.kind = BoundKind::Int;
             property.value = integerValue(static_cast<std::int32_t>(*shape.integer));
         } else {
             property = unsupported(owner, shape, BoundKind::Int, "an integer property carried no value");
         }
     } else if (type == "float") {
-        if (shape.real.has_value()) {
+        if (shape.real.has_value() && !fitsFloat(*shape.real)) {
+            property = unsupported(owner, shape, BoundKind::Float,
+                                   "a float property's value does not fit a single-precision Papyrus float exactly");
+        } else if (shape.real.has_value()) {
             property.kind = BoundKind::Float;
             property.value = floatValue(static_cast<float>(*shape.real));
         } else {
@@ -204,7 +254,7 @@ BoundProperty bindShape(const OwnerId& owner, const VmadValueShape& shape, const
         property = unsupported(owner, shape, BoundKind::AliasBound,
                                "the object is bound to a quest alias, and the alias fill order is unproven");
     } else if (type == "object") {
-        if (shape.object.has_value() && !shape.object->empty()) {
+        if (shape.object.has_value() && !isBlank(*shape.object)) {
             property.kind = BoundKind::Object;
             property.value = objectValue(0, *shape.object, std::string());
         } else {

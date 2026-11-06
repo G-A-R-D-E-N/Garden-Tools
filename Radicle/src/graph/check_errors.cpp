@@ -1,5 +1,6 @@
 #include "fo4/graph/check_errors.hpp"
 
+#include "check_dialogue.hpp"
 #include "check_errors_records.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/condition_functions.hpp"
@@ -497,6 +498,17 @@ std::string_view check_code_name(CheckCode code) noexcept {
     case CheckCode::injected_record: return "injected_record";
     case CheckCode::unsupported_vmad_property: return "unsupported_vmad_property";
     case CheckCode::results_truncated: return "results_truncated";
+    case CheckCode::dialogue_info_count_mismatch: return "dialogue_info_count_mismatch";
+    case CheckCode::dialogue_previous_info_cycle: return "dialogue_previous_info_cycle";
+    case CheckCode::dialogue_previous_info_topic_mismatch:
+      return "dialogue_previous_info_topic_mismatch";
+    case CheckCode::dialogue_branch_quest_mismatch: return "dialogue_branch_quest_mismatch";
+    case CheckCode::dialogue_branch_category_invalid: return "dialogue_branch_category_invalid";
+    case CheckCode::scene_parent_quest_missing: return "scene_parent_quest_missing";
+    case CheckCode::scene_action_topic_not_dial: return "scene_action_topic_not_dial";
+    case CheckCode::scene_action_phase_out_of_range: return "scene_action_phase_out_of_range";
+    case CheckCode::scene_action_alias_unknown: return "scene_action_alias_unknown";
+    case CheckCode::scene_action_index_order: return "scene_action_index_order";
   }
   return "unknown";
 }
@@ -565,6 +577,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
                                            const CheckOptions& options,
                                            CheckRunSummary* summary) {
   const auto winners = winning_records(load_order);
+  const auto dialogue = make_dialogue_check_context(load_order);
   FindingSink sink{options.limit, {}, false, {}};
   const auto game_master = PluginKey::from_filename(k_game_master);
 
@@ -597,6 +610,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
     }
     check_links(*plugin, records, winners, game_master, sink);
     check_dialogue_links(*plugin, winners, sink);
+    for (auto& finding : check_dialogue(*plugin, dialogue)) sink.add(std::move(finding));
     check_preflight(*plugin, sink);
     for (auto& finding : check_record_levels(*plugin)) sink.add(std::move(finding));
     check_conditions(*plugin, sink);
