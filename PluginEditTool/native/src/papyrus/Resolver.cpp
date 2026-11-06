@@ -196,6 +196,12 @@ const Type* Resolver::resolveMemberTarget(Context& ctx, const Node* target) cons
 }
 
 const Type* Resolver::resolveCallee(Context& ctx, const Node* callee) const {
+    if (const auto* member = dynamic_cast<const MemberExpression*>(callee)) {
+        const Type* type = resolveMemberExpression(ctx, member, true);
+        ctx.types[member] = *type;
+        return &ctx.types[member];
+    }
+
     const auto* id = dynamic_cast<const IdentifierExpression*>(callee);
     if (!id) return resolveExpression(ctx, callee);
 
@@ -208,6 +214,19 @@ const Type* Resolver::resolveCallee(Context& ctx, const Node* callee) const {
 
     ctx.bindings[id] = *binding;
     ctx.types[id] = binding->type;
+    return &binding->type;
+}
+
+const Type* Resolver::resolveMemberExpression(Context& ctx, const MemberExpression* member,
+                                              bool callPosition) const {
+    const Type* targetType = resolveMemberTarget(ctx, member->target.get());
+    const Binding* binding =
+        lookupMember(ctx, member->target.get(), *targetType, member->name, callPosition);
+    if (!binding) {
+        reportUnknownMember(ctx, member->name, *targetType, member->nameSpan);
+        return &Type::error();
+    }
+    ctx.bindings[member] = *binding;
     return &binding->type;
 }
 
@@ -243,18 +262,9 @@ const Type* Resolver::computeType(Context& ctx, const Node* expression) const {
             return &binding->type;
         }
 
-        case NodeKind::MemberExpression: {
-            const auto* member = static_cast<const MemberExpression*>(expression);
-            const Type* targetType = resolveMemberTarget(ctx, member->target.get());
-            const Binding* binding =
-                lookupMember(ctx, member->target.get(), *targetType, member->name);
-            if (!binding) {
-                reportUnknownMember(ctx, member->name, *targetType, member->nameSpan);
-                return &Type::error();
-            }
-            ctx.bindings[member] = *binding;
-            return &binding->type;
-        }
+        case NodeKind::MemberExpression:
+            return resolveMemberExpression(ctx, static_cast<const MemberExpression*>(expression),
+                                           false);
 
         case NodeKind::IndexExpression: {
             const auto* index = static_cast<const IndexExpression*>(expression);
@@ -364,12 +374,13 @@ const Binding* Resolver::lookupName(Context& ctx, const std::string& name,
         }
     }
 
-    const Binding* member = lookupOnChain(ctx, ctx.chain, name, ctx.selfType == std::nullopt);
+    const Binding* member =
+        lookupOnChain(ctx, ctx.chain, name, ctx.selfType == std::nullopt, inCallPosition);
     if (member) return member;
 
     for (const Script* import : ctx.imports) {
         const auto chain = index_.baseChain(import);
-        const Binding* hit = lookupOnChain(ctx, chain, name, true);
+        const Binding* hit = lookupOnChain(ctx, chain, name, true, inCallPosition);
         if (hit) return hit;
     }
 
@@ -384,7 +395,21 @@ const Binding* Resolver::lookupName(Context& ctx, const std::string& name,
 }
 
 const Binding* Resolver::lookupOnChain(Context& ctx, const std::vector<const Script*>& chain,
-                                       const std::string& name, bool globalsOnly) const {
+                                       const std::string& name, bool globalsOnly,
+                                       bool callPosition) const {
+    if (callPosition) {
+        // A call must bind to a callable anywhere on the chain before a same-named property.
+        for (const Script* level : chain) {
+            const Declaration* decl = ScriptIndex::findCallableOn(level, name);
+            if (!decl) continue;
+            if (globalsOnly) {
+                const auto* fn = dynamic_cast<const FunctionDecl*>(decl);
+                if (!fn || !fn->isGlobal) continue;
+            }
+            return bindingFor(ctx, decl, level);
+        }
+    }
+
     for (const Script* level : chain) {
         const Declaration* decl = ScriptIndex::findMemberOn(level, name);
         if (!decl) continue;
@@ -398,11 +423,13 @@ const Binding* Resolver::lookupOnChain(Context& ctx, const std::vector<const Scr
 }
 
 const Binding* Resolver::lookupMember(Context& ctx, const Node* target,
-                                      const Type& targetType, const std::string& name) const {
+                                      const Type& targetType, const std::string& name,
+                                      bool callPosition) const {
     const auto targetIt = ctx.bindings.find(target);
     if (targetIt != ctx.bindings.end() && targetIt->second.kind == BindingKind::Script &&
         targetIt->second.owner != nullptr) {
-        return lookupOnChain(ctx, index_.baseChain(targetIt->second.owner), name, false);
+        return lookupOnChain(ctx, index_.baseChain(targetIt->second.owner), name, false,
+                             callPosition);
     }
 
     switch (targetType.kind) {
@@ -419,7 +446,7 @@ const Binding* Resolver::lookupMember(Context& ctx, const Node* target,
                 ctx.baseChainComplete = false;
                 return nullptr;
             }
-            return lookupOnChain(ctx, index_.baseChain(script), name, false);
+            return lookupOnChain(ctx, index_.baseChain(script), name, false, callPosition);
         }
 
         case TypeKind::Struct: {
@@ -584,9 +611,18 @@ std::optional<Type> Resolver::resolveTypeName(ScriptIndex& index, const std::str
                 if (iequals(s.name, name)) return Type::structOf(level->name, s.name);
             }
         }
+        // Imported structs must be searched after the base chain so a local struct shadows them.
+        for (const auto& import : relativeTo->imports) {
+            const Script* imported = index.resolve(import.name);
+            if (!imported) continue;
+            for (const auto& s : imported->structs) {
+                if (iequals(s.name, name)) return Type::structOf(imported->name, s.name);
+            }
+        }
     }
 
-    const auto split = name.find_last_of(':');
+    // '#' must split like ':' because decompiled sources spell a foreign struct as Script#Struct.
+    const auto split = name.find_last_of(":#");
     if (split != std::string::npos && split > 0) {
         const auto ownerName = name.substr(0, split);
         const auto structName = name.substr(split + 1);
