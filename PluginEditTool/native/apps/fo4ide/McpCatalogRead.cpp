@@ -43,3 +43,10 @@ const CatalogTool kTools[] = {
 std::span<const CatalogTool> readCatalogTools() { return kTools; }
 
 }
+};
+
+}
+
+std::span<const CatalogTool> readCatalogTools() { return kTools; }
+
+}
