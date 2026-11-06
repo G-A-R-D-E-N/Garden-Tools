@@ -1,8 +1,15 @@
 {
   "default": [],
+  "backend.GetActivePlugins": [
+    {"Name": "Patch.esp", "Kind": "plugin", "LoadOrder": 1, "Editable": true, "Size": 4096}
+  ],
   "backend.SearchRecords": [
     {"FormKey": "000800:Patch.esp", "EditorID": "MissingCourier", "Type": "QUST", "Plugin": "Patch.esp"},
-    {"FormKey": "000900:Patch.esp", "EditorID": "BagInTheAlley", "Type": "SCEN", "Plugin": "Patch.esp"}
+    {"FormKey": "000900:Patch.esp", "EditorID": "BagInTheAlley", "Type": "SCEN", "Plugin": "Patch.esp"},
+    {"FormKey": "000810:Patch.esp", "EditorID": "FlowChartDemo", "Type": "QUST", "Plugin": "Patch.esp"},
+    {"FormKey": "000830:Patch.esp", "EditorID": "CourierMother", "Type": "NPC_", "Plugin": "Patch.esp"},
+    {"FormKey": "000831:Patch.esp", "EditorID": "OldRailYard", "Type": "LCTN", "Plugin": "Patch.esp"},
+    {"FormKey": "000832:Patch.esp", "EditorID": "CourierLocket", "Type": "MISC", "Plugin": "Patch.esp"}
   ],
   "backend.GetQuestStages": {"stages": [
     {"index": 10, "flags": 2, "logEntries": [{"logText": "Find the courier's bag in the alley.", "flags": 0, "note": ""}]},
@@ -19,6 +26,19 @@
     {"kind": "reference", "id": 1, "name": "Guard", "flags": 0},
     {"kind": "location", "id": 2, "name": "Alley", "flags": 0}
   ]},
+  "backend.GetQuestStages@000810:Patch.esp": {"stages": [
+    {"index": 10, "flags": 0, "logEntries": [{"logText": "Meet the contact at the depot.", "flags": 0, "note": ""}]},
+    {"index": 20, "flags": 0, "logEntries": [{"logText": "The contact is gone. The job is off.", "flags": 2, "note": ""}]},
+    {"index": 30, "flags": 0, "logEntries": [{"logText": "Deliver the crate to the buyer.", "flags": 1, "note": ""}]},
+    {"index": 40, "flags": 0, "logEntries": []}
+  ]},
+  "backend.GetQuestObjectives@000810:Patch.esp": {"objectives": [
+    {"index": 10, "flags": 0, "displayText": "Find the contact", "targets": []}
+  ]},
+  "backend.GetQuestFragments@000810:Patch.esp": [
+    {"stage": 10, "function": "Fragment_Stage_0010", "fragmentScript": "QF_FlowChartDemo_000810"}
+  ],
+  "backend.GetQuestScript": {"source": "ScriptName QF_FlowChartDemo_000810 Extends Quest\n\nFunction Fragment_Stage_0010()\n  SetStage(30)\nEndFunction\n", "parses": true},
   "backend.GetDialogue": {
     "branches": [
       {"formKey": "000801:Patch.esp", "editorId": "CourierBranch", "category": 0, "flags": 0, "topic": "000802:Patch.esp"}
@@ -63,7 +83,7 @@
   "backend.GetReferencedBy": [
     {"Plugin": "Patch.esp", "FormKey": "000900:Patch.esp", "EditorID": "BagInTheAlley", "Type": "SCEN"}
   ],
-  "backend.ResolveFormKeyLabels": {"000910:Fallout4.esm": "Worried"},
+  "backend.ResolveFormKeyLabels": {"000910:Fallout4.esm": "Worried", "000830:Patch.esp": "CourierMother", "000831:Patch.esp": "OldRailYard", "000832:Patch.esp": "CourierLocket"},
   "backend.GetScene": {
     "formKey": "000900:Patch.esp", "editorId": "BagInTheAlley", "flags": 1,
     "parentQuest": "000800:Patch.esp",

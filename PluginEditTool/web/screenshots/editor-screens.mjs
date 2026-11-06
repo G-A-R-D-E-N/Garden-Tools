@@ -12,9 +12,17 @@ const transforms = {
 
 function reply(target, method, args) {
   const key = `${target}.${method}`;
-  const found = key in fixtures ? fixtures[key] : fixtures.default;
+  const scoped = `${key}@${args?.[1]}`;
+  const source = scoped in fixtures ? scoped : key;
+  const found = source in fixtures ? fixtures[source] : fixtures.default;
   const value = key in transforms ? transforms[key](found, args ?? []) : found;
   return { ok: true, value: typeof value === 'string' ? value : JSON.stringify(value) };
+}
+
+async function chooseRecord(page, record) {
+  await page.getByRole('button', { name: 'Choose', exact: true }).click();
+  await page.getByText(record, { exact: true }).click();
+  await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
 }
 
 const FLOWS = [
@@ -54,6 +62,41 @@ const FLOWS = [
       await page.getByText('MissingCourier', { exact: true }).click();
       await page.getByRole('button', { name: 'Check this quest', exact: true }).click();
       await page.locator('.quest-check-counts').waitFor();
+    },
+  },
+  {
+    name: 'wizard-templates',
+    label: 'New quest',
+    async pick(page) {
+      for (const title of ['Fetch an item', 'Kill a target', 'Talk to someone', 'Escort', 'Choice with two endings']) {
+        await page.getByRole('button', { name: new RegExp(`^${title}`) }).waitFor();
+      }
+    },
+  },
+  {
+    name: 'wizard-fetch-review',
+    label: 'New quest',
+    async pick(page) {
+      await page.getByRole('button', { name: /^Fetch an item/ }).click();
+      await page.getByLabel('Which plugin should the quest go in?').selectOption('Patch.esp');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await page.getByLabel("What is the quest's internal name?").fill('LostLocket');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await chooseRecord(page, 'CourierMother');
+      await chooseRecord(page, 'OldRailYard');
+      await chooseRecord(page, 'CourierLocket');
+      await page.getByLabel('What does the player get as a reward?').fill('50 caps');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await page.locator('.wizard-review').waitFor();
+    },
+  },
+  {
+    name: 'quest-flow-chart',
+    label: 'Quest',
+    async pick(page) {
+      await page.getByRole('button', { name: 'Choose quest' }).click();
+      await page.getByText('FlowChartDemo', { exact: true }).click();
+      await page.locator('.quest-flow-arrow-jump').waitFor();
     },
   },
 ];
