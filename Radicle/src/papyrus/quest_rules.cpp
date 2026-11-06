@@ -141,8 +141,7 @@ BoundProperty bindShape(const OwnerId& owner, const VmadValueShape& shape, const
 
 bool isBlank(const std::string& text) {
     return std::all_of(text.begin(), text.end(), [](char ch) {
-        return ch == ' ' || ch == '	' || ch == '
-' || ch == '' || ch == '' || ch == '';
+        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\v' || ch == '\f';
     });
 }
 

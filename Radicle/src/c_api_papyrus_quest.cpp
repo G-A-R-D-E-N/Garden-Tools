@@ -156,7 +156,7 @@ radicle_status radicle_papyrus_bind_vmad_values(radicle_papyrus_owner_kind owner
       input.push_back(std::move(shape));
     }
     const fo4::papyrus::VmadBindReport report = fo4::papyrus::bindVmadValues(*owner, input);
-    out_report->properties = new radicle_papyrus_bound_property[report.properties.size()];
+    out_report->properties = new radicle_papyrus_bound_property[report.properties.size()]();
     out_report->count = report.properties.size();
     for (size_t i = 0; i < report.properties.size(); ++i) {
       const fo4::papyrus::BoundProperty& property = report.properties[i];
