@@ -85,4 +85,10 @@ export const QUEST_HELP_TOPICS: readonly HelpTopic[] = [
     body: 'The output folder receives the .psc and .pex files for this script. The imports folder is where the script looks for game scripts it uses, usually the game\'s Data\\Scripts folder.',
     related: ['quest-fragment'],
   },
+  {
+    id: 'quest-check',
+    title: 'Check this quest',
+    body: 'Check this quest looks for problems that stop this quest from working. It checks that a stage completes or fails the quest, that each stage has journal text or an objective with its number, that each objective has a stage with its number and points only at aliases that exist, that no two stages share a number, that script jumps go to stages that exist, and that fragment scripts compile. It also lists the game record checker results for this quest, its dialogue and its scenes. Errors are listed before warnings, and info lines mean something could not be read so it was not checked. The list is out of date after you save a stage, objective, alias or fragment, so check again. If the record checker hits its row limit, a warning says the list may be missing problems.',
+    related: ['quest-stage', 'quest-fragment'],
+  },
 ];

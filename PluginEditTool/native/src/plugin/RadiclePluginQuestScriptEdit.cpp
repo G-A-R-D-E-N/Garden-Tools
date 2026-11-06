@@ -1,9 +1,9 @@
 #include <fo4/archive/assets.hpp>
+#include <fo4/papyrus/decompiler.hpp>
+#include <fo4/pex/pex.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
-#include <fo4ide/papyrus/Decompiler.hpp>
 #include <fo4ide/papyrus/Parser.hpp>
-#include <fo4ide/papyrus/Pex.hpp>
 #include <fo4ide/papyrus/ScriptIndex.hpp>
 #include <fo4ide/papyrus/VanillaScriptSources.hpp>
 
@@ -137,12 +137,12 @@ std::vector<std::uint8_t> toBytes(const std::string& raw) {
 }
 
 std::string decompilePex(const std::vector<std::uint8_t>& bytes, std::string_view name) {
-    const auto pex = fo4ide::papyrus::PexFile::fromBytes(bytes);
+    const auto pex = fo4::pex::PexFile::fromBytes(bytes);
     if (pex.objects.size() != 1) throw std::runtime_error("PEX must contain exactly one object");
     if (!sameName(pex.objects.front().name, name)) {
         throw std::runtime_error("PEX object " + pex.objects.front().name + " is not " + std::string(name));
     }
-    auto source = fo4ide::papyrus::Decompiler::toSource(pex);
+    auto source = fo4::papyrus::Decompiler::toSource(pex);
     const auto at = source.find(kDecompileFailed);
     if (at != std::string::npos) {
         const auto end = source.find('\n', at);

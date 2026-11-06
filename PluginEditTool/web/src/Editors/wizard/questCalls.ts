@@ -30,7 +30,7 @@ export function buildQuestCalls(template: QuestTemplate, answers: Answers): Back
   const stages: QuestStage[] = template.stages.map(stage => ({
     index: stage.index,
     flags: 0,
-    logEntries: [{ logText: fill(stage.journal, answers), note: '', flags: stage.completes ? 1 : 0 }],
+    logEntries: [{ logText: fill(stage.journal, answers), note: '', flags: stage.completes ? 1 : stage.fails ? 2 : 0 }],
   }));
   const objectives: QuestObjective[] = template.objectives.map(objective => ({
     index: objective.index,

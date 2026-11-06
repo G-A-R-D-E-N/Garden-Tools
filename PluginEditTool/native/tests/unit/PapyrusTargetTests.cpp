@@ -1,13 +1,14 @@
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/generators/catch_generators.hpp>
 
+#include <fo4/papyrus/decompiler.hpp>
+#include <fo4/pex/pex.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 #include <fo4ide/papyrus/QuestFragmentSource.hpp>
@@ -17,7 +18,6 @@
 
 #include "../helpers/GraphTestSupport.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
-#include "../../src/app/PapyrusStaging.hpp"
 
 #ifdef __linux__
 #include <fcntl.h>
@@ -426,62 +426,6 @@ TEST_CASE("PapyrusTarget Compile refuses a ScriptName part with a character that
     CHECK(runner.last.executable.empty());
 }
 
-TEST_CASE("PapyrusStaging reports an unstageable namespace part as an error, not as no staging") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Good.psc";
-    touch(source, "ScriptName Good:Foo\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-    touch(staging / "Good");
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging refuses an unsafe ScriptName and writes nothing outside staging") {
-    const std::vector<std::tuple<std::string, std::string, std::string>> rows = {
-        {"ScriptName A:B?:C", "", "unsafe namespace part"},
-        {"ScriptName ..:..:Evil", "../Evil.psc", "Refused to compile"},
-        {"ScriptName A:..:B", "", "Refused to compile"},
-        {"ScriptName MyMod:/fo4ide_gt086_escape:Evil", "/fo4ide_gt086_escape/Evil.psc", "Refused to compile"},
-    };
-    const auto& [scriptLine, escapeText, fragment] =
-        rows[GENERATE(std::size_t{0}, std::size_t{1}, std::size_t{2}, std::size_t{3})];
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Evil.psc";
-    touch(source, scriptLine + "\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-    const bool hasEscape = !escapeText.empty();
-    const auto escaped = hasEscape ? root / escapeText : std::filesystem::path{};
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    const bool escapedWritten = hasEscape && std::filesystem::exists(escaped);
-    std::error_code ec;
-    if (hasEscape) std::filesystem::remove(escaped, ec);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "UnsafeScriptName");
-    CHECK(result.error().message.find(fragment) != std::string::npos);
-    if (hasEscape) CHECK_FALSE(escapedWritten);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging stages a namespaced script under its namespace folders") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Foo.psc";
-    touch(source, "ScriptName MyMod:Quests:Foo\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    REQUIRE(result.has_value());
-    REQUIRE(result->has_value());
-    CHECK(result->value() == staging);
-    CHECK(std::filesystem::is_regular_file(staging / "MyMod" / "Quests" / "Foo.psc"));
-}
-
 TEST_CASE("PapyrusTarget Decompile shows the NOT SAVED trailer without write") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -501,6 +445,37 @@ TEST_CASE("PapyrusTarget Decompile shows the NOT SAVED trailer without write") {
     const auto text = result->get<std::string>();
     CHECK(text.find("ScriptName Greeter") != std::string::npos);
     CHECK(text.find("NOT SAVED") != std::string::npos);
+
+    const auto bytes = readBytes(pex);
+    const auto file = fo4::pex::PexFile::fromBytes(
+        std::vector<std::uint8_t>(bytes.begin(), bytes.end()));
+    for (const bool assembly : {false, true}) {
+        auto shown = target.invoke(
+            "Decompile", nlohmann::json::array({pex.string(), "", assembly, false}));
+        REQUIRE(shown.has_value());
+        const auto expected = assembly ? fo4::papyrus::Decompiler::disassemble(file)
+                                       : fo4::papyrus::Decompiler::toSource(file);
+        CHECK(shown->get<std::string>().rfind(expected, 0) == 0);
+    }
+}
+
+TEST_CASE("PapyrusTarget Decompile reports a .pex it cannot read as a failure, not a throw") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto junk = root / "x.pex";
+    touch(junk, "junk");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto result =
+        target.invoke("Decompile", nlohmann::json::array({junk.string(), "", false, false}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().rfind("Decompile failed for x.pex", 0) == 0);
 }
 
 TEST_CASE("PapyrusTarget Decompile writes a namespaced .psc when asked") {

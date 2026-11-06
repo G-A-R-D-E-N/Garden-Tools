@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 #include <string_view>
 
 namespace fo4::papyrus {
@@ -24,5 +25,7 @@ inline bool safeScriptObjectName(std::string_view name) {
     }
     return true;
 }
+
+std::string extractScriptName(const std::string& text);
 
 }  // namespace fo4::papyrus
