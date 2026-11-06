@@ -100,10 +100,6 @@ export function parseDialogue(raw: string | object): DialogueData {
   return data as DialogueData;
 }
 
-export function pluginOf(formKey: string): string {
-  return formKey.slice(formKey.indexOf(':') + 1);
-}
-
 export const topicTitle = (topic: DialogueTopic): string => topic.name || topic.editorId || topic.formKey;
 
 export const topicLine = (topic: DialogueTopic): string =>

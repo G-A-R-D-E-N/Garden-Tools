@@ -10,12 +10,9 @@ export interface QuestSnapshot {
   aliases: QuestAlias[];
 }
 
-export const questPlugin = (formKey: string): string => formKey.slice(formKey.indexOf(':') + 1);
-
 const unwrap = (raw: string | object): unknown => (typeof raw === 'string' ? JSON.parse(raw) : raw);
 
-export async function readQuest(b: Backend, formKey: string): Promise<QuestSnapshot> {
-  const plugin = questPlugin(formKey);
+export async function readQuest(b: Backend, plugin: string, formKey: string): Promise<QuestSnapshot> {
   const context = { language: 'en' };
   const [stages, objectives, aliases] = await Promise.all([
     b.GetQuestStages(plugin, formKey, context),
@@ -29,11 +26,11 @@ export async function readQuest(b: Backend, formKey: string): Promise<QuestSnaps
   };
 }
 
-export const writeStages = (b: Backend, formKey: string, stages: QuestStage[]) =>
-  b.SetQuestStages(questPlugin(formKey), formKey, stagesJson(stages));
+export const writeStages = (b: Backend, plugin: string, formKey: string, stages: QuestStage[]) =>
+  b.SetQuestStages(plugin, formKey, stagesJson(stages));
 
-export const writeObjectives = (b: Backend, formKey: string, objectives: QuestObjective[]) =>
-  b.SetQuestObjectives(questPlugin(formKey), formKey, objectivesJson(objectives));
+export const writeObjectives = (b: Backend, plugin: string, formKey: string, objectives: QuestObjective[]) =>
+  b.SetQuestObjectives(plugin, formKey, objectivesJson(objectives));
 
-export const writeAliases = (b: Backend, formKey: string, aliases: QuestAlias[]) =>
-  b.SetQuestAliases(questPlugin(formKey), formKey, aliasesJson(aliases));
+export const writeAliases = (b: Backend, plugin: string, formKey: string, aliases: QuestAlias[]) =>
+  b.SetQuestAliases(plugin, formKey, aliasesJson(aliases));

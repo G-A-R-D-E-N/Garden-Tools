@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
+import type { PickedRecord } from '../RecordPicker';
 import HelpDrawer from './help/HelpDrawer';
 import { SCREEN_TOPICS } from './help/helpContent';
 import SceneWorkspace from './scene/SceneWorkspace';
 
 export default function SceneEditor({ onBack }: { onBack: () => void }) {
   const [helpOpen, setHelpOpen] = useState(false);
-  const [sceneKey, setSceneKey] = useState<string | null>(null);
+  const [scene, setScene] = useState<PickedRecord | null>(null);
   return (
     <section className="editor-screen" aria-labelledby="scene-editor-title">
       <header className="editor-screen-header">
@@ -19,7 +20,8 @@ export default function SceneEditor({ onBack }: { onBack: () => void }) {
         A scene is a scripted sequence, such as actors talking or walking. Its phases run as columns, its actors as rows
         and its actions as blocks.
       </p>
-      <SceneWorkspace key={sceneKey ?? 'none'} sceneKey={sceneKey} onPickScene={setSceneKey} />
+      <SceneWorkspace key={scene ? `${scene.plugin}|${scene.formKey}` : 'none'} sceneKey={scene?.formKey ?? null}
+        plugin={scene?.plugin ?? ''} onPickScene={(formKey, plugin) => setScene({ formKey, plugin })} />
       {helpOpen && <HelpDrawer topicIds={SCREEN_TOPICS.scene} onClose={() => setHelpOpen(false)} />}
     </section>
   );

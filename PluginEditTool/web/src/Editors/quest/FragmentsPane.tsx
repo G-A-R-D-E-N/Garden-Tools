@@ -4,7 +4,6 @@ import { errorText } from '../../errors';
 import { friendlyError, type FriendlyMessage } from '../friendlyErrors';
 import HelpTip from '../help/HelpTip';
 import type { UndoEntry } from '../useUndoStack';
-import { questPlugin } from './questBackend';
 import { ErrorNote } from './questControls';
 
 type ActionKind = 'display' | 'complete' | 'stage';
@@ -21,6 +20,7 @@ interface FragmentArgs {
 }
 
 interface Props {
+  plugin: string;
   formKey: string;
   push: (entry: UndoEntry) => void;
 }
@@ -35,7 +35,7 @@ const EMPTY_FORM: FragmentArgs = { stage: 0, entry: 0, scriptName: '', outputDir
 
 const keyOf = (args: FragmentArgs) => `${args.stage}:${args.entry}`;
 
-export default function FragmentsPane({ formKey, push }: Props) {
+export default function FragmentsPane({ plugin, formKey, push }: Props) {
   const backend = getBackend();
   const [form, setForm] = useState<FragmentArgs>(EMPTY_FORM);
   const [result, setResult] = useState('');
@@ -45,7 +45,7 @@ export default function FragmentsPane({ formKey, push }: Props) {
   const apply = (args: FragmentArgs, onDone?: () => void) => {
     if (!backend) return;
     setError(null);
-    backend.SetQuestFragment(questPlugin(formKey), formKey, args.stage, args.entry, args.scriptName,
+    backend.SetQuestFragment(plugin, formKey, args.stage, args.entry, args.scriptName,
       args.outputDir, args.importsDir, JSON.stringify(args.actions)).then(raw => {
       written.current.set(keyOf(args), args);
       setResult(typeof raw === 'string'

@@ -5,6 +5,23 @@ import { openQuest, stubBackend, undoButton } from './questTestHarness';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+it('Detects: switching an alias to collection with no entries is blocked, so native never receives an empty collection', async () => {
+  const backend = stubBackend();
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  fireEvent.change(await screen.findByLabelText('Alias 0 kind'), { target: { value: 'collection' } });
+  expect((await screen.findByRole('alert')).textContent).toContain('needs at least one entry');
+  expect((screen.getByLabelText('Alias 0 kind') as HTMLSelectElement).value).toBe('reference');
+  expect(backend.SetQuestAliases).not.toHaveBeenCalled();
+});
+
+it('Detects: the Aliases pane warns that saving rewrites the list and can remove fill rules, keywords and items', async () => {
+  stubBackend();
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  expect(await screen.findByText(/cannot show fill rules, keywords or items yet/)).toBeTruthy();
+});
+
 it('Detects: an edited alias name is written, and Undo writes the old name back and shows it again', async () => {
   const backend = stubBackend();
   render(<QuestEditor onBack={() => {}} />);

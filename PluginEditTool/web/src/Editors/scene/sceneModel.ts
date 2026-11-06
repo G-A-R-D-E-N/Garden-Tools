@@ -62,8 +62,6 @@ export function parseScene(raw: string | object): SceneDto {
   return { formKey: '', phases: [], actors: [], actions: [], ...parsed } as SceneDto;
 }
 
-export const pluginOf = (formKey: string): string => formKey.slice(formKey.indexOf(':') + 1);
-
 export const ACTION_TYPES = [
   { type: 0, label: 'Dialogue' },
   { type: 1, label: 'Package' },

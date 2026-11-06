@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import ConditionsEditor from '../ConditionsEditor';
-import RecordPicker from '../RecordPicker';
+import RecordPicker, { type PickedRecord } from '../RecordPicker';
 import { getBackend } from '../backend';
 import { errorText } from '../errors';
 import HelpDrawer from './help/HelpDrawer';
@@ -13,7 +13,7 @@ import { buildActions } from './dialogue/dialogueActions';
 import DialogueChat from './dialogue/DialogueChat';
 import DialogueDetails from './dialogue/DialogueDetails';
 import DialogueTree from './dialogue/DialogueTree';
-import { parseDialogue, pluginOf, type DialogueData, type DialogueInfo, type LineRef } from './dialogue/dialogueModel';
+import { parseDialogue, type DialogueData, type DialogueInfo, type LineRef } from './dialogue/dialogueModel';
 import './dialogue/DialogueScreen.css';
 
 const CONDITIONS_PATH = 'Conditions';
@@ -21,7 +21,7 @@ const CONDITIONS_PATH = 'Conditions';
 export default function DialogueEditor({ onBack }: { onBack: () => void }) {
   const backend = getBackend();
   const [helpOpen, setHelpOpen] = useState(false);
-  const [quest, setQuest] = useState<string | null>(null);
+  const [quest, setQuest] = useState<PickedRecord | null>(null);
   const [pickingQuest, setPickingQuest] = useState(false);
   const [dialogue, setDialogue] = useState<DialogueData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -30,14 +30,14 @@ export default function DialogueEditor({ onBack }: { onBack: () => void }) {
   const [topicKey, setTopicKey] = useState<string | null>(null);
   const [line, setLine] = useState<LineRef | null>(null);
   const [conditionsFor, setConditionsFor] = useState<{ info: DialogueInfo; before: string } | null>(null);
-  const { push, onKeyDown, scopeRef } = useUndoStack();
+  const { push, reset, onKeyDown, scopeRef } = useUndoStack();
 
   const fail = (e: unknown) => setError(friendlyError(errorText(e)));
 
-  const refresh = async (questKey: string) => {
+  const refresh = async (picked: PickedRecord) => {
     if (!backend) return;
     try {
-      const data = parseDialogue(await backend.GetDialogue(pluginOf(questKey), questKey));
+      const data = parseDialogue(await backend.GetDialogue(picked.plugin, picked.formKey));
       setDialogue(data);
       const emotions = [...new Set(data.topics.flatMap(t => t.infos.flatMap(i =>
         i.responses.flatMap(r => (r.emotion ? [r.emotion] : [])))))];
@@ -62,22 +62,23 @@ export default function DialogueEditor({ onBack }: { onBack: () => void }) {
     return true;
   };
 
-  const pickQuest = async (questKey: string) => {
+  const pickQuest = async (picked: PickedRecord) => {
     setPickingQuest(false);
     setError(null);
-    setQuest(questKey);
+    reset();
+    setQuest(picked);
     setTopicKey(null);
     setLine(null);
     setDialogue(null);
     setLoading(true);
-    await refresh(questKey);
+    await refresh(picked);
     setLoading(false);
   };
 
   const openConditions = async (info: DialogueInfo) => {
     if (!backend || !quest) return;
     try {
-      const before = await backend.GetConditionsAt(pluginOf(quest), info.formKey, CONDITIONS_PATH);
+      const before = await backend.GetConditionsAt(quest.plugin, info.formKey, CONDITIONS_PATH);
       setConditionsFor({ info, before });
     } catch (e) {
       fail(e);
@@ -87,7 +88,7 @@ export default function DialogueEditor({ onBack }: { onBack: () => void }) {
   const conditionsSaved = async () => {
     if (!backend || !quest || !conditionsFor) return;
     const { info, before } = conditionsFor;
-    const plugin = pluginOf(quest);
+    const plugin = quest.plugin;
     setConditionsFor(null);
     const restore = (raw: string) => () => {
       void write(() => backend.SetConditionsAt(plugin, info.formKey, CONDITIONS_PATH, raw));
@@ -101,7 +102,7 @@ export default function DialogueEditor({ onBack }: { onBack: () => void }) {
     await refresh(quest);
   };
 
-  const actions = backend && quest ? buildActions(backend, quest, write, push) : null;
+  const actions = backend && quest ? buildActions(backend, quest.plugin, quest.formKey, write, push) : null;
   const topic = dialogue?.topics.find(t => t.formKey === topicKey) ?? null;
   const info = topic && line ? (topic.infos.find(i => i.formKey === line.info) ?? null) : null;
 
@@ -117,7 +118,7 @@ export default function DialogueEditor({ onBack }: { onBack: () => void }) {
         Dialogue is what characters say. Pick a quest, then a topic, to see the conversation and edit each NPC line.
       </p>
       <div className="dlg-row">
-        <span>Quest: {quest ?? 'none picked yet'}</span>
+        <span>Quest: {quest?.formKey ?? 'none picked yet'}</span>
         <HelpTip topicId="dialogue-quest" />
         <button type="button" onClick={() => setPickingQuest(true)}>{quest ? 'Change quest' : 'Pick a quest'}</button>
       </div>
@@ -142,11 +143,11 @@ export default function DialogueEditor({ onBack }: { onBack: () => void }) {
         </div>
       )}
       {pickingQuest && (
-        <RecordPicker title="Quest" refType="Quest" refTypes="QUST" onPick={key => void pickQuest(key)}
-          onClose={() => setPickingQuest(false)} />
+        <RecordPicker title="Quest" refType="Quest" refTypes="QUST"
+          onPick={(formKey, plugin) => void pickQuest({ formKey, plugin })} onClose={() => setPickingQuest(false)} />
       )}
       {conditionsFor && quest && (
-        <ConditionsEditor plugin={pluginOf(quest)} record={conditionsFor.info.formKey} path={CONDITIONS_PATH}
+        <ConditionsEditor plugin={quest.plugin} record={conditionsFor.info.formKey} path={CONDITIONS_PATH}
           label="Reply conditions" onClose={() => setConditionsFor(null)} onSaved={() => void conditionsSaved()} />
       )}
       {helpOpen && <HelpDrawer topicIds={SCREEN_TOPICS.dialogue} onClose={() => setHelpOpen(false)} />}

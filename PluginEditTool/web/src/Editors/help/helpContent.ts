@@ -57,10 +57,10 @@ export const GETTING_STARTED: readonly string[] = [
 ];
 
 export const SCREEN_TOPICS = {
-  quest: ['quest-stage', 'objective', 'alias'],
-  dialogue: ['dialogue-topic', 'quest-stage'],
-  scene: ['scene-phase', 'alias'],
-} as const;
+  quest: ['quest-stage', 'objective', 'alias', ...QUEST_HELP_TOPICS.map(topic => topic.id)],
+  dialogue: ['dialogue-topic', 'quest-stage', ...DIALOGUE_HELP_TOPICS.map(topic => topic.id)],
+  scene: ['scene-phase', 'alias', ...SCENE_HELP_TOPICS.map(topic => topic.id)],
+};
 
 export const getHelpTopic = (id: string): HelpTopic | undefined =>
   HELP_TOPICS.find(topic => topic.id === id);

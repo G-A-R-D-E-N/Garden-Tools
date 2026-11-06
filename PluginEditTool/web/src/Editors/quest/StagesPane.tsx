@@ -1,12 +1,8 @@
-import { useState } from 'react';
-import ConditionsEditor from '../../ConditionsEditor';
 import HelpTip from '../help/HelpTip';
-import { questPlugin } from './questBackend';
 import { CommitInput, FlagChecks } from './questControls';
 import { LOG_ENTRY_FLAG_OPTIONS, STAGE_FLAG_OPTIONS, type QuestStage, type StageLogEntry } from './questModel';
 
 interface Props {
-  formKey: string;
   stages: QuestStage[];
   onCommit: (next: QuestStage[], label: string) => void;
 }
@@ -14,10 +10,7 @@ interface Props {
 const withEntry = (stage: QuestStage, entryAt: number, entry: StageLogEntry): QuestStage =>
   ({ ...stage, logEntries: stage.logEntries.map((current, i) => (i === entryAt ? entry : current)) });
 
-export default function StagesPane({ formKey, stages, onCommit }: Props) {
-  const [conditionsAt, setConditionsAt] = useState<{ stage: number; entry: number } | null>(null);
-  const [notice, setNotice] = useState('');
-
+export default function StagesPane({ stages, onCommit }: Props) {
   const replaceStage = (position: number, next: QuestStage, label: string) =>
     onCommit(stages.map((stage, i) => (i === position ? next : stage)), label);
 
@@ -36,6 +29,13 @@ export default function StagesPane({ formKey, stages, onCommit }: Props) {
         <HelpTip topicId="quest-stage" />
         <button type="button" className="sidebar-action-btn" onClick={addStage}>Add stage</button>
       </header>
+      <div className="quest-row">
+        <p className="quest-warning">
+          Saving rewrites every stage and log entry on this quest. This editor cannot show log-entry conditions yet,
+          so saving can remove them. Check the conditions in the Creation Kit after you save.
+        </p>
+        <HelpTip topicId="quest-stage-log" />
+      </div>
       {stages.length === 0 && (
         <div className="editor-empty">This quest has no stages yet. Add one with Add stage to create its first checkpoint.</div>
       )}
@@ -75,10 +75,6 @@ export default function StagesPane({ formKey, stages, onCommit }: Props) {
                 <HelpTip topicId="quest-stage-entry-flags" />
               </div>
               <div className="quest-row">
-                <button type="button" className="sidebar-action-btn"
-                  aria-label={`Conditions for stage ${stage.index} log entry ${entryAt + 1}`}
-                  onClick={() => setConditionsAt({ stage: position, entry: entryAt })}>Conditions</button>
-                <HelpTip topicId="quest-stage-conditions" />
                 <button type="button" className="sidebar-action-btn" onClick={() => replaceStage(position,
                   { ...stage, logEntries: stage.logEntries.filter((_, i) => i !== entryAt) },
                   `Remove log entry from stage ${stage.index}`)}>Remove entry</button>
@@ -92,13 +88,6 @@ export default function StagesPane({ formKey, stages, onCommit }: Props) {
           </button>
         </div>
       ))}
-      {notice && <p className="quest-note" role="status">{notice}</p>}
-      {conditionsAt && (
-        <ConditionsEditor plugin={questPlugin(formKey)} record={formKey}
-          path={`Stages[${conditionsAt.stage}].LogEntries[${conditionsAt.entry}].Conditions`}
-          label={`Log entry ${conditionsAt.entry + 1} conditions`}
-          onClose={() => setConditionsAt(null)} onSaved={msg => { setNotice(msg); setConditionsAt(null); }} />
-      )}
     </section>
   );
 }

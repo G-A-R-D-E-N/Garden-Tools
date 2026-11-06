@@ -14,17 +14,17 @@ import SceneSettingsForm from './SceneSettingsForm';
 import SceneTimeline from './SceneTimeline';
 import { Notice } from './sceneFormParts';
 import { readConditions, sceneChanges, writeConditions, type Run } from './sceneChanges';
-import { parseScene, pluginOf, typeLabel, type ConditionsTarget, type SceneDto, type Selection } from './sceneModel';
+import { parseScene, typeLabel, type ConditionsTarget, type SceneDto, type Selection } from './sceneModel';
 import './scene.css';
 
 interface Props {
   sceneKey: string | null;
-  onPickScene: (formKey: string) => void;
+  plugin: string;
+  onPickScene: (formKey: string, plugin: string) => void;
 }
 
-export default function SceneWorkspace({ sceneKey, onPickScene }: Props) {
+export default function SceneWorkspace({ sceneKey, plugin, onPickScene }: Props) {
   const b = getBackend() ?? null;
-  const plugin = sceneKey ? pluginOf(sceneKey) : '';
   const { push, undo, redo, canUndo, canRedo, scopeRef, onKeyDown } = useUndoStack();
   const [scene, setScene] = useState<SceneDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -38,13 +38,13 @@ export default function SceneWorkspace({ sceneKey, onPickScene }: Props) {
   const load = useCallback(async () => {
     if (!b || !sceneKey) return;
     try {
-      setScene(parseScene(await b.GetScene(pluginOf(sceneKey), sceneKey)));
+      setScene(parseScene(await b.GetScene(plugin, sceneKey)));
       setLoadError(null);
     } catch (e) {
       setLoadError(errorText(e));
     }
     setRevision(current => current + 1);
-  }, [b, sceneKey]);
+  }, [b, sceneKey, plugin]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -148,7 +148,8 @@ export default function SceneWorkspace({ sceneKey, onPickScene }: Props) {
       )}
       {picking && (
         <RecordPicker title="Scene" refType="SCEN" refTypes="SCEN"
-          onPick={formKey => { setPicking(false); onPickScene(formKey); }} onClose={() => setPicking(false)} />
+          onPick={(formKey, pickedPlugin) => { setPicking(false); onPickScene(formKey, pickedPlugin); }}
+          onClose={() => setPicking(false)} />
       )}
       {conditions && b && sceneKey && (
         <ConditionsEditor plugin={plugin} record={sceneKey} path={conditions.path} label={conditions.label}

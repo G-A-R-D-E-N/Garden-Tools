@@ -17,6 +17,7 @@ export function useUndoStack() {
   useEffect(() => { scopeRef.current?.focus(); }, []);
 
   const push = useCallback((entry: UndoEntry) => setHistory(h => pushHistory(h, entry)), []);
+  const reset = useCallback(() => setHistory({ undo: [], redo: [] }), []);
 
   const undo = useCallback(() => {
     const entry = history.undo.at(-1);
@@ -46,6 +47,7 @@ export function useUndoStack() {
 
   return {
     push,
+    reset,
     undo,
     redo,
     canUndo: history.undo.length > 0,

@@ -19,6 +19,15 @@ export default function AliasesPane({ aliases, onCommit }: Props) {
     onCommit([...aliases, { id, kind: 'reference', name: '', flags: null, collectionEntries: [] }], `Add alias ${id}`);
   };
 
+  const setKind = (position: number, alias: QuestAlias, kind: AliasKind) => {
+    if (kind === 'collection' && alias.collectionEntries.length === 0) {
+      setProblem('A collection needs at least one entry, and this editor cannot add entries yet. Keep the kind as Reference or Location.');
+      return;
+    }
+    setProblem('');
+    replace(position, { ...alias, kind }, `Change alias ${alias.id} kind`);
+  };
+
   const setFlags = (position: number, alias: QuestAlias, text: string) => {
     const flags = text.trim() === '' ? null : Number(text);
     if (flags !== null && (!Number.isInteger(flags) || flags < 0)) {
@@ -37,9 +46,9 @@ export default function AliasesPane({ aliases, onCommit }: Props) {
         <button type="button" className="sidebar-action-btn" onClick={addAlias}>Add alias</button>
       </header>
       <div className="quest-row">
-        <p className="quest-note">
-          Fill rules (which actor or place the game puts in each alias) are not read by this editor yet.
-          Saving aliases here can remove them, so check fill rules after you save.
+        <p className="quest-warning">
+          Saving rewrites the whole alias list. This editor cannot show fill rules, keywords or items yet, so saving can
+          remove them. Check each alias in the Creation Kit after you save.
         </p>
         <HelpTip topicId="quest-alias-fill" />
       </div>
@@ -60,7 +69,7 @@ export default function AliasesPane({ aliases, onCommit }: Props) {
             <span>Kind</span>
             <HelpTip topicId="quest-alias-kind" />
             <select aria-label={`Alias ${alias.id} kind`} value={alias.kind}
-              onChange={e => replace(position, { ...alias, kind: e.target.value as AliasKind }, `Change alias ${alias.id} kind`)}>
+              onChange={e => setKind(position, alias, e.target.value as AliasKind)}>
               {ALIAS_KINDS.map(kind => <option key={kind} value={kind}>{kind}</option>)}
             </select>
           </div>

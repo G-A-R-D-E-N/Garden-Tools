@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import DialogueEditor from '../DialogueEditor';
 
 const QUEST = '000800:Patch.esp';
+const OTHER_QUEST = '000900:Patch.esp';
 const BRANCH = '000801:Patch.esp';
 const TOPIC = '000802:Patch.esp';
 const INFO = '000803:Patch.esp';
@@ -30,7 +31,10 @@ function setUpBackend(lines: string[]) {
     return 'ok';
   });
   const backend = {
-    SearchRecords: vi.fn(async () => JSON.stringify([{ FormKey: QUEST, EditorID: 'MQ101', Type: 'QUST', Plugin: 'Patch.esp' }])),
+    SearchRecords: vi.fn(async () => JSON.stringify([
+      { FormKey: QUEST, EditorID: 'MQ101', Type: 'QUST', Plugin: 'Patch.esp' },
+      { FormKey: OTHER_QUEST, EditorID: 'MQ102', Type: 'QUST', Plugin: 'Patch.esp' },
+    ])),
     GetDialogue: vi.fn(async () => JSON.stringify(dialogue())),
     SetInfo: setInfo,
   };
@@ -69,6 +73,20 @@ it('edits a line, then undo restores the old text through SetInfo. Detects: undo
   });
   expect(setInfo.mock.calls[1][2].responses[0].text).toBe('First line');
   await screen.findByRole('button', { name: /First line/ });
+});
+
+it('Detects: Ctrl+Z after picking another quest does not undo an edit made on the previous quest', async () => {
+  const { setInfo } = setUpBackend(['First line', 'Second line', 'Third line']);
+  await openTopic();
+  fireEvent.click(screen.getByRole('button', { name: /First line/ }));
+  fireEvent.change(screen.getByLabelText('Line text'), { target: { value: 'Changed line' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save line' }));
+  await waitFor(() => expect(setInfo).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Change quest' }));
+  fireEvent.click(await screen.findByText('MQ102'));
+  await screen.findByRole('button', { name: /Hello there/ });
+  fireEvent.keyDown(screen.getByRole('region', { name: 'Dialogue' }), { key: 'z', ctrlKey: true });
+  expect(setInfo).toHaveBeenCalledTimes(1);
 });
 
 it('flags a character Windows-1252 cannot hold inline and does not call SetInfo. Detects: unsupported text reaching SetInfo', async () => {

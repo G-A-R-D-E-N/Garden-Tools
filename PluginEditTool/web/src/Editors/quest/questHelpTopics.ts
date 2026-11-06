@@ -10,19 +10,13 @@ export const QUEST_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'quest-stage-log',
     title: 'Log entry',
-    body: 'A log entry is the journal line the player reads when the quest reaches this stage. Write it as a short sentence, such as "Find the courier at the docks". Leave it empty if the stage should not show anything.',
+    body: 'A log entry is the journal line the player reads when the quest reaches this stage. Write it as a short sentence, such as "Find the courier at the docks". Leave it empty if the stage should not show anything. Saving the stages rewrites every log entry, and this editor cannot show log-entry conditions yet, so saving can remove them. Check the conditions in the Creation Kit after you save.',
     related: ['quest-stage'],
   },
   {
     id: 'quest-stage-entry-flags',
     title: 'Log entry outcome',
     body: 'Completes the quest marks the quest as finished when this log entry is reached. Fails the quest marks it as failed. Leave both off for a normal step.',
-    related: ['quest-stage-log'],
-  },
-  {
-    id: 'quest-stage-conditions',
-    title: 'Log entry conditions',
-    body: 'Conditions decide when this log entry applies, for example only if the player has a certain item. Each condition compares a game value with a number. Check the conditions in the Creation Kit too, because some stage conditions may not show here yet.',
     related: ['quest-stage-log'],
   },
   {
@@ -70,7 +64,7 @@ export const QUEST_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'quest-alias-fill',
     title: 'Fill rule',
-    body: 'A fill rule tells the game which actor, object or place to put in an alias when the quest starts. This editor does not read fill rules yet. After you save aliases here, check the fill rule of each alias in the Creation Kit.',
+    body: 'A fill rule tells the game which actor, object or place to put in an alias when the quest starts. This editor does not read fill rules, keywords or items yet. Saving the aliases rewrites the whole list, so saving can remove them. Check each alias in the Creation Kit after you save.',
     related: ['alias'],
   },
   {

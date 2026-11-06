@@ -7,9 +7,9 @@ import StagesPane from './StagesPane';
 import { useQuestRecord } from './useQuestRecord';
 import './Quest.css';
 
-export default function QuestWorkspace({ formKey }: { formKey: string }) {
+export default function QuestWorkspace({ formKey, plugin }: { formKey: string; plugin: string }) {
   const { onKeyDown, scopeRef, push, undo, redo, canUndo, canRedo } = useUndoStack();
-  const { snapshot, error, commitStages, commitObjectives, commitAliases } = useQuestRecord(formKey, push);
+  const { snapshot, error, commitStages, commitObjectives, commitAliases } = useQuestRecord(plugin, formKey, push);
   return (
     <div ref={scopeRef} tabIndex={-1} className="quest-workspace" onKeyDown={onKeyDown}>
       <div className="quest-toolbar">
@@ -21,10 +21,10 @@ export default function QuestWorkspace({ formKey }: { formKey: string }) {
       {snapshot === null && !error && <p className="quest-note">Loading the quest...</p>}
       {snapshot && (
         <div className="quest-panes">
-          <StagesPane formKey={formKey} stages={snapshot.stages} onCommit={commitStages} />
+          <StagesPane stages={snapshot.stages} onCommit={commitStages} />
           <ObjectivesPane objectives={snapshot.objectives} aliases={snapshot.aliases} onCommit={commitObjectives} />
           <AliasesPane aliases={snapshot.aliases} onCommit={commitAliases} />
-          <FragmentsPane formKey={formKey} push={push} />
+          <FragmentsPane plugin={plugin} formKey={formKey} push={push} />
         </div>
       )}
     </div>

@@ -93,7 +93,7 @@ export function stagesJson(stages: QuestStage[]): string {
     flags: stage.flags,
     logEntries: stage.logEntries.map(entry => ({
       flags: entry.flags,
-      logText: entry.logText,
+      ...(entry.logText ? { logText: entry.logText } : {}),
       ...(entry.note ? { note: entry.note } : {}),
     })),
   })));

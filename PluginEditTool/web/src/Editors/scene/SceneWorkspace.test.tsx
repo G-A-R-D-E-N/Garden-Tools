@@ -47,7 +47,7 @@ function fakeBackend(initial: FakeScene) {
 
 it('Detects: a used actor cannot be removed until its actions are re-pointed', async () => {
   const backend = fakeBackend(sceneFixture());
-  render(<SceneWorkspace sceneKey="000800:Patch.esp" onPickScene={() => {}} />);
+  render(<SceneWorkspace sceneKey="000800:Patch.esp" plugin="Patch.esp" onPickScene={() => {}} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Alias 3' }));
   expect(screen.getByText(/2 actions use this actor/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Remove actor' })).toBeDisabled();
@@ -60,7 +60,7 @@ it('Detects: a used actor cannot be removed until its actions are re-pointed', a
 
 it('Detects: unreadable conditions show a warning and no condition count', async () => {
   fakeBackend({ ...sceneFixture(), phases: [phase(0, 'Walk', { startConditionsUnreadable: true, startConditions: undefined }), phase(1, 'Talk')] });
-  render(<SceneWorkspace sceneKey="000800:Patch.esp" onPickScene={() => {}} />);
+  render(<SceneWorkspace sceneKey="000800:Patch.esp" plugin="Patch.esp" onPickScene={() => {}} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Walk' }));
   expect(screen.getByText('These conditions could not be read; saving here will not change them')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Edit start conditions' })).toBeDisabled();
@@ -69,7 +69,7 @@ it('Detects: unreadable conditions show a warning and no condition count', async
 
 it('Detects: an applied phase rename is restored by Undo', async () => {
   const backend = fakeBackend(sceneFixture());
-  render(<SceneWorkspace sceneKey="000800:Patch.esp" onPickScene={() => {}} />);
+  render(<SceneWorkspace sceneKey="000800:Patch.esp" plugin="Patch.esp" onPickScene={() => {}} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Walk' }));
   fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Walk again' } });
   fireEvent.click(screen.getByRole('button', { name: 'Apply phase changes' }));

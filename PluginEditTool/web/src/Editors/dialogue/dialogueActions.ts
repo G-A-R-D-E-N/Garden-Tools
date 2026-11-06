@@ -1,7 +1,7 @@
 import type { Backend } from '../../backend';
 import type { UndoEntry } from '../useUndoStack';
 import {
-  pluginOf, responseSpec,
+  responseSpec,
   type DialogueBranch, type DialogueInfo, type DialogueResponse, type DialogueTopic, type LineChange, type NewTopic,
 } from './dialogueModel';
 
@@ -24,8 +24,8 @@ const lineAfter = (response: DialogueResponse, change: LineChange): DialogueResp
   emotion: change.emotion === undefined ? response.emotion : change.emotion,
 });
 
-export function buildActions(b: Backend, quest: string, write: Write, push: (entry: UndoEntry) => void): DialogueActions {
-  const plugin = pluginOf(quest);
+export function buildActions(b: Backend, plugin: string, quest: string, write: Write,
+  push: (entry: UndoEntry) => void): DialogueActions {
   const setInfo = (info: DialogueInfo, spec: Record<string, unknown>) =>
     write(() => b.SetInfo(plugin, info.formKey, spec));
 

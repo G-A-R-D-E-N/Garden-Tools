@@ -6,7 +6,7 @@ import type { UndoEntry } from '../useUndoStack';
 import { readQuest, writeAliases, writeObjectives, writeStages, type QuestSnapshot } from './questBackend';
 import type { QuestAlias, QuestObjective, QuestStage } from './questModel';
 
-export function useQuestRecord(formKey: string, push: (entry: UndoEntry) => void) {
+export function useQuestRecord(plugin: string, formKey: string, push: (entry: UndoEntry) => void) {
   const backend = getBackend();
   const [snapshot, setSnapshot] = useState<QuestSnapshot | null>(null);
   const [error, setError] = useState<FriendlyMessage | null>(() => (backend ? null : { text: 'No backend bridge.' }));
@@ -14,11 +14,11 @@ export function useQuestRecord(formKey: string, push: (entry: UndoEntry) => void
   useEffect(() => {
     if (!backend) return;
     let live = true;
-    readQuest(backend, formKey).then(
+    readQuest(backend, plugin, formKey).then(
       loaded => { if (live) setSnapshot(loaded); },
       (e: unknown) => { if (live) setError(friendlyError(errorText(e))); });
     return () => { live = false; };
-  }, [backend, formKey]);
+  }, [backend, plugin, formKey]);
 
   const run = (job: () => Promise<unknown>, onDone: () => void) => {
     setError(null);
@@ -39,17 +39,17 @@ export function useQuestRecord(formKey: string, push: (entry: UndoEntry) => void
 
   const commitStages = (next: QuestStage[], label: string) => {
     if (!backend || !snapshot) return;
-    commit(label, snapshot.stages, next, value => writeStages(backend, formKey, value), storeField('stages'));
+    commit(label, snapshot.stages, next, value => writeStages(backend, plugin, formKey, value), storeField('stages'));
   };
 
   const commitObjectives = (next: QuestObjective[], label: string) => {
     if (!backend || !snapshot) return;
-    commit(label, snapshot.objectives, next, value => writeObjectives(backend, formKey, value), storeField('objectives'));
+    commit(label, snapshot.objectives, next, value => writeObjectives(backend, plugin, formKey, value), storeField('objectives'));
   };
 
   const commitAliases = (next: QuestAlias[], label: string) => {
     if (!backend || !snapshot) return;
-    commit(label, snapshot.aliases, next, value => writeAliases(backend, formKey, value), storeField('aliases'));
+    commit(label, snapshot.aliases, next, value => writeAliases(backend, plugin, formKey, value), storeField('aliases'));
   };
 
   return { snapshot, error, commitStages, commitObjectives, commitAliases };
