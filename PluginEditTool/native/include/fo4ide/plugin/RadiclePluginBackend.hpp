@@ -50,6 +50,7 @@ using LoadMo2AfterPendingCheckHook = void (*)();
 void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook);
 using WriteOpLockedHook = void (*)();
 void setWriteOpLockedHook(WriteOpLockedHook hook);
+void setWriteOpPendingHook(WriteOpLockedHook hook);
 void setSaveIoLockedHook(WriteOpLockedHook hook);
 using LoadReadWindowHook = void (*)();
 void setLoadReadWindowHook(LoadReadWindowHook hook);
@@ -147,6 +148,10 @@ public:
     Result<nlohmann::json> removeAliasScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> setAliasScriptValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> removeQuestFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getQuestFragments(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getQuestScript(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> editQuestScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addPackageProcedure(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removePackageProcedure(const nlohmann::json& arguments) override;
@@ -168,6 +173,7 @@ public:
 #ifdef FO4IDE_TEST_HOOKS
     std::weak_ptr<const fo4::ConflictGraph> cachedGraphForTest() const;
     Result<nlohmann::json> testSetQuestFragment(const nlohmann::json& arguments);
+    std::optional<std::pair<std::string, std::vector<std::uint8_t>>> testStagedQuestScript(std::string_view plugin) const;
     void testSetJournalRoot(std::filesystem::path root);
 #ifdef __linux__
     bool testHasReadAuthority(const std::filesystem::path& root) const;
@@ -295,6 +301,10 @@ private:
         StateHold restore_;
     };
 
+    // Constraint: plugins_ is replaced by lifecycle operations, so this snapshot takes a read OpLock.
+    std::vector<std::string> archivePluginNames() const;
+    // Requires: caller holds an OpLock.
+    std::vector<std::string> archivePluginNamesLocked() const;
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
     bool stageQuestFragmentMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated,
@@ -315,6 +325,27 @@ private:
     Result<nlohmann::json> savePlugin(const nlohmann::json& arguments);
     Result<nlohmann::json> createRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> setQuestFragment(const nlohmann::json& arguments);
+    struct QuestFragmentWrite {
+        fo4::Plugin mutated{};
+        fo4::FormKey key{};
+        std::string scriptName{};
+        std::filesystem::path sourcePath{};
+        std::filesystem::path pexPath{};
+        std::filesystem::path imports{};
+        std::string function{};
+        std::string source{};
+        std::optional<std::string> originalSource{};
+        std::optional<std::string> originalPex{};
+        bool hasSource{false};
+        bool hasHeader{false};
+        bool hasBinding{false};
+    };
+    Result<QuestFragmentWrite> prepareQuestFragmentLocked(const LoadedPlugin& loaded, const fo4::FormKey& key,
+                                                          std::uint16_t stage, std::uint32_t index,
+                                                          std::string_view scriptName, std::string_view outputDirectory,
+                                                          std::string_view importsDirectory) const;
+    Result<nlohmann::json> stageQuestFragmentWriteLocked(LoadedPlugin& loaded, QuestFragmentWrite write,
+                                                         const std::string& source);
     Result<nlohmann::json> deleteRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> renumberRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> setField(const nlohmann::json& arguments);
