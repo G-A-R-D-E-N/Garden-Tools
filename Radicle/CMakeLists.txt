@@ -401,6 +401,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/pex_analysis/script_set.cpp
+  src/pex_analysis/script_library.cpp
   src/abc/abc_file.cpp
   src/abc/abc_write.cpp
   src/abc/byte_reader.cpp
