@@ -178,12 +178,6 @@ typedef struct radicle_cell_summary {
   int32_t localized;
 } radicle_cell_summary;
 
-typedef struct radicle_static_placement {
-  float position[3];
-  float rotation[3];
-  float scale;
-} radicle_static_placement;
-
 typedef struct radicle_scol_part {
   const char* model_path;
   const radicle_static_placement* placements;
