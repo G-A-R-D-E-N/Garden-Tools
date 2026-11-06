@@ -46,6 +46,16 @@ const FLOWS = [
       await page.locator('.scene-title', { hasText: 'BagInTheAlley' }).waitFor();
     },
   },
+  {
+    name: 'quest-check',
+    label: 'Quest',
+    async pick(page) {
+      await page.getByRole('button', { name: 'Choose quest' }).click();
+      await page.getByText('MissingCourier', { exact: true }).click();
+      await page.getByRole('button', { name: 'Check this quest', exact: true }).click();
+      await page.locator('.quest-check-counts').waitFor();
+    },
+  },
 ];
 
 async function main() {

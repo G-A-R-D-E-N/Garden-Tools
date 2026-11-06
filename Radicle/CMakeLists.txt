@@ -186,6 +186,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
   src/forms/cell_create.cpp
+  src/forms/cell_override.cpp
   src/forms/components.cpp
   src/forms/effects.cpp
   src/forms/placed_reference.cpp
@@ -198,6 +199,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/placed_reference_edit.cpp
   src/forms/placed_reference_create.cpp
   src/forms/placed_reference_move.cpp
+  src/forms/placed_reference_ops.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/weather.cpp
@@ -770,6 +772,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_reference_create.cpp
     tests/test_placed_reference_move.cpp
     tests/test_placed_reference_move_exterior.cpp
+    tests/test_cell_edit.cpp
     tests/test_edit_history.cpp
     tests/test_record_flags.cpp
     tests/test_record_flags_deleted.cpp
