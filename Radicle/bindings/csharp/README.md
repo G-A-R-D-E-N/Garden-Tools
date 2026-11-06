@@ -18,6 +18,7 @@ The main wrapper types:
 | `RadicleEnvironment` | Load order, winners and versions, EditorID lookup, worlds and cells, cell children, placed references, terrain, base records. |
 | `StringTables` | Localized strings, including tables inside BA2 archives. |
 | `Ba2Archive` / `AssetResolver` | Archives and asset lookup with the game's precedence. |
+| `ScriptSet` | Opens the Papyrus script set of loose roots and archives (skip or fail on an unreadable archive), resolves winners, checks a parent chain and runs the native call-site census. |
 | `PluginFile` | Override creation, reference field edits and saving. |
 
 ## ABI check

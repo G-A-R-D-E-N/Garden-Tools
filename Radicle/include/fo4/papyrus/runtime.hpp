@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fo4/papyrus/event_fanout.hpp"
 #include "fo4/papyrus/host.hpp"
 #include "fo4/papyrus/interpreter.hpp"
 #include "fo4/papyrus/owner.hpp"
@@ -13,7 +14,9 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fo4::papyrus {
@@ -69,6 +72,19 @@ struct NativeRegistration {
 
 using InstanceId = std::uint64_t;
 
+enum class AttachRefusal : std::uint8_t {
+    None = 0,
+    UnknownScript = 1,
+    EmptyPropertyName = 2,
+    DuplicatePropertyName = 3,
+};
+
+struct AttachResult {
+    std::optional<InstanceId> instance;
+    AttachRefusal refusal{AttachRefusal::None};
+    std::string reason;
+};
+
 struct SchedulerStepResult {
     std::int32_t spent{0};
     std::int32_t completed{0};
@@ -94,8 +110,23 @@ public:
 
     std::optional<InstanceId> attach(const std::string& scriptName, const OwnerId& owner,
                                      std::map<std::string, Value> properties = {});
+    // Invariant: all or nothing; a refusal leaves no instance behind and does not consume an instance id.
+    AttachResult attachWithProperties(const std::string& scriptName, const OwnerId& owner,
+                                      const std::vector<std::pair<std::string, Value>>& properties);
+    std::optional<Value> instanceProperty(InstanceId instance, const std::string& name) const;
     bool detach(InstanceId instance);
     std::optional<InstanceId> instanceForOwner(const OwnerId& owner) const;
+    std::vector<InstanceId> instancesForOwner(const OwnerId& owner) const;
+    bool hasScript(const std::string& name) const;
+    bool hasInvalidParentChain(const std::string& name) const;
+    bool instanceDeclares(InstanceId instance, const std::string& function) const;
+    bool instanceDetached(InstanceId instance) const;
+    void parkOwner(const OwnerId& owner);
+    void unparkOwner(const OwnerId& owner);
+    bool ownerParked(const OwnerId& owner) const;
+    FanOutReport fanOutEvent(const OwnerId& owner, const std::string& eventName,
+                             const std::vector<Value>& args);
+    FanOutReport broadcastEvent(const std::string& eventName, const std::vector<Value>& args);
 
     Lifecycle lifecycle(InstanceId instance) const;
     const std::string& failure(InstanceId instance) const;
@@ -190,9 +221,11 @@ private:
     const NativeRegistration* findNative(const std::string& script, const std::string& function,
                                          std::string& ownerScript) const;
     void drainQueued(Instance& instance);
+    void fanOutOwner(FanOutReport& report, const OwnerId& owner, const std::vector<Value>& args);
 
     std::vector<const pex::PexObject*> scripts_;
     std::map<InstanceId, Instance> instances_;
+    std::set<OwnerId> parked_;
     InstanceId nextInstance_{1};
     std::function<bool(std::string_view)> gate_;
     OnInitArrivalPolicy onInitPolicy_{OnInitArrivalPolicy::Refuse};

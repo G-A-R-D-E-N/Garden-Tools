@@ -1,6 +1,10 @@
 #include "dialogue_writer_fixture.hpp"
+#include "fo4/forms/scene.hpp"
 
 #include <gtest/gtest.h>
+
+#include <string_view>
+#include <utility>
 
 namespace {
 
@@ -70,6 +74,64 @@ Bytes payload_scene() {
   return out.bytes;
 }
 
+}
+
+// Detects: a payload row whose exposed signature must be the subrecord the writer stores, so a reader keyed on it cannot miss the member.
+TEST(SceneWriter, PayloadRowsExposeTheSubrecordTheWriterStores) {
+  const std::pair<std::string_view, std::string_view> expected[] = {
+      {"SCEN\\Action\\Topic", "DATA"},
+      {"SCEN\\Action\\DialogueSubtype", "VENC"},
+      {"SCEN\\Action\\AnimArchType", "PNAM"},
+      {"SCEN\\Action\\AudioOutputOverride", "ONAM"},
+      {"SCEN\\Action\\PlayerPositiveDialogueSubtype", "VENC"},
+      {"SCEN\\Action\\PlayerNegativeDialogueSubtype", "PLVD"},
+      {"SCEN\\Action\\PlayerQuestionDialogueSubtype", "DALC"},
+      {"SCEN\\Action\\NpcQuestionDialogueSubtype", "NQUS"},
+      {"SCEN\\Action\\StartSceneTopic", "STSC"},
+      {"SCEN\\Action\\PlaySound", "HTID"},
+      {"SCEN\\Action\\LoopingMax", "DMAX"},
+      {"SCEN\\Action\\TimerMax", "SNAM"},
+      {"SCEN\\Action\\CameraRateOfChange", "CRIS"},
+      {"SCEN\\Action\\DialogueTargetActor", "DTGT"},
+  };
+  const auto rows = fo4::scene_action_payload_paths();
+  for (const auto& row : rows) EXPECT_FALSE(row.signature.to_string().empty()) << row.path;
+  for (const auto& [path, tag] : expected) {
+    const fo4::ScenePayloadPath* found = nullptr;
+    for (const auto& row : rows) {
+      if (row.path == path) found = &row;
+    }
+    ASSERT_NE(found, nullptr) << path;
+    EXPECT_EQ(found->signature.to_string(), tag) << path;
+  }
+}
+
+// Regression guard: create_scene must append the SCEN inside the quest children group with its flags, parent quest, index and tail members.
+TEST(SceneWriter, CreateSceneAppendsASceneWithItsFlagsParentQuestAndIndexAndSurvivesReload) {
+  auto plugin = fo4::test::dialogue::read(build());
+  const auto created = fo4::forms::create_scene(plugin, key(k_quest), fo4::forms::SceneSpec{"Made scene", 0x24, 7});
+  ASSERT_EQ(created.status, fo4::forms::SceneAuthorStatus::ok);
+  const auto id = created.key.local().value();
+  const auto saved = reload(plugin);
+  EXPECT_EQ(order(saved, id), (Order{"EDID", "FNAM", "PNAM", "INAM", "VNAM", "XNAM"}));
+  EXPECT_EQ(payloads(saved, id, "EDID"), std::vector<Bytes>{zstr("Made scene")});
+  EXPECT_EQ(payloads(saved, id, "FNAM"), std::vector<Bytes>{words({0x24})});
+  EXPECT_EQ(payloads(saved, id, "PNAM"), std::vector<Bytes>{words({k_quest})});
+  EXPECT_EQ(payloads(saved, id, "XNAM"), std::vector<Bytes>{words({7})});
+}
+
+// Regression guard: create_scene must refuse a non-QUST, master-owned or embedded-NUL request without changing any byte.
+TEST(SceneWriter, CreateSceneRefusesUnknownAndMasterOwnedQuestsAndLeavesThePluginAlone) {
+  auto plugin = fo4::test::dialogue::read(build());
+  const auto before = fo4::write_plugin(plugin);
+  const fo4::FormKey master_quest{fo4::PluginKey::from_filename("Other.esm"), fo4::LocalFormId{k_quest}};
+  EXPECT_EQ(fo4::forms::create_scene(plugin, key(k_topic), fo4::forms::SceneSpec{"Made scene"}).status,
+            fo4::forms::SceneAuthorStatus::quest_missing);
+  EXPECT_EQ(fo4::forms::create_scene(plugin, master_quest, fo4::forms::SceneSpec{"Made scene"}).status,
+            fo4::forms::SceneAuthorStatus::not_local);
+  EXPECT_EQ(fo4::forms::create_scene(plugin, key(k_quest), fo4::forms::SceneSpec{std::string("a\0b", 3)}).status,
+            fo4::forms::SceneAuthorStatus::invalid_argument);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(SceneWriter, GroupFieldsAreAddressedByExplicitGroupIndex) {
@@ -265,4 +327,53 @@ TEST(SceneWriter, MalformedOrDuplicatedScopesAreRefused) {
   EXPECT_TRUE(refused(plugin, [&] { fo4::set_scene_formlink(plugin, key(0x801), "SCEN\\ParentQuest", key(0x802)); }));
   EXPECT_TRUE(refused(plugin, [&] { set(plugin, "SCEN\\LastActionIndex", 0, "1", 0x801); }));
   EXPECT_EQ(set(plugin, "SCEN\\Actor\\Alias", 0, "2", 0x801), Scalar::updated);
+}
+
+// Regression guard: ensure_scene_member must place an absent action end phase after the start phase and before the timer payload, so both stay readable in their scopes.
+TEST(SceneWriter, EnsureSceneMemberPlacesAnAbsentActionEndPhaseInItsHeader) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::ensure_scene_member(plugin, key(k_scene), "SCEN\\Action\\EndPhase", 1), Scalar::updated);
+  EXPECT_EQ(fo4::ensure_scene_member(plugin, key(k_scene), "SCEN\\Action\\EndPhase", 1), Scalar::unchanged);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\StartPhase", 1, "1"), Scalar::unchanged);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\EndPhase", 1, "1"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\TimerMax", 1, "2.5"), Scalar::updated);
+  const auto saved = reload(plugin);
+  EXPECT_EQ(payloads(saved, k_scene, "ENAM"), (std::vector<Bytes>{words({1}), words({1}), words({1})}));
+  EXPECT_EQ(payloads(saved, k_scene, "SNAM"),
+            (std::vector<Bytes>{words({0}), words({1}), f32s({2.5f}), words({0})}));
+}
+
+// Regression guard: a timer max written before its start phase is read as the start phase, so ensure_scene_member must write the header start phase first.
+TEST(SceneWriter, EnsureSceneMemberWritesATimerStartPhaseBeforeANewTimerMax) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::insert_scene_action(plugin, key(k_scene), 3, 2), fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(fo4::ensure_scene_member(plugin, key(k_scene), "SCEN\\Action\\TimerMax", 3), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\TimerMax", 3, "2.5"), Scalar::updated);
+  const auto saved = reload(plugin);
+  EXPECT_EQ(payloads(saved, k_scene, "SNAM"),
+            (std::vector<Bytes>{words({0}), words({1}), f32s({5.0f}), words({0}), words({0}), f32s({2.5f})}));
+}
+
+// Regression guard: ensure_scene_member must refuse a member outside its action type, an out-of-range group, a phase reference with no scene phase, or an unknown path and change no byte.
+TEST(SceneWriter, EnsureSceneMemberRefusesMismatchedAndPhaselessMembersWithoutChangingBytes) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::ensure_scene_member(plugin, key(k_scene), "SCEN\\Action\\LoopingMax", 1), Scalar::subrecord_missing);
+  EXPECT_EQ(fo4::ensure_scene_member(plugin, key(k_scene), "SCEN\\Action\\EndPhase", 9), Scalar::subrecord_missing);
+  EXPECT_EQ(fo4::ensure_scene_member(plugin, key(k_scene), "SCEN\\Phase\\Flags", 0), Scalar::unchanged);
+  EXPECT_TRUE(refused(plugin, [&] { fo4::ensure_scene_member(plugin, key(k_scene), "SCEN\\Nope", 0); }));
+  auto phaseless = read(payload_scene());
+  EXPECT_TRUE(refused(phaseless, [&] { fo4::ensure_scene_member(phaseless, key(k_scene), "SCEN\\Action\\EndPhase", 0); }));
+}
+
+// Regression guard: the scene index scalar must address the tail XNAM that create_scene writes.
+TEST(SceneWriter, SceneIndexScalarWritesTheTailIndex) {
+  auto plugin = read(build());
+  const auto created = fo4::forms::create_scene(plugin, key(k_quest), fo4::forms::SceneSpec{"Made scene", 0, 7});
+  ASSERT_EQ(created.status, fo4::forms::SceneAuthorStatus::ok);
+  const auto id = created.key.local().value();
+  EXPECT_EQ(set(plugin, "SCEN\\Index", 0, "9", id), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Index", 0, "9", id), Scalar::unchanged);
+  EXPECT_EQ(set(plugin, "SCEN\\Index", 1, "9", id), Scalar::subrecord_missing);
+  const auto saved = reload(plugin);
+  EXPECT_EQ(payloads(saved, id, "XNAM"), (std::vector<Bytes>{words({9})}));
 }
