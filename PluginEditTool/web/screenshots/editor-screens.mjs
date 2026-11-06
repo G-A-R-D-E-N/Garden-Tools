@@ -68,7 +68,7 @@ async function main() {
         await page.getByRole('button', { name: new RegExp(`^${flow.label}`) }).first().click();
         await flow.pick(page);
         await page.screenshot({ path: `${OUT}/${theme}-${i + 1}-${flow.name}.png` });
-        await page.getByRole('button', { name: 'Help', exact: true }).click();
+        await page.locator('.editors-modal').getByRole('button', { name: 'Help', exact: true }).click();
         await page.locator('.help-drawer').waitFor();
         await page.screenshot({ path: `${OUT}/${theme}-${i + 1}-${flow.name}-help.png` });
         await page.getByRole('button', { name: 'Close help' }).click();
