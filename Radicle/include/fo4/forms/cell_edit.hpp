@@ -4,6 +4,7 @@
 #include "fo4/forms/placed_reference.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -204,5 +205,55 @@ struct CellPropertyDescriptor {
 };
 
 std::vector<CellPropertyDescriptor> cell_property_descriptors();
+
+enum class CleanupMode {
+  dedupe,
+  excess,
+};
+
+enum class CleanupPlanStatus {
+  planned,
+  cell_missing,
+  cell_deleted,
+  not_a_cell,
+};
+
+enum class CleanupReason {
+  duplicate,
+  duplicate_of_special,
+  excess,
+};
+
+struct CleanupEntry {
+  FormKey reference{};
+  FormKey kept{};
+  CleanupReason reason{CleanupReason::duplicate};
+};
+
+struct CleanupPlan {
+  CleanupPlanStatus status{CleanupPlanStatus::cell_missing};
+  FormKey cell{};
+  std::vector<CleanupEntry> entries;
+};
+
+CleanupPlan plan_cell_cleanup(const fo4::env::Environment& env,
+                              const FormKey& cell,
+                              CleanupMode mode,
+                              std::size_t max_count,
+                              bool by_model);
+
+enum class CleanupApplyStatus {
+  applied,
+  refused,
+};
+
+struct CleanupApplyResult {
+  CleanupApplyStatus status{CleanupApplyStatus::refused};
+  std::vector<DeleteStatus> entry_status;
+};
+
+CleanupApplyResult apply_cell_cleanup(Plugin& patch,
+                                      const fo4::env::Environment& env,
+                                      const CleanupPlan& plan);
 
 }  // namespace fo4::forms
