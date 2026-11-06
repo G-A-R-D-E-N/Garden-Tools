@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -100,6 +101,12 @@ std::vector<std::byte> xprm_bytes() {
   return out.bytes;
 }
 
+std::vector<std::byte> lighting_bytes(std::size_t size) {
+  std::vector<std::byte> bytes(size, std::byte{0});
+  for (std::size_t i = 40; i < size; ++i) bytes[i] = std::byte{0xAB};
+  return bytes;
+}
+
 void write_node(fo4::test::ByteWriter& out, const Node& node) {
   if (node.group) {
     std::string label(4, '\0');
@@ -161,11 +168,14 @@ std::vector<std::byte> make_base() {
                               rec("REFR", 0x813,
                                   {{"NAME", bytes_of({0x820})},
                                    {"DATA", floats({4300.0f, 8300.0f, 0.0f, 0.0f, 0.0f, 0.0f})}})})});
+  const auto interior_804 = rec("CELL", 0x804, {{"DATA", {std::byte{0x01}, std::byte{0}}}, {"XCLL", lighting_bytes(72)}});
+  const auto interior_805 = rec("CELL", 0x805, {{"DATA", {std::byte{0x01}, std::byte{0}}}, {"XCLL", lighting_bytes(40)}});
   return make_plugin(
       {},
       {top("WRLD",
            {rec("WRLD", 0x800, {{"EDID", zstring("TestWorld")}}),
-            grp(0x800, 1, {rec("CELL", 0x801, {{"DATA", {std::byte{0x02}, std::byte{0}}}}), grp(0, 4, {grp(0, 5, {cell_802, refs, cell_803})})})})});
+            grp(0x800, 1, {rec("CELL", 0x801, {{"DATA", {std::byte{0x02}, std::byte{0}}}}), grp(0, 4, {grp(0, 5, {cell_802, refs, cell_803})})})}),
+       top("CELL", {interior_804, interior_805})});
 }
 
 std::vector<std::byte> make_patch() {
@@ -201,6 +211,13 @@ bool has_subrecord(const fo4::Record& record, std::string_view signature) {
                      [&](const fo4::Subrecord& sub) { return sub.signature == wanted; });
 }
 
+const fo4::Subrecord* subrecord_of(const fo4::Record& record, std::string_view signature) {
+  const auto wanted = fo4::Signature::from_string(signature);
+  const auto found = std::find_if(record.subrecords.begin(), record.subrecords.end(),
+                                  [&](const fo4::Subrecord& sub) { return sub.signature == wanted; });
+  return found == record.subrecords.end() ? nullptr : &*found;
+}
+
 bool has_reference(const fo4::Plugin& plugin, const fo4::FormKey& cell, const fo4::FormKey& reference) {
   for (const auto& view : fo4::forms::placed_references_for_cell(plugin, cell)) {
     if (view.record->form_key == reference) return true;
@@ -230,7 +247,7 @@ std::optional<std::int32_t> bucket_type_of(const fo4::Plugin& plugin, const fo4:
 std::vector<std::byte> make_targets() {
   return make_plugin({}, {top("WATR", {rec("WATR", 0x900)}), top("IMGS", {rec("IMGS", 0x901)}),
                           top("ECZN", {rec("ECZN", 0x902)}), top("LCTN", {rec("LCTN", 0x903)}),
-                          top("LGTM", {rec("LGTM", 0x904)}), top("REGN", {rec("REGN", 0x905)}),
+                          top("LGTM", {rec("LGTM", 0x904)}), top("REGN", {rec("REGN", 0x905), rec("REGN", 0x907)}),
                           top("FACT", {rec("FACT", 0x906)})});
 }
 
@@ -777,6 +794,7 @@ TEST_F(CellEditTest, EditLinksRegionsAndOwnerReadBackThroughDecodeCell) {
   const auto image_space = fo4::FormKey::parse("000901:Targets.esm");
   const auto encounter_zone = fo4::FormKey::parse("000902:Targets.esm");
   const auto region = fo4::FormKey::parse("000905:Targets.esm");
+  const auto second_region = fo4::FormKey::parse("000907:Targets.esm");
   const auto owner = fo4::FormKey::parse("000906:Targets.esm");
   auto patch = props_patch();
 
@@ -784,7 +802,7 @@ TEST_F(CellEditTest, EditLinksRegionsAndOwnerReadBackThroughDecodeCell) {
   edit.location = std::optional<fo4::FormKey>{location};
   edit.image_space = std::optional<fo4::FormKey>{image_space};
   edit.encounter_zone = std::optional<fo4::FormKey>{encounter_zone};
-  edit.regions = std::vector<fo4::FormKey>{region};
+  edit.regions = std::vector<fo4::FormKey>{region, second_region};
   edit.owner = std::optional<fo4::FormKey>{owner};
   edit.owner_rank = 3;
   ASSERT_EQ(fo4::forms::edit_cell(patch, env, cell, edit).status, fo4::forms::CellEditStatus::edited);
@@ -796,8 +814,9 @@ TEST_F(CellEditTest, EditLinksRegionsAndOwnerReadBackThroughDecodeCell) {
   EXPECT_EQ(data.location, location);
   EXPECT_EQ(data.image_space, image_space);
   EXPECT_EQ(data.encounter_zone, encounter_zone);
-  ASSERT_EQ(data.regions.size(), 1u);
+  ASSERT_EQ(data.regions.size(), 2u);
   EXPECT_EQ(data.regions[0], region);
+  EXPECT_EQ(data.regions[1], second_region);
   EXPECT_EQ(data.owner, owner);
   EXPECT_EQ(data.owner_rank, 3);
 }
@@ -819,6 +838,14 @@ TEST_F(CellEditTest, EditCreatesMissingSubrecordsInSchemaOrder) {
   const auto* record = fo4::find_record(patch, cell);
   ASSERT_NE(record, nullptr);
   EXPECT_EQ(signatures_of(*record), (std::vector<std::string>{"DATA", "XCLC", "XCLL", "LTMP", "XCLW", "XLCN"}));
+
+  const auto reread = reread_patched(dir_, patch);
+  const auto* ref = reread.winner(cell);
+  ASSERT_NE(ref, nullptr);
+  const auto lighting = fo4::env::decode_cell(reread, *ref).lighting;
+  ASSERT_TRUE(lighting.has_value());
+  EXPECT_FLOAT_EQ(lighting->directional_fade, 1.0f);
+  EXPECT_FLOAT_EQ(lighting->fog_power, 1.0f);
 }
 
 TEST_F(CellEditTest, ClearingALinkRemovesItsSubrecord) {
@@ -828,15 +855,23 @@ TEST_F(CellEditTest, ClearingALinkRemovesItsSubrecord) {
 
   fo4::forms::CellEdit set;
   set.image_space = std::optional<fo4::FormKey>{fo4::FormKey::parse("000901:Targets.esm")};
+  set.owner = std::optional<fo4::FormKey>{fo4::FormKey::parse("000906:Targets.esm")};
+  set.owner_rank = 3;
+  set.regions = std::vector<fo4::FormKey>{fo4::FormKey::parse("000905:Targets.esm")};
   ASSERT_EQ(fo4::forms::edit_cell(patch, env, cell, set).status, fo4::forms::CellEditStatus::edited);
 
   fo4::forms::CellEdit clear;
   clear.image_space = std::optional<fo4::FormKey>{};
+  clear.owner = std::optional<fo4::FormKey>{};
+  clear.regions = std::vector<fo4::FormKey>{};
   ASSERT_EQ(fo4::forms::edit_cell(patch, env, cell, clear).status, fo4::forms::CellEditStatus::edited);
 
   const auto* record = fo4::find_record(patch, cell);
   ASSERT_NE(record, nullptr);
   EXPECT_FALSE(has_subrecord(*record, "XCIM"));
+  EXPECT_FALSE(has_subrecord(*record, "XOWN"));
+  EXPECT_FALSE(has_subrecord(*record, "XRNK"));
+  EXPECT_FALSE(has_subrecord(*record, "XCLR"));
   const auto reread = reread_patched(dir_, patch);
   const auto* ref = reread.winner(cell);
   ASSERT_NE(ref, nullptr);
@@ -890,19 +925,73 @@ TEST_F(CellEditTest, RefusedCellEditLeavesPatchUnchanged) {
 }
 
 TEST_F(CellEditTest, CellPropertyDescriptorsCoverEveryEditableMember) {
+  const std::vector<std::string> members = {"flags", "lighting", "lighting_template", "water_height", "water", "image_space",
+                                            "encounter_zone", "location", "acoustic_space", "music_type", "sky_weather_region",
+                                            "god_rays", "lock_list", "owner", "owner_rank", "regions"};
+  const auto normalized = [](std::string text) {
+    std::erase(text, '_');
+    for (auto& ch : text) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    return text;
+  };
   const auto descriptors = fo4::forms::cell_property_descriptors();
-  std::vector<std::string> names;
-  for (const auto& descriptor : descriptors) {
-    names.push_back(descriptor.name);
-    if (descriptor.kind == fo4::forms::CellPropertyKind::link) {
-      EXPECT_FALSE(descriptor.targets.empty()) << descriptor.name;
-    }
+  for (const auto& member : members) {
+    const bool found = std::any_of(descriptors.begin(), descriptors.end(), [&](const auto& descriptor) {
+      return normalized(descriptor.name).find(normalized(member)) != std::string::npos;
+    });
+    EXPECT_TRUE(found) << member;
   }
-  EXPECT_EQ(names, (std::vector<std::string>{
-                       "Flags", "LightingAmbient", "LightingDirectional", "LightingFogNearColor",
-                       "LightingFogNear", "LightingFogFar", "LightingDirectionalRotationXY",
-                       "LightingDirectionalRotationZ", "LightingDirectionalFade", "LightingFogClipDistance",
-                       "LightingFogPower", "LightingTemplate", "WaterHeight", "Water", "ImageSpace",
-                       "EncounterZone", "Location", "AcousticSpace", "MusicType", "SkyWeatherRegion",
-                       "GodRays", "LockList", "Owner", "OwnerRank", "Regions"}));
+  for (const auto& descriptor : descriptors) {
+    if (descriptor.kind == fo4::forms::CellPropertyKind::link) EXPECT_FALSE(descriptor.targets.empty());
+  }
+}
+
+TEST_F(CellEditTest, InteriorCellEditKeepsLightingTailAndWritesFlags) {
+  const auto env = base_and_targets(dir_);
+  const auto cell = fo4::FormKey::parse("000804:Base.esm");
+  auto patch = props_patch();
+  fo4::forms::CellLightingEdit lighting;
+  lighting.ambient = std::array<std::uint8_t, 3>{9, 8, 7};
+  fo4::forms::CellEdit edit;
+  edit.lighting = lighting;
+  edit.flags = std::uint16_t{0x0003};
+  ASSERT_EQ(fo4::forms::edit_cell(patch, env, cell, edit).status, fo4::forms::CellEditStatus::edited);
+  const auto* record = fo4::find_record(patch, cell);
+  ASSERT_NE(record, nullptr);
+  const auto* xcll = subrecord_of(*record, "XCLL");
+  const auto* data = subrecord_of(*record, "DATA");
+  ASSERT_TRUE(xcll != nullptr && data != nullptr);
+  ASSERT_EQ(xcll->data.size(), 72u);
+  EXPECT_EQ(xcll->data[0], std::byte{9});
+  EXPECT_TRUE(std::all_of(xcll->data.begin() + 40, xcll->data.end(),
+                          [](std::byte value) { return value == std::byte{0xAB}; }));
+  EXPECT_EQ(data->data, (std::vector<std::byte>{std::byte{0x03}, std::byte{0}}));
+}
+
+TEST_F(CellEditTest, ShortLightingSubrecordIsRefusedAndPatchUnchanged) {
+  const auto env = base_and_targets(dir_);
+  auto patch = props_patch();
+  const auto before = fo4::write_plugin(patch);
+  fo4::forms::CellLightingEdit lighting;
+  lighting.ambient = std::array<std::uint8_t, 3>{1, 2, 3};
+  fo4::forms::CellEdit edit;
+  edit.lighting = lighting;
+  EXPECT_EQ(fo4::forms::edit_cell(patch, env, fo4::FormKey::parse("000805:Base.esm"), edit).status,
+            fo4::forms::CellEditStatus::malformed);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
+}
+
+TEST_F(CellEditTest, UnlistedOwnerAndPartialApplyLeavePatchUnchanged) {
+  const auto env = base_and_targets(dir_);
+  const auto cell = fo4::FormKey::parse("000802:Base.esm");
+  auto patch = props_patch();
+  const auto before = fo4::write_plugin(patch);
+  fo4::forms::CellEdit edit;
+  edit.flags = std::uint16_t{0x0082};
+  edit.water_height = 3.0f;
+  edit.location = std::optional<fo4::FormKey>{fo4::FormKey::parse("000903:Unrelated.esm")};
+  EXPECT_EQ(fo4::forms::edit_cell(patch, env, cell, edit).status, fo4::forms::CellEditStatus::target_not_master);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
+  edit.location = std::optional<fo4::FormKey>{fo4::FormKey::parse("000905:Targets.esm")};
+  EXPECT_EQ(fo4::forms::edit_cell(patch, env, cell, edit).status, fo4::forms::CellEditStatus::target_type_not_allowed);
+  EXPECT_TRUE(fo4::write_plugin(patch) == before);
 }

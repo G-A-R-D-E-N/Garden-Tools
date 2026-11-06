@@ -145,6 +145,7 @@ void store_owner(const Plugin& plugin,
                  const std::optional<FormKey>& owner) {
   if (!owner || is_null(*owner)) {
     erase_all(record, sig("XOWN"));
+    erase_all(record, sig("XRNK"));
     return;
   }
   const auto raw = link_raw(plugin, env, *owner, {sig("FACT"), sig("NPC_")});
@@ -189,6 +190,10 @@ void store_lighting(Record& record, const CellLightingEdit& edit) {
   auto* existing = unique_subrecord(record, sig("XCLL"));
   auto data = existing ? existing->data : std::vector<std::byte>(required, std::byte{0});
   if (data.size() < required) throw Refusal{CellEditStatus::malformed};
+  if (!existing) {
+    store(data, 28, 1.0f);
+    store(data, 36, 1.0f);
+  }
   if (edit.ambient) store_color(data, 0, *edit.ambient);
   if (edit.directional) store_color(data, 4, *edit.directional);
   if (edit.fog_near_color) store_color(data, 8, *edit.fog_near_color);
@@ -259,6 +264,8 @@ CellEditResult edit_cell(Plugin& patch,
     apply_edit(next, env, *record, edit);
   } catch (const Refusal& refusal) {
     return {refusal.status, {}};
+  } catch (const FormIdError&) {
+    return {CellEditStatus::invalid_value, {}};
   }
   detail::mark_record_modified(next, *record);
   patch = std::move(next);
