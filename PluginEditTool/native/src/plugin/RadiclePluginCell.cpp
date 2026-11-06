@@ -3,6 +3,7 @@
 #include <fo4ide/core/JsonInt.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -378,15 +379,38 @@ Result<nlohmann::json> RadiclePluginBackend::editPlacedReference(const nlohmann:
         if (scale.is_number()) edit.scale->emplace(scale.get<float>());
     }
     if (changes.contains("editorId")) {
-        if (!changes.at("editorId").is_string()) {
-            return std::unexpected(Error{"PlacedEditArgumentsMissing", "EditPlacedReference editorId must be a string"});
+        const auto& editorId = changes.at("editorId");
+        if (!editorId.is_string() && !editorId.is_null()) {
+            return std::unexpected(Error{"PlacedEditArgumentsMissing", "EditPlacedReference editorId must be a string or null"});
         }
-        edit.editor_id = changes.at("editorId").get<std::string>();
+        edit.editor_id = editorId.is_string() ? editorId.get<std::string>() : std::string{};
     }
-    if (!edit.transform && !edit.scale && !edit.editor_id) {
+    if (changes.contains("enableParent")) {
+        const auto& enableParent = changes.at("enableParent");
+        edit.enable_parent.emplace();
+        if (!enableParent.is_null()) {
+            if (!enableParent.is_object() || !enableParent.contains("parent") || !enableParent.at("parent").is_string()) {
+                return std::unexpected(Error{
+                    "PlacedEditArgumentsMissing",
+                    "EditPlacedReference enableParent must be null or {parent: FormKey, flags: 0-255}"
+                });
+            }
+            const auto flags = enableParent.contains("flags") ? core::jsonInt(enableParent.at("flags")) : std::optional<int>{0};
+            if (!flags || *flags < 0 || *flags > 255) {
+                return std::unexpected(Error{"PlacedEditArgumentsMissing", "EditPlacedReference enableParent flags must be 0-255"});
+            }
+            try {
+                edit.enable_parent->parent = fo4::FormKey::parse(enableParent.at("parent").get<std::string>());
+            } catch (const std::exception& error) {
+                return std::unexpected(Error{"InvalidFormKey", error.what()});
+            }
+            edit.enable_parent->flags = static_cast<std::uint8_t>(*flags);
+        }
+    }
+    if (!edit.transform && !edit.scale && !edit.editor_id && !edit.enable_parent) {
         return std::unexpected(Error{
             "PlacedEditArgumentsMissing",
-            "EditPlacedReference supports transform, scale and editorId"
+            "EditPlacedReference supports transform, scale, editorId and enableParent"
         });
     }
 
