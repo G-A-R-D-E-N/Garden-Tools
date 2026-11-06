@@ -16,6 +16,7 @@ namespace fo4::forms {
 namespace {
 
 constexpr auto k_cell = Signature::from_string("CELL");
+constexpr auto k_refr = Signature::from_string("REFR");
 
 struct DedupeToken {
   std::string base;
@@ -55,7 +56,8 @@ bool is_special(const fo4::env::Environment& env,
   const auto editor_id = env.metadata(ref).editor_id;
   return (editor_id && !editor_id->empty()) || data.scripts.has_value() ||
          data.enable_parent.has_value() || data.teleport.has_value() ||
-         !data.linked_references.empty() || !data.patrols.empty() || !data.activate_parents.empty();
+         !data.linked_references.empty() || !data.patrols.empty() || !data.activate_parents.empty() ||
+         data.activate_parent_flags.has_value();
 }
 
 bool accepted_delete(DeleteStatus status) {
@@ -92,7 +94,7 @@ CleanupPlan plan_cell_cleanup(const fo4::env::Environment& env,
     std::size_t kept = 0;
     for (const auto& child : children) {
       const auto& record = *child.ref->record;
-      if (!fo4::is_placed_reference_signature(record.header.signature)) continue;
+      if (record.header.signature != k_refr) continue;
       if (record.header.flags.is_persistent()) continue;
       if (kept++ < max_count) continue;
       plan.entries.push_back({record.form_key, {}, CleanupReason::excess});
@@ -107,7 +109,7 @@ CleanupPlan plan_cell_cleanup(const fo4::env::Environment& env,
   std::map<DedupeToken, Kept> seen;
   for (const auto& child : children) {
     const auto& ref = *child.ref;
-    if (!fo4::is_placed_reference_signature(ref.record->header.signature)) continue;
+    if (ref.record->header.signature != k_refr) continue;
     const auto& key = ref.record->form_key;
     const auto data = fo4::env::decode_placed_reference(env, ref);
     const bool special = is_special(env, ref, data);

@@ -34,7 +34,9 @@ using Planned = std::map<FormKey, std::pair<FormKey, CleanupReason>>;
 Node statics() {
   return top("STAT", {rec("STAT", 0x900, {{"EDID", zstring("Crate")}, {"MODL", zstring("Props\\Crate.nif")}}),
                       rec("STAT", 0x901, {{"EDID", zstring("CrateAlt")}, {"MODL", zstring("Props\\Crate.nif")}}),
-                      rec("STAT", 0x902, {{"EDID", zstring("Barrel")}, {"MODL", zstring("Props\\Barrel.nif")}})});
+                      rec("STAT", 0x902, {{"EDID", zstring("Barrel")}, {"MODL", zstring("Props\\Barrel.nif")}}),
+                      rec("STAT", 0x903, {{"EDID", zstring("Lamp")}}),
+                      rec("STAT", 0x904, {{"EDID", zstring("LampB")}})});
 }
 
 Node placed(std::uint32_t id, std::uint32_t base, float x, float y, float z, std::uint32_t flags = 0,
@@ -57,6 +59,20 @@ Node cell_block(std::vector<Node> cells) {
 
 std::vector<std::byte> base_plugin(std::vector<Node> temporary, std::vector<Node> persistent = {}) {
   return make_plugin({}, {statics(), cell_block(cell_nodes(k_cell, std::move(temporary), std::move(persistent)))});
+}
+
+std::vector<std::byte> patch_bytes() {
+  return make_plugin({"Base.esm"},
+                     {cell_block(cell_nodes(k_cell, {placed(0x01000813, 0x900, 500, 0, 0),
+                                                    placed(0x01000814, 0x900, 500, 0, 0)}))});
+}
+
+void write_patched_base(fo4::test::TempDataDir& dir) {
+  dir.write("Base.esm",
+            base_plugin({placed(0x811, 0x900, 100, 200, 0),
+                         placed(0x812, 0x900, 100, 200, 0, 0, {{"EDID", zstring("Gate")}})}),
+            0);
+  dir.write("Patch.esp", patch_bytes(), 1);
 }
 
 fo4::env::Environment load(fo4::test::TempDataDir& dir, const std::vector<std::string>& names) {
@@ -114,6 +130,17 @@ TEST(CellCleanup, DedupeByModelTreatsDifferentBasesWithSameModelAsDuplicates) {
               {{FormKey::parse("000822:Base.esm"), {FormKey::parse("000821:Base.esm"), CleanupReason::duplicate}}});
 }
 
+TEST(CellCleanup, ByModelFallsBackToEditorIdWithoutModel) {
+  fo4::test::TempDataDir dir;
+  dir.write("Base.esm",
+            base_plugin({placed(0x831, 0x903, 100, 200, 0), placed(0x832, 0x904, 100, 200, 0),
+                         placed(0x833, 0x903, 100, 200, 0)}),
+            0);
+  const auto env = load(dir, {"Base.esm"});
+  expect_plan(plan_cell_cleanup(env, FormKey::parse("000810:Base.esm"), CleanupMode::dedupe, 0, true),
+              {{FormKey::parse("000833:Base.esm"), {FormKey::parse("000831:Base.esm"), CleanupReason::duplicate}}});
+}
+
 TEST(CellCleanup, ExcessCapsNonPersistentReferences) {
   fo4::test::TempDataDir dir;
   dir.write("Base.esm",
@@ -129,17 +156,48 @@ TEST(CellCleanup, ExcessCapsNonPersistentReferences) {
   expect_plan(plan_cell_cleanup(env, cell, CleanupMode::excess, 4, false), {});
 }
 
+TEST(CellCleanup, NonPlannedCellStatusesPlanNothing) {
+  fo4::test::TempDataDir dir;
+  dir.write("Base.esm", make_plugin({}, {statics(), cell_block({rec("CELL", 0x820, {{"DATA", {std::byte{0x01}, std::byte{0}}}}, 0x20)})}), 0);
+  const auto env = load(dir, {"Base.esm"});
+  const auto missing = plan_cell_cleanup(env, FormKey::parse("000990:Base.esm"), CleanupMode::dedupe, 0, false);
+  const auto deleted = plan_cell_cleanup(env, FormKey::parse("000820:Base.esm"), CleanupMode::dedupe, 0, false);
+  const auto not_cell = plan_cell_cleanup(env, FormKey::parse("000900:Base.esm"), CleanupMode::dedupe, 0, false);
+  EXPECT_EQ(missing.status, CleanupPlanStatus::cell_missing);
+  EXPECT_EQ(deleted.status, CleanupPlanStatus::cell_deleted);
+  EXPECT_EQ(not_cell.status, CleanupPlanStatus::not_a_cell);
+  EXPECT_TRUE(missing.entries.empty());
+  EXPECT_TRUE(deleted.entries.empty());
+  EXPECT_TRUE(not_cell.entries.empty());
+
+  auto base = env.plugin(0);
+  const auto applied = apply_cell_cleanup(base, env, missing);
+  EXPECT_EQ(applied.status, CleanupApplyStatus::refused);
+  EXPECT_TRUE(applied.entry_status.empty());
+}
+
+TEST(CellCleanup, ApplyRefusalLeavesPatchByteIdentical) {
+  fo4::test::TempDataDir dir;
+  write_patched_base(dir);
+  const auto env = load(dir, {"Base.esm", "Patch.esp"});
+  auto patch = env.plugin(*env.find_plugin("Patch.esp"));
+  const auto before = fo4::write_plugin(patch);
+
+  CleanupPlan plan;
+  plan.status = CleanupPlanStatus::planned;
+  plan.cell = FormKey::parse("000810:Base.esm");
+  plan.entries = {{FormKey::parse("000811:Base.esm"), {}, CleanupReason::duplicate},
+                  {FormKey::parse("000999:Base.esm"), {}, CleanupReason::duplicate}};
+  const auto applied = apply_cell_cleanup(patch, env, plan);
+  EXPECT_EQ(applied.status, CleanupApplyStatus::refused);
+  EXPECT_EQ(applied.entry_status,
+            (std::vector<DeleteStatus>{DeleteStatus::marked_deleted, DeleteStatus::reference_missing}));
+  EXPECT_EQ(fo4::write_plugin(patch), before);
+}
+
 TEST(CellCleanup, DryRunPlanMatchesApply) {
   fo4::test::TempDataDir dir;
-  dir.write("Base.esm",
-            base_plugin({placed(0x811, 0x900, 100, 200, 0),
-                         placed(0x812, 0x900, 100, 200, 0, 0, {{"EDID", zstring("Gate")}})}),
-            0);
-  dir.write("Patch.esp",
-            make_plugin({"Base.esm"},
-                        {cell_block(cell_nodes(k_cell, {placed(0x01000813, 0x900, 500, 0, 0),
-                                                       placed(0x01000814, 0x900, 500, 0, 0)}))}),
-            1);
+  write_patched_base(dir);
   const auto env = load(dir, {"Base.esm", "Patch.esp"});
   const auto cell = FormKey::parse("000810:Base.esm");
   const auto plan = plan_cell_cleanup(env, cell, CleanupMode::dedupe, 0, false);
