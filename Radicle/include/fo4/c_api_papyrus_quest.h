@@ -44,6 +44,7 @@ RADICLE_API radicle_status radicle_papyrus_identify_startup_stages(const radicle
                                                                    radicle_papyrus_stage_report* out_report);
 RADICLE_API void radicle_papyrus_stage_report_destroy(radicle_papyrus_stage_report* report);
 
+/* Invariant: element_type, elements and members carry an array's or struct's decoded values; nesting is limited to 16 levels. */
 typedef struct radicle_papyrus_vmad_shape {
   const char* name;
   const char* type;
@@ -58,6 +59,11 @@ typedef struct radicle_papyrus_vmad_shape {
   int32_t has_boolean;
   int32_t boolean;
   const char* object;
+  const char* element_type;
+  const struct radicle_papyrus_vmad_shape* elements;
+  size_t elements_len;
+  const struct radicle_papyrus_vmad_shape* members;
+  size_t members_len;
 } radicle_papyrus_vmad_shape;
 
 typedef struct radicle_papyrus_bound_property {
@@ -74,6 +80,8 @@ typedef struct radicle_papyrus_bind_report {
   int32_t bound;
   int32_t unsupported;
   int32_t silently_defaulted;
+  char** unsupported_shapes;
+  size_t unsupported_shape_count;
   char* report;
   char* digest;
 } radicle_papyrus_bind_report;
