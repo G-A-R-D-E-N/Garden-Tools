@@ -1,0 +1,13 @@
+{
+  "default": [],
+  "backend.GetQuestStages": {"stages": [
+    {"index": 10, "flags": 0, "startUp": true, "logEntries": [{"logText": "Find the courier's bag in the alley.", "flags": 0, "note": ""}]},
+    {"index": 20, "flags": 0, "startUp": false, "logEntries": [{"logText": "The tracks lead north, toward the old rail yard.", "flags": 0, "note": ""}]},
+    {"index": 30, "flags": 2, "startUp": false, "logEntries": [{"logText": "Return the bag to the courier's mother.", "flags": 0, "note": ""}]}
+  ]},
+  "backend.GetQuestObjectives": {"objectives": [
+    {"index": 10, "flags": 0, "displayText": "Search the alley", "targets": []},
+    {"index": 20, "flags": 0, "displayText": "Reach the rail yard", "targets": []},
+    {"index": 30, "flags": 0, "displayText": "Deliver the bag", "targets": []}
+  ]}
+}
