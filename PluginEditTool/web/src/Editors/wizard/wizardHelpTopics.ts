@@ -37,4 +37,58 @@ export const WIZARD_HELP_TOPICS: readonly HelpTopic[] = [
     body: 'The reward the final journal line names, such as "50 caps". Writing it here does not give the player anything by itself.',
     related: ['quest-stage'],
   },
+  {
+    id: 'wizard-target',
+    title: 'Target',
+    body: 'The named enemy the player must find and defeat. Pick an NPC from the list. The quest does not put the enemy in the world, so place them at the location in the Creation Kit.',
+    related: ['alias'],
+  },
+  {
+    id: 'wizard-target-location',
+    title: 'Target location',
+    body: 'The place where the player finds the target. Pick a location from the list.',
+    related: ['alias'],
+  },
+  {
+    id: 'wizard-person',
+    title: 'Person',
+    body: 'The named character the player must find and talk to. Pick an NPC from the list.',
+    related: ['alias'],
+  },
+  {
+    id: 'wizard-person-location',
+    title: 'Where to find them',
+    body: 'The place where the player finds this person. Pick a location from the list.',
+    related: ['alias'],
+  },
+  {
+    id: 'wizard-escortee',
+    title: 'Escortee',
+    body: 'The character who walks with the player to the destination. If this character dies, the quest fails. Pick an NPC from the list.',
+    related: ['alias'],
+  },
+  {
+    id: 'wizard-destination',
+    title: 'Destination',
+    body: 'The place the escortee must be taken to. Pick a location from the list.',
+    related: ['alias'],
+  },
+  {
+    id: 'wizard-option-a',
+    title: 'First choice',
+    body: 'The first decision the player can make, worded as the journal should show it, such as "Spare the raiders". The journal reads "You chose: Spare the raiders."',
+    related: ['quest-stage'],
+  },
+  {
+    id: 'wizard-option-b',
+    title: 'Second choice',
+    body: 'The second decision the player can make, worded the same way as the first choice, such as "Hand the raiders over".',
+    related: ['quest-stage'],
+  },
+  {
+    id: 'wizard-reward-b',
+    title: 'Reward for the second choice',
+    body: 'The reward the final journal line names when the player makes the second choice, such as "20 caps". Writing it here does not give the player anything by itself.',
+    related: ['quest-stage'],
+  },
 ];

@@ -6,7 +6,7 @@ export interface RecordQuestion { id: string; kind: 'record'; label: string; hel
 export type TemplateQuestion = TextQuestion | RecordQuestion;
 export type WizardStep = PluginQuestion | TemplateQuestion;
 
-export interface TemplateStage { index: number; journal: string; completes?: boolean; }
+export interface TemplateStage { index: number; journal: string; completes?: boolean; fails?: boolean; }
 export interface TemplateObjective { index: number; text: string; targets: string[]; }
 export interface TemplateAlias { slot: string; name: string; kind: AliasKind; }
 
