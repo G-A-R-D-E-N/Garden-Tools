@@ -5,10 +5,13 @@ import HelpDrawer from './help/HelpDrawer';
 import { SCREEN_TOPICS } from './help/helpContent';
 import QuestWorkspace from './quest/QuestWorkspace';
 
-export default function QuestEditor({ onBack }: { onBack: () => void }) {
+export default function QuestEditor({ onBack, initialQuest = null }: {
+  onBack: () => void;
+  initialQuest?: PickedRecord | null;
+}) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [quest, setQuest] = useState<PickedRecord | null>(null);
+  const [quest, setQuest] = useState<PickedRecord | null>(initialQuest);
   return (
     <section className="editor-screen" aria-labelledby="quest-editor-title">
       <header className="editor-screen-header">
