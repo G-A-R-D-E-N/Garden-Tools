@@ -203,10 +203,14 @@ std::shared_ptr<const fo4::env::Environment> RadiclePluginBackend::borrowedEnvir
     return borrowedEnvironment_;
 }
 
-void RadiclePluginBackend::dropBorrowedEnvironmentLocked() {
+void RadiclePluginBackend::dropBorrowedEnvironmentOnlyLocked() {
     std::scoped_lock lock(environmentMutex_);
     ++mutationEpoch_;
     borrowedEnvironment_.reset();
+}
+
+void RadiclePluginBackend::dropBorrowedEnvironmentLocked() {
+    dropBorrowedEnvironmentOnlyLocked();
     cellEditHistories_.clear();
 }
 
@@ -430,18 +434,10 @@ Result<fo4::forms::PlacedReferenceEditResult> RadiclePluginBackend::editPlacedRe
 
 void RadiclePluginBackend::stageCellEditLocked(LoadedPlugin& patch, fo4::Plugin mutated) {
     CommitScope commit;
-    syncCellEditHistoryLocked();
     fo4::PluginEditHistory history = std::move(cellEditHistories_[patch.name]);
     history.record(patch.plugin);
     stagePluginMutationLocked(patch, std::move(mutated));
     cellEditHistories_[patch.name] = std::move(history);
-    cellEditHistoryEpoch_ = mutationEpoch_;
-}
-
-void RadiclePluginBackend::syncCellEditHistoryLocked() {
-    if (cellEditHistoryEpoch_ == mutationEpoch_) return;
-    cellEditHistories_.clear();
-    cellEditHistoryEpoch_ = mutationEpoch_;
 }
 
 Result<nlohmann::json> RadiclePluginBackend::undoCellEdit(const nlohmann::json& arguments) {
@@ -467,7 +463,6 @@ Result<nlohmann::json> RadiclePluginBackend::stepCellEditHistory(const nlohmann:
 
     try {
         CommitScope commit;
-        syncCellEditHistoryLocked();
         const auto found = cellEditHistories_.find(patch->name);
         if (found == cellEditHistories_.end()) {
             return std::unexpected(Error{undo ? "NothingToUndo" : "NothingToRedo", "No cell edit to step in " + pluginName});
@@ -481,7 +476,6 @@ Result<nlohmann::json> RadiclePluginBackend::stepCellEditHistory(const nlohmann:
         auto response = nlohmann::json(cellEditHistoryJson(patch->name, history.undo_count(),
                                                            history.redo_count()).dump());
         cellEditHistories_[patch->name] = std::move(history);
-        cellEditHistoryEpoch_ = mutationEpoch_;
         return response;
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CellEditHistoryFailed", error.what()});
@@ -500,7 +494,7 @@ Result<nlohmann::json> RadiclePluginBackend::getCellEditHistory(const nlohmann::
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     }
     const auto history = cellEditHistories_.find(loaded->name);
-    if (cellEditHistoryEpoch_ != mutationEpoch_ || history == cellEditHistories_.end()) {
+    if (history == cellEditHistories_.end()) {
         return nlohmann::json(cellEditHistoryJson(loaded->name, 0, 0).dump());
     }
     return nlohmann::json(cellEditHistoryJson(loaded->name, history->second.undo_count(),

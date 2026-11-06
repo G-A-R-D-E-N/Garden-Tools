@@ -569,6 +569,84 @@ TEST_CASE("Native cell edit history is cleared by openPlugin, discardPlugin and 
     }
 }
 
+TEST_CASE("Native cell edit history of patch A survives an edit to patch B so undo in A still works") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+    writeBytes(root / "Patch2.esp", patchPlugin());
+
+    auto environment = patchEnvironment(root);
+    environment["plugins"].push_back(pluginEntry("Patch2.esp", root / "Patch2.esp"));
+
+    const auto patchView = nlohmann::json::array({"Patch.esp"});
+    const auto otherView = nlohmann::json::array({"Patch2.esp"});
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", transformChange()
+    })).has_value());
+
+    SECTION("a cell edit in patch B does not clear the undo step recorded for patch A") {
+        auto newer = transformChange();
+        newer["transform"]["x"] = 300.0;
+        REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+            "000801:Base.esm", "Patch2.esp", newer
+        })).has_value());
+        CHECK(parseStringResult(backend.getCellEditHistory(otherView)).at("undoCount") == 1);
+    }
+
+    SECTION("a non-cell edit in patch B does not clear the undo step recorded for patch A") {
+        REQUIRE(backend.createInteriorCell(nlohmann::json::array({"Patch2.esp", "Kitchen"})).has_value());
+    }
+
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 1);
+    REQUIRE(backend.undoCellEdit(patchView).has_value());
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 0);
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("redoCount") == 1);
+}
+
+TEST_CASE("Native undo after discarding patch A returns NothingToUndo without touching A and keeps patch B's undo step") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+    writeBytes(root / "Patch2.esp", patchPlugin());
+
+    auto environment = patchEnvironment(root);
+    environment["plugins"].push_back(pluginEntry("Patch2.esp", root / "Patch2.esp"));
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto patchView = nlohmann::json::array({"Patch.esp"});
+    const auto otherView = nlohmann::json::array({"Patch2.esp"});
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", transformChange()
+    })).has_value());
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch2.esp", transformChange()
+    })).has_value());
+
+    REQUIRE(backend.invoke("backend.DiscardPlugin", patchView).has_value());
+    const auto afterDiscard = parseStringResult(backend.getPlacedReferences(cellView));
+
+    const auto undo = backend.undoCellEdit(patchView);
+    REQUIRE_FALSE(undo.has_value());
+    CHECK(undo.error().type == "NothingToUndo");
+    CHECK(parseStringResult(backend.getPlacedReferences(cellView)) == afterDiscard);
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 0);
+
+    CHECK(parseStringResult(backend.getCellEditHistory(otherView)).at("undoCount") == 1);
+    REQUIRE(backend.undoCellEdit(otherView).has_value());
+    CHECK(parseStringResult(backend.getPlacedReferences(cellView)).at("references")[0]
+              .at("position").at("x") == 10.0f);
+}
+
 TEST_CASE("Native cell edit rejects malformed arguments and a NUL editor id without staging") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
