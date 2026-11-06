@@ -302,3 +302,22 @@ TEST_CASE("Native objective text refuses embedded NUL") {
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "InvalidQuestObjectivePayload");
 }
+
+// Detects: a bulk SetQuestObjectives with two objectives sharing one index must be refused without writing, so index-based edits stay unambiguous.
+TEST_CASE("Native SetQuestObjectives refuses duplicate objective indexes without writing") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend; loadPatch(backend, path);
+    const auto key = createQuestWithAlias(backend);
+    REQUIRE(backend.invokeBackend("SetQuestObjectives", nlohmann::json::array({"Patch.esp", key, objectivesWithGetStage(key)})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto before = readBytes(path);
+    auto payload = objectivesWithGetStage(key);
+    payload[0]["index"] = 3;
+    payload.push_back(payload[0]);
+    const auto result = backend.invokeBackend("SetQuestObjectives", nlohmann::json::array({"Patch.esp", key, payload}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidQuestObjectivePayload");
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(readBytes(path) == before);
+}

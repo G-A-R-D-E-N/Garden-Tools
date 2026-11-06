@@ -497,6 +497,16 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveScript") return backend_.removeScript(args);
         if (method == "AddScriptProperty") return backend_.addScriptProperty(args);
         if (method == "RemoveScriptProperty") return backend_.removeScriptProperty(args);
+        if (method == "SetInfoFragment") return backend_.setInfoFragment(args);
+        if (method == "AddInfoFragment") return backend_.addInfoFragment(args);
+        if (method == "RemoveInfoFragment") return backend_.removeInfoFragment(args);
+        if (method == "SetScenePhaseFragment") return backend_.setScenePhaseFragment(args);
+        if (method == "AddScenePhaseFragment") return backend_.addScenePhaseFragment(args);
+        if (method == "RemoveScenePhaseFragment") return backend_.removeScenePhaseFragment(args);
+        if (method == "RemoveQuestFragment") return backend_.removeQuestFragment(args);
+        if (method == "GetQuestFragments") return backend_.getQuestFragments(args);
+        if (method == "GetQuestScript") return backend_.getQuestScript(args);
+        if (method == "EditQuestScript") return backend_.editQuestScript(args);
         if (method == "AddAliasScript") return backend_.addAliasScript(args);
         if (method == "RemoveAliasScript") return backend_.removeAliasScript(args);
         if (method == "AddAliasScriptProperty") return backend_.addAliasScriptProperty(args);
