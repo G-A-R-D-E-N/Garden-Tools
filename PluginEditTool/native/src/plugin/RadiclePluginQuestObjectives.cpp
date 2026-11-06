@@ -325,6 +325,10 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
                 replaceConditions.back().push_back(conditionsGiven);
                 objective.targets.push_back(std::move(target));
             }
+            if (std::any_of(objectives.objectives.begin(), objectives.objectives.end(),
+                            [&](const auto& existing) { return existing.index == objective.index; })) {
+                return std::unexpected(Error{kObjectiveError, "duplicate objective index " + std::to_string(objective.index)});
+            }
             objectives.objectives.push_back(std::move(objective));
         }
 

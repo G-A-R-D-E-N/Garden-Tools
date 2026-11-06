@@ -3,6 +3,8 @@
 
 #include "fo4/archive/ba2.hpp"
 #include "fo4/archive/ba2_hash.hpp"
+#include "fo4/pex/pex.hpp"
+#include "fo4/pex_analysis/opcodes.hpp"
 
 #include <gtest/gtest.h>
 
@@ -81,8 +83,78 @@ protected:
     return assets;
   }
 
+  radicle_script_set* open_set(const std::vector<std::string>& roots, const std::vector<std::string>& archives,
+                               radicle_archive_policy policy = RADICLE_ARCHIVE_POLICY_FAIL) {
+    std::vector<const char*> root_paths;
+    for (const auto& root : roots) root_paths.push_back(root.c_str());
+    std::vector<const char*> archive_paths;
+    for (const auto& archive : archives) archive_paths.push_back(archive.c_str());
+    radicle_script_set* set = nullptr;
+    EXPECT_EQ(radicle_script_set_open(root_paths.data(), root_paths.size(), archive_paths.data(),
+                                      archive_paths.size(), policy, &set),
+              RADICLE_STATUS_OK);
+    return set;
+  }
+
+  int32_t chain_valid(radicle_script_set* set, const char* name) {
+    int32_t valid = -1;
+    EXPECT_EQ(radicle_script_set_parent_chain_valid(set, name, &valid), RADICLE_STATUS_OK);
+    return valid;
+  }
+
   std::filesystem::path root_;
 };
+
+using fo4::pex::PexFile;
+using fo4::pex::PexFunction;
+using fo4::pex::PexInstruction;
+using fo4::pex::PexObject;
+using fo4::pex::PexState;
+using fo4::pex::PexValue;
+using fo4::pex::PexValueType;
+using fo4::pex_analysis::PexOp;
+
+PexValue ident(std::string name) {
+  PexValue value;
+  value.type = PexValueType::Identifier;
+  value.str = std::move(name);
+  return value;
+}
+
+PexInstruction call_of(PexOp op, std::vector<std::string> names) {
+  PexInstruction instruction;
+  instruction.opCode = static_cast<std::uint8_t>(op);
+  for (auto& name : names) instruction.args.push_back(ident(std::move(name)));
+  return instruction;
+}
+
+PexFunction function_of(std::string name, bool native, bool global, std::vector<PexInstruction> body = {}) {
+  PexFunction function;
+  function.name = std::move(name);
+  function.isNative = native;
+  function.isGlobal = global;
+  function.instructions = std::move(body);
+  return function;
+}
+
+std::string pex_text(std::string object_name, std::string parent, std::vector<PexFunction> functions = {}) {
+  PexFile pex;
+  pex.majorVersion = 3;
+  pex.minorVersion = 9;
+  pex.gameId = 2;
+  PexObject object;
+  object.name = std::move(object_name);
+  object.parentClassName = std::move(parent);
+  PexState state;
+  state.functions = std::move(functions);
+  object.states.push_back(std::move(state));
+  pex.objects.push_back(std::move(object));
+  pex.rebuildStringTable();
+  const auto bytes = pex.toBytes();
+  return std::string(bytes.begin(), bytes.end());
+}
+
+std::string c_strings_text(const char* text) { return text == nullptr ? std::string("<null>") : std::string(text); }
 
 std::string text_of(uint8_t* bytes, size_t size) {
   return std::string(reinterpret_cast<const char*>(bytes), size);
@@ -234,4 +306,179 @@ TEST_F(CApiScriptSetTest, RejectsBadArguments) {
   radicle_script_set_destroy(empty);
   radicle_assets_destroy(none);
   radicle_assets_destroy(assets);
+}
+
+TEST_F(CApiScriptSetTest, OpenOwnsItsAssetsAndResolvesLooseOverArchive) {
+  const auto data = root_ / "Data";
+  const auto loose_path = write_loose(data, "Scripts/Actors/Foo.pex", "loose");
+  const auto archive = write_archive("Mod - Main.ba2", {general("Scripts\\Actors\\Foo.pex", "archived"),
+                                                        general("Scripts\\Bar.pex", "bar")});
+  radicle_script_set* set = open_set({data.string()}, {archive.string()});
+  ASSERT_NE(set, nullptr);
+  ASSERT_EQ(radicle_script_set_count(set), 2u);
+  EXPECT_EQ(radicle_script_set_failure_count(set), 0u);
+
+  radicle_script_set_winner winner{};
+  ASSERT_EQ(radicle_script_set_get(set, 0, &winner), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(winner.name), "actors/foo");
+  EXPECT_EQ(winner.winner.origin, RADICLE_ASSET_LOOSE);
+  EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path(winner.winner.container), loose_path));
+  EXPECT_EQ(winner.replaced, 1u);
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_script_set_read(set, 1, &bytes, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(text_of(bytes, size), "bar");
+  radicle_free_bytes(bytes);
+  radicle_script_set_destroy(set);
+}
+
+TEST_F(CApiScriptSetTest, ArchivePolicyFailAbortsAndSkipReportsTheUnreadableArchive) {
+  const auto data = root_ / "Data";
+  const auto first = write_archive("A - Main.ba2", {general("Scripts\\One.pex", "one")});
+  const auto broken = write_loose(root_, "B - Broken.ba2", "this is not a ba2");
+  const auto last = write_archive("C - Main.ba2", {general("Scripts\\Two.pex", "two")});
+  const std::vector<std::string> archives{first.string(), broken.string(), last.string()};
+  std::vector<const char*> archive_paths;
+  for (const auto& archive : archives) archive_paths.push_back(archive.c_str());
+  const char* root_path = nullptr;
+
+  radicle_script_set* set = sentinel<radicle_script_set>();
+  EXPECT_NE(radicle_script_set_open(&root_path, 0, archive_paths.data(), archive_paths.size(),
+                                    RADICLE_ARCHIVE_POLICY_FAIL, &set),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(set, nullptr);
+
+  set = open_set({data.string()}, archives, RADICLE_ARCHIVE_POLICY_SKIP);
+  ASSERT_NE(set, nullptr);
+  ASSERT_EQ(radicle_script_set_count(set), 2u);
+  ASSERT_EQ(radicle_script_set_failure_count(set), 1u);
+  radicle_script_set_failure_info failure{};
+  ASSERT_EQ(radicle_script_set_failure(set, 0, &failure), RADICLE_STATUS_OK);
+  EXPECT_EQ(failure.archive_index, 1u);
+  EXPECT_EQ(std::filesystem::path(failure.path), broken);
+  EXPECT_FALSE(c_strings_text(failure.message).empty());
+  EXPECT_EQ(radicle_script_set_failure(set, 1, &failure), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(failure.path, static_cast<const char*>(nullptr));
+
+  radicle_script_set_winner winner{};
+  ASSERT_EQ(radicle_script_set_get(set, 1, &winner), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(winner.name), "two");
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_script_set_read(set, 1, &bytes, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(text_of(bytes, size), "two");
+  radicle_free_bytes(bytes);
+  radicle_script_set_destroy(set);
+
+  radicle_script_set* rejected = sentinel<radicle_script_set>();
+  EXPECT_EQ(radicle_script_set_open(&root_path, 0, archive_paths.data(), archive_paths.size(),
+                                    static_cast<radicle_archive_policy>(7), &rejected),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(rejected, nullptr);
+}
+
+TEST_F(CApiScriptSetTest, OpenDropsDuplicateRoots) {
+  const auto data = root_ / "Data";
+  write_loose(data, "Scripts/Foo.pex", "loose");
+  radicle_script_set* set = open_set({data.string(), data.string()}, {});
+  ASSERT_NE(set, nullptr);
+  ASSERT_EQ(radicle_script_set_count(set), 1u);
+  radicle_script_set_winner winner{};
+  ASSERT_EQ(radicle_script_set_get(set, 0, &winner), RADICLE_STATUS_OK);
+  EXPECT_EQ(winner.replaced, 0u);
+  radicle_script_set_destroy(set);
+}
+
+TEST_F(CApiScriptSetTest, ParentChainValidityMatchesTheManagedWalk) {
+  const auto data = root_ / "Data";
+  write_loose(data, "Scripts/Base.pex", pex_text("Base", ""));
+  write_loose(data, "Scripts/Child.pex", pex_text("Child", "Base"));
+  write_loose(data, "Scripts/Ns/Inner.pex", pex_text("Ns:Inner", "child"));
+  write_loose(data, "Scripts/Orphan.pex", pex_text("Orphan", "Nope"));
+  write_loose(data, "Scripts/CycA.pex", pex_text("CycA", "CycB"));
+  write_loose(data, "Scripts/CycB.pex", pex_text("CycB", "CycA"));
+  write_loose(data, "Scripts/SelfLoop.pex", pex_text("SelfLoop", "selfloop"));
+  write_loose(data, "Scripts/Junk.pex", "not a pex");
+  write_loose(data, "Scripts/OnJunk.pex", pex_text("OnJunk", "Junk"));
+  constexpr int kDepth = 300;
+  for (int i = 0; i < kDepth; ++i) {
+    const std::string name = "Deep" + std::to_string(i);
+    write_loose(data, "Scripts/" + name + ".pex",
+                pex_text(name, i + 1 < kDepth ? "Deep" + std::to_string(i + 1) : ""));
+  }
+  radicle_script_set* set = open_set({data.string()}, {});
+  ASSERT_NE(set, nullptr);
+
+  EXPECT_EQ(chain_valid(set, "Base"), 1);
+  EXPECT_EQ(chain_valid(set, "cHiLd"), 1);
+  EXPECT_EQ(chain_valid(set, "NS:inner"), 1);
+  EXPECT_EQ(chain_valid(set, "Deep0"), 1);
+  EXPECT_EQ(chain_valid(set, "Orphan"), 0);
+  EXPECT_EQ(chain_valid(set, "CycA"), 0);
+  EXPECT_EQ(chain_valid(set, "SelfLoop"), 0);
+  EXPECT_EQ(chain_valid(set, "Junk"), 0);
+  EXPECT_EQ(chain_valid(set, "OnJunk"), 0);
+  EXPECT_EQ(chain_valid(set, "Missing"), 0);
+
+  int32_t valid = 5;
+  EXPECT_EQ(radicle_script_set_parent_chain_valid(nullptr, "Base", &valid), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(valid, 0);
+  EXPECT_EQ(radicle_script_set_parent_chain_valid(set, nullptr, &valid), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_script_set_parent_chain_valid(set, "Base", nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_script_set_destroy(set);
+}
+
+TEST_F(CApiScriptSetTest, CensusFindsNativeCallSitesThroughTheParentChain) {
+  const auto data = root_ / "Data";
+  write_loose(data, "Scripts/Base.pex", pex_text("Base", "", {function_of("Native", true, false)}));
+  write_loose(data, "Scripts/Util.pex", pex_text("Util", "", {function_of("Ping", true, true)}));
+  write_loose(data, "Scripts/Child.pex",
+              pex_text("Child", "Base",
+                       {function_of("Helper", false, false),
+                        function_of("Run", false, false,
+                                    {call_of(PexOp::CallMethod, {"Native", "self", "::none"}),
+                                     call_of(PexOp::CallStatic, {"Util", "Ping", "::none"}),
+                                     call_of(PexOp::CallMethod, {"Missing", "self", "::none"}),
+                                     call_of(PexOp::CallMethod, {"Helper", "self", "::none"})})}));
+  write_loose(data, "Scripts/Broken.pex", "not a pex");
+  radicle_script_set* set = open_set({data.string()}, {});
+  ASSERT_NE(set, nullptr);
+
+  radicle_script_census* census = nullptr;
+  ASSERT_EQ(radicle_script_set_census(set, &census), RADICLE_STATUS_OK);
+  ASSERT_NE(census, nullptr);
+  radicle_script_census_totals totals{};
+  ASSERT_EQ(radicle_script_census_totals_get(census, &totals), RADICLE_STATUS_OK);
+  EXPECT_EQ(totals.object_count, 3u);
+  EXPECT_EQ(totals.unreadable_count, 1u);
+  EXPECT_EQ(totals.site_count, 2u);
+  EXPECT_EQ(totals.script_call_count, 1u);
+  EXPECT_EQ(totals.unresolved_count, 1u);
+
+  radicle_script_census_site site{};
+  ASSERT_EQ(radicle_script_census_site_get(census, 0, &site), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(site.script), "Child");
+  EXPECT_EQ(std::string(site.function), "Run");
+  EXPECT_EQ(site.instruction, 0u);
+  EXPECT_EQ(site.is_static, 0);
+  EXPECT_EQ(std::string(site.target), "Child");
+  EXPECT_EQ(std::string(site.called_function), "Native");
+  ASSERT_EQ(radicle_script_census_site_get(census, 1, &site), RADICLE_STATUS_OK);
+  EXPECT_EQ(site.instruction, 1u);
+  EXPECT_EQ(site.is_static, 1);
+  EXPECT_EQ(std::string(site.target), "Util");
+  EXPECT_EQ(std::string(site.called_function), "Ping");
+  EXPECT_EQ(radicle_script_census_site_get(census, 2, &site), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  const char* text = nullptr;
+  ASSERT_EQ(radicle_script_census_unresolved(census, 0, &text), RADICLE_STATUS_OK);
+  EXPECT_NE(c_strings_text(text).find("Missing"), std::string::npos);
+  ASSERT_EQ(radicle_script_census_unreadable(census, 0, &text), RADICLE_STATUS_OK);
+  EXPECT_EQ(c_strings_text(text), "broken");
+  EXPECT_EQ(radicle_script_census_unresolved(census, 1, &text), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_script_census_totals_get(nullptr, &totals), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  radicle_script_census_destroy(census);
+  radicle_script_census_destroy(nullptr);
+  radicle_script_set_destroy(set);
 }

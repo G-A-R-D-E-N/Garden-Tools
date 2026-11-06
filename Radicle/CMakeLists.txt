@@ -192,6 +192,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
   src/forms/dialogue_authoring.cpp
+  src/forms/scene_authoring.cpp
   src/forms/copy_as_new.cpp
   src/forms/copy_as_wrapper.cpp
   src/forms/placed_reference_edit.cpp
@@ -238,6 +239,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin/destructible_stage.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/subrecord_copy.cpp
+  src/plugin/info_responses.cpp
   src/plugin/scene_writer.cpp
   src/plugin/sound_writer.cpp
   src/plugin/scene_index.cpp
@@ -272,6 +274,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/graph/conflict_kind.cpp
   src/graph/check_errors.cpp
   src/graph/check_errors_records.cpp
+  src/graph/check_dialogue.cpp
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
@@ -402,6 +405,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/pex_analysis/script_set.cpp
+  src/pex_analysis/script_library.cpp
   src/abc/abc_file.cpp
   src/abc/abc_write.cpp
   src/abc/byte_reader.cpp
@@ -535,6 +539,7 @@ set(RADICLE_C_SOURCES
   src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp
   src/c_api_conditions.cpp
   src/c_api_dialogue.cpp src/c_api_dialogue_author.cpp
+  src/c_api_scene_author.cpp
   src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp
   src/c_api_cell.cpp
   src/c_api_patch.cpp
@@ -1019,10 +1024,12 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_structs.cpp
     tests/test_papyrus_runtime.cpp
     tests/test_papyrus_save_state.cpp
+    tests/test_papyrus_attach_remote.cpp
     tests/test_papyrus_quest_rules.cpp
     tests/test_c_api_papyrus.cpp
     tests/test_c_api_papyrus_save_quest.cpp
     tests/test_c_api_papyrus_runtime.cpp
+    tests/test_c_api_papyrus_attach_remote.cpp
     tests/test_c_api_script_set.cpp
     tests/test_pex_analysis.cpp
     tests/test_pex_analysis_c_api.cpp

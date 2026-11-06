@@ -231,6 +231,30 @@ public:
         return recordTypedCall("RemoveScriptProperty", args);
     }
 
+    fo4ide::Result<nlohmann::json> setInfoFragment(const nlohmann::json& args) override {
+        return recordTypedCall("SetInfoFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addInfoFragment(const nlohmann::json& args) override {
+        return recordTypedCall("AddInfoFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeInfoFragment(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveInfoFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> setScenePhaseFragment(const nlohmann::json& args) override {
+        return recordTypedCall("SetScenePhaseFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addScenePhaseFragment(const nlohmann::json& args) override {
+        return recordTypedCall("AddScenePhaseFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveScenePhaseFragment", args);
+    }
+
     fo4ide::Result<nlohmann::json> removeQuestFragment(const nlohmann::json& args) override {
         return recordTypedCall("RemoveQuestFragment", args);
     }
@@ -732,7 +756,10 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
         "AddPackageProcedure", "RemovePackageProcedure",
         "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty", "AddAliasScript",
         "RemoveAliasScript", "AddAliasScriptProperty", "RemoveAliasScriptProperty", "SetAliasScriptValue",
-        "ReleaseMemory", "RemoveQuestFragment", "GetQuestFragments", "GetQuestScript", "EditQuestScript"};
+        "ReleaseMemory",
+        "SetInfoFragment", "AddInfoFragment", "RemoveInfoFragment",
+        "SetScenePhaseFragment", "AddScenePhaseFragment", "RemoveScenePhaseFragment",
+        "RemoveQuestFragment", "GetQuestFragments", "GetQuestScript", "EditQuestScript"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());
@@ -790,4 +817,10 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.getWeaponDamageTypes(args), "WeaponBackendUnavailable");
     unavailable(base.getPerkEffects(args), "PerkBackendUnavailable");
     unavailable(base.setPerkEffects(args), "PerkBackendUnavailable");
+    unavailable(base.setInfoFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.addInfoFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.removeInfoFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.setScenePhaseFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.addScenePhaseFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.removeScenePhaseFragment(args), "FragmentBackendUnavailable");
 }

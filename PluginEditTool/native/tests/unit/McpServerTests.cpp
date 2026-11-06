@@ -128,6 +128,43 @@ TEST_CASE("RPC-backed MCP tools map named arguments to positional RPC arguments"
     CHECK(result.text == R"(["hello"])");
 }
 
+namespace {
+
+class EchoArgsTarget final : public fo4ide::rpc::Target {
+public:
+    fo4ide::Result<nlohmann::json> invoke(std::string_view method,
+                                          const nlohmann::json& args) override {
+        if (method == "Args") return args;
+        if (method == "Text") return args.at(0);
+        return std::unexpected(fo4ide::Error{"UnknownMethod", "unknown"});
+    }
+};
+
+}
+
+TEST_CASE("RPC-backed MCP tools pass named arguments in declared order and null for absent optionals") {
+    fo4ide::rpc::Dispatcher dispatcher;
+    REQUIRE(dispatcher.registerTarget("test", std::make_shared<EchoArgsTarget>()).has_value());
+
+    fo4ide::mcp::RpcTool tool(echoDefinition(), dispatcher, "test", "Args", {"b", "a", "c"});
+    const auto result = tool.call({{"a", 1}, {"b", "x"}});
+    CHECK_FALSE(result.isError);
+    CHECK(result.text == R"(["x",1,null])");
+}
+
+TEST_CASE("RPC-backed MCP tools flag Error: and ERR: text results as failures like catalog tools") {
+    fo4ide::rpc::Dispatcher dispatcher;
+    REQUIRE(dispatcher.registerTarget("test", std::make_shared<EchoArgsTarget>()).has_value());
+    fo4ide::mcp::RpcTool tool(echoDefinition(), dispatcher, "test", "Text", {"value"});
+
+    const auto failed = tool.call({{"value", "Error: nope"}});
+    CHECK(failed.isError);
+    CHECK(failed.text == "Error: nope");
+    CHECK(tool.call({{"value", "ERR: bad"}}).isError);
+    CHECK_FALSE(tool.call({{"value", "Errors are not a prefix match"}}).isError);
+    CHECK_FALSE(tool.call({{"value", "Done: ok"}}).isError);
+}
+
 TEST_CASE("MCP stdio loop is newline-delimited") {
     fo4ide::mcp::Registry registry;
     fo4ide::mcp::StdioServer server(registry);

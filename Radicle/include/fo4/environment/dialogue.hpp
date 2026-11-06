@@ -71,6 +71,8 @@ struct SceneAction {
 struct Scene {
   std::optional<std::uint32_t> flags;
   std::optional<FormKey> parent_quest;
+  std::optional<FormKey> template_scene;
+  std::optional<std::uint32_t> index;
   std::vector<ScenePhase> phases;
   std::vector<SceneActor> actors;
   std::vector<SceneAction> actions;

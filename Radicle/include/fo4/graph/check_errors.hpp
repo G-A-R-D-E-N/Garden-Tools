@@ -30,6 +30,16 @@ enum class CheckCode {
   injected_record,
   unsupported_vmad_property,
   results_truncated,
+  dialogue_info_count_mismatch,
+  dialogue_previous_info_cycle,
+  dialogue_previous_info_topic_mismatch,
+  dialogue_branch_quest_mismatch,
+  dialogue_branch_category_invalid,
+  scene_parent_quest_missing,
+  scene_action_topic_not_dial,
+  scene_action_phase_out_of_range,
+  scene_action_alias_unknown,
+  scene_action_index_order,
 };
 
 enum class CheckSeverity {
