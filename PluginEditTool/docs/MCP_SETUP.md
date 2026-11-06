@@ -284,7 +284,7 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `undo_cell_edit` | `patch_plugin` | memory | Editor operation: undo the last placed-reference edit in a patch plugin. |
 | `redo_cell_edit` | `patch_plugin` | memory | Editor operation: redo the last undone placed-reference edit in a patch plugin. |
 | `get_cell_edit_history` | `patch_plugin` | no | Editor query: undo and redo step counts for a patch plugin's placed-reference edits. |
-| `duplicate_placed_reference` | `form_key`, `patch_plugin`, `offset` | memory | Editor operation: duplicate a placed reference into a patch plugin. `offset` adds `x`, `y`, `z`, `rx`, `ry`, `rz` to the copy's transform. Recorded for undo and redo. |
+| `duplicate_placed_reference` | `form_key`, `patch_plugin`, [`offset`] | memory | Editor operation: duplicate a placed reference into a patch plugin. `offset` adds `x`, `y`, `z`, `rx`, `ry`, `rz` to the copy's transform. Recorded for undo and redo. |
 | `delete_placed_reference` | `form_key`, `patch_plugin` | memory | Editor operation: delete a placed reference in a patch plugin. Returns status `deleted` or `markedDeleted`. Recorded for undo and redo. |
 | `set_cell_properties` | `form_key`, `patch_plugin`, `changes` | memory | Editor operation: edit cell properties in a patch plugin. `changes` keys are the names from `get_cell_properties`; a null link clears it. Recorded for undo and redo. |
 | `load_script` | `path` | no | Editor operation: load script. Same RPC the desktop editor uses. |

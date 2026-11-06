@@ -194,7 +194,7 @@ TEST_CASE("Native cell properties edit refuses an unknown field or a non-number 
     CHECK(parseStringResult(backend.getCellProperties(cellView)).at("values").at("WaterHeight").is_null());
 }
 
-TEST_CASE("Native cell properties edit refuses a link to a plugin that is not loaded") {
+TEST_CASE("Native cell properties edit refuses a link to a record that does not exist") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     writeBytes(root / "Base.esm", basePlugin());
@@ -205,7 +205,7 @@ TEST_CASE("Native cell properties edit refuses a link to a plugin that is not lo
     REQUIRE(backend.invoke("environment.LoadMo2", patchEnvironment(root)).has_value());
 
     const auto refused = backend.setCellProperties(nlohmann::json::array({
-        "000800:Base.esm", "Patch.esp", nlohmann::json{{"Location", "000123:Missing.esp"}}
+        "000800:Base.esm", "Patch.esp", nlohmann::json{{"Location", "000999:Base.esm"}}
     }));
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error().type == "CellTargetMissing");
