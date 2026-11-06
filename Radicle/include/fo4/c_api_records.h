@@ -124,12 +124,6 @@ typedef struct radicle_weather_info {
   void* internal;
 } radicle_weather_info;
 
-typedef struct radicle_static_placement {
-  float position[3];
-  float rotation[3];
-  float scale;
-} radicle_static_placement;
-
 typedef struct radicle_static_part {
   radicle_form_key static_record;
   const radicle_static_placement* placements;

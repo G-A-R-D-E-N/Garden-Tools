@@ -442,10 +442,6 @@ int main() {
   printf("WeatherInfo.HasParameters %zu\n", offsetof(radicle_weather_info, has_parameters));
   printf("WeatherInfo.Parameters %zu\n", offsetof(radicle_weather_info, parameters));
   printf("WeatherInfo.Internal %zu\n", offsetof(radicle_weather_info, internal));
-  printf("StaticPlacement %zu\n", sizeof(radicle_static_placement));
-  printf("StaticPlacement.Position %zu\n", offsetof(radicle_static_placement, position));
-  printf("StaticPlacement.Rotation %zu\n", offsetof(radicle_static_placement, rotation));
-  printf("StaticPlacement.Scale %zu\n", offsetof(radicle_static_placement, scale));
   printf("StaticPart %zu\n", sizeof(radicle_static_part));
   printf("StaticPart.StaticRecord %zu\n", offsetof(radicle_static_part, static_record));
   printf("StaticPart.Placements %zu\n", offsetof(radicle_static_part, placements));
@@ -1435,6 +1431,10 @@ int main() {
   printf("CellSummary.Worldspace %zu\n", offsetof(radicle_cell_summary, worldspace));
   printf("CellSummary.WinningPlugin %zu\n", offsetof(radicle_cell_summary, winning_plugin));
   printf("CellSummary.Localized %zu\n", offsetof(radicle_cell_summary, localized));
+  printf("StaticPlacement %zu\n", sizeof(radicle_static_placement));
+  printf("StaticPlacement.Position %zu\n", offsetof(radicle_static_placement, position));
+  printf("StaticPlacement.Rotation %zu\n", offsetof(radicle_static_placement, rotation));
+  printf("StaticPlacement.Scale %zu\n", offsetof(radicle_static_placement, scale));
   printf("ScolPart %zu\n", sizeof(radicle_scol_part));
   printf("ScolPart.ModelPath %zu\n", offsetof(radicle_scol_part, model_path));
   printf("ScolPart.Placements %zu\n", offsetof(radicle_scol_part, placements));
