@@ -255,6 +255,22 @@ public:
         return recordTypedCall("RemoveScenePhaseFragment", args);
     }
 
+    fo4ide::Result<nlohmann::json> removeQuestFragment(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveQuestFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> getQuestFragments(const nlohmann::json& args) const override {
+        return recordTypedCall("GetQuestFragments", args);
+    }
+
+    fo4ide::Result<nlohmann::json> getQuestScript(const nlohmann::json& args) const override {
+        return recordTypedCall("GetQuestScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> editQuestScript(const nlohmann::json& args) override {
+        return recordTypedCall("EditQuestScript", args);
+    }
+
     fo4ide::Result<nlohmann::json> addAliasScript(const nlohmann::json& args) override {
         return recordTypedCall("AddAliasScript", args);
     }
@@ -742,7 +758,8 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
         "RemoveAliasScript", "AddAliasScriptProperty", "RemoveAliasScriptProperty", "SetAliasScriptValue",
         "ReleaseMemory",
         "SetInfoFragment", "AddInfoFragment", "RemoveInfoFragment",
-        "SetScenePhaseFragment", "AddScenePhaseFragment", "RemoveScenePhaseFragment"};
+        "SetScenePhaseFragment", "AddScenePhaseFragment", "RemoveScenePhaseFragment",
+        "RemoveQuestFragment", "GetQuestFragments", "GetQuestScript", "EditQuestScript"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());
@@ -781,6 +798,10 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.removeScript(args), "ScriptBackendUnavailable");
     unavailable(base.addScriptProperty(args), "ScriptBackendUnavailable");
     unavailable(base.removeScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.removeQuestFragment(args), "QuestFragmentBackendUnavailable");
+    unavailable(base.getQuestFragments(args), "QuestFragmentBackendUnavailable");
+    unavailable(base.getQuestScript(args), "QuestScriptBackendUnavailable");
+    unavailable(base.editQuestScript(args), "QuestScriptBackendUnavailable");
     unavailable(base.addAliasScript(args), "ScriptBackendUnavailable");
     unavailable(base.removeAliasScript(args), "ScriptBackendUnavailable");
     unavailable(base.addAliasScriptProperty(args), "ScriptBackendUnavailable");
