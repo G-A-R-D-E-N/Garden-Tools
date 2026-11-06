@@ -2,7 +2,7 @@
 
 #include "fo4/plugin/container.hpp"
 
-#include "../environment/scene_layout.hpp"
+#include "fo4/environment/scene_layout.hpp"
 
 #include <cstddef>
 #include <cstdint>

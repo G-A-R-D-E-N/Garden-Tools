@@ -1,7 +1,8 @@
 #include "fo4/environment/dialogue.hpp"
+#include "fo4/plugin/info_responses.hpp"
 
 #include "record_reader.hpp"
-#include "scene_layout.hpp"
+#include "fo4/environment/scene_layout.hpp"
 
 #include <algorithm>
 
@@ -108,21 +109,18 @@ DialogueInfo decode_dialogue_info(const Environment& env, const RecordRef& ref) 
   out.speaker = r.link(sig("ANAM")); out.start_scene = r.link(sig("TSCE"));
   out.prompt = localized(env, ref, r, r.unique(sig("RNAM")));
   const auto subs = std::span{ref.record->subrecords};
-  for (std::size_t i = 0; i < subs.size(); ++i) {
-    if (subs[i].signature != sig("TRDA")) continue;
-    if (subs[i].data.size() != 20) r.fail(sig("TRDA"), "response data must be twenty bytes");
-    std::size_t end = i + 1;
-    while (end < subs.size() && subs[end].signature != sig("TRDA") &&
-           subs[end].signature != sig("CTDA") && subs[end].signature != sig("RNAM")) ++end;
-    const Scope response{r, subs.subspan(i + 1, end - i - 1)};
+  for (const auto& at : read_info_responses(*ref.record)) {
+    if (at.malformed) r.fail(sig("TRDA"), "response data must be twenty bytes");
+    const Scope response{r, subs.subspan(at.first, at.last - at.first)};
     const auto* text = response.one(sig("NAM1"));
     if (!text) r.fail(sig("TRDA"), "response has no NAM1 text");
     DialogueResponse value;
-    value.emotion = r.link_at(subs[i], 0); value.sound = r.link_at(subs[i], 5);
-    value.number = std::to_integer<std::uint8_t>(subs[i].data[4]);
-    value.unknown = std::to_integer<std::uint8_t>(subs[i].data[9]);
-    value.interrupt_percent = Reader::u16(subs[i], 10);
-    value.camera_target_alias = Reader::i32(subs[i], 12); value.camera_location_alias = Reader::i32(subs[i], 16);
+    value.emotion = r.link_at(subs[at.trda], 0); value.sound = r.link_at(subs[at.trda], 5);
+    value.number = at.number;
+    value.unknown = at.unknown;
+    value.interrupt_percent = at.interrupt_percent;
+    value.camera_target_alias = at.camera_target_alias;
+    value.camera_location_alias = at.camera_location_alias;
     value.text = localized(env, ref, r, text);
     value.speaker_idle = response.link(sig("SNAM")); value.listener_idle = response.link(sig("LNAM"));
     out.responses.push_back(std::move(value));

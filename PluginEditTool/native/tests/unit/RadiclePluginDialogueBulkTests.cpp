@@ -55,6 +55,17 @@ nlohmann::json parseResult(const fo4ide::Result<nlohmann::json>& result) {
     return *result;
 }
 
+std::vector<std::byte> fileBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    REQUIRE(stream.good());
+    const auto size = static_cast<std::size_t>(stream.tellg());
+    std::vector<std::byte> bytes(size);
+    stream.seekg(0);
+    stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size));
+    REQUIRE(stream.good());
+    return bytes;
+}
+
 std::string errorType(const fo4ide::Result<nlohmann::json>& result) {
     REQUIRE(!result.has_value());
     return result.error().type;
@@ -134,9 +145,12 @@ TEST_CASE("Bulk topic creation refuses bad input and localized plugins without s
     fo4ide::plugin::RadiclePluginBackend localized;
     openPatch(localized, localizedRoot, 0x80u);
     const auto localizedQuest = freshQuest(localized);
+    const auto beforeRefusal = fileBytes(localizedRoot / "Patch.esp");
     CHECK(errorType(localized.invokeBackend("CreateDialogueTopicBulk", nlohmann::json::array({
         "Patch.esp", localizedQuest, nlohmann::json{{"lines", nlohmann::json::array({"Hi"})}}}))) ==
           "LocalizedDialogueUnsupported");
+    CHECK(dialogueOf(localized, localizedQuest).at("topics").empty());
+    CHECK(fileBytes(localizedRoot / "Patch.esp") == beforeRefusal);
 }
 
 TEST_CASE("Bulk topic creation keeps accented response text as UTF-8 and refuses text Windows-1252 cannot hold") {

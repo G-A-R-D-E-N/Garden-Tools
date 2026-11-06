@@ -3,7 +3,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/signature.hpp"
-#include "../environment/scene_layout.hpp"
+#include "fo4/environment/scene_layout.hpp"
 #include "../plugin/record_edit.hpp"
 
 #include <algorithm>

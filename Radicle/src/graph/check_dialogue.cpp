@@ -1,6 +1,6 @@
 #include "check_dialogue.hpp"
 
-#include "../environment/scene_layout.hpp"
+#include "fo4/environment/scene_layout.hpp"
 #include "fo4/plugin/reader.hpp"
 
 #include <algorithm>
