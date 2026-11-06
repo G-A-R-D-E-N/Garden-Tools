@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { buildQuestCalls, NEW_RECORD, type Answers, type BackendCall } from './questCalls';
+import { buildQuestCalls, isLinked, NEW_RECORD, type Answers, type BackendCall } from './questCalls';
 import type { QuestTemplate } from './templateTypes';
 import { WIZARD_HELP_TOPICS } from './wizardHelpTopics';
 import { CHOICE_TWO_ENDINGS } from './templates/choiceTwoEndings';
@@ -54,7 +54,7 @@ it('Detects: a template edit silently changing the quest it creates, because fet
     },
     {
       method: 'SetQuestAliases',
-      args: ['Patch.esp', NEW_RECORD, '[{"kind":"reference","id":0,"name":"QuestGiver","uniqueActor":"000900:Patch.esp"},{"kind":"reference","id":1,"name":"Item"},{"kind":"location","id":2,"name":"Location","specificLocation":"000A00:Patch.esp"}]'],
+      args: ['Patch.esp', NEW_RECORD, '[{"kind":"reference","id":0,"name":"QuestGiver","uniqueActor":"000900:Patch.esp"},{"kind":"reference","id":1,"name":"Item","createReference":{"object":"000B00:Patch.esp","alias":2,"create":"At"}},{"kind":"location","id":2,"name":"Location","specificLocation":"000A00:Patch.esp"}]'],
     },
     {
       method: 'SetQuestObjectives',
@@ -71,8 +71,17 @@ it('Detects: an unanswered {blank} making the quest say "undefined" in its journ
   expect(() => buildQuestCalls(FETCH_AN_ITEM, { plugin: 'Patch.esp', name: 'The Lost Locket' }, FORM_KEYS)).toThrow('{location}');
 });
 
-it('Detects: a picked NPC or location whose form key is missing, so the alias would ship unlinked while the review says it is linked', () => {
-  expect(() => buildQuestCalls(FETCH_AN_ITEM, ANSWERS, { questGiver: FORM_KEYS.questGiver })).toThrow('No record was picked for {location}.');
+it('Detects: a picked NPC, location or item whose form key is missing, so the alias would ship unlinked while the review says it is linked', () => {
+  expect(() => buildQuestCalls(FETCH_AN_ITEM, ANSWERS, { questGiver: FORM_KEYS.questGiver, item: FORM_KEYS.item })).toThrow('No record was picked for {location}.');
+  expect(() => buildQuestCalls(FETCH_AN_ITEM, ANSWERS, { questGiver: FORM_KEYS.questGiver, location: FORM_KEYS.location })).toThrow('No record was picked for {item}.');
+});
+
+it('Detects: an item with no location alias to place it at, so the item stays unlinked and the review keeps its not-linked note', () => {
+  const noLocation = { ...FETCH_AN_ITEM, objectives: [], aliases: FETCH_AN_ITEM.aliases.filter(alias => alias.kind !== 'location') };
+  expect(isLinked(noLocation, 'item')).toBe(false);
+  expect(isLinked(FETCH_AN_ITEM, 'item')).toBe(true);
+  const aliases = jsonArg<{ name: string; createReference?: unknown }[]>(buildQuestCalls(noLocation, ANSWERS, FORM_KEYS)[3]);
+  expect(aliases.find(alias => alias.name === 'Item')?.createReference).toBeUndefined();
 });
 
 it('Detects: a template whose stages, objectives, aliases or question help ids do not line up, so the quest it builds is broken or the wizard shows a help topic that does not exist', () => {

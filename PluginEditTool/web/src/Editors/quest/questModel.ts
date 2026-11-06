@@ -14,7 +14,7 @@ export interface QuestAlias {
   name: string;
   flags: number | null;
   collectionEntries: CollectionEntry[];
-  fill?: Record<string, string>;
+  fill?: Record<string, unknown>;
 }
 
 export interface FlagOption { bit: number; label: string; }

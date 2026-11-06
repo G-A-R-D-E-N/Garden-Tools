@@ -17,6 +17,7 @@ const START_GAME_ENABLED = '1';
 const FILL_BY_RECORD_TYPE: Record<string, { alias: AliasKind; key: string }> = {
   NPC_: { alias: 'reference', key: 'uniqueActor' },
   LCTN: { alias: 'location', key: 'specificLocation' },
+  MISC: { alias: 'reference', key: 'createReference' },
 };
 
 const fill = (text: string, answers: Answers): string => text.replace(/\{(\w+)\}/g, (_, key: string) => {
@@ -33,21 +34,31 @@ const aliasIndex = (template: QuestTemplate, slot: string): number => {
   return index;
 };
 
+const locationAliasId = (template: QuestTemplate): number | undefined => {
+  const index = template.aliases.findIndex(alias => alias.kind === 'location');
+  return index < 0 ? undefined : index;
+};
+
 const fillRule = (template: QuestTemplate, slot: string) => {
   const question = template.questions.find(item => item.id === slot);
   const alias = template.aliases.find(item => item.slot === slot);
   if (question?.kind !== 'record' || alias === undefined) return undefined;
   const rule = FILL_BY_RECORD_TYPE[question.recordType];
-  return rule && rule.alias === alias.kind ? rule : undefined;
+  if (!rule || rule.alias !== alias.kind) return undefined;
+  if (rule.key === 'createReference' && locationAliasId(template) === undefined) return undefined;
+  return rule;
 };
 
 export const isLinked = (template: QuestTemplate, slot: string): boolean => fillRule(template, slot) !== undefined;
 
-const linkFill = (template: QuestTemplate, slot: string, formKeys: FormKeys): Record<string, string> | undefined => {
+const linkFill = (template: QuestTemplate, slot: string, formKeys: FormKeys): Record<string, unknown> | undefined => {
   const rule = fillRule(template, slot);
   if (!rule) return undefined;
   const formKey = formKeys[slot];
   if (!formKey) throw new Error(`No record was picked for {${slot}}.`);
+  if (rule.key === 'createReference') {
+    return { createReference: { object: formKey, alias: locationAliasId(template), create: 'At' } };
+  }
   return { [rule.key]: formKey };
 };
 

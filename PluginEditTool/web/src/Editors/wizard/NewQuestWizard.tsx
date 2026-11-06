@@ -155,7 +155,8 @@ export default function NewQuestWizard({ onBack, onCreated }: {
           <p className="editor-purpose">
             Check the answers. The wizard writes the internal name, the journal lines, the objectives and the alias
             names. It makes the quest start by itself with the game, at its first stage. It links each NPC and
-            location you picked to its alias. A record marked not linked still has to be set in the Creation Kit.
+            location you picked to its alias. It places each item you picked at the location as a new copy. A record
+            marked not linked still has to be set in the Creation Kit.
           </p>
           <dl className="wizard-review">
             {flow.map(question => (

@@ -63,7 +63,8 @@ it('Detects: finishing the wizard sends CreateRecord, then stages, aliases and o
   render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
   await answerEveryStep();
   expect(screen.getByText(/start by itself with the game/)).toBeTruthy();
-  expect(screen.getByText(/\(not linked:/)).toBeTruthy();
+  expect(screen.getByText(/places each item you picked at the location as a new copy/)).toBeTruthy();
+  expect(screen.queryByText(/\(not linked:/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
   expect(createRecord).toHaveBeenCalledWith('Patch.esp', 'QUST', { schema: true, editorId: 'The_Lost_Locket' });
@@ -71,6 +72,7 @@ it('Detects: finishing the wizard sends CreateRecord, then stages, aliases and o
   expect(backend.SetQuestStages).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('Go to Abandoned Mill and find Rusty Locket.'));
   expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"uniqueActor":"000900:Patch.esp"'));
   expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"specificLocation":"000A00:Patch.esp"'));
+  expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"createReference":{"object":"000B00:Patch.esp","alias":2,"create":"At"}'));
   const [create, flags, stages, aliases, objectives] = [
     createRecord.mock.invocationCallOrder[0],
     setField.mock.invocationCallOrder[0],
