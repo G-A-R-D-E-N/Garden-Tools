@@ -89,7 +89,7 @@ export default function FlowChart({ stages, objectives, jumps, selected, onSelec
       )}
       <p className="quest-note quest-flow-legend">
         <span className="quest-flow-legend-problem">Red border</span>: no journal text and no objective with this
-        number. <span className="quest-flow-legend-ending">Blue border</span>: completes or fails the quest. Grey: fine.
+        number. <span className="quest-flow-legend-ending">Blue border</span>: completes or fails the quest. Grey: fine.{' '}
         <span className="quest-flow-legend-jump">Amber arc</span>: a script function on this quest sets another stage.
       </p>
     </section>

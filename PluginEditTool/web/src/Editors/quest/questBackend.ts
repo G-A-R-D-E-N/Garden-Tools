@@ -19,12 +19,15 @@ export interface FragmentBinding {
 
 const unwrap = (raw: string | object): unknown => (typeof raw === 'string' ? JSON.parse(raw) : raw);
 
-const FUNCTION_BODY = /\bFunction\s+(\w+)\s*\([^)]*\)([\s\S]*?)\bEndFunction\b/gi;
+const BLOCK_COMMENT = /;\/[\s\S]*?\/;/g;
+const LINE_COMMENT = /;.*$/gm;
+const FUNCTION_BODY = /\bFunction\s+(\w+)\s*\([^)]*\)(?![^\n]*\bnative\b)([\s\S]*?)\bEndFunction\b/gi;
 const SET_STAGE = /\b(?:SetStage|SetCurrentStageID)\s*\(\s*(\d+)\s*\)/gi;
 
 function functionBodies(source: string): Map<string, string> {
+  const code = source.replace(BLOCK_COMMENT, '').replace(LINE_COMMENT, '');
   const bodies = new Map<string, string>();
-  for (const match of source.matchAll(FUNCTION_BODY)) bodies.set(match[1].toLowerCase(), match[2]);
+  for (const match of code.matchAll(FUNCTION_BODY)) bodies.set(match[1].toLowerCase(), match[2]);
   return bodies;
 }
 

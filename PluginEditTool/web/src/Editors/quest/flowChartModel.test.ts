@@ -133,3 +133,14 @@ it('Detects: the imports folder is passed to GetQuestScript, so a script written
   await readStageJumps(backend as unknown as Backend, 'Patch.esp', '000800:Patch.esp', 'C:/Out');
   expect(GetQuestScript).toHaveBeenCalledWith('QF_Courier', 'C:/Out');
 });
+
+it('Detects: a SetStage inside a Papyrus line comment or block comment is not a jump', () => {
+  const source = 'Function Fragment_Stage_0010_Item_00()\n  ; SetStage(30)\n  ;/ SetStage(40) /;\n  ;/\n  SetStage(50)\n  /;\nEndFunction';
+  expect(parseStageJumps([binding(10, 'Fragment_Stage_0010_Item_00')], scripts(source))).toEqual([]);
+});
+
+it('Detects: a bodiless native declaration does not swallow the bound function that follows it', () => {
+  const source = 'Function Native_Helper() global native\nFunction Fragment_Stage_0010_Item_00()\n  SetStage(20)\nEndFunction';
+  expect(parseStageJumps([binding(10, 'Fragment_Stage_0010_Item_00')], scripts(source)))
+    .toEqual([{ from: 10, to: 20, function: 'Fragment_Stage_0010_Item_00' }]);
+});

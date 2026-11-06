@@ -11,6 +11,7 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
   const [snapshot, setSnapshot] = useState<QuestSnapshot | null>(null);
   const [error, setError] = useState<FriendlyMessage | null>(() => (backend ? null : { text: 'No backend bridge.' }));
   const latestStages = useRef<QuestStage[]>([]);
+  const jumpRequest = useRef(0);
 
   useEffect(() => {
     if (!backend) return;
@@ -73,7 +74,10 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
 
   const refreshJumps = (importsDir: string) => {
     if (!backend) return;
-    readStageJumps(backend, plugin, formKey, importsDir).then(storeField('jumps'), () => undefined);
+    const request = ++jumpRequest.current;
+    readStageJumps(backend, plugin, formKey, importsDir).then(jumps => {
+      if (request === jumpRequest.current) storeField('jumps')(jumps);
+    }, () => undefined);
   };
 
   return { snapshot, error, commitStages, editStages, commitObjectives, commitAliases, refreshJumps };
