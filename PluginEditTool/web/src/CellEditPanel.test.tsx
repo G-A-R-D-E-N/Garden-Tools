@@ -177,11 +177,13 @@ describe('Cell Viewer reference editing', () => {
   });
 
   it('the Delete action calls DeletePlacedReference for the selected reference and clears the selection', async () => {
+    refs = [REF, OTHER];
     await openSelected();
     act(() => view().onDeleteSelected?.());
     await waitFor(() => expect(rpc.cell.DeletePlacedReference).toHaveBeenCalledTimes(1));
     expect(rpc.cell.DeletePlacedReference).toHaveBeenCalledWith(REF.formKey, PATCH);
-    await waitFor(() => expect(view().selectedKey ?? null).toBeNull());
+    await waitFor(() => expect(view().references.map(r => r.formKey)).toEqual([OTHER.formKey]));
+    expect(view().selectedKey).toBeNull();
   });
 
   it('a second delete pressed while the first is running opens the patch picker once and sends one delete', async () => {
