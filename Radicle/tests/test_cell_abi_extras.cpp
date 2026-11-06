@@ -19,7 +19,6 @@ namespace {
 using namespace fo4::test::envnode;
 using fo4::test::xcll_bytes;
 
-// Extras.esp: CELL 000800 carries every decoded CELL member, 000801 a truncated XCLL, 000802 a malformed XCLR, 000803 a WRLD the CELL exports must reject.
 std::vector<std::byte> make_extras() {
   fo4::test::ByteWriter lod;
   lod.u32(0xC00);
@@ -56,13 +55,14 @@ std::vector<std::byte> make_extras() {
                          {"DATA", floats({1.0f, 2.0f, 3.0f, 0.0f, 0.0f, 0.0f, 1.0f,
                                           4.0f, 5.0f, 6.0f, 0.0f, 0.0f, 0.0f, 1.0f})}});
   const auto merged = rec("CELL", 0x804, {{"EDID", zstring("Merged")}, {"DATA", {std::byte{0x01}, std::byte{0}}}});
-  const auto merged_refs = grp(0x804, 9,
-                               {rec("REFR", 0x2001,
-                                    {{"NAME", bytes_of({0x2100})},
-                                     {"DATA", floats({10.0f, 20.0f, 30.0f, 0.0f, 0.0f, 0.0f})}}),
-                                rec("REFR", 0x2002,
-                                    {{"NAME", bytes_of({0x2200})},
-                                     {"DATA", floats({40.0f, 50.0f, 60.0f, 0.0f, 0.0f, 0.0f})}})});
+  const auto merged_refs = grp(0x804, 6,
+                               {grp(0x804, 9,
+                                    {rec("REFR", 0x2001,
+                                         {{"NAME", bytes_of({0x2100})},
+                                          {"DATA", floats({10.0f, 20.0f, 30.0f, 0.0f, 0.0f, 0.0f})}}),
+                                     rec("REFR", 0x2002,
+                                         {{"NAME", bytes_of({0x2200})},
+                                          {"DATA", floats({40.0f, 50.0f, 60.0f, 0.0f, 0.0f, 0.0f})}})})});
   const auto marker = rec("STAT", 0x2300,
                           {{"EDID", zstring("TriggerMarker")}, {"MODL", zstring("Markers\\Trigger.nif")}});
   const auto decal = rec("TXST", 0x2400,
@@ -84,7 +84,8 @@ std::vector<std::byte> make_extras() {
                                          {"DATA", floats({300.0f, 400.0f, 0.0f, 0.0f, 0.0f, 0.0f})}}),
                                     rec("REFR", 0x2403,
                                         {{"DATA", floats({500.0f, 600.0f, 0.0f, 0.0f, 0.0f, 0.0f})}})});
-  const auto world_children = grp(0x803, 1, {grp(0, 4, {grp(0, 5, {field, field_persistent, field_temporary})})});
+  const auto field_children = grp(0x810, 6, {field_persistent, field_temporary});
+  const auto world_children = grp(0x803, 1, {grp(0, 4, {grp(0, 5, {field, field_children})})});
   return make_plugin({}, {top("CELL", {grp(0, 2, {grp(0, 3, {cell, short_tail, bad_regions, merged, merged_refs})})}),
                           top("WRLD", {world, world_children}), top("STAT", {stat, marker}),
                           top("SCOL", {scol}), top("TXST", {decal})});
@@ -92,13 +93,14 @@ std::vector<std::byte> make_extras() {
 
 std::vector<std::byte> make_patch() {
   const auto merged = rec("CELL", 0x804, {{"EDID", zstring("Merged")}, {"DATA", {std::byte{0x01}, std::byte{0}}}});
-  const auto refs = grp(0x804, 9,
-                        {rec("REFR", 0x2002,
-                             {{"NAME", bytes_of({0x2200})},
-                              {"DATA", floats({70.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f})}}),
-                         rec("REFR", 0x01000003,
-                             {{"NAME", bytes_of({0x2100})},
-                              {"DATA", floats({80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f})}})});
+  const auto refs = grp(0x804, 6,
+                        {grp(0x804, 9,
+                             {rec("REFR", 0x2002,
+                                  {{"NAME", bytes_of({0x2200})},
+                                   {"DATA", floats({70.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f})}}),
+                              rec("REFR", 0x01000003,
+                                  {{"NAME", bytes_of({0x2100})},
+                                   {"DATA", floats({80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f})}})})});
   const auto world = rec("WRLD", 0x803, {{"EDID", zstring("NotACell")}});
   const auto field = rec("CELL", 0x810,
                          {{"EDID", zstring("Field")},
