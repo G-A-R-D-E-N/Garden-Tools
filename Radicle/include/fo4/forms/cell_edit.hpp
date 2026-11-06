@@ -92,4 +92,43 @@ PlacedReferenceEditResult edit_placed_reference(Plugin& patch,
                                                 const FormKey& reference,
                                                 const PlacedReferenceEdit& edit);
 
+enum class DuplicateStatus {
+  duplicated,
+  reference_missing,
+  reference_deleted,
+  parent_cell_missing,
+  unsupported_signature,
+};
+
+struct DuplicateOptions {
+  PositionRotation offset{};
+  bool keep_editor_id{false};
+};
+
+struct DuplicateResult {
+  DuplicateStatus status{DuplicateStatus::reference_missing};
+  FormKey new_reference{};
+};
+
+DuplicateResult duplicate_placed_reference(Plugin& patch,
+                                           const fo4::env::Environment& env,
+                                           const FormKey& reference,
+                                           const DuplicateOptions& options);
+
+enum class DeleteStatus {
+  deleted,
+  marked_deleted,
+  referenced,
+  reference_missing,
+  already_deleted,
+};
+
+struct DeleteResult {
+  DeleteStatus status{DeleteStatus::reference_missing};
+};
+
+DeleteResult delete_placed_reference(Plugin& patch,
+                                     const fo4::env::Environment& env,
+                                     const FormKey& reference);
+
 }  // namespace fo4::forms
