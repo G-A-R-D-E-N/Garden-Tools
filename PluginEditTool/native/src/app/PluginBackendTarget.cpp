@@ -531,6 +531,10 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "GetPlacedReferencesAtGrid") return backend_.getPlacedReferencesAtGrid(args);
         if (method == "ResolveWorldspace") return backend_.resolveWorldspace(args);
         if (method == "SetPlacedReferenceTransform") return backend_.setPlacedReferenceTransform(args);
+        if (method == "EditPlacedReference") return backend_.editPlacedReference(args);
+        if (method == "UndoCellEdit") return backend_.undoCellEdit(args);
+        if (method == "RedoCellEdit") return backend_.redoCellEdit(args);
+        if (method == "GetCellEditHistory") return backend_.getCellEditHistory(args);
     }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);
 }

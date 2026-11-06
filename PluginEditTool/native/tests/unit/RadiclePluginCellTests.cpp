@@ -573,3 +573,190 @@ TEST_CASE("Native cell reads the disk value again after discardPlugin") {
     REQUIRE(discarded.at("references").size() == 1);
     CHECK(discarded.at("references")[0].at("position").at("x") == 10.0f);
 }
+
+namespace {
+
+nlohmann::json transformChange() {
+    return {{"transform", {{"x", 100.0}, {"y", 200.0}, {"z", 300.0}, {"rx", 1.5}, {"ry", 2.5}, {"rz", 3.5}}}};
+}
+
+}  // namespace
+
+TEST_CASE("Native cell edit records an undo step and undo and redo restore the patch") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp"),
+            pluginEntry("Patch.esp", root / "Patch.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto patchView = nlohmann::json::array({"Patch.esp"});
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", transformChange()
+    })).has_value());
+    const auto edited = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(edited.at("references").size() == 1);
+    CHECK(edited.at("references")[0].at("position").at("x") == 100.0f);
+    const auto afterEdit = parseStringResult(backend.getCellEditHistory(patchView));
+    CHECK(afterEdit.at("undoCount") == 1);
+    CHECK(afterEdit.at("redoCount") == 0);
+
+    REQUIRE(backend.undoCellEdit(patchView).has_value());
+    const auto undone = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(undone.at("references").size() == 1);
+    CHECK(undone.at("references")[0].at("position").at("x") == 10.0f);
+    const auto afterUndo = parseStringResult(backend.getCellEditHistory(patchView));
+    CHECK(afterUndo.at("undoCount") == 0);
+    CHECK(afterUndo.at("redoCount") == 1);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto reread = fo4::read_plugin_file(root / "Patch.esp");
+    CHECK(fo4::find_record(reread, fo4::FormKey::parse("000801:Base.esm")) == nullptr);
+    CHECK(reread.header.masters.size() == 1);
+
+    REQUIRE(backend.redoCellEdit(patchView).has_value());
+    const auto redone = parseStringResult(backend.getPlacedReferences(cellView));
+    CHECK(redone.at("references")[0].at("position").at("x") == 100.0f);
+    const auto afterRedo = parseStringResult(backend.getCellEditHistory(patchView));
+    CHECK(afterRedo.at("undoCount") == 1);
+    CHECK(afterRedo.at("redoCount") == 0);
+}
+
+TEST_CASE("Native cell edit is refused on a protected plugin and leaves it unchanged") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    auto protectedPatch = pluginEntry("Patch.esp", root / "Patch.esp");
+    protectedPatch["source"] = "data";
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp"),
+            protectedPatch
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto before = parseStringResult(backend.getPlacedReferences(cellView));
+    const auto refused = backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", transformChange()
+    }));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "PluginReadOnly");
+    CHECK(parseStringResult(backend.getPlacedReferences(cellView)) == before);
+    CHECK(parseStringResult(backend.getCellEditHistory(nlohmann::json::array({"Patch.esp"})))
+              .at("undoCount") == 0);
+}
+
+TEST_CASE("Native cell edit refuses an unknown reference and records no undo step") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp"),
+            pluginEntry("Patch.esp", root / "Patch.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto before = parseStringResult(backend.getPlacedReferences(cellView));
+    const auto missing = backend.editPlacedReference(nlohmann::json::array({
+        "000999:Base.esm", "Patch.esp", transformChange()
+    }));
+    REQUIRE_FALSE(missing.has_value());
+    CHECK(missing.error().type == "PlacedReferenceNotFound");
+    CHECK(parseStringResult(backend.getPlacedReferences(cellView)) == before);
+    CHECK(parseStringResult(backend.getCellEditHistory(nlohmann::json::array({"Patch.esp"})))
+              .at("undoCount") == 0);
+}
+
+TEST_CASE("Native cell undo refuses to revert a change staged after the edit") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp"),
+            pluginEntry("Patch.esp", root / "Patch.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto patchView = nlohmann::json::array({"Patch.esp"});
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", transformChange()
+    })).has_value());
+    REQUIRE(backend.createInteriorCell(nlohmann::json::array({"Patch.esp", "Kitchen"})).has_value());
+
+    const auto undo = backend.undoCellEdit(patchView);
+    REQUIRE_FALSE(undo.has_value());
+    CHECK(undo.error().type == "NothingToUndo");
+    const auto kept = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(kept.at("references").size() == 1);
+    CHECK(kept.at("references")[0].at("position").at("x") == 100.0f);
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 0);
+}
+
+TEST_CASE("Native cell edit applies scale and editor id as one undo step") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp"),
+            pluginEntry("Patch.esp", root / "Patch.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto patchView = nlohmann::json::array({"Patch.esp"});
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", nlohmann::json{{"scale", 2.5}, {"editorId", "RenamedRef"}}
+    })).has_value());
+    const auto edited = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(edited.at("references").size() == 1);
+    CHECK(edited.at("references")[0].at("scale") == 2.5f);
+    CHECK(edited.at("references")[0].at("editorId") == "RenamedRef");
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 1);
+
+    REQUIRE(backend.undoCellEdit(patchView).has_value());
+    const auto undone = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(undone.at("references").size() == 1);
+    CHECK(undone.at("references")[0].at("scale") == 1.0f);
+    CHECK(undone.at("references")[0].at("editorId") != "RenamedRef");
+}
