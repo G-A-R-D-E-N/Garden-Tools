@@ -35,15 +35,13 @@ export default function SceneWorkspace({ sceneKey, plugin, onPickScene }: Props)
   const [conditions, setConditions] = useState<ConditionsTarget | null>(null);
   const changes = b && sceneKey ? sceneChanges(b, plugin, sceneKey) : null;
 
-  const load = useCallback(async () => {
-    if (!b || !sceneKey) return;
-    try {
-      setScene(parseScene(await b.GetScene(plugin, sceneKey)));
-      setLoadError(null);
-    } catch (e) {
-      setLoadError(errorText(e));
-    }
-    setRevision(current => current + 1);
+  const load = useCallback(() => {
+    if (!b || !sceneKey) return Promise.resolve();
+    return Promise.resolve()
+      .then(() => b.GetScene(plugin, sceneKey))
+      .then(raw => { setScene(parseScene(raw)); setLoadError(null); })
+      .catch(e => setLoadError(errorText(e)))
+      .finally(() => setRevision(current => current + 1));
   }, [b, sceneKey, plugin]);
 
   useEffect(() => { void load(); }, [load]);

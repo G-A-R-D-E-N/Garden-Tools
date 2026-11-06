@@ -50,12 +50,12 @@ it('Detects: a used actor cannot be removed until its actions are re-pointed', a
   render(<SceneWorkspace sceneKey="000800:Patch.esp" plugin="Patch.esp" onPickScene={() => {}} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Alias 3' }));
   expect(screen.getByText(/2 actions use this actor/)).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Remove actor' })).toBeDisabled();
+  expect((screen.getByRole('button', { name: 'Remove actor' }) as HTMLButtonElement).disabled).toBe(true);
 
   fireEvent.click(screen.getByRole('button', { name: 'Re-point 2 actions' }));
   await waitFor(() => expect(backend.SetSceneAction).toHaveBeenCalledTimes(2));
   expect(backend.SetSceneAction).toHaveBeenCalledWith('Patch.esp', '000800:Patch.esp', 0, { actorAlias: 5 });
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Remove actor' })).toBeEnabled());
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Remove actor' }) as HTMLButtonElement).disabled).toBe(false));
 });
 
 it('Detects: unreadable conditions show a warning and no condition count', async () => {
@@ -63,7 +63,7 @@ it('Detects: unreadable conditions show a warning and no condition count', async
   render(<SceneWorkspace sceneKey="000800:Patch.esp" plugin="Patch.esp" onPickScene={() => {}} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Walk' }));
   expect(screen.getByText('These conditions could not be read; saving here will not change them')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Edit start conditions' })).toBeDisabled();
+  expect((screen.getByRole('button', { name: 'Edit start conditions' }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getAllByText('0 conditions')).toHaveLength(1);
 });
 

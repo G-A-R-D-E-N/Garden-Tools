@@ -11,7 +11,7 @@ export default function QuestWorkspace({ formKey, plugin }: { formKey: string; p
   const { onKeyDown, scopeRef, push, undo, redo, canUndo, canRedo } = useUndoStack();
   const { snapshot, error, commitStages, commitObjectives, commitAliases } = useQuestRecord(plugin, formKey, push);
   return (
-    <div ref={scopeRef} tabIndex={-1} className="quest-workspace" onKeyDown={onKeyDown}>
+    <section ref={scopeRef} tabIndex={-1} className="quest-workspace" onKeyDown={onKeyDown}>
       <div className="quest-toolbar">
         <span className="quest-current">Editing {formKey}</span>
         <button type="button" className="sidebar-action-btn" disabled={!canUndo} onClick={undo}>Undo</button>
@@ -27,6 +27,6 @@ export default function QuestWorkspace({ formKey, plugin }: { formKey: string; p
           <FragmentsPane plugin={plugin} formKey={formKey} push={push} />
         </div>
       )}
-    </div>
+    </section>
   );
 }
