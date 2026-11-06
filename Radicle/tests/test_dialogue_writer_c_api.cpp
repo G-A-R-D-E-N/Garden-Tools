@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <fstream>
 #include <string>
+#include <variant>
+#include <vector>
 
 namespace {
 
@@ -29,6 +31,103 @@ protected:
   TempRoot root;
   std::filesystem::path path;
 };
+
+struct Authored {
+  std::uint32_t branch = 0, topic = 0, first = 0, second = 0;
+};
+
+std::string num(std::uint32_t value) { return std::to_string(value); }
+
+std::string render(const fo4::Group& group) {
+  std::string out = "G" + std::to_string(group.header.group_type) + "(" + num(group.header.label_as_u32()) + ")[";
+  for (const auto& child : group.children) {
+    if (const auto* record = std::get_if<fo4::Record>(&child)) {
+      out += record->header.signature.to_string() + num(record->form_key.local().value()) + " ";
+    } else {
+      out += render(std::get<fo4::Group>(child)) + " ";
+    }
+  }
+  return out + "]";
+}
+
+const fo4::Group* quest_children(const fo4::Plugin& plugin, std::uint32_t quest) {
+  for (const auto& top : plugin.groups) {
+    for (const auto& child : top.children) {
+      const auto* group = std::get_if<fo4::Group>(&child);
+      if (group != nullptr && group->header.group_type == static_cast<std::int32_t>(fo4::GroupType::quest_children) &&
+          group->header.label_as_u32() == quest) {
+        return group;
+      }
+    }
+  }
+  return nullptr;
+}
+
+std::vector<std::uint8_t> bytes_of(radicle_plugin* plugin) {
+  std::uint8_t* bytes = nullptr;
+  std::size_t count = 0;
+  EXPECT_EQ(radicle_plugin_write_bytes(plugin, &bytes, &count), RADICLE_STATUS_OK) << radicle_last_error();
+  std::vector<std::uint8_t> out(bytes, bytes + count);
+  radicle_free_bytes(bytes);
+  return out;
+}
+
+Authored author_topic_with_two_infos(radicle_plugin* plugin) {
+  const radicle_form_key quest = rkey(k_quest);
+  radicle_form_key branch{}, topic{}, first{}, second{};
+  radicle_dialogue_branch_spec branch_spec{};
+  branch_spec.editor_id = "GreetBranch";
+  EXPECT_EQ(radicle_plugin_create_dialogue_branch(plugin, quest, &branch_spec, &branch), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_dialogue_topic_spec topic_spec{};
+  topic_spec.editor_id = "Greeting";
+  topic_spec.name = "Hello there";
+  topic_spec.priority = 50.0f;
+  topic_spec.has_branch = 1;
+  topic_spec.branch = branch;
+  EXPECT_EQ(radicle_plugin_create_dialogue_topic(plugin, quest, &topic_spec, &topic), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(radicle_plugin_set_dialogue_branch_start(plugin, branch, topic), RADICLE_STATUS_OK);
+
+  radicle_dialogue_condition condition{};
+  condition.flags_byte = 0x20;
+  condition.function = 14;
+  condition.param1 = 7;
+  condition.unknown3 = -1;
+  radicle_dialogue_response_spec first_response{};
+  first_response.text = "Hello, friend";
+  first_response.number = 1;
+  first_response.camera_target_alias = -1;
+  first_response.camera_location_alias = -1;
+  radicle_dialogue_info_spec first_spec{};
+  first_spec.flags = 0x0200;
+  first_spec.reset_time_encoded = 24;
+  first_spec.responses = &first_response;
+  first_spec.response_count = 1;
+  first_spec.conditions = &condition;
+  first_spec.condition_count = 1;
+  EXPECT_EQ(radicle_plugin_create_dialogue_info(plugin, topic, &first_spec, &first), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_dialogue_response_spec second_response{};
+  second_response.text = "Caf\xC3\xA9 second";
+  second_response.script_notes = "note";
+  second_response.number = 2;
+  second_response.interrupt_percent = 20;
+  second_response.has_emotion = 1;
+  second_response.emotion = rkey(k_kywd);
+  second_response.has_sound = 1;
+  second_response.sound = rkey(k_sndr);
+  second_response.camera_target_alias = -1;
+  second_response.camera_location_alias = -1;
+  radicle_dialogue_info_spec second_spec{};
+  second_spec.responses = &second_response;
+  second_spec.response_count = 1;
+  EXPECT_EQ(radicle_plugin_create_dialogue_info(plugin, topic, &second_spec, &second), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  return {branch.local_id, topic.local_id, first.local_id, second.local_id};
+}
 
 }
 
@@ -332,4 +431,163 @@ TEST_F(DialogueWriterCApi, SceneActorAndActionAuthoringStatusesMapAndSurviveRelo
   EXPECT_EQ(decoded->actions[2].type, 1);
   radicle_scene_free(decoded);
   radicle_env_destroy(env);
+}
+
+TEST_F(DialogueWriterCApi, AuthoredTopicSavesWithTheRealGroupShapeChainAndConditions) {
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
+  const auto authored = author_topic_with_two_infos(plugin);
+  const auto saved = (root.path / "out" / k_plugin).string();
+  ASSERT_EQ(radicle_plugin_write_file(plugin, saved.c_str()), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+
+  auto reloaded = fo4::read_plugin_file(saved);
+  fo4::assign_record_form_keys(reloaded);
+  const auto* children = quest_children(reloaded, k_quest);
+  ASSERT_NE(children, nullptr);
+  const std::string expected = "G10(" + num(k_quest) + ")[DLBR" + num(authored.branch) + " DIAL" + num(k_topic) +
+                               " G7(" + num(k_topic) + ")[INFO" + num(k_info) + " INFO" + num(k_group) + " ] DIAL" +
+                               num(authored.topic) + " G7(" + num(authored.topic) + ")[INFO" + num(authored.first) +
+                               " INFO" + num(authored.second) + " ] SCEN" + num(k_scene) + " SCEN" +
+                               num(k_template) + " DIAL" + num(k_bare) + " ]";
+  EXPECT_EQ(render(*children), expected);
+  EXPECT_EQ(payloads(reloaded, authored.branch, "SNAM"), std::vector<Bytes>{words({authored.topic})});
+  EXPECT_EQ(payloads(reloaded, authored.topic, "TIFC"), std::vector<Bytes>{words({2})});
+
+  const char* paths[] = {saved.c_str()};
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, rkey(authored.topic), &record), RADICLE_STATUS_OK);
+  radicle_dialogue_topic_info topic_info{};
+  ASSERT_EQ(radicle_dialogue_topic_get_info(env, record, &topic_info), RADICLE_STATUS_OK);
+  EXPECT_EQ(topic_info.branch.local_id, authored.branch);
+  EXPECT_EQ(topic_info.has_info_count, 1);
+  EXPECT_EQ(topic_info.info_count, 2u);
+
+  const radicle_dialogue_info* first = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, rkey(authored.first), &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_dialogue_info_decode(env, record, &first), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(first->flags, 0x0200);
+  EXPECT_EQ(first->reset_time_encoded, 24);
+  EXPECT_EQ(first->previous_info.plugin, nullptr);
+  ASSERT_EQ(first->condition_count, 1u);
+  EXPECT_EQ(first->conditions[0].flags_byte, 0x20);
+  EXPECT_EQ(first->conditions[0].function, 14);
+  EXPECT_EQ(first->conditions[0].param1, 7);
+  ASSERT_EQ(first->response_count, 1u);
+  EXPECT_STREQ(first->responses[0].text.text, "Hello, friend");
+  EXPECT_EQ(first->responses[0].number, 1);
+  radicle_dialogue_info_free(first);
+
+  const radicle_dialogue_info* second = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, rkey(authored.second), &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_dialogue_info_decode(env, record, &second), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(second->previous_info.local_id, authored.first);
+  EXPECT_EQ(second->condition_count, 0u);
+  ASSERT_EQ(second->response_count, 1u);
+  EXPECT_STREQ(second->responses[0].text.text, "Caf\xC3\xA9 second");
+  EXPECT_EQ(second->responses[0].emotion.local_id, k_kywd);
+  EXPECT_EQ(second->responses[0].sound.local_id, k_sndr);
+  EXPECT_EQ(second->responses[0].interrupt_percent, 20);
+  radicle_dialogue_info_free(second);
+  radicle_env_destroy(env);
+}
+
+TEST_F(DialogueWriterCApi, RemovingInfosRelinksTheChainAndDropsTheEmptyTopicGroup) {
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
+  const auto authored = author_topic_with_two_infos(plugin);
+  const auto saved = (root.path / "out" / k_plugin).string();
+
+  EXPECT_EQ(radicle_plugin_remove_dialogue_info(plugin, rkey(authored.first)), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_write_file(plugin, saved.c_str()), RADICLE_STATUS_OK) << radicle_last_error();
+  const char* paths[] = {saved.c_str()};
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, rkey(authored.topic), &record), RADICLE_STATUS_OK);
+  radicle_dialogue_topic_info topic_info{};
+  ASSERT_EQ(radicle_dialogue_topic_get_info(env, record, &topic_info), RADICLE_STATUS_OK);
+  EXPECT_EQ(topic_info.info_count, 1u);
+  const radicle_dialogue_info* second = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, rkey(authored.second), &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_dialogue_info_decode(env, record, &second), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(second->previous_info.plugin, nullptr);
+  radicle_dialogue_info_free(second);
+  radicle_env_destroy(env);
+
+  EXPECT_EQ(radicle_plugin_remove_dialogue_info(plugin, rkey(authored.second)), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_write_file(plugin, saved.c_str()), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+
+  auto reloaded = fo4::read_plugin_file(saved);
+  fo4::assign_record_form_keys(reloaded);
+  const auto* children = quest_children(reloaded, k_quest);
+  ASSERT_NE(children, nullptr);
+  const std::string expected = "G10(" + num(k_quest) + ")[DLBR" + num(authored.branch) + " DIAL" + num(k_topic) +
+                               " G7(" + num(k_topic) + ")[INFO" + num(k_info) + " INFO" + num(k_group) + " ] DIAL" +
+                               num(authored.topic) + " SCEN" + num(k_scene) + " SCEN" + num(k_template) + " DIAL" +
+                               num(k_bare) + " ]";
+  EXPECT_EQ(render(*children), expected);
+  EXPECT_EQ(payloads(reloaded, authored.topic, "TIFC"), std::vector<Bytes>{words({0})});
+}
+
+TEST_F(DialogueWriterCApi, AuthoringRefusalsCarryAStatusAndMessageAndLeaveThePluginAlone) {
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
+  const auto before = bytes_of(plugin);
+  radicle_dialogue_branch_spec branch_spec{};
+  branch_spec.editor_id = "Branch";
+  radicle_dialogue_topic_spec topic_spec{};
+  topic_spec.editor_id = "Topic";
+  radicle_dialogue_info_spec info_spec{};
+  radicle_form_key out = rkey(0x9999);
+
+  EXPECT_EQ(radicle_plugin_create_dialogue_branch(nullptr, rkey(k_quest), &branch_spec, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_dialogue_branch(plugin, rkey(k_quest), nullptr, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_dialogue_branch(plugin, rkey(k_quest), &branch_spec, nullptr),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_dialogue_topic(plugin, rkey(k_quest), nullptr, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_dialogue_info(plugin, rkey(k_topic), nullptr, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_dialogue_branch_start(nullptr, rkey(k_dlbr), rkey(k_topic)),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_dialogue_info(nullptr, rkey(k_info)), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  EXPECT_EQ(radicle_plugin_create_dialogue_branch(plugin, rkey(k_topic), &branch_spec, &out),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(out.plugin, nullptr);
+  EXPECT_FALSE(std::string(radicle_last_error()).empty());
+  EXPECT_EQ(radicle_plugin_set_dialogue_branch_start(plugin, rkey(k_topic), rkey(k_topic)), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_remove_dialogue_info(plugin, rkey(k_topic)), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_create_dialogue_topic(plugin, radicle_form_key{"Other.esm", k_quest}, &topic_spec, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out.plugin, nullptr);
+  info_spec.response_count = 1;
+  EXPECT_EQ(radicle_plugin_create_dialogue_info(plugin, rkey(k_topic), &info_spec, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  branch_spec.editor_id = "\xFF";
+  EXPECT_EQ(radicle_plugin_create_dialogue_branch(plugin, rkey(k_quest), &branch_spec, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  topic_spec.name = "\xE4\xB8\x80";
+  EXPECT_EQ(radicle_plugin_create_dialogue_topic(plugin, rkey(k_quest), &topic_spec, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  topic_spec.name = nullptr;
+  topic_spec.subtype_name = "ABC";
+  EXPECT_EQ(radicle_plugin_create_dialogue_topic(plugin, rkey(k_quest), &topic_spec, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  topic_spec.subtype_name = nullptr;
+  topic_spec.has_branch = 1;
+  topic_spec.branch = rkey(k_topic);
+  EXPECT_EQ(radicle_plugin_create_dialogue_topic(plugin, rkey(k_quest), &topic_spec, &out),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(bytes_of(plugin), before);
+  radicle_plugin_destroy(plugin);
 }
