@@ -29,6 +29,7 @@ function wizardBackend(overrides: Record<string, unknown> = {}) {
     SearchRecords: vi.fn(async (_query: string, typeFilter: string) => JSON.stringify([HITS[typeFilter]])),
     ResolveFormKeyLabels: vi.fn(async (csv: string) => JSON.stringify(Object.fromEntries(csv.split(',').map(key => [key, LABELS[key]])))),
     CreateRecord: vi.fn(async () => JSON.stringify({ formKey: CREATED })),
+    SetField: vi.fn(async () => 'ok'),
     ...overrides,
   });
 }
@@ -56,21 +57,29 @@ async function answerEveryStep() {
 
 it('Detects: finishing the wizard sends CreateRecord, then stages, aliases and objectives in that order, then opens the new quest', async () => {
   const createRecord = vi.fn(async () => JSON.stringify({ formKey: CREATED }));
-  const backend = wizardBackend({ CreateRecord: createRecord });
+  const setField = vi.fn(async () => 'ok');
+  const backend = wizardBackend({ CreateRecord: createRecord, SetField: setField });
   const onCreated = vi.fn();
   render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
   await answerEveryStep();
+  expect(screen.getByText(/start by itself with the game/)).toBeTruthy();
+  expect(screen.getByText(/\(not linked:/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
   expect(createRecord).toHaveBeenCalledWith('Patch.esp', 'QUST', { schema: true, editorId: 'The_Lost_Locket' });
+  expect(setField).toHaveBeenCalledWith('Patch.esp', CREATED, 'QUST\\Flags', '1');
   expect(backend.SetQuestStages).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('Go to Abandoned Mill and find Rusty Locket.'));
-  const [create, stages, aliases, objectives] = [
+  expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"uniqueActor":"000900:Patch.esp"'));
+  expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"specificLocation":"000A00:Patch.esp"'));
+  const [create, flags, stages, aliases, objectives] = [
     createRecord.mock.invocationCallOrder[0],
+    setField.mock.invocationCallOrder[0],
     backend.SetQuestStages.mock.invocationCallOrder[0],
     backend.SetQuestAliases.mock.invocationCallOrder[0],
     backend.SetQuestObjectives.mock.invocationCallOrder[0],
   ];
-  expect(create).toBeLessThan(stages);
+  expect(create).toBeLessThan(flags);
+  expect(flags).toBeLessThan(stages);
   expect(stages).toBeLessThan(aliases);
   expect(aliases).toBeLessThan(objectives);
 });
