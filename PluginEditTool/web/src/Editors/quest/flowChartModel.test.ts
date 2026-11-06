@@ -44,3 +44,10 @@ it('Detects: the box shows the first non-blank journal line, skipping blank line
   expect(stageBox(chart, 10).text).toBe('Find the courier');
   expect(stageBox(chart, 10).badges).toContain('Has journal text');
 });
+
+it('Detects: a stage with no journal text and no objective of the same number is drawn as a problem, and a completing stage as an ending', () => {
+  const chart = buildFlowChart([stage(10), stage(20, 'Go', 1), stage(30, 'Here')], [objective(30)]);
+  expect(stageBox(chart, 10).state).toBe('problem');
+  expect(stageBox(chart, 20).state).toBe('ending');
+  expect(stageBox(chart, 30).state).toBe('ok');
+});

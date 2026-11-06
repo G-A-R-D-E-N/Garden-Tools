@@ -2,7 +2,7 @@ import { LOG_ENTRY_FLAG_OPTIONS, type QuestObjective, type QuestStage } from './
 
 const PAD = 12;
 const BOX_WIDTH = 180;
-const STAGE_HEIGHT = 112;
+const STAGE_HEIGHT = 150;
 const COLUMN_GAP = 56;
 const END_GAP_Y = 28;
 const END_HEIGHT = 46;
@@ -12,6 +12,8 @@ const ENDINGS = [
   { flag: LOG_ENTRY_FLAG_OPTIONS[0], badge: 'Completes quest' },
   { flag: LOG_ENTRY_FLAG_OPTIONS[1], badge: 'Fails quest' },
 ];
+
+export type FlowState = 'ok' | 'problem' | 'ending';
 
 export interface FlowBox {
   id: string;
@@ -23,6 +25,7 @@ export interface FlowBox {
   height: number;
   text: string;
   badges: string[];
+  state: FlowState;
 }
 
 export interface FlowArrow {
@@ -74,7 +77,10 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
       ...endings.map(ending => ending.badge),
     ];
     const id = stageId(stage.index);
-    boxes.push({ id, kind: 'stage', stageIndex: stage.index, x, y: PAD, width: BOX_WIDTH, height: STAGE_HEIGHT, text, badges });
+    const state: FlowState = !text && !objectiveNumbers.has(stage.index) ? 'problem' : endings.length > 0 ? 'ending' : 'ok';
+    boxes.push({
+      id, kind: 'stage', stageIndex: stage.index, x, y: PAD, width: BOX_WIDTH, height: STAGE_HEIGHT, text, badges, state,
+    });
 
     const endWidth = (BOX_WIDTH - END_GAP_X * (endings.length - 1)) / endings.length;
     endings.forEach((ending, at) => {
@@ -88,6 +94,7 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
         height: END_HEIGHT,
         text: ending.flag.label,
         badges: [],
+        state: 'ending',
       };
       boxes.push(endBox);
       arrows.push({

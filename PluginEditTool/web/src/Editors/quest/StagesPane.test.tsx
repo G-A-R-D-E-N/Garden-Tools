@@ -1,8 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import QuestEditor from '../QuestEditor';
 import { openQuest, stubBackend, undoButton } from './questTestHarness';
 
+const scrollIntoView = vi.fn();
+
+beforeEach(() => { scrollIntoView.mockClear(); Element.prototype.scrollIntoView = scrollIntoView; });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it('Detects: a log entry offers no Conditions editor, because native rejects Stages[n].LogEntries[m].Conditions', async () => {
@@ -33,6 +36,31 @@ it('Detects: clicking a flow chart box highlights that stage card, so the chart 
   expect(screen.getByRole('button', { name: /^Stage 20/ }).getAttribute('aria-pressed')).toBe('true');
   expect(screen.getByRole('group', { name: 'Stage 20 flags' }).closest('.quest-card')?.classList.contains('quest-card-selected')).toBe(true);
   expect(screen.getByRole('group', { name: 'Stage 10 flags' }).closest('.quest-card')?.classList.contains('quest-card-selected')).toBe(false);
+  expect(scrollIntoView).toHaveBeenCalledTimes(1);
+});
+
+it('Detects: clicking the already selected flow chart box scrolls its card into view again', async () => {
+  stubBackend({
+    GetQuestStages: vi.fn(async () => JSON.stringify({ stages: [
+      { index: 10, flags: 0, logEntries: [] },
+      { index: 20, flags: 0, logEntries: [] },
+    ] })),
+  });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  const box = await screen.findByRole('button', { name: /^Stage 20/ });
+  fireEvent.click(box);
+  fireEvent.click(box);
+  expect(scrollIntoView).toHaveBeenCalledTimes(2);
+});
+
+it('Detects: the + next step button on a flow chart box saves the stages with a new stage after it', async () => {
+  const backend = stubBackend();
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  fireEvent.click(await screen.findByRole('button', { name: '+ next step' }));
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
+  expect(JSON.parse(backend.SetQuestStages.mock.calls[0][2]).map((item: { index: number }) => item.index)).toEqual([10, 20]);
 });
 
 it('Detects: changing the outcome of a log entry with no journal text does not write an empty log text', async () => {

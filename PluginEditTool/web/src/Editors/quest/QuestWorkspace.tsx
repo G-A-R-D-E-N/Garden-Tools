@@ -5,6 +5,7 @@ import FlowChart from './FlowChart';
 import FragmentsPane from './FragmentsPane';
 import ObjectivesPane from './ObjectivesPane';
 import { ErrorNote } from './questControls';
+import type { StageSelection } from './questModel';
 import StagesPane from './StagesPane';
 import { useQuestRecord } from './useQuestRecord';
 import './Quest.css';
@@ -12,7 +13,8 @@ import './Quest.css';
 export default function QuestWorkspace({ formKey, plugin }: { formKey: string; plugin: string }) {
   const { onKeyDown, scopeRef, push, undo, redo, canUndo, canRedo } = useUndoStack();
   const { snapshot, error, commitStages, commitObjectives, commitAliases } = useQuestRecord(plugin, formKey, push);
-  const [selectedStage, setSelectedStage] = useState<number | null>(null);
+  const [selectedStage, setSelectedStage] = useState<StageSelection | null>(null);
+  const pickStage = (index: number | null) => setSelectedStage(index === null ? null : { index });
   return (
     <section ref={scopeRef} tabIndex={-1} className="quest-workspace" onKeyDown={onKeyDown}>
       <div className="quest-toolbar">
@@ -25,7 +27,7 @@ export default function QuestWorkspace({ formKey, plugin }: { formKey: string; p
       {snapshot && (
         <>
           <FlowChart stages={snapshot.stages} objectives={snapshot.objectives} selected={selectedStage}
-            onSelect={setSelectedStage} />
+            onSelect={pickStage} onCommit={commitStages} />
           <div className="quest-panes">
             <StagesPane stages={snapshot.stages} selected={selectedStage} onCommit={commitStages} />
             <ObjectivesPane objectives={snapshot.objectives} aliases={snapshot.aliases} onCommit={commitObjectives} />

@@ -1,7 +1,19 @@
+.quest-flow-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.quest-flow-scroll {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .quest-flow-canvas {
   position: relative;
-  max-width: 100%;
-  overflow: auto;
 }
 
 .quest-flow-arrows {
@@ -35,25 +47,49 @@
 .quest-flow-box {
   display: flex;
   flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+}
+
+.quest-flow-state-problem {
+  border-color: var(--text-highlight);
+}
+
+.quest-flow-state-ending {
+  border-color: var(--accent-info);
+}
+
+.quest-flow-select {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
   align-items: flex-start;
   gap: 4px;
   padding: 6px 8px;
+  overflow: hidden;
   font: inherit;
   font-size: 12px;
   text-align: left;
   color: var(--text-primary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-strong);
+  background: none;
+  border: none;
   cursor: pointer;
 }
 
-.quest-flow-box:hover {
+.quest-flow-select:hover {
   background: var(--bg-hover);
 }
 
-.quest-flow-box[aria-pressed='true'] {
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 1px var(--accent-color);
+.quest-flow-select[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--accent-color);
+}
+
+.quest-flow-add {
+  align-self: flex-start;
+  margin: 0 6px 6px;
+  font-size: 11px;
+  padding: 2px 6px;
 }
 
 .quest-flow-end {
@@ -87,4 +123,36 @@
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
+}
+
+.quest-flow-legend-problem {
+  color: var(--text-highlight);
+}
+
+.quest-flow-legend-ending {
+  color: var(--accent-info);
+}
+
+.quest-flow-panel {
+  display: flex;
+  flex: 0 0 260px;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+
+.quest-flow-panel textarea {
+  min-height: 64px;
+  resize: vertical;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 4px 6px;
 }
