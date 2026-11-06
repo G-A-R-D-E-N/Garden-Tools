@@ -170,6 +170,26 @@ Result<nlohmann::json> RadiclePluginBackend::resolveWorldspace(
     }
 }
 
+Result<nlohmann::json> RadiclePluginBackend::resolveWorldspaceId(
+    const nlohmann::json& arguments) const {
+    const auto worldId = support::stringArgument(arguments, 0);
+    if (worldId.empty()) {
+        return std::unexpected(Error{"WorldspaceMissing", "Worldspace FormKey or EditorID is empty"});
+    }
+
+    OpLock lock(*this, OpLock::Mode::Read);
+    try {
+        const auto env = borrowedEnvironment();
+        const auto worldKey = fo4::env::resolve_worldspace_id(*env, worldId);
+        if (!worldKey.has_value()) {
+            return nlohmann::json(nlohmann::json{{"error", "Worldspace not found: " + worldId}}.dump());
+        }
+        return nlohmann::json(nlohmann::json{{"worldspaceFormKey", worldKey->to_string()}}.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"CellReadFailed", error.what()});
+    }
+}
+
 Result<nlohmann::json> RadiclePluginBackend::getPlacedReferencesAtGrid(
     const nlohmann::json& arguments) const {
     const auto worldId = support::stringArgument(arguments, 0);

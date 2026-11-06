@@ -216,6 +216,9 @@ public:
     virtual Result<nlohmann::json> resolveWorldspace(const nlohmann::json&) const {
         return std::unexpected(Error{"CellBackendUnavailable", "Worldspace queries are unavailable"});
     }
+    virtual Result<nlohmann::json> resolveWorldspaceId(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Worldspace queries are unavailable"});
+    }
     virtual Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
     }
