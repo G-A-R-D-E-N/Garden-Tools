@@ -21,6 +21,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [result, setResult] = useState<CellReferencesResult | null>(null);
+  const [loadedWorldspace, setLoadedWorldspace] = useState<string | null>(null);
   const [geometry, setGeometry] = useState<CellGeoMap>({});
   const [log, setLog] = useState<string[]>([]);
 
@@ -272,12 +273,23 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const loadWorldspace = async (cellFormKey: string, live: () => boolean) => {
+    if (!cell) return;
+    try {
+      const reply = JSON.parse(await cell.ResolveWorldspace(cellFormKey)) as { worldspaceFormKey?: string | null };
+      if (live()) setLoadedWorldspace(reply.worldspaceFormKey ?? null);
+    } catch {
+      if (live()) setLoadedWorldspace(null);
+    }
+  };
+
   const runLoad = async (fetchReferences: () => Promise<string>) => {
     if (!cell) return;
     const mine = ++loadSeq.current;
     const live = () => mine === loadSeq.current;
     setBusy(true);
     setResult(null);
+    setLoadedWorldspace(null);
     setGeometry({});
     setGeoProgress(null);
     setTexStats(null);
@@ -297,6 +309,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         return;
       }
       setResult(parsed);
+      if (parsed.cellFormKey) void loadWorldspace(parsed.cellFormKey, live);
       const refs = parsed.references ?? [];
       appendLog(`• loaded ${parsed.cellEditorId || parsed.cellFormKey} -- ${refs.length} reference(s), ${parsed.withModelCount ?? 0} with a model`);
 
@@ -588,6 +601,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                 {result && (
                   <div className="cell-stats">
                     <div className="cell-stat"><span>Cell</span><strong>{result.cellEditorId || result.cellFormKey}</strong></div>
+                    {loadedWorldspace && <div className="cell-stat"><span>Worldspace</span><strong>{loadedWorldspace}</strong></div>}
                     <div className="cell-stat"><span>Interior</span><strong>{result.interior ? 'Yes' : 'No'}</strong></div>
                     <div className="cell-stat"><span>References</span><strong>{result.referenceCount ?? references.length}</strong></div>
                     <div className="cell-stat"><span>With model</span><strong>{result.withModelCount ?? 0}</strong></div>

@@ -699,6 +699,7 @@ export interface CellPlacedReference {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: number;
+  isMarker?: boolean;
 }
 export interface CellReferencesResult {
   cellFormKey?: string;
@@ -731,6 +732,7 @@ export interface CellHost {
 
   GetPlacedReferencesAtGrid(worldspace: string, gridX: number, gridY: number): Promise<string>;
   SearchWorldspaces(query: string, limit: number): Promise<string>;
+  ResolveWorldspace(cellId: string): Promise<string>;
 
   GetGeometryBatch(relModelPathsJson: string): Promise<string>;
   GetPlugins(): Promise<string>;
