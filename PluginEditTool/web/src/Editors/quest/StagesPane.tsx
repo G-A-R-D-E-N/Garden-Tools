@@ -1,16 +1,21 @@
+import { useEffect, useRef } from 'react';
 import HelpTip from '../help/HelpTip';
 import { CommitInput, FlagChecks } from './questControls';
 import { LOG_ENTRY_FLAG_OPTIONS, STAGE_FLAG_OPTIONS, type QuestStage, type StageLogEntry } from './questModel';
 
 interface Props {
   stages: QuestStage[];
+  selected: number | null;
   onCommit: (next: QuestStage[], label: string) => void;
 }
 
 const withEntry = (stage: QuestStage, entryAt: number, entry: StageLogEntry): QuestStage =>
   ({ ...stage, logEntries: stage.logEntries.map((current, i) => (i === entryAt ? entry : current)) });
 
-export default function StagesPane({ stages, onCommit }: Props) {
+export default function StagesPane({ stages, selected, onCommit }: Props) {
+  const selectedCard = useRef<HTMLDivElement>(null);
+  useEffect(() => { selectedCard.current?.scrollIntoView?.({ block: 'nearest' }); }, [selected]);
+
   const replaceStage = (position: number, next: QuestStage, label: string) =>
     onCommit(stages.map((stage, i) => (i === position ? next : stage)), label);
 
@@ -40,7 +45,8 @@ export default function StagesPane({ stages, onCommit }: Props) {
         <div className="editor-empty">This quest has no stages yet. Add one with Add stage to create its first checkpoint.</div>
       )}
       {stages.map((stage, position) => (
-        <div key={stage.index} className="quest-card">
+        <div key={stage.index} ref={stage.index === selected ? selectedCard : undefined}
+          className={stage.index === selected ? 'quest-card quest-card-selected' : 'quest-card'}>
           <div className="quest-row">
             <strong>Stage {stage.index}</strong>
             <HelpTip topicId="quest-stage-flags" />

@@ -1,0 +1,90 @@
+.quest-flow-canvas {
+  position: relative;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.quest-flow-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.quest-flow-arrow {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+}
+
+.quest-flow-arrow-ends {
+  stroke-dasharray: 4 3;
+}
+
+.quest-flow-head {
+  fill: var(--text-secondary);
+}
+
+.quest-flow-box,
+.quest-flow-end {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.quest-flow-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+}
+
+.quest-flow-box:hover {
+  background: var(--bg-hover);
+}
+
+.quest-flow-box[aria-pressed='true'] {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.quest-flow-end {
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-strong);
+}
+
+.quest-flow-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.quest-flow-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.quest-flow-badge {
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}

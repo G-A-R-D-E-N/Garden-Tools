@@ -59,6 +59,11 @@
   border-radius: var(--radius);
 }
 
+.quest-card-selected {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-color);
+}
+
 .quest-entry {
   display: flex;
   flex-direction: column;
