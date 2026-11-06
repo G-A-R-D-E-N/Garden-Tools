@@ -8,26 +8,40 @@
 // Needs the game's Data folder, so it is gated on FO4_DATA_DIR and skips
 // without it. CI has no game files and will skip.
 
+#include "fo4/environment/cell_view.hpp"
+#include "fo4/environment/environment.hpp"
 #include "fo4/forms/cell.hpp"
+#include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/container.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <iomanip>
+#include <iostream>
+#include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
+#include <vector>
 
 namespace {
 
 constexpr auto k_cell = fo4::Signature::from_string("CELL");
 constexpr auto k_wrld = fo4::Signature::from_string("WRLD");
 constexpr auto k_xclc = fo4::Signature::from_string("XCLC");
+constexpr auto k_data = fo4::Signature::from_string("DATA");
+constexpr auto k_name = fo4::Signature::from_string("NAME");
+constexpr auto k_xscl = fo4::Signature::from_string("XSCL");
 
 struct GridCounts {
   std::size_t checked{0};
@@ -81,6 +95,86 @@ void check_group(const fo4::Group& group,
   }
 }
 
+struct CellPick {
+  fo4::FormKey key;
+  std::string editor_id;
+};
+
+struct CellSample {
+  fo4::env::Environment env;
+  CellPick interior;
+  CellPick exterior;
+};
+
+std::optional<CellPick> pick_named_cell(const fo4::env::Environment& env,
+                                        const std::vector<const fo4::env::RecordRef*>& candidates) {
+  std::vector<std::pair<std::size_t, fo4::FormKey>> ranked;
+  ranked.reserve(candidates.size());
+  for (const auto* ref : candidates) {
+    ranked.emplace_back(env.cell_children(ref->record->form_key).size(), ref->record->form_key);
+  }
+  std::stable_sort(ranked.begin(), ranked.end(),
+                   [](const auto& a, const auto& b) { return a.first > b.first; });
+  for (const auto& entry : ranked) {
+    const auto& key = entry.second;
+    const auto summary = fo4::env::describe_cell(env, key);
+    if (!summary || summary->editor_id.empty()) continue;
+    if (fo4::env::resolve_cell_id(env, summary->editor_id) != key) continue;
+    return CellPick{key, summary->editor_id};
+  }
+  return std::nullopt;
+}
+
+std::optional<CellSample> load_cell_sample(const std::filesystem::path& master) {
+  const std::vector<std::filesystem::path> paths{master};
+  auto env = fo4::env::Environment::load(paths);
+  const auto* world = env.find_by_editor_id("Commonwealth", k_wrld);
+  if (world == nullptr) return std::nullopt;
+  auto interior = pick_named_cell(env, env.interior_cells());
+  auto exterior = pick_named_cell(env, env.worldspace_cells(world->record->form_key));
+  if (!interior || !exterior) return std::nullopt;
+  return CellSample{std::move(env), std::move(*interior), std::move(*exterior)};
+}
+
+const CellSample* cell_sample(const std::filesystem::path& master) {
+  static const std::optional<CellSample> sample = load_cell_sample(master);
+  return sample ? &*sample : nullptr;
+}
+
+const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature signature) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == signature) return &sub;
+  }
+  return nullptr;
+}
+
+std::array<float, 6> raw_pose(const fo4::Record& record) {
+  std::array<float, 6> pose{};
+  const auto* data = find_subrecord(record, k_data);
+  if (data != nullptr && data->data.size() == pose.size() * sizeof(float)) {
+    std::memcpy(pose.data(), data->data.data(), data->data.size());
+  }
+  return pose;
+}
+
+float raw_scale(const fo4::Record& record) {
+  float value = 1.0f;
+  const auto* scale = find_subrecord(record, k_xscl);
+  if (scale != nullptr && scale->data.size() == sizeof(float)) {
+    std::memcpy(&value, scale->data.data(), sizeof(float));
+  }
+  return value;
+}
+
+std::optional<fo4::FormKey> raw_base(const fo4::Record& record, const fo4::PluginKey& master) {
+  const auto* name = find_subrecord(record, k_name);
+  if (name == nullptr || name->data.size() != sizeof(std::uint32_t)) return std::nullopt;
+  std::uint32_t raw = 0;
+  std::memcpy(&raw, name->data.data(), sizeof(raw));
+  if (raw == 0 || (raw >> 24) != 0) return std::nullopt;
+  return fo4::FormKey{master, fo4::LocalFormId{raw & 0x00FFFFFFu}};
+}
+
 }  // namespace
 
 TEST(ExteriorCellGridRealData, ReproducesShippedWorldspaceLabels) {
@@ -116,4 +210,79 @@ TEST(ExteriorCellGridRealData, ReproducesShippedWorldspaceLabels) {
   // Negative coordinates are the case floor division gets right and C
   // truncation gets wrong, so the sample has to actually contain them.
   EXPECT_GT(counts.negative, 1000u);
+}
+
+// Invariant: list_cell_references must keep every reference with its base, pose and scale.
+TEST(CellViewReal, ListCellReferencesMatchesRawGroupWalkOnVanillaCells) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  }
+  const std::filesystem::path master = std::filesystem::path(dir) / "Fallout4.esm";
+  if (!std::filesystem::exists(master)) GTEST_SKIP() << "no Fallout4.esm under " << dir;
+  record_game_build(detect_game_build(dir));
+
+  const auto* sample = cell_sample(master);
+  ASSERT_NE(sample, nullptr) << "Commonwealth with a named interior and exterior cell is missing from Fallout4.esm";
+  const auto master_key = fo4::PluginKey::from_filename("Fallout4.esm");
+
+  for (const auto* pick : {&sample->interior, &sample->exterior}) {
+    SCOPED_TRACE(pick->editor_id);
+    const auto listing = fo4::env::list_cell_references(sample->env, pick->key);
+    const auto* cell_ref = sample->env.winner(pick->key);
+    ASSERT_NE(cell_ref, nullptr);
+    const auto raw =
+        fo4::forms::placed_references_for_cell(sample->env.plugin(cell_ref->plugin), pick->key);
+
+    std::map<fo4::FormKey, const fo4::forms::PlacedReferenceView*> raw_by_key;
+    std::size_t live = 0;
+    for (const auto& view : raw) {
+      if (view.deleted) continue;
+      ++live;
+      raw_by_key.emplace(view.record->form_key, &view);
+    }
+    ASSERT_GT(live, 0u);
+    ASSERT_EQ(raw_by_key.size(), live);
+    ASSERT_EQ(listing.references.size(), live);
+
+    for (const auto& ref : listing.references) {
+      SCOPED_TRACE(ref.key.to_string());
+      const auto found = raw_by_key.find(ref.key);
+      ASSERT_NE(found, raw_by_key.end());
+      const auto& view = *found->second;
+      const auto& record = *view.record;
+      EXPECT_EQ(ref.persistent, view.persistent);
+      EXPECT_EQ(ref.base, raw_base(record, master_key));
+      EXPECT_EQ(ref.scale, raw_scale(record));
+      EXPECT_EQ((std::array<float, 6>{ref.transform.x, ref.transform.y, ref.transform.z, ref.transform.rx,
+                                      ref.transform.ry, ref.transform.rz}),
+                raw_pose(record));
+    }
+  }
+}
+
+// Invariant: a cell read must stay under 2000 ms per cell.
+TEST(CellViewReal, ListCellReferencesStaysWithinCeilingOnVanillaCells) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  }
+  const std::filesystem::path master = std::filesystem::path(dir) / "Fallout4.esm";
+  if (!std::filesystem::exists(master)) GTEST_SKIP() << "no Fallout4.esm under " << dir;
+  record_game_build(detect_game_build(dir));
+
+  const auto* sample = cell_sample(master);
+  ASSERT_NE(sample, nullptr) << "Commonwealth with a named interior and exterior cell is missing from Fallout4.esm";
+  constexpr double k_ceiling_ms = 2000.0;
+
+  for (const auto* pick : {&sample->interior, &sample->exterior}) {
+    const auto start = std::chrono::steady_clock::now();
+    const auto listing = fo4::env::list_cell_references(sample->env, pick->key);
+    const double ms =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    std::cout << "CELL_PERF cell=" << pick->editor_id << " refs=" << listing.references.size() << " ms="
+              << std::fixed << std::setprecision(3) << ms << std::defaultfloat << "\n";
+    EXPECT_GT(listing.references.size(), 0u) << pick->editor_id;
+    EXPECT_LT(ms, k_ceiling_ms) << pick->editor_id;
+  }
 }
