@@ -47,6 +47,10 @@ int main() {
   printf("FormKey %zu\n", sizeof(radicle_form_key));
   printf("FormKey.Plugin %zu\n", offsetof(radicle_form_key, plugin));
   printf("FormKey.LocalId %zu\n", offsetof(radicle_form_key, local_id));
+  printf("StaticPlacement %zu\n", sizeof(radicle_static_placement));
+  printf("StaticPlacement.Position %zu\n", offsetof(radicle_static_placement, position));
+  printf("StaticPlacement.Rotation %zu\n", offsetof(radicle_static_placement, rotation));
+  printf("StaticPlacement.Scale %zu\n", offsetof(radicle_static_placement, scale));
   printf("EnvPluginInfo %zu\n", sizeof(radicle_env_plugin_info));
   printf("EnvPluginInfo.Filename %zu\n", offsetof(radicle_env_plugin_info, filename));
   printf("EnvPluginInfo.Path %zu\n", offsetof(radicle_env_plugin_info, path));
@@ -1431,10 +1435,6 @@ int main() {
   printf("CellSummary.Worldspace %zu\n", offsetof(radicle_cell_summary, worldspace));
   printf("CellSummary.WinningPlugin %zu\n", offsetof(radicle_cell_summary, winning_plugin));
   printf("CellSummary.Localized %zu\n", offsetof(radicle_cell_summary, localized));
-  printf("StaticPlacement %zu\n", sizeof(radicle_static_placement));
-  printf("StaticPlacement.Position %zu\n", offsetof(radicle_static_placement, position));
-  printf("StaticPlacement.Rotation %zu\n", offsetof(radicle_static_placement, rotation));
-  printf("StaticPlacement.Scale %zu\n", offsetof(radicle_static_placement, scale));
   printf("ScolPart %zu\n", sizeof(radicle_scol_part));
   printf("ScolPart.ModelPath %zu\n", offsetof(radicle_scol_part, model_path));
   printf("ScolPart.Placements %zu\n", offsetof(radicle_scol_part, placements));
