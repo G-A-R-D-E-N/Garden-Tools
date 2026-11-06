@@ -187,6 +187,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/cell.cpp
   src/forms/cell_create.cpp
   src/forms/cell_override.cpp
+  src/forms/cell_properties.cpp
   src/forms/components.cpp
   src/forms/effects.cpp
   src/forms/placed_reference.cpp
