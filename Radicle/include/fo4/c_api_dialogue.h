@@ -75,6 +75,48 @@ typedef struct radicle_dialogue_info {
   void* internal;
 } radicle_dialogue_info;
 
+typedef struct radicle_dialogue_branch_spec {
+  const char* editor_id;
+  uint32_t category;
+  uint32_t flags;
+} radicle_dialogue_branch_spec;
+
+typedef struct radicle_dialogue_topic_spec {
+  const char* editor_id;
+  const char* name;
+  float priority;
+  int32_t has_branch;
+  radicle_form_key branch;
+  int32_t has_keyword;
+  radicle_form_key keyword;
+  uint8_t topic_flags;
+  uint8_t category;
+  uint16_t subtype;
+  const char* subtype_name;
+} radicle_dialogue_topic_spec;
+
+typedef struct radicle_dialogue_response_spec {
+  const char* text;
+  const char* script_notes;
+  int32_t has_emotion;
+  radicle_form_key emotion;
+  int32_t has_sound;
+  radicle_form_key sound;
+  uint8_t number;
+  uint16_t interrupt_percent;
+  int32_t camera_target_alias;
+  int32_t camera_location_alias;
+} radicle_dialogue_response_spec;
+
+typedef struct radicle_dialogue_info_spec {
+  uint16_t flags;
+  uint16_t reset_time_encoded;
+  const radicle_dialogue_response_spec* responses;
+  size_t response_count;
+  const radicle_dialogue_condition* conditions;
+  size_t condition_count;
+} radicle_dialogue_info_spec;
+
 typedef struct radicle_scene_phase {
   const char* name;
   int32_t has_editor_width;
@@ -192,6 +234,23 @@ RADICLE_API radicle_status radicle_plugin_set_scene_action_name(radicle_plugin* 
                                                                 radicle_form_key key,
                                                                 size_t index,
                                                                 const char* name);
+RADICLE_API radicle_status radicle_plugin_create_dialogue_branch(radicle_plugin* plugin,
+                                                                 radicle_form_key quest,
+                                                                 const radicle_dialogue_branch_spec* spec,
+                                                                 radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_plugin_create_dialogue_topic(radicle_plugin* plugin,
+                                                                radicle_form_key quest,
+                                                                const radicle_dialogue_topic_spec* spec,
+                                                                radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_plugin_set_dialogue_branch_start(radicle_plugin* plugin,
+                                                                    radicle_form_key branch,
+                                                                    radicle_form_key topic);
+RADICLE_API radicle_status radicle_plugin_create_dialogue_info(radicle_plugin* plugin,
+                                                               radicle_form_key topic,
+                                                               const radicle_dialogue_info_spec* spec,
+                                                               radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_plugin_remove_dialogue_info(radicle_plugin* plugin,
+                                                               radicle_form_key info);
 
 #ifdef __cplusplus
 }
