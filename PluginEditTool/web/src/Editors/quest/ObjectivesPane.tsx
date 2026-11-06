@@ -44,7 +44,7 @@ export default function ObjectivesPane({ objectives, aliases, onCommit }: Props)
   return (
     <section className="quest-pane" aria-labelledby="quest-objectives-title">
       <header className="quest-pane-header">
-        <h4 id="quest-objectives-title">Objectives</h4>
+        <h4 id="quest-objectives-title" tabIndex={-1}>Objectives</h4>
         <HelpTip topicId="objective" />
         <button type="button" className="sidebar-action-btn" onClick={addObjective}>Add objective</button>
       </header>
