@@ -92,4 +92,117 @@ PlacedReferenceEditResult edit_placed_reference(Plugin& patch,
                                                 const FormKey& reference,
                                                 const PlacedReferenceEdit& edit);
 
+enum class DuplicateStatus {
+  duplicated,
+  reference_missing,
+  reference_deleted,
+  parent_cell_missing,
+  unsupported_signature,
+};
+
+struct DuplicateOptions {
+  PositionRotation offset{};
+  bool keep_editor_id{false};
+};
+
+struct DuplicateResult {
+  DuplicateStatus status{DuplicateStatus::reference_missing};
+  FormKey new_reference{};
+};
+
+DuplicateResult duplicate_placed_reference(Plugin& patch,
+                                           const fo4::env::Environment& env,
+                                           const FormKey& reference,
+                                           const DuplicateOptions& options);
+
+enum class DeleteStatus {
+  deleted,
+  marked_deleted,
+  referenced,
+  reference_missing,
+  already_deleted,
+};
+
+struct DeleteResult {
+  DeleteStatus status{DeleteStatus::reference_missing};
+};
+
+DeleteResult delete_placed_reference(Plugin& patch,
+                                     const fo4::env::Environment& env,
+                                     const FormKey& reference);
+
+struct CellLightingEdit {
+  std::optional<std::array<std::uint8_t, 3>> ambient;
+  std::optional<std::array<std::uint8_t, 3>> directional;
+  std::optional<std::array<std::uint8_t, 3>> fog_near_color;
+  std::optional<float> fog_near;
+  std::optional<float> fog_far;
+  std::optional<std::int32_t> directional_rotation_xy;
+  std::optional<std::int32_t> directional_rotation_z;
+  std::optional<float> directional_fade;
+  std::optional<float> fog_clip_distance;
+  std::optional<float> fog_power;
+};
+
+struct CellEdit {
+  std::optional<std::uint16_t> flags;
+  std::optional<CellLightingEdit> lighting;
+  std::optional<std::optional<FormKey>> lighting_template;
+  std::optional<float> water_height;
+  std::optional<std::optional<FormKey>> water;
+  std::optional<std::optional<FormKey>> image_space;
+  std::optional<std::optional<FormKey>> encounter_zone;
+  std::optional<std::optional<FormKey>> location;
+  std::optional<std::optional<FormKey>> acoustic_space;
+  std::optional<std::optional<FormKey>> music_type;
+  std::optional<std::optional<FormKey>> sky_weather_region;
+  std::optional<std::optional<FormKey>> god_rays;
+  std::optional<std::optional<FormKey>> lock_list;
+  std::optional<std::optional<FormKey>> owner;
+  std::optional<std::int32_t> owner_rank;
+  std::optional<std::vector<FormKey>> regions;
+};
+
+enum class CellEditStatus {
+  edited,
+  cell_missing,
+  cell_deleted,
+  not_a_cell,
+  target_missing,
+  target_type_not_allowed,
+  target_not_master,
+  interior_flag_locked,
+  invalid_value,
+  malformed,
+};
+
+struct CellEditResult {
+  CellEditStatus status{CellEditStatus::cell_missing};
+  std::string copied_from;
+};
+
+CellEditResult edit_cell(Plugin& patch,
+                         const fo4::env::Environment& env,
+                         const FormKey& cell,
+                         const CellEdit& edit);
+
+enum class CellPropertyKind {
+  scalar,
+  link,
+  colour,
+  flags,
+};
+
+struct CellPropertyDescriptor {
+  std::string name;
+  std::string label;
+  CellPropertyKind kind{CellPropertyKind::scalar};
+  double minimum{0.0};
+  double maximum{0.0};
+  bool multiple{false};
+  std::vector<std::string> targets;
+};
+
+std::vector<CellPropertyDescriptor> cell_property_descriptors();
+
 }  // namespace fo4::forms

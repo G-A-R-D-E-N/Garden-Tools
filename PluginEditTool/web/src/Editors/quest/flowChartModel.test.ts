@@ -81,6 +81,19 @@ it('Detects: the same stage pair listed twice draws a single arc', () => {
   expect(jumpArrows(chart).map(arrow => arrow.id)).toEqual(['jump:10:20']);
 });
 
+const curveMidX = (arrow: FlowArrow) => {
+  const [x0, , x1, , x2, , x3] = arrow.d!.match(/-?\d+(\.\d+)?/g)!.map(Number);
+  return (x0 + 3 * x1 + 3 * x2 + x3) / 8;
+};
+
+it('Detects: a jump from A to B and a jump from B to A bow to opposite sides, so the two curves do not sit on top of each other', () => {
+  const chart = buildFlowChart([stage(10), stage(20)], [], [jump(10, 20), jump(20, 10)]);
+  const forward = jumpArrows(chart).find(arrow => arrow.id === 'jump:10:20')!;
+  const back = jumpArrows(chart).find(arrow => arrow.id === 'jump:20:10')!;
+  expect(forward.d).not.toBe(back.d);
+  expect(Math.abs(curveMidX(forward) - curveMidX(back))).toBeGreaterThanOrEqual(10);
+});
+
 const binding = (stageIndex: number, fn: string) => ({ stage: stageIndex, function: fn, fragmentScript: 'QF_Courier' });
 const scripts = (source: string) => new Map([['QF_Courier', source]]);
 
@@ -143,4 +156,21 @@ it('Detects: a bodiless native declaration does not swallow the bound function t
   const source = 'Function Native_Helper() global native\nFunction Fragment_Stage_0010_Item_00()\n  SetStage(20)\nEndFunction';
   expect(parseStageJumps([binding(10, 'Fragment_Stage_0010_Item_00')], scripts(source)))
     .toEqual([{ from: 10, to: 20, function: 'Fragment_Stage_0010_Item_00' }]);
+});
+
+it('Detects: a semicolon inside a Papyrus string does not drop the rest of its line, so a SetStage after it still counts', () => {
+  const source = 'Function Fragment_Stage_0010_Item_00()\n  Debug.Trace("Courier; done") SetStage(20)\nEndFunction';
+  expect(parseStageJumps([binding(10, 'Fragment_Stage_0010_Item_00')], scripts(source)))
+    .toEqual([{ from: 10, to: 20, function: 'Fragment_Stage_0010_Item_00' }]);
+});
+
+it('Detects: a semicolon-slash inside a Papyrus string does not open a block comment that hides the SetStage after it', () => {
+  const source = 'Function Fragment_Stage_0010_Item_00()\n  Debug.Trace("see ;/ here")\n  SetStage(20)\n  ;/ note /;\nEndFunction';
+  expect(parseStageJumps([binding(10, 'Fragment_Stage_0010_Item_00')], scripts(source)))
+    .toEqual([{ from: 10, to: 20, function: 'Fragment_Stage_0010_Item_00' }]);
+});
+
+it('Detects: a SetStage written inside a Papyrus string is not a jump', () => {
+  const source = 'Function Fragment_Stage_0010_Item_00()\n  Debug.Trace("SetStage(40)")\nEndFunction';
+  expect(parseStageJumps([binding(10, 'Fragment_Stage_0010_Item_00')], scripts(source))).toEqual([]);
 });

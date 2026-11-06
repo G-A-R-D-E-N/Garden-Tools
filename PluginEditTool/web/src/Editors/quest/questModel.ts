@@ -14,6 +14,7 @@ export interface QuestAlias {
   name: string;
   flags: number | null;
   collectionEntries: CollectionEntry[];
+  fill?: Record<string, unknown>;
 }
 
 export interface FlagOption { bit: number; label: string; }
@@ -125,6 +126,7 @@ export function aliasesJson(aliases: QuestAlias[]): string {
       if (alias.flags !== null) row.flags = alias.flags;
     }
     if (alias.name) row.name = alias.name;
+    if (alias.fill) Object.assign(row, alias.fill);
     return row;
   }));
 }

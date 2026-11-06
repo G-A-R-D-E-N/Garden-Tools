@@ -8,7 +8,7 @@ import HelpDrawer from '../help/HelpDrawer';
 import HelpTip from '../help/HelpTip';
 import { SCREEN_TOPICS } from '../help/helpContent';
 import { ErrorNote } from '../quest/questControls';
-import { buildQuestCalls, runQuestCalls, type Answers, type QuestRun } from './questCalls';
+import { buildQuestCalls, isLinked, runQuestCalls, type Answers, type FormKeys, type QuestRun } from './questCalls';
 import { buildSceneCalls, describeSceneAndDialogue } from './sceneCalls';
 import type { PluginQuestion, QuestTemplate, RecordQuestion, WizardStep } from './templateTypes';
 import { QUEST_TEMPLATES } from './templates/registry';
@@ -26,6 +26,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
   const [template, setTemplate] = useState<QuestTemplate | null>(null);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
+  const [formKeys, setFormKeys] = useState<FormKeys>({});
   const [plugins, setPlugins] = useState<ActivePlugin[]>([]);
   const [picking, setPicking] = useState<RecordQuestion | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -56,6 +57,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     setTemplate(next);
     setStep(0);
     setAnswers({});
+    setFormKeys({});
     setError(null);
     setMadeKey(null);
   };
@@ -66,6 +68,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     try {
       const labels = JSON.parse(await backend.ResolveFormKeyLabels(formKey)) as Record<string, string>;
       setAnswer(question.id, labels[formKey] || formKey);
+      setFormKeys(prev => ({ ...prev, [question.id]: formKey }));
     } catch (e) {
       setError(friendlyError(errorText(e)));
     }
@@ -78,7 +81,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     setMadeKey(null);
     const run: QuestRun = { formKey: null, made: new Map() };
     try {
-      await runQuestCalls(backend, [...buildQuestCalls(template, answers), ...buildSceneCalls(template, answers)], run);
+      await runQuestCalls(backend, [...buildQuestCalls(template, answers, formKeys), ...buildSceneCalls(template, answers)], run);
       onCreated({ formKey: run.formKey ?? '', plugin: answers.plugin });
     } catch (e) {
       const failure = friendlyError(errorText(e));
@@ -152,15 +155,18 @@ export default function NewQuestWizard({ onBack, onCreated }: {
         <div className="wizard-body">
           <p className="editor-purpose">
             Check the answers. The wizard writes the internal name, the journal lines, the objectives and the alias
-            names. It does not link the quest giver, location or item to the quest, so set those in the Creation Kit.
-            The quest will not start by itself. Set it to start with the game, and add something that moves it to
-            stage 10.
+            names. It makes the quest start by itself with the game, at its first stage. It links each NPC and
+            location you picked to its alias. It places each item you picked at the location as a new copy. A record
+            marked not linked still has to be set in the Creation Kit.
           </p>
           <dl className="wizard-review">
             {flow.map(question => (
               <div key={question.id}>
                 <dt>{question.label}</dt>
-                <dd>{answers[question.id]}</dd>
+                <dd>
+                  {answers[question.id]}
+                  {question.kind === 'record' && !isLinked(template, question.id) && ' (not linked: set it in the Creation Kit)'}
+                </dd>
               </div>
             ))}
           </dl>
