@@ -2912,6 +2912,11 @@ public unsafe struct PapyrusVmadShape
     public int HasBoolean;
     public int Boolean;
     public IntPtr Object;
+    public IntPtr ElementType;
+    public IntPtr Elements;
+    public nuint ElementsLen;
+    public IntPtr Members;
+    public nuint MembersLen;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2932,6 +2937,8 @@ public unsafe struct PapyrusBindReport
     public int Bound;
     public int Unsupported;
     public int SilentlyDefaulted;
+    public IntPtr UnsupportedShapes;
+    public nuint UnsupportedShapeCount;
     public IntPtr Report;
     public IntPtr Digest;
 }
@@ -2978,7 +2985,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 109u;
+    public const uint CompiledAbiVersion = 119u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();

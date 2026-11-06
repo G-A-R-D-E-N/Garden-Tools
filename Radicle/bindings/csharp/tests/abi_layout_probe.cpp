@@ -1849,6 +1849,11 @@ int main() {
   printf("PapyrusVmadShape.HasBoolean %zu\n", offsetof(radicle_papyrus_vmad_shape, has_boolean));
   printf("PapyrusVmadShape.Boolean %zu\n", offsetof(radicle_papyrus_vmad_shape, boolean));
   printf("PapyrusVmadShape.Object %zu\n", offsetof(radicle_papyrus_vmad_shape, object));
+  printf("PapyrusVmadShape.ElementType %zu\n", offsetof(radicle_papyrus_vmad_shape, element_type));
+  printf("PapyrusVmadShape.Elements %zu\n", offsetof(radicle_papyrus_vmad_shape, elements));
+  printf("PapyrusVmadShape.ElementsLen %zu\n", offsetof(radicle_papyrus_vmad_shape, elements_len));
+  printf("PapyrusVmadShape.Members %zu\n", offsetof(radicle_papyrus_vmad_shape, members));
+  printf("PapyrusVmadShape.MembersLen %zu\n", offsetof(radicle_papyrus_vmad_shape, members_len));
   printf("PapyrusBoundProperty %zu\n", sizeof(radicle_papyrus_bound_property));
   printf("PapyrusBoundProperty.OwnerKey %zu\n", offsetof(radicle_papyrus_bound_property, owner_key));
   printf("PapyrusBoundProperty.Name %zu\n", offsetof(radicle_papyrus_bound_property, name));
@@ -1861,6 +1866,8 @@ int main() {
   printf("PapyrusBindReport.Bound %zu\n", offsetof(radicle_papyrus_bind_report, bound));
   printf("PapyrusBindReport.Unsupported %zu\n", offsetof(radicle_papyrus_bind_report, unsupported));
   printf("PapyrusBindReport.SilentlyDefaulted %zu\n", offsetof(radicle_papyrus_bind_report, silently_defaulted));
+  printf("PapyrusBindReport.UnsupportedShapes %zu\n", offsetof(radicle_papyrus_bind_report, unsupported_shapes));
+  printf("PapyrusBindReport.UnsupportedShapeCount %zu\n", offsetof(radicle_papyrus_bind_report, unsupported_shape_count));
   printf("PapyrusBindReport.Report %zu\n", offsetof(radicle_papyrus_bind_report, report));
   printf("PapyrusBindReport.Digest %zu\n", offsetof(radicle_papyrus_bind_report, digest));
   printf("PapyrusAliasInput %zu\n", sizeof(radicle_papyrus_alias_input));

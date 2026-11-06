@@ -192,6 +192,107 @@ TEST(PapyrusQuestRules, BindsIntAndObjectArraysAndAStructAndRefusesVariables) {
   EXPECT_TRUE(report.clean());
 }
 
+VmadValueShape scalarShape(const std::string& name, const std::string& type) {
+  VmadValueShape shape;
+  shape.name = name;
+  shape.type = type;
+  return shape;
+}
+
+std::string reasonOf(const fo4::papyrus::VmadBindReport& report, const std::string& name) {
+  for (const auto& property : report.properties) {
+    if (property.name == name) return property.reason.value_or(std::string());
+  }
+  return "<missing>";
+}
+
+TEST(PapyrusQuestRules, RefusalReasonsStartWithThePascalCaseKindAndNameTheCount) {
+  const OwnerId owner = OwnerId::forForm("0001:Q.esp");
+  VmadValueShape items = scalarShape("Items", "Array");
+  items.elementCount = 3;
+  VmadValueShape pair = scalarShape("Pair", "Struct");
+  pair.elementCount = 2;
+  VmadValueShape alias = scalarShape("Target", "Object");
+  alias.hasAlias = true;
+  VmadValueShape missing = scalarShape("Count", "Int");
+  const auto report = bindVmadValues(
+      owner, {items, pair, alias, scalarShape("Anything", "Variable"), scalarShape("Odd", "Mystery"), missing});
+  EXPECT_EQ(reasonOf(report, "Items").rfind("Array: ", 0), 0u);
+  EXPECT_NE(reasonOf(report, "Items").find("3 elements"), std::string::npos);
+  EXPECT_EQ(reasonOf(report, "Pair").rfind("Struct: ", 0), 0u);
+  EXPECT_NE(reasonOf(report, "Pair").find("2 members"), std::string::npos);
+  EXPECT_EQ(reasonOf(report, "Target").rfind("AliasBound: ", 0), 0u);
+  EXPECT_EQ(reasonOf(report, "Anything").rfind("Variable: ", 0), 0u);
+  EXPECT_EQ(reasonOf(report, "Odd").rfind("Unknown: ", 0), 0u);
+  EXPECT_EQ(reasonOf(report, "Count").rfind("Int: ", 0), 0u);
+}
+
+TEST(PapyrusQuestRules, AnEmptyStructIsRefusedAndAnEmptyArrayIsAnExplicitValue) {
+  const OwnerId owner = OwnerId::forForm("0001:Q.esp");
+  VmadValueShape empty = scalarShape("Empty", "Struct");
+  empty.elementCount = 0;
+  VmadValueShape none = scalarShape("None", "Array");
+  none.elementType = "Int";
+  none.elementCount = 0;
+  const auto report = bindVmadValues(owner, {empty, none});
+  EXPECT_EQ(report.properties[0].name, "Empty");
+  EXPECT_EQ(report.properties[0].kind, BoundKind::Unsupported);
+  EXPECT_NE(reasonOf(report, "Empty").find("0 members"), std::string::npos);
+  EXPECT_EQ(report.properties[1].kind, BoundKind::Array);
+  EXPECT_EQ(report.bound, 1);
+  EXPECT_EQ(report.unsupported, 1);
+}
+
+TEST(PapyrusQuestRules, TheReportListsEveryUnsupportedShapeWithItsOwner) {
+  const OwnerId owner = OwnerId::forForm("0001:Q.esp");
+  VmadValueShape alias = scalarShape("Target", "Object");
+  alias.hasAlias = true;
+  VmadValueShape count = scalarShape("Count", "Int");
+  count.integer = 1;
+  const auto report = bindVmadValues(owner, {alias, count, scalarShape("Anything", "Variable")});
+  ASSERT_EQ(report.unsupportedShapes.size(), 2u);
+  EXPECT_EQ(report.unsupportedShapes[0].rfind(owner.key() + " Anything: Variable: ", 0), 0u);
+  EXPECT_EQ(report.unsupportedShapes[1].rfind(owner.key() + " Target: AliasBound: ", 0), 0u);
+  EXPECT_EQ(static_cast<std::int32_t>(report.unsupportedShapes.size()), report.unsupported);
+}
+
+TEST(PapyrusQuestRules, ValuesThatCannotBeKeptExactlyAreRefusedNotTruncated) {
+  const OwnerId owner = OwnerId::forForm("0001:Q.esp");
+  VmadValueShape big = scalarShape("Big", "Int");
+  big.integer = 4294967296LL;
+  VmadValueShape low = scalarShape("Low", "Int");
+  low.integer = -2147483648LL;
+  VmadValueShape high = scalarShape("High", "Int");
+  high.integer = 2147483647LL;
+  VmadValueShape tenth = scalarShape("Tenth", "Float");
+  tenth.real = 0.1;
+  VmadValueShape half = scalarShape("Half", "Float");
+  half.real = 1.5;
+  VmadValueShape huge = scalarShape("Huge", "Float");
+  huge.real = 1e300;
+  const auto report = bindVmadValues(owner, {big, low, high, tenth, half, huge});
+  EXPECT_EQ(report.bound, 3);
+  EXPECT_EQ(report.unsupported, 3);
+  EXPECT_NE(reasonOf(report, "Big").find("does not fit a 32-bit"), std::string::npos);
+  EXPECT_EQ(reasonOf(report, "Big").rfind("Int: ", 0), 0u);
+  EXPECT_EQ(reasonOf(report, "Tenth").rfind("Float: ", 0), 0u);
+  EXPECT_EQ(reasonOf(report, "Huge").rfind("Float: ", 0), 0u);
+  for (const auto& property : report.properties) {
+    if (property.name == "Low") EXPECT_EQ(property.value.integer, -2147483647 - 1);
+    if (property.name == "High") EXPECT_EQ(property.value.integer, 2147483647);
+    if (property.name == "Half") EXPECT_FLOAT_EQ(property.value.real, 1.5F);
+  }
+}
+
+TEST(PapyrusQuestRules, ABlankObjectReferenceIsRefused) {
+  const OwnerId owner = OwnerId::forForm("0001:Q.esp");
+  VmadValueShape blank = scalarShape("Blank", "Object");
+  blank.object = "  ";
+  const auto report = bindVmadValues(owner, {blank});
+  EXPECT_EQ(report.unsupported, 1);
+  EXPECT_EQ(reasonOf(report, "Blank").rfind("Object: ", 0), 0u);
+}
+
 TEST(PapyrusQuestRules, FillsTheProvenAliasKindsAndLeavesTheActorsOpen) {
   OwnerRegistry references;
   const std::vector<QuestAliasInput> aliases = {

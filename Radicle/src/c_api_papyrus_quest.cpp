@@ -45,6 +45,36 @@ std::optional<fo4::papyrus::OwnerId> ownerFrom(radicle_papyrus_owner_kind kind, 
   return std::nullopt;
 }
 
+constexpr int kMaxShapeDepth = 16;
+
+bool shapeFrom(const radicle_papyrus_vmad_shape& in, int depth, fo4::papyrus::VmadValueShape& shape) {
+  if (depth > kMaxShapeDepth) return false;
+  if ((in.elements == nullptr && in.elements_len != 0) || (in.members == nullptr && in.members_len != 0)) {
+    return false;
+  }
+  shape.name = in.name == nullptr ? std::string() : std::string(in.name);
+  shape.type = in.type == nullptr ? std::string() : std::string(in.type);
+  shape.hasAlias = in.has_alias != 0;
+  if (in.has_element_count != 0) shape.elementCount = in.element_count;
+  if (in.text != nullptr) shape.text = std::string(in.text);
+  if (in.has_real != 0) shape.real = in.real;
+  if (in.has_integer != 0) shape.integer = in.integer;
+  if (in.has_boolean != 0) shape.boolean = in.boolean != 0;
+  if (in.object != nullptr) shape.object = std::string(in.object);
+  if (in.element_type != nullptr) shape.elementType = std::string(in.element_type);
+  for (size_t i = 0; i < in.elements_len; ++i) {
+    fo4::papyrus::VmadValueShape child;
+    if (!shapeFrom(in.elements[i], depth + 1, child)) return false;
+    shape.elements.push_back(std::move(child));
+  }
+  for (size_t i = 0; i < in.members_len; ++i) {
+    fo4::papyrus::VmadValueShape child;
+    if (!shapeFrom(in.members[i], depth + 1, child)) return false;
+    shape.members.push_back(std::move(child));
+  }
+  return true;
+}
+
 }  // namespace
 
 extern "C" {
@@ -119,15 +149,10 @@ radicle_status radicle_papyrus_bind_vmad_values(radicle_papyrus_owner_kind owner
     input.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       fo4::papyrus::VmadValueShape shape;
-      shape.name = shapes[i].name == nullptr ? std::string() : std::string(shapes[i].name);
-      shape.type = shapes[i].type == nullptr ? std::string() : std::string(shapes[i].type);
-      shape.hasAlias = shapes[i].has_alias != 0;
-      if (shapes[i].has_element_count != 0) shape.elementCount = shapes[i].element_count;
-      if (shapes[i].text != nullptr) shape.text = std::string(shapes[i].text);
-      if (shapes[i].has_real != 0) shape.real = shapes[i].real;
-      if (shapes[i].has_integer != 0) shape.integer = shapes[i].integer;
-      if (shapes[i].has_boolean != 0) shape.boolean = shapes[i].boolean != 0;
-      if (shapes[i].object != nullptr) shape.object = std::string(shapes[i].object);
+      if (!shapeFrom(shapes[i], 0, shape)) {
+        return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                      "a shape is nested too deeply or has a null child array");
+      }
       input.push_back(std::move(shape));
     }
     const fo4::papyrus::VmadBindReport report = fo4::papyrus::bindVmadValues(*owner, input);
@@ -148,6 +173,11 @@ radicle_status radicle_papyrus_bind_vmad_values(radicle_papyrus_owner_kind owner
     out_report->bound = report.bound;
     out_report->unsupported = report.unsupported;
     out_report->silently_defaulted = report.silentlyDefaulted;
+    out_report->unsupported_shapes = new char*[report.unsupportedShapes.size()]();
+    out_report->unsupported_shape_count = report.unsupportedShapes.size();
+    for (size_t i = 0; i < report.unsupportedShapes.size(); ++i) {
+      out_report->unsupported_shapes[i] = copyText(report.unsupportedShapes[i]);
+    }
     out_report->report = copyText(report.toReport());
     out_report->digest = copyText(report.digest());
     return RADICLE_STATUS_OK;
@@ -164,6 +194,8 @@ void radicle_papyrus_bind_report_destroy(radicle_papyrus_bind_report* report) {
     delete report->properties[i].value;
   }
   delete[] report->properties;
+  for (size_t i = 0; i < report->unsupported_shape_count; ++i) std::free(report->unsupported_shapes[i]);
+  delete[] report->unsupported_shapes;
   std::free(report->report);
   std::free(report->digest);
   *report = radicle_papyrus_bind_report{};
