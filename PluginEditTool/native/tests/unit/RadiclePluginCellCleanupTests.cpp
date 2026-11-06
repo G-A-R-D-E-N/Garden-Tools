@@ -102,7 +102,7 @@ TEST_CASE("Native cell cleanup apply removes the duplicate and undo restores it"
     })));
     CHECK(applied.at("removed") == 1);
     CHECK(parseStringResult(backend.getPlacedReferences(cellView)).at("references").size() == 1);
-    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 1);
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 2);
 
     REQUIRE(backend.undoCellEdit(patchView).has_value());
     CHECK(parseStringResult(backend.getPlacedReferences(cellView)).at("references").size() == 2);
