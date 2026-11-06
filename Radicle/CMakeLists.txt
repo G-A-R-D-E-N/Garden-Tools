@@ -278,6 +278,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
+  src/environment/cell_view.cpp
   src/environment/world.cpp
   src/environment/region.cpp
   src/environment/placed.cpp
@@ -941,6 +942,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_scene_actor_action_edit.cpp
     tests/test_environment_world.cpp
     tests/test_environment_region.cpp
+    tests/test_cell_view.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
     tests/test_environment_script_elements.cpp
