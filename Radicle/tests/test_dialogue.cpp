@@ -1,5 +1,6 @@
 #include "fo4/c_api_dialogue.h"
 #include "fo4/environment/dialogue.hpp"
+#include "fo4/plugin/info_responses.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
 
@@ -143,6 +144,46 @@ TEST_F(DialogueRead, MalformedKnownFieldsAndUnpairedGroupsFailClosed) {
   for (const auto id : {0x802u, 0x803u, 0x804u, 0x805u}) {
     EXPECT_THROW(fo4::env::decode_scene(env, record(env, id)), fo4::env::WorldDecodeError);
   }
+}
+
+// Detects: a response body that swallows the conditions or the prompt after it, and a header field read from the wrong offset.
+TEST_F(DialogueRead, InfoResponseDecoderScopesBodiesAndExposesHeaderFields) {
+  const std::vector<Sub> subs{{"ENAM", words({0xFFFF8001})},
+    {"TRDA", response(1)}, {"NAM1", text("first")}, {"NAM2", text("notes")}, {"SNAM", words({0x813})},
+    {"TRDA", response(2)}, {"NAM1", text("second")},
+    {"CTDA", condition(14)}, {"CIS1", text("operand")}, {"RNAM", text("prompt")}};
+  write({{"INFO", 0x800, subs}}); const auto env = load(); const auto& info = *record(env).record;
+  const auto responses = fo4::read_info_responses(info);
+  ASSERT_EQ(responses.size(), 2u);
+  EXPECT_EQ(responses[0].number, 1); EXPECT_EQ(responses[0].emotion, 0x810u); EXPECT_EQ(responses[0].sound, 0x811u);
+  EXPECT_EQ(responses[0].unknown, 0xAB); EXPECT_EQ(responses[0].interrupt_percent, 90);
+  EXPECT_EQ(responses[0].camera_target_alias, -1); EXPECT_EQ(responses[0].camera_location_alias, 42);
+  EXPECT_FALSE(responses[0].malformed); EXPECT_EQ(responses[1].number, 2);
+  const auto nam = fo4::Signature::from_string("NAM1");
+  const auto* first = fo4::info_response_subrecord(info, responses[0], nam);
+  ASSERT_NE(first, nullptr); EXPECT_EQ(first->data, text("first"));
+  const auto* second = fo4::info_response_subrecord(info, responses[1], nam);
+  ASSERT_NE(second, nullptr); EXPECT_EQ(second->data, text("second"));
+  // The second body must stop at CTDA, so the conditions and the prompt are not inside it.
+  EXPECT_EQ(responses[1].last, 7u);
+  EXPECT_EQ(fo4::info_response_subrecord(info, responses[1], fo4::Signature::from_string("RNAM")), nullptr);
+  EXPECT_EQ(fo4::info_response_subrecord(info, responses[0], fo4::Signature::from_string("NAM2")),
+            &info.subrecords[3]);
+}
+
+// Detects: a decoder that throws or drops the row on a short header, which a read tool must still be able to show.
+TEST_F(DialogueRead, InfoResponseDecoderReportsShortHeadersWithoutThrowing) {
+  write({{"INFO", 0x800, {{"TRDA", std::vector<std::byte>(19)}, {"NAM1", text("a")}, {"TRDA", words({0x810, 7})},
+    {"NAM1", text("b")}}}});
+  const auto env = load();
+  const auto responses = fo4::read_info_responses(*record(env).record);
+  ASSERT_EQ(responses.size(), 2u);
+  EXPECT_TRUE(responses[0].malformed); EXPECT_EQ(responses[0].emotion, 0u); EXPECT_EQ(responses[0].sound, 0u);
+  EXPECT_TRUE(responses[1].malformed); EXPECT_EQ(responses[1].number, 7);
+  const auto* body = fo4::info_response_subrecord(*record(env).record, responses[1],
+                                                 fo4::Signature::from_string("NAM1"));
+  ASSERT_NE(body, nullptr);
+  EXPECT_EQ(body->data, text("b"));
 }
 
 TEST_F(DialogueRead, InfoResponseDataOfAnotherSizeFailsClosed) {

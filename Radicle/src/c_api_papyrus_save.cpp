@@ -68,10 +68,12 @@ radicle_status radicle_papyrus_save_capture(const radicle_papyrus_runtime* runti
     std::vector<fo4::papyrus::SavedRegistration> registrations;
     std::vector<fo4::papyrus::SavedTimer> timers;
     for (const fo4::papyrus::RegistrationEntry& entry : runtime->runtime.registrations().entries()) {
-      if (entry.registration.kind == fo4::papyrus::RegistrationKind::CustomEvent) {
+      if (entry.registration.kind != fo4::papyrus::RegistrationKind::Timer) {
+        const bool remote = entry.registration.kind == fo4::papyrus::RegistrationKind::RemoteEvent;
         fo4::papyrus::SavedRegistration registration;
         registration.ownerKey = entry.owner.key();
-        registration.kind = "CustomEvent";
+        registration.kind = remote ? "RemoteEvent" : "CustomEvent";
+        if (remote && entry.registration.source.has_value()) registration.sourceKey = entry.registration.source->key();
         registration.eventName = entry.registration.eventName;
         registration.interval = entry.registration.intervalSeconds;
         registration.repeats = entry.registration.repeats;

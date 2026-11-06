@@ -140,6 +140,9 @@ add_executable(
     unit/RadiclePluginNameFieldTests.cpp
     unit/RadiclePluginQuestObjectiveTests.cpp
     unit/RadiclePluginQuestAuthorTests.cpp
+    unit/RadiclePluginQuestFragmentAuthorTests.cpp
+    unit/RadiclePluginQuestScriptEditTests.cpp
+    unit/RadiclePluginQuestScriptSafetyTests.cpp
     unit/RadiclePluginJournalRootTests.cpp
     unit/RadiclePluginJournalIntegrationTests.cpp
     unit/RadiclePluginJournalDirectoryTests.cpp
@@ -237,6 +240,10 @@ add_executable(
     unit/RadiclePluginDeferredLocalizationTests.cpp
     unit/RadiclePluginPendingLifecycleTests.cpp
     unit/RadiclePluginQuestEndToEndTests.cpp
+    unit/RadiclePluginDialogueTests.cpp
+    unit/RadiclePluginSceneTests.cpp
+    unit/RadiclePluginFragmentsTests.cpp
+    unit/RadiclePluginDialogueBulkTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
@@ -258,14 +265,27 @@ target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
 target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 fo4ide_enable_warnings(fo4ide_test_plugin_backend)
 fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
-catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "~[multi-process]" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "~[multi-process]~QuestScriptReal.*" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "[multi-process]" OUTPUT_SUFFIX _multi_process PROPERTIES TIMEOUT ${FO4IDE_MULTI_PROCESS_TEST_TIMEOUT})
+# Real-game QuestScriptReal cases decompile and compile whole vanilla archives; they need the long real-data timeout.
+catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "QuestScriptReal.*" OUTPUT_SUFFIX _quest_script_real PROPERTIES TIMEOUT 1800)
 
 add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRealTests.cpp)
 target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_sound_semantic_real)
 fo4ide_enable_sanitizers(fo4ide_test_sound_semantic_real)
 catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 1800)
+
+# The vanilla sweep decompiles and recompiles every quest script in Misc.ba2; give it headroom.
+add_executable(
+    fo4ide_test_quest_script_real
+    unit/QuestScriptRealTests.cpp
+    unit/VanillaScriptSourcesTests.cpp
+)
+target_link_libraries(fo4ide_test_quest_script_real PRIVATE fo4ide_papyrus fo4ide_archive Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_quest_script_real)
+fo4ide_enable_sanitizers(fo4ide_test_quest_script_real)
+catch_discover_tests(fo4ide_test_quest_script_real PROPERTIES TIMEOUT 1800)
 
 add_executable(
     fo4ide_test_archive_backend
