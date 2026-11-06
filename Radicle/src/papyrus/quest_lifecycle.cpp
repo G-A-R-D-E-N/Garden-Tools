@@ -253,6 +253,8 @@ QuestStartupResult QuestLifecycle::start(const std::vector<QuestStartupInput>& i
             if (!instance.has_value()) {
                 counters_.blocked += 1;
                 failed_[input->quest] = "missing script " + input->scripts[i];
+                for (const InstanceId id : attached) runtime_.detach(id);
+                questInstances_.erase(input->quest);
                 result.reasons.push_back(input->quest + " " + input->scripts[i] + ": missing script");
                 return result;
             }
@@ -267,6 +269,8 @@ QuestStartupResult QuestLifecycle::start(const std::vector<QuestStartupInput>& i
             const std::string message =
                 runtime_.failure(attached[i]).empty() ? statusName(status) : runtime_.failure(attached[i]);
             failed_[input->quest] = message;
+            for (const InstanceId id : attached) runtime_.detach(id);
+            questInstances_.erase(input->quest);
             counters_.blocked += 1;
             result.reasons.push_back(input->quest + " " + input->scripts[i] + ": " + message);
             return result;

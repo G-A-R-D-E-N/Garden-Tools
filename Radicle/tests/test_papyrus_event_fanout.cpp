@@ -170,6 +170,8 @@ TEST_F(FanOutTest, AnEventTheGateRefusesIsRefusedForEveryOwner) {
 TEST_F(FanOutTest, UnknownOwnersAndMissingHandlersAreReportedSeparately) {
   attach("Deaf", "A");
 
+  runtime_->parkOwner(OwnerId::forForm("P"));
+  EXPECT_EQ(runtime_->fanOutEvent(OwnerId::forForm("P"), "OnHit", {}).skippedParked, 1);
   const auto unknown = runtime_->fanOutEvent(OwnerId::forForm("Z"), "OnHit", {});
   const auto noHandler = runtime_->fanOutEvent(OwnerId::forForm("A"), "OnHit", {});
 

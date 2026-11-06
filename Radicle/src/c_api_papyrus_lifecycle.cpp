@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <memory>
 #include <new>
 #include <optional>
@@ -51,7 +52,7 @@ char* copyText(const std::string& text) {
 
 std::string textOf(const char* text) { return text == nullptr ? std::string() : std::string(text); }
 
-std::optional<OwnerId> ownerFrom(radicle_papyrus_owner_kind kind, const char* base, const char* discriminator) {
+std::optional<OwnerId> ownerFromUnchecked(radicle_papyrus_owner_kind kind, const char* base, const char* discriminator) {
   if (base == nullptr) return std::nullopt;
   const std::string baseKey(base);
   const std::string disc = textOf(discriminator);
@@ -70,6 +71,14 @@ std::optional<OwnerId> ownerFrom(radicle_papyrus_owner_kind kind, const char* ba
       return OwnerId::forRuntimeInstance(baseKey, std::strtoll(disc.c_str(), nullptr, 10));
   }
   return std::nullopt;
+}
+
+std::optional<OwnerId> ownerFrom(radicle_papyrus_owner_kind kind, const char* base, const char* discriminator) {
+  try {
+    return ownerFromUnchecked(kind, base, discriminator);
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
 }
 
 VmadValueShape shapeFrom(const radicle_papyrus_lifecycle_property& property) {
@@ -248,7 +257,7 @@ int32_t radicle_papyrus_lifecycle_instance_at(const radicle_papyrus_lifecycle_ha
                                               size_t index, uint64_t* out_instance) {
   radicle_c_detail::clear_error();
   if (out_instance != nullptr) *out_instance = 0;
-  if (lifecycle == nullptr || quest == nullptr || out_instance == nullptr) return 0;
+  if (lifecycle == nullptr || quest == nullptr || out_instance == nullptr || *quest == 0) return 0;
   const std::vector<fo4::papyrus::InstanceId> instances = lifecycle->lifecycle.instancesFor(quest);
   if (index >= instances.size()) return 0;
   *out_instance = instances[index];
@@ -370,7 +379,7 @@ int32_t radicle_papyrus_lifecycle_alias_instance(const radicle_papyrus_lifecycle
                                                  const char* quest, int32_t alias_id, uint64_t* out_instance) {
   radicle_c_detail::clear_error();
   if (out_instance != nullptr) *out_instance = 0;
-  if (lifecycle == nullptr || quest == nullptr || out_instance == nullptr) return 0;
+  if (lifecycle == nullptr || quest == nullptr || out_instance == nullptr || *quest == 0) return 0;
   const auto instance = lifecycle->lifecycle.aliasInstance(OwnerId::forQuestAlias(quest, alias_id));
   if (!instance.has_value()) return 0;
   *out_instance = *instance;
@@ -380,7 +389,7 @@ int32_t radicle_papyrus_lifecycle_alias_instance(const radicle_papyrus_lifecycle
 int32_t radicle_papyrus_lifecycle_objective(const radicle_papyrus_lifecycle_handle* lifecycle, const char* quest,
                                             int32_t alias_id, int32_t index) {
   radicle_c_detail::clear_error();
-  if (lifecycle == nullptr || quest == nullptr) return -1;
+  if (lifecycle == nullptr || quest == nullptr || *quest == 0) return -1;
   return lifecycle->lifecycle.objectiveOf(OwnerId::forQuestAlias(quest, alias_id), index);
 }
 

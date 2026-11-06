@@ -127,9 +127,12 @@ void Runtime::fanOutOwner(FanOutReport& report, const OwnerId& owner, const std:
     if (instances.empty()) {
         FanOutOutcome outcome;
         outcome.owner = owner;
-        outcome.result = allowed ? FanOutResult::UnknownOwner : FanOutResult::Refused;
-        outcome.reason = allowed ? "no instance is registered for this owner"
-                                 : "the event is not allowed by the evidence gate";
+        outcome.result = !allowed ? FanOutResult::Refused
+                         : ownerParked(owner) ? FanOutResult::SkippedParked
+                                              : FanOutResult::UnknownOwner;
+        outcome.reason = !allowed ? "the event is not allowed by the evidence gate"
+                         : ownerParked(owner) ? "the owner is parked, so its scripts are not attached"
+                                              : "no instance is registered for this owner";
         tally(report, std::move(outcome));
         return;
     }
