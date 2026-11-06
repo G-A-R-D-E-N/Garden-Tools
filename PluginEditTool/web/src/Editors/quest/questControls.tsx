@@ -1,4 +1,4 @@
-import { useState, type InputHTMLAttributes, type KeyboardEvent } from 'react';
+import { useState, type InputHTMLAttributes, type KeyboardEvent, type TextareaHTMLAttributes } from 'react';
 import type { FriendlyMessage } from '../friendlyErrors';
 import { toggleBit, type FlagOption } from './questModel';
 
@@ -6,6 +6,24 @@ type CommitInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'o
   value: string;
   onCommit: (next: string) => void;
 };
+
+type CommitTextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange' | 'onBlur' | 'defaultValue'> & {
+  value: string;
+  onCommit: (next: string) => void;
+};
+
+export function CommitTextarea({ value, onCommit, ...rest }: CommitTextareaProps) {
+  const [draft, setDraft] = useState(value);
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    setDraft(value);
+  }
+  return (
+    <textarea {...rest} value={draft} onChange={e => setDraft(e.target.value)}
+      onBlur={() => { if (draft !== value) onCommit(draft); }} />
+  );
+}
 
 export function CommitInput({ value, onCommit, ...rest }: CommitInputProps) {
   const [draft, setDraft] = useState(value);

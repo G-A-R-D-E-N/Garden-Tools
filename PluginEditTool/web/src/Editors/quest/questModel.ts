@@ -2,6 +2,8 @@ export type AliasKind = 'reference' | 'location' | 'collection';
 
 export interface StageLogEntry { logText: string; note: string; flags: number; }
 export interface QuestStage { index: number; flags: number; logEntries: StageLogEntry[]; }
+export interface StageSelection { index: number; }
+export type StageEdit = (current: QuestStage[]) => QuestStage[];
 export interface ObjectiveTarget { alias: number; aliasName: string; flags: number; }
 export interface QuestObjective { index: number; flags: number; displayText: string; targets: ObjectiveTarget[]; }
 export interface CollectionEntry { id: number; maxInitialFillCount: number | null; }
