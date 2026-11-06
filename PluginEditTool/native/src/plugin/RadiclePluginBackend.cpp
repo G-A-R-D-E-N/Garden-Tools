@@ -750,7 +750,8 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
         fo4::apply_master_kinds(reloaded, knownKinds);
         CommitScope commit;
         loaded->plugin = std::move(reloaded); loaded->diskBaseline = loaded->plugin.original_data;
-        dropBorrowedEnvironmentLocked();
+        dropBorrowedEnvironmentOnlyLocked();
+        cellEditHistories_.erase(loaded->name);
         loaded->loadedTime = readTime;
         loaded->stagedLocalization.reset(); loaded->stagedAllocation.reset(); loaded->stagedPluginLanguages.clear(); loaded->stagedPluginStringIds.clear();
         loaded->stagedQuestFragments.reset();
