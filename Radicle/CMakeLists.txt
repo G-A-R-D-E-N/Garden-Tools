@@ -532,7 +532,7 @@ set(RADICLE_C_SOURCES
   src/c_api_version.cpp
   src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp
   src/c_api_conditions.cpp
-  src/c_api_dialogue.cpp
+  src/c_api_dialogue.cpp src/c_api_dialogue_author.cpp
   src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp
   src/c_api_cell.cpp
   src/c_api_patch.cpp
