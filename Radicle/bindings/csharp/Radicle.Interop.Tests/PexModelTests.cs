@@ -12,7 +12,7 @@ public class PexModelTests
 {
     private static readonly byte[] HighBytes = { 0x80, 0xA9, 0xFE, 0xFF };
 
-    internal static byte[] SyntheticPex(bool withCode = false, bool withHandlers = false, bool duplicateStrings = false)
+    internal static byte[] SyntheticPex(bool withCode = false, bool withHandlers = false, bool duplicateStrings = false, bool withoutParent = false)
     {
         var bytes = new List<byte>();
         void U8(byte value) => bytes.Add(value);
@@ -69,7 +69,7 @@ public class PexModelTests
         U32(0);
 
         var bodyStart = bytes.Count;
-        U16(2);
+        U16(withoutParent ? (ushort)0 : (ushort)2);
         U16(0);
         U8(0);
         U32(0);

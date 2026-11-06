@@ -94,7 +94,11 @@ ToolResult RpcTool::call(const nlohmann::json& arguments) {
         return {prefix + response.error, true};
     }
 
-    if (response.value.is_string()) return {response.value.get<std::string>(), false};
+    if (response.value.is_string()) {
+        auto text = response.value.get<std::string>();
+        const bool failure = text.rfind("Error:", 0) == 0 || text.rfind("ERR:", 0) == 0;
+        return {std::move(text), failure};
+    }
     if (response.value.is_null()) return {"", false};
     return {response.value.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace), false};
 }
