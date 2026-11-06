@@ -574,6 +574,7 @@ class RemoteCommandTest(ServiceTest):
         pull, push = (call.args[0][len(VM.ssh):] for call in popen.call_args_list)
         self.assertEqual(pull[pull.index("-File") + 1], "C:/ci/real-data/service/run_remote.ps1")
         self.assertEqual(pull[pull.index("-Bundle") + 1], "C:/ci/real-data/incoming/vm.bundle")
+        self.assertEqual(pull[pull.index("-Root") + 1], "C:/ci/real-data")
         self.assertEqual(pull[pull.index("-BaseRef") + 1], "nomad/dev")
         self.assertEqual(push[push.index("-Event") + 1], "push")
         self.assertNotIn("-BaseRef", push)

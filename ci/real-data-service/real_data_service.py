@@ -384,7 +384,7 @@ def send_bundle(worker, bundle):
 def start_remote(worker, t, log_path, bundle_name):
     args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", f"{worker.root}/service/run_remote.ps1",
             "-Bundle", f"{worker.root}/incoming/{bundle_name}", "-Ref", f"refs/real-data/candidate-{worker.name}",
-            "-Event", "pull_request" if t.number else "push"]
+            "-Event", "pull_request" if t.number else "push", "-Root", worker.root]
     if t.base:
         args += ["-BaseRef", t.base]
     LOG_DIR.mkdir(parents=True, exist_ok=True)
