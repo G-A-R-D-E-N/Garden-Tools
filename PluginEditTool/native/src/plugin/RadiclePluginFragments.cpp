@@ -61,9 +61,21 @@ std::optional<Error> fragmentFailure(fo4::VmadStructureMutationStatus status, st
     return Error{"SetFragmentFailed", "fragment binding could not be written: " + std::string(subject)};
 }
 
+std::optional<Error> addFailure(fo4::VmadStructureMutationStatus status, std::string_view subject) {
+    if (status == fo4::VmadStructureMutationStatus::already_present) {
+        return Error{"FragmentAlreadyBound", "a fragment is already bound at that position: " + std::string(subject)};
+    }
+    if (status == fo4::VmadStructureMutationStatus::binding_missing ||
+        status == fo4::VmadStructureMutationStatus::subrecord_missing) {
+        return Error{"FragmentSectionMissing", "the record has no fragment section to add into: " + std::string(subject)};
+    }
+    return fragmentFailure(status, subject);
+}
+
 std::optional<Error> bindFlaggedFragment(fo4::Plugin& plugin, const fo4::FormKey& record,
                                         std::uint32_t index, const std::string& script,
-                                        const std::string& function, std::string_view subject) {
+                                        const std::string& function, std::string_view subject, bool addOnly) {
+    if (addOnly) return addFailure(fo4::add_vmad_fragment(plugin, record, index, script, function), subject);
     auto status = fo4::set_vmad_fragment(plugin, record, index, script, function);
     if (status == fo4::VmadStructureMutationStatus::binding_missing ||
         status == fo4::VmadStructureMutationStatus::subrecord_missing) {
@@ -80,7 +92,10 @@ std::optional<Error> bindFlaggedFragment(fo4::Plugin& plugin, const fo4::FormKey
 std::optional<Error> bindScenePhaseFragment(fo4::Plugin& plugin, const fo4::FormKey& record,
                                            std::uint32_t phase, std::uint8_t flag,
                                            const std::string& script, const std::string& function,
-                                           std::string_view subject) {
+                                           std::string_view subject, bool addOnly) {
+    if (addOnly) {
+        return addFailure(fo4::add_scene_vmad_phase_fragment(plugin, record, phase, flag, script, function), subject);
+    }
     auto status = fo4::set_scene_vmad_phase_fragment(plugin, record, phase, flag, script, function);
     if (status == fo4::VmadStructureMutationStatus::binding_missing ||
         status == fo4::VmadStructureMutationStatus::subrecord_missing) {
@@ -106,6 +121,14 @@ std::optional<Error> recordKeyArgument(const nlohmann::json& arguments, std::siz
 
 }
 Result<nlohmann::json> RadiclePluginBackend::setInfoFragment(const nlohmann::json& arguments) {
+    return writeInfoFragment(arguments, false);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::addInfoFragment(const nlohmann::json& arguments) {
+    return writeInfoFragment(arguments, true);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::writeInfoFragment(const nlohmann::json& arguments, bool addOnly) {
     const auto pluginName = questStringArg(arguments, 0);
     if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     fo4::FormKey info;
@@ -128,14 +151,14 @@ Result<nlohmann::json> RadiclePluginBackend::setInfoFragment(const nlohmann::jso
 
     try {
         auto mutated = loaded->plugin;
-        if (auto error = bindFlaggedFragment(mutated, info, index, script, function, pluginName)) {
+        if (auto error = bindFlaggedFragment(mutated, info, index, script, function, pluginName, addOnly)) {
             return std::unexpected(*error);
         }
         stagePluginMutationLocked(*loaded, std::move(mutated));
-        return nlohmann::json("Bound INFO fragment " + std::to_string(index) + " of " + pluginName +
-                              ". SavePlugin to persist.");
+        return nlohmann::json(std::string(addOnly ? "Added" : "Bound") + " INFO fragment " +
+                              std::to_string(index) + " of " + pluginName + ". SavePlugin to persist.");
     } catch (const std::exception& error) {
-        return std::unexpected(Error{"SetInfoFragmentFailed", error.what()});
+        return std::unexpected(Error{addOnly ? "AddInfoFragmentFailed" : "SetInfoFragmentFailed", error.what()});
     }
 }
 
@@ -165,6 +188,14 @@ Result<nlohmann::json> RadiclePluginBackend::removeInfoFragment(const nlohmann::
 }
 
 Result<nlohmann::json> RadiclePluginBackend::setScenePhaseFragment(const nlohmann::json& arguments) {
+    return writeScenePhaseFragment(arguments, false);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::addScenePhaseFragment(const nlohmann::json& arguments) {
+    return writeScenePhaseFragment(arguments, true);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::writeScenePhaseFragment(const nlohmann::json& arguments, bool addOnly) {
     const auto pluginName = questStringArg(arguments, 0);
     if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     fo4::FormKey scene;
@@ -190,13 +221,15 @@ Result<nlohmann::json> RadiclePluginBackend::setScenePhaseFragment(const nlohman
     try {
         auto mutated = loaded->plugin;
         if (auto error = bindScenePhaseFragment(mutated, scene, phase, static_cast<std::uint8_t>(flag),
-                                                script, function, pluginName)) {
+                                                script, function, pluginName, addOnly)) {
             return std::unexpected(*error);
         }
         stagePluginMutationLocked(*loaded, std::move(mutated));
-        return nlohmann::json("Bound scene phase fragment of " + pluginName + ". SavePlugin to persist.");
+        return nlohmann::json(std::string(addOnly ? "Added" : "Bound") + " scene phase fragment of " +
+                              pluginName + ". SavePlugin to persist.");
     } catch (const std::exception& error) {
-        return std::unexpected(Error{"SetScenePhaseFragmentFailed", error.what()});
+        return std::unexpected(Error{addOnly ? "AddScenePhaseFragmentFailed" : "SetScenePhaseFragmentFailed",
+                                     error.what()});
     }
 }
 

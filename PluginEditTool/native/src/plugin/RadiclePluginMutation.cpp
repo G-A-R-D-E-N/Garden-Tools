@@ -242,8 +242,10 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "RemoveSceneAction") return removeSceneAction(arguments);
     if (method == "MoveSceneAction") return moveSceneAction(arguments);
     if (method == "SetInfoFragment") return setInfoFragment(arguments);
+    if (method == "AddInfoFragment") return addInfoFragment(arguments);
     if (method == "RemoveInfoFragment") return removeInfoFragment(arguments);
     if (method == "SetScenePhaseFragment") return setScenePhaseFragment(arguments);
+    if (method == "AddScenePhaseFragment") return addScenePhaseFragment(arguments);
     if (method == "RemoveScenePhaseFragment") return removeScenePhaseFragment(arguments);
     if (method == "CreateDialogueTopicBulk") return createDialogueTopicBulk(arguments);
     if (method == "GetVoicePath") return getVoicePath(arguments);
