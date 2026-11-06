@@ -3,17 +3,15 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <optional>
 #include <regex>
 #include <set>
 #include <sstream>
 #include <system_error>
 #include <utility>
 #include <fo4/papyrus/analysis_service.hpp>
+#include <fo4/papyrus/compile_staging.hpp>
 #include <fo4/papyrus/decompile_service.hpp>
-#include <fo4/papyrus/script_names.hpp>
 
-#include "PapyrusStaging.hpp"
 #include "ServiceTargetSupport.hpp"
 
 namespace fo4ide::app {
@@ -32,28 +30,6 @@ std::string stripQuotes(std::string value) {
 bool endsWithIgnoreCase(std::string_view value, std::string_view suffix) {
     return value.size() >= suffix.size() &&
            toLower(std::string(value.substr(value.size() - suffix.size()))) == toLower(std::string(suffix));
-}
-
-std::vector<std::filesystem::path> enumeratePscFiles(const std::filesystem::path& root) {
-    std::vector<std::filesystem::path> files;
-    std::vector<std::filesystem::path> stack{root};
-    std::error_code ec;
-    while (!stack.empty()) {
-        const auto dir = stack.back();
-        stack.pop_back();
-        for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
-            std::error_code statusEc;
-            const auto& entry = *it;
-            if (entry.is_symlink(statusEc)) continue;
-            if (entry.is_directory(statusEc)) {
-                stack.push_back(entry.path());
-            } else if (entry.is_regular_file(statusEc) &&
-                       endsWithIgnoreCase(entry.path().extension().string(), ".psc")) {
-                files.push_back(entry.path());
-            }
-        }
-    }
-    return files;
 }
 
 struct CiLess {
@@ -418,88 +394,13 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
                               "not what you recompile.)");
     }
 
-    std::string workDir;
-    std::string target;
-    std::optional<std::filesystem::path> stagingDir;
-    if (isDir) {
-        const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
-        auto staged = stageNamespacedScripts(
-            enumeratePscFiles(source),
-            std::filesystem::temp_directory_path() / ("FO4RE_PapyrusStage_" + std::to_string(ticks)));
-        if (!staged) return nlohmann::json(staged.error().message);
-        stagingDir = *staged;
-        workDir = stagingDir ? stagingDir->string() : source;
-        target = workDir;
-    } else {
-        const auto full = std::filesystem::absolute(source);
-        const auto fileDir = full.parent_path();
-        std::string objName;
-        try {
-            objName = fo4::papyrus::extractScriptName(readFileText(full));
-        } catch (...) {
-        }
-        std::vector<std::string> segments;
-        {
-            std::istringstream stream(objName);
-            std::string part;
-            while (std::getline(stream, part, ':')) {
-                if (!part.empty()) segments.push_back(part);
-            }
-        }
-        const auto depth = static_cast<int>(segments.size()) - 1;
-        std::filesystem::path root = fileDir;
-        bool layoutMatches = depth > 0;
-        for (int i = 0; i < depth; ++i) {
-            if (toLower(root.filename().string()) !=
-                toLower(segments[static_cast<std::size_t>(depth - 1 - i)])) {
-                layoutMatches = false;
-                break;
-            }
-            root = root.parent_path();
-            if (root.empty()) {
-                layoutMatches = false;
-                break;
-            }
-        }
-        if (layoutMatches) {
-            workDir = root.string();
-            target = objName;
-        } else {
-            workDir = fileDir.string();
-            target = full.filename().string();
-        }
-    }
-
-    std::vector<std::string> imp;
     const auto importsText = stringArgument(args, 2);
-    if (!isWhitespace(importsText)) {
-        std::istringstream stream(importsText);
-        std::string part;
-        while (std::getline(stream, part, ';')) {
-            auto cleaned = stripQuotes(part);
-            if (!cleaned.empty()) imp.push_back(std::move(cleaned));
-        }
-    }
-    for (const auto& base : locator_.papyrusBaseImports()) imp.push_back(base.string());
-    imp.push_back(workDir);
-
-    std::vector<std::string> distinct;
-    std::set<std::string, CiLess> seen;
-    for (auto& entry : imp) {
-        if (seen.insert(entry).second) distinct.push_back(std::move(entry));
-    }
-    std::ostringstream importArg;
-    for (std::size_t i = 0; i < distinct.size(); ++i) {
-        if (i) importArg << ';';
-        importArg << distinct[i];
-    }
-
     const auto outArg = stripQuotes(stringArgument(args, 1));
-    const auto outDir = outArg.empty() ? (isDir ? source : workDir) : outArg;
-    std::error_code ec;
-    std::filesystem::create_directories(outDir, ec);
-    if (ec) {
-        return nlohmann::json("Cannot create output dir '" + outDir + "': " + ec.message());
+    fo4::papyrus::CompilePlan plan;
+    try {
+        plan = fo4::papyrus::planCompile(source, outArg, importsText, locator_.papyrusBaseImports());
+    } catch (const fo4::papyrus::CompileStagingError& ex) {
+        return nlohmann::json(ex.what());
     }
 
     auto flags = stripQuotes(stringArgument(args, 3));
@@ -509,8 +410,8 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
     const bool release = boolArgument(args, 6);
 
     std::vector<std::string> processArgs{
-        target, "-f=\"" + flags + "\"", "-i=\"" + importArg.str() + "\"",
-        "-o=\"" + outDir + "\""};
+        plan.target, "-f=\"" + flags + "\"", "-i=\"" + plan.importArg + "\"",
+        "-o=\"" + plan.outDir + "\""};
     if (all || isDir) processArgs.push_back("-all");
     if (optimize) processArgs.push_back("-op");
     if (release) processArgs.push_back("-r");
@@ -524,7 +425,7 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
     process::Request request;
     request.executable = exePath;
     request.arguments = processArgs;
-    request.workingDirectory = workDir;
+    request.workingDirectory = plan.workDir;
     request.timeout = std::chrono::seconds(300);
     auto run = runner_.run(request);
     if (!run) return nlohmann::json("Failed to run the Papyrus compiler: " + run.error().message);
@@ -549,13 +450,13 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
     std::smatch batchMatch;
     if (std::regex_search(batch, batchMatch, std::regex(R"((\d+)\s+succeeded,\s+(\d+)\s+failed)"))) {
         sb << "RESULT: " << batchMatch[1].str() << " succeeded, " << batchMatch[2].str()
-           << " failed (output -> " << outDir << ")\n";
+           << " failed (output -> " << plan.outDir << ")\n";
     } else {
         sb << "RESULT: " << (run->exitCode == 0 ? "success" : "FAILED")
-           << " (output -> " << outDir << ")\n";
+           << " (output -> " << plan.outDir << ")\n";
     }
     sb << "\ncompiler: " << exePath << "\n";
-    sb << "workdir : " << workDir << "\n";
+    sb << "workdir : " << plan.workDir << "\n";
     sb << "args    : " << displayArgs.str() << "\n\n";
 
     std::vector<std::string> important;
@@ -585,10 +486,7 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
         const auto hint = diagnoseDependencies(combined);
         if (!hint.empty()) sb << "\n" << hint;
     }
-    if (stagingDir) {
-        std::error_code cleanupEc;
-        std::filesystem::remove_all(*stagingDir, cleanupEc);
-    }
+    fo4::papyrus::removeCompileStaging(plan);
     return nlohmann::json(sb.str());
 }
 
