@@ -1,6 +1,7 @@
 import { QUEST_HELP_TOPICS } from '../quest/questHelpTopics';
 import { DIALOGUE_HELP_TOPICS } from '../dialogue/dialogueHelpTopics';
 import { SCENE_HELP_TOPICS } from '../scene/sceneHelpTopics';
+import { WIZARD_HELP_TOPICS } from '../wizard/wizardHelpTopics';
 
 export interface HelpTopic {
   id: string;
@@ -47,6 +48,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
   ...QUEST_HELP_TOPICS,
   ...DIALOGUE_HELP_TOPICS,
   ...SCENE_HELP_TOPICS,
+  ...WIZARD_HELP_TOPICS,
 ];
 
 export const GETTING_STARTED: readonly string[] = [
@@ -60,6 +62,7 @@ export const SCREEN_TOPICS = {
   quest: ['quest-stage', 'objective', 'alias', ...QUEST_HELP_TOPICS.map(topic => topic.id)],
   dialogue: ['dialogue-topic', 'quest-stage', ...DIALOGUE_HELP_TOPICS.map(topic => topic.id)],
   scene: ['scene-phase', 'alias', ...SCENE_HELP_TOPICS.map(topic => topic.id)],
+  wizard: WIZARD_HELP_TOPICS.map(topic => topic.id),
 };
 
 export const getHelpTopic = (id: string): HelpTopic | undefined =>

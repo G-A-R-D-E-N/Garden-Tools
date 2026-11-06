@@ -1,22 +1,26 @@
 import { useState } from 'react';
-import { Clapperboard, Flag, MessageSquare, X } from 'lucide-react';
+import { Clapperboard, FilePlus2, Flag, MessageSquare, X } from 'lucide-react';
 import QuestEditor from './QuestEditor';
 import DialogueEditor from './DialogueEditor';
 import SceneEditor from './SceneEditor';
 import HelpPage from './help/HelpPage';
 import { useTour } from './help/useTour';
+import NewQuestWizard from './wizard/NewQuestWizard';
+import type { PickedRecord } from '../RecordPicker';
 import './Editors.css';
 
-type EditorKind = 'quest' | 'dialogue' | 'scene';
+type EditorKind = 'quest' | 'dialogue' | 'scene' | 'wizard';
 
 const CARDS = [
   { kind: 'quest', title: 'Quest', text: 'Stages, objectives and aliases for one quest.', icon: <Flag size={24} strokeWidth={1.5} /> },
   { kind: 'dialogue', title: 'Dialogue', text: 'Topics and the responses an NPC gives, for one quest.', icon: <MessageSquare size={24} strokeWidth={1.5} /> },
   { kind: 'scene', title: 'Scene', text: 'Phases, actors and actions of one scripted scene.', icon: <Clapperboard size={24} strokeWidth={1.5} /> },
+  { kind: 'wizard', title: 'New quest from template', text: 'Answer a few plain questions and get a working quest to edit.', icon: <FilePlus2 size={24} strokeWidth={1.5} /> },
 ] as const;
 
 export default function EditorsHome({ onClose }: { onClose: () => void }) {
   const [screen, setScreen] = useState<EditorKind | null>(null);
+  const [createdQuest, setCreatedQuest] = useState<PickedRecord | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const tour = useTour();
   const back = () => setScreen(null);
@@ -51,7 +55,10 @@ export default function EditorsHome({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           )}
-          {screen === 'quest' && <QuestEditor onBack={back} />}
+          {screen === 'wizard' && (
+            <NewQuestWizard onBack={back} onCreated={quest => { setCreatedQuest(quest); setScreen('quest'); }} />
+          )}
+          {screen === 'quest' && <QuestEditor onBack={back} initialQuest={createdQuest} />}
           {screen === 'dialogue' && <DialogueEditor onBack={back} />}
           {screen === 'scene' && <SceneEditor onBack={back} />}
         </div>
