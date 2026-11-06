@@ -1,8 +1,13 @@
 #include <cstddef>
+#include <cstring>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "RadiclePluginCellFixture.hpp"
@@ -21,6 +26,25 @@ std::size_t countAtX(const nlohmann::json& cell, float x) {
         if (reference.at("position").at("x") == x) ++count;
     }
     return count;
+}
+
+const fo4::Subrecord* findSubrecord(const fo4::Record& record, std::string_view signature) {
+    const auto wanted = fo4::Signature::from_string(signature);
+    for (const auto& sub : record.subrecords) {
+        if (sub.signature == wanted) return &sub;
+    }
+    return nullptr;
+}
+
+std::optional<std::vector<std::byte>> savedPatchXesp(fo4ide::plugin::RadiclePluginBackend& backend,
+                                                    const std::filesystem::path& root) {
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto reloaded = fo4::read_plugin_file(root / "Patch.esp");
+    const auto* record = fo4::find_record(reloaded, fo4::FormKey::parse("000801:Base.esm"));
+    REQUIRE(record != nullptr);
+    const auto* xesp = findSubrecord(*record, "XESP");
+    if (xesp == nullptr) return std::nullopt;
+    return xesp->data;
 }
 
 }  // namespace
@@ -211,4 +235,139 @@ TEST_CASE("Native cell properties edit refuses a link to a record that does not 
     CHECK(refused.error().type == "CellTargetMissing");
     CHECK(parseStringResult(backend.getCellEditHistory(nlohmann::json::array({"Patch.esp"})))
               .at("undoCount") == 0);
+}
+
+TEST_CASE("Native cell editor id null clears the id and undo restores it") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", patchEnvironment(root)).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto patchView = nlohmann::json::array({"Patch.esp"});
+    const auto editorIdOf = [&] {
+        return parseStringResult(backend.getPlacedReferences(cellView)).at("references")[0].at("editorId");
+    };
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", nlohmann::json{{"editorId", "RenamedRef"}}
+    })).has_value());
+    REQUIRE(editorIdOf() == "RenamedRef");
+
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", nlohmann::json{{"editorId", nullptr}}
+    })).has_value());
+    CHECK(editorIdOf() == "");
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 2);
+
+    REQUIRE(backend.undoCellEdit(patchView).has_value());
+    CHECK(editorIdOf() == "RenamedRef");
+}
+
+TEST_CASE("Native cell enable parent set and clear are separate undo steps") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", patchEnvironment(root)).has_value());
+
+    const auto patchView = nlohmann::json::array({"Patch.esp"});
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", nlohmann::json{{"enableParent", {{"parent", "000810:Base.esm"}, {"flags", 1}}}}
+    })).has_value());
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", nlohmann::json{{"enableParent", nullptr}}
+    })).has_value());
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 2);
+
+    REQUIRE(backend.undoCellEdit(patchView).has_value());
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 1);
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("redoCount") == 1);
+    REQUIRE(backend.undoCellEdit(patchView).has_value());
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 0);
+}
+
+TEST_CASE("Native cell enable parent writes XESP to the saved patch and a null clear removes it") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", patchEnvironment(root)).has_value());
+
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", nlohmann::json{{"enableParent", {{"parent", "000810:Base.esm"}, {"flags", 1}}}}
+    })).has_value());
+    const auto set = savedPatchXesp(backend, root);
+    REQUIRE(set.has_value());
+    REQUIRE(set->size() == 8);
+    std::uint32_t parent = 0;
+    std::memcpy(&parent, set->data(), 4);
+    CHECK((parent & 0x00FFFFFFu) == 0x810u);
+    CHECK(std::to_integer<int>((*set)[4]) == 1);
+
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", nlohmann::json{{"enableParent", nullptr}}
+    })).has_value());
+    CHECK_FALSE(savedPatchXesp(backend, root).has_value());
+}
+
+TEST_CASE("Native cell enable parent without flags saves flags 0") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", patchEnvironment(root)).has_value());
+
+    REQUIRE(backend.editPlacedReference(nlohmann::json::array({
+        "000801:Base.esm", "Patch.esp", nlohmann::json{{"enableParent", {{"parent", "000810:Base.esm"}}}}
+    })).has_value());
+    const auto saved = savedPatchXesp(backend, root);
+    REQUIRE(saved.has_value());
+    REQUIRE(saved->size() == 8);
+    CHECK(std::to_integer<int>((*saved)[4]) == 0);
+}
+
+TEST_CASE("Native cell enable parent refuses malformed or non-master parents without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Patch.esp", patchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", patchEnvironment(root)).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto patchView = nlohmann::json::array({"Patch.esp"});
+    const auto before = parseStringResult(backend.getPlacedReferences(cellView));
+    const auto refusal = [&](nlohmann::json enableParent) {
+        const auto result = backend.editPlacedReference(nlohmann::json::array({
+            "000801:Base.esm", "Patch.esp", nlohmann::json{{"enableParent", std::move(enableParent)}}
+        }));
+        return result.has_value() ? std::string{} : result.error().type;
+    };
+
+    CHECK(refusal(nlohmann::json::object()) == "PlacedEditArgumentsMissing");
+    CHECK(refusal({{"flags", 1}}) == "PlacedEditArgumentsMissing");
+    CHECK(refusal({{"parent", "000810"}}) == "InvalidFormKey");
+    CHECK(refusal({{"parent", "000810:Base.esm"}, {"flags", 256}}) == "PlacedEditArgumentsMissing");
+    CHECK(refusal({{"parent", "000810:Base.esm"}, {"flags", -1}}) == "PlacedEditArgumentsMissing");
+    CHECK(refusal({{"parent", "000810:Base.esm"}, {"flags", 1.5}}) == "PlacedEditArgumentsMissing");
+    CHECK(refusal({{"parent", "000810:Base.esm"}, {"flags", true}}) == "PlacedEditArgumentsMissing");
+    CHECK(refusal({{"parent", "000800:Source.esp"}}) == "PlacedEditInvalid");
+
+    CHECK(parseStringResult(backend.getPlacedReferences(cellView)) == before);
+    CHECK(parseStringResult(backend.getCellEditHistory(patchView)).at("undoCount") == 0);
 }
