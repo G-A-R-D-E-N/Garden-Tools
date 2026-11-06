@@ -63,8 +63,31 @@ std::vector<std::byte> make_extras() {
                                 rec("REFR", 0x2002,
                                     {{"NAME", bytes_of({0x2200})},
                                      {"DATA", floats({40.0f, 50.0f, 60.0f, 0.0f, 0.0f, 0.0f})}})});
+  const auto marker = rec("STAT", 0x2300,
+                          {{"EDID", zstring("TriggerMarker")}, {"MODL", zstring("Markers\\Trigger.nif")}});
+  const auto decal = rec("TXST", 0x2400,
+                         {{"EDID", zstring("ScorchDecal")},
+                          {"TX00", zstring("Decals\\Scorch.dds")},
+                          {"DODT", floats({64.0f, 0.0f, 32.0f})}});
+  const auto field = rec("CELL", 0x810,
+                         {{"EDID", zstring("Field")},
+                          {"FULL", zstring("Field Name")},
+                          {"XCLC", bytes_of({1, 2})}});
+  const auto field_persistent = grp(0x810, 8,
+                                    {rec("REFR", 0x2401,
+                                         {{"NAME", bytes_of({0x2400})},
+                                          {"DATA", floats({100.0f, 200.0f, 0.0f, 0.0f, 0.0f, 0.0f})}},
+                                         0x800)});
+  const auto field_temporary = grp(0x810, 9,
+                                   {rec("REFR", 0x2402,
+                                        {{"NAME", bytes_of({0x2300})},
+                                         {"DATA", floats({300.0f, 400.0f, 0.0f, 0.0f, 0.0f, 0.0f})}}),
+                                    rec("REFR", 0x2403,
+                                        {{"DATA", floats({500.0f, 600.0f, 0.0f, 0.0f, 0.0f, 0.0f})}})});
+  const auto world_children = grp(0x803, 1, {grp(0, 4, {grp(0, 5, {field, field_persistent, field_temporary})})});
   return make_plugin({}, {top("CELL", {grp(0, 2, {grp(0, 3, {cell, short_tail, bad_regions, merged, merged_refs})})}),
-                          top("WRLD", {world}), top("STAT", {stat}), top("SCOL", {scol})});
+                          top("WRLD", {world, world_children}), top("STAT", {stat, marker}),
+                          top("SCOL", {scol}), top("TXST", {decal})});
 }
 
 std::vector<std::byte> make_patch() {
@@ -76,7 +99,13 @@ std::vector<std::byte> make_patch() {
                          rec("REFR", 0x01000003,
                              {{"NAME", bytes_of({0x2100})},
                               {"DATA", floats({80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f})}})});
-  return make_plugin({"Extras.esp"}, {top("CELL", {grp(0, 2, {grp(0, 3, {merged, refs})})})});
+  const auto world = rec("WRLD", 0x803, {{"EDID", zstring("NotACell")}});
+  const auto field = rec("CELL", 0x810,
+                         {{"EDID", zstring("Field")},
+                          {"FULL", zstring("Patch Name")},
+                          {"XCLC", bytes_of({1, 2})}});
+  return make_plugin({"Extras.esp"}, {top("CELL", {grp(0, 2, {grp(0, 3, {merged, refs})})}),
+                                      top("WRLD", {world, grp(0x803, 1, {grp(0, 4, {grp(0, 5, {field})})})})});
 }
 
 void write_file(const std::filesystem::path& path, const std::vector<std::byte>& bytes) {
@@ -276,6 +305,76 @@ TEST_F(CellAbiTest, FindCellAtGridNotFound) {
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_env_find_cell_at_grid(env_, {nullptr, 0}, 0, 0, &found),
             RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(CellAbiTest, FindCellAtGridReturnsHighestPluginCellSummary) {
+  radicle_form_key found{};
+  ASSERT_EQ(radicle_env_find_cell_at_grid(env_, {"Extras.esp", 0x803}, 1, 2, &found),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_STREQ(found.plugin, "Extras.esp");
+  EXPECT_EQ(found.local_id, 0x810u);
+
+  radicle_cell_view* view = nullptr;
+  ASSERT_EQ(radicle_env_cell_view(env_, found, &view), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_cell_summary summary{};
+  ASSERT_EQ(radicle_cell_view_summary(view, &summary), RADICLE_STATUS_OK);
+  EXPECT_EQ(summary.interior, 0);
+  EXPECT_EQ(summary.has_grid, 1);
+  EXPECT_EQ(summary.grid_x, 1);
+  EXPECT_EQ(summary.grid_y, 2);
+  EXPECT_EQ(summary.has_worldspace, 1);
+  EXPECT_STREQ(summary.worldspace.plugin, "Extras.esp");
+  EXPECT_EQ(summary.worldspace.local_id, 0x803u);
+  EXPECT_STREQ(summary.editor_id, "Field");
+  EXPECT_EQ(summary.name_kind, RADICLE_NAME_INLINE);
+  EXPECT_STREQ(summary.name_text, "Patch Name");
+  EXPECT_EQ(summary.winning_plugin, 1u);
+  radicle_cell_view_free(view);
+}
+
+TEST_F(CellAbiTest, CellViewReportsReferenceFlagsDecalAndMarkerBases) {
+  radicle_cell_view* view = nullptr;
+  ASSERT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x810}, &view), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(radicle_cell_view_reference_count(view), 3u);
+
+  radicle_cell_reference decal_ref{};
+  ASSERT_EQ(radicle_cell_view_reference(view, 0, &decal_ref), RADICLE_STATUS_OK);
+  EXPECT_EQ(decal_ref.key.local_id, 0x2401u);
+  EXPECT_EQ(decal_ref.has_base, 1);
+  EXPECT_EQ(decal_ref.persistent, 1);
+  EXPECT_EQ(decal_ref.initially_disabled, 1);
+  ASSERT_NE(decal_ref.base_info, nullptr);
+  EXPECT_STREQ(decal_ref.base_info->type_name, "TextureSet");
+  EXPECT_EQ(decal_ref.base_info->has_decal, 1);
+  EXPECT_STREQ(decal_ref.base_info->decal_diffuse, "Decals\\Scorch.dds");
+  EXPECT_EQ(decal_ref.base_info->has_decal_width, 1);
+  EXPECT_EQ(decal_ref.base_info->decal_width, 64.0f);
+  EXPECT_EQ(decal_ref.base_info->has_decal_height, 1);
+  EXPECT_EQ(decal_ref.base_info->decal_height, 32.0f);
+  EXPECT_EQ(decal_ref.base_info->editor_marker, 0);
+
+  radicle_cell_reference marker_ref{};
+  ASSERT_EQ(radicle_cell_view_reference(view, 1, &marker_ref), RADICLE_STATUS_OK);
+  EXPECT_EQ(marker_ref.key.local_id, 0x2402u);
+  EXPECT_EQ(marker_ref.persistent, 0);
+  EXPECT_EQ(marker_ref.initially_disabled, 0);
+  ASSERT_NE(marker_ref.base_info, nullptr);
+  EXPECT_EQ(marker_ref.base_info->editor_marker, 1);
+  EXPECT_EQ(marker_ref.base_info->has_decal, 0);
+
+  radicle_cell_reference bare_ref{};
+  ASSERT_EQ(radicle_cell_view_reference(view, 2, &bare_ref), RADICLE_STATUS_OK);
+  EXPECT_EQ(bare_ref.key.local_id, 0x2403u);
+  EXPECT_EQ(bare_ref.has_base, 0);
+  EXPECT_EQ(bare_ref.base_info, nullptr);
+  EXPECT_EQ(bare_ref.position[0], 500.0f);
+  radicle_cell_view_free(view);
+
+  radicle_cell_view* non_cell = nullptr;
+  EXPECT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x803}, &non_cell), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(non_cell, nullptr);
 }
 
 TEST_F(CellAbiTest, CellViewListsMergedReferencesAndBaseInfo) {

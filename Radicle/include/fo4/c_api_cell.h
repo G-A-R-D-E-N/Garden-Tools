@@ -228,6 +228,7 @@ RADICLE_API radicle_status radicle_env_find_cell_at_grid(const radicle_env* env,
                                                          int32_t x,
                                                          int32_t y,
                                                          radicle_form_key* out_key);
+/* The view must be freed with radicle_cell_view_free and must not outlive env; its form_key.plugin pointers borrow from env. */
 RADICLE_API radicle_status radicle_env_cell_view(const radicle_env* env,
                                                  radicle_form_key cell,
                                                  radicle_cell_view** out_view);
@@ -242,6 +243,7 @@ RADICLE_API radicle_status radicle_cell_view_scol_part(const radicle_cell_view* 
                                                        size_t part_index,
                                                        radicle_scol_part* out_part);
 RADICLE_API void radicle_cell_view_free(radicle_cell_view* view);
+/* The info must be freed with radicle_base_object_info_free and must not outlive env; its form_key.plugin pointers borrow from env. */
 RADICLE_API radicle_status radicle_env_base_object_info(const radicle_env* env,
                                                         radicle_form_key base,
                                                         radicle_base_object_info** out_info);

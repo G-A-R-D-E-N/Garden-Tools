@@ -167,13 +167,13 @@ radicle_status radicle_env_find_cell_at_grid(const radicle_env* env,
   if (env == nullptr || out_key == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env and out_key are required");
   }
-  const auto worldspace = to_form_key(world);
-  if (!worldspace) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid worldspace key is required");
-  if (!fo4::forms::exterior_cell_coordinate_valid(x) || !fo4::forms::exterior_cell_coordinate_valid(y)) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
-                "exterior CELL coordinates must be within -110..110");
-  }
   return guarded("unknown exception while finding a cell at a grid", [&] {
+    const auto worldspace = to_form_key(world);
+    if (!worldspace) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid worldspace key is required");
+    if (!fo4::forms::exterior_cell_coordinate_valid(x) || !fo4::forms::exterior_cell_coordinate_valid(y)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "exterior CELL coordinates must be within -110..110");
+    }
     const auto cell = fo4::env::find_cell_at_grid(env->value, *worldspace, x, y);
     if (!cell) return fail(RADICLE_STATUS_NOT_FOUND, "no exterior CELL at that grid");
     *out_key = to_c_key(*env, cell);
@@ -189,9 +189,9 @@ radicle_status radicle_env_cell_view(const radicle_env* env,
   if (env == nullptr || out_view == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env and out_view are required");
   }
-  const auto key = to_form_key(cell);
-  if (!key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid CELL key is required");
   return guarded("unknown exception while listing cell references", [&] {
+    const auto key = to_form_key(cell);
+    if (!key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid CELL key is required");
     fo4::env::CellReferences data;
     try {
       data = fo4::env::list_cell_references(env->value, *key);
@@ -268,9 +268,9 @@ radicle_status radicle_env_base_object_info(const radicle_env* env,
   if (env == nullptr || out_info == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env and out_info are required");
   }
-  const auto key = to_form_key(base);
-  if (!key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid base object key is required");
   return guarded("unknown exception while describing a base object", [&] {
+    const auto key = to_form_key(base);
+    if (!key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid base object key is required");
     const auto info = fo4::env::describe_base_object(env->value, *key);
     if (!info) return fail(RADICLE_STATUS_NOT_FOUND, "no base object with that key");
     auto storage = std::make_unique<BaseStorage>();
