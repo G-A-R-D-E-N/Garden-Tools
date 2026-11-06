@@ -84,6 +84,12 @@ RADICLE_API radicle_status radicle_papyrus_runtime_register_custom_event(radicle
 RADICLE_API radicle_status radicle_papyrus_runtime_register_timer(radicle_papyrus_runtime* runtime, uint64_t instance, double interval_seconds, int32_t repeats, radicle_papyrus_clock clock, int64_t* out_handle);
 RADICLE_API radicle_status radicle_papyrus_runtime_unregister(radicle_papyrus_runtime* runtime, int64_t handle, int32_t* out_removed);
 RADICLE_API radicle_status radicle_papyrus_runtime_advance_clock(radicle_papyrus_runtime* runtime, const char* owner, double delta_seconds, radicle_papyrus_clock clock, int32_t* out_fired);
+/* Requires: names and values hold count entries and are copied; one bad entry refuses the call and leaves no instance behind. */
+RADICLE_API radicle_status radicle_papyrus_runtime_attach_with_properties(radicle_papyrus_runtime* runtime, const char* script, radicle_papyrus_owner_kind owner_kind, const char* base_form_key, const char* discriminator, const char* const* names, const radicle_papyrus_value* const* values, size_t count, uint64_t* out_instance);
+RADICLE_API radicle_status radicle_papyrus_runtime_get_property(const radicle_papyrus_runtime* runtime, uint64_t instance, const char* name, radicle_papyrus_value** out_value);
+RADICLE_API radicle_status radicle_papyrus_runtime_register_remote_event(radicle_papyrus_runtime* runtime, uint64_t instance, radicle_papyrus_owner_kind source_kind, const char* source_base_form_key, const char* source_discriminator, const char* event_name, int64_t* out_handle);
+/* Requires: capacity entries in out_handles and out_instances (either may be null with capacity 0); out_count is the full match count, an owner with no instance reports instance 0. */
+RADICLE_API radicle_status radicle_papyrus_runtime_match_remote_event(const radicle_papyrus_runtime* runtime, radicle_papyrus_owner_kind source_kind, const char* source_base_form_key, const char* source_discriminator, const char* event_name, int64_t* out_handles, uint64_t* out_instances, size_t capacity, size_t* out_count);
 
 #ifdef __cplusplus
 }

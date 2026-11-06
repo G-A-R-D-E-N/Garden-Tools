@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -310,9 +311,24 @@ std::vector<std::string> stringsMember(const JsonValue& value, const std::string
     return out;
 }
 
+bool blankText(const std::string& text) {
+    return std::all_of(text.begin(), text.end(), [](char ch) { return ch == ' ' || (ch >= '\t' && ch <= '\r'); });
+}
+
+std::string registrationRefusal(const std::vector<SavedRegistration>& registrations) {
+    for (const SavedRegistration& registration : registrations) {
+        if (lowerAscii(registration.kind) == "remoteevent" && blankText(registration.sourceKey)) {
+            return "a remote event registration needs a source owner key";
+        }
+    }
+    return {};
+}
+
 }  // namespace
 
 std::string SaveState::serialize() const {
+    const std::string refusal = registrationRefusal(registrations);
+    if (!refusal.empty()) throw std::invalid_argument(refusal);
     std::string out;
     out += "{\n";
     out += "  \"version\": " + std::to_string(version) + ",\n";
@@ -350,7 +366,9 @@ std::string SaveState::serialize() const {
         out += "      \"event\": " + quote(registration.eventName) + ",\n";
         out += "      \"interval\": " + numberText(registration.interval) + ",\n";
         out += "      \"repeats\": " + std::string(registration.repeats ? "true" : "false") + ",\n";
-        out += "      \"clock\": " + quote(registration.clock) + "\n";
+        out += "      \"clock\": " + quote(registration.clock);
+        if (!registration.sourceKey.empty()) out += ",\n      \"source\": " + quote(registration.sourceKey);
+        out += "\n";
         out += "    }";
     }
     out += registrations.empty() ? "],\n" : "\n  ],\n";
@@ -447,7 +465,13 @@ std::optional<SaveState> SaveState::deserialize(std::string_view json, std::stri
                                member(node, "repeats")->kind == JsonValue::Kind::Bool &&
                                member(node, "repeats")->boolean;
         registration.clock = textMember(node, "clock");
+        registration.sourceKey = textMember(node, "source");
         state.registrations.push_back(std::move(registration));
+    }
+    const std::string refusal = registrationRefusal(state.registrations);
+    if (!refusal.empty()) {
+        error = refusal;
+        return std::nullopt;
     }
     for (const JsonValue& node : timersNode->array) {
         SavedTimer timer;
@@ -470,6 +494,8 @@ std::optional<SaveState> SaveState::deserialize(std::string_view json, std::stri
 SaveState captureSaveState(std::vector<SavedThread> threads,
                            std::vector<SavedRegistration> registrations, std::vector<SavedTimer> timers,
                            std::vector<SavedObjective> objectives) {
+    const std::string refusal = registrationRefusal(registrations);
+    if (!refusal.empty()) throw std::invalid_argument(refusal);
     SaveState state;
     state.threads = std::move(threads);
     state.registrations = std::move(registrations);
@@ -493,6 +519,8 @@ SaveState captureSaveState(std::vector<SavedThread> threads,
 
 RestoreReport restoreSaveState(const SaveState& state,
                                const std::map<std::string, std::string>& currentFingerprints) {
+    const std::string refusal = registrationRefusal(state.registrations);
+    if (!refusal.empty()) throw std::invalid_argument(refusal);
     RestoreReport report;
     for (const SavedThread& thread : state.threads) {
         ThreadRestore outcome;
