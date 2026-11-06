@@ -98,7 +98,7 @@ endif()
 fo4ide_enable_warnings(fo4ide_plugin)
 fo4ide_enable_sanitizers(fo4ide_plugin)
 if(FO4IDE_BUILD_TESTS)
-    target_compile_definitions(fo4ide_plugin PRIVATE FO4IDE_TEST_HOOKS)
+    target_compile_definitions(fo4ide_plugin PUBLIC FO4IDE_TEST_HOOKS)
 endif()
 
 add_library(fo4ide_logging logging/Logger.cpp)
