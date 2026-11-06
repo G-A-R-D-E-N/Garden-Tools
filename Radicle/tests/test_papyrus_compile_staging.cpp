@@ -85,7 +85,7 @@ TEST(PapyrusCompileStaging, RefusesAnUnsafeScriptNameAndWritesNothingOutsideStag
     if (hasEscape) std::filesystem::remove(escaped, ec);
     ASSERT_TRUE(message.has_value());
     EXPECT_NE(message->find(fragment), std::string::npos);
-    if (hasEscape) EXPECT_FALSE(escapedWritten);
+    if (hasEscape) { EXPECT_FALSE(escapedWritten); }
     EXPECT_FALSE(std::filesystem::exists(staging));
   }
 }
