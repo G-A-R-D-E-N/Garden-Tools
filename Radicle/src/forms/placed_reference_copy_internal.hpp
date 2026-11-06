@@ -74,6 +74,15 @@ void validate_destination_record_path(
     const PluginFormIdContext& destination_context,
     std::string_view label);
 
+Group* ensure_group_path(Plugin& plugin,
+                         const std::vector<const Group*>& source_path,
+                         const PluginFormIdContext& source_context,
+                         const PluginFormIdContext& destination_context);
+
+void add_missing_masters(Plugin& next,
+                         const Plugin& source,
+                         const std::set<PluginKey>& required_owners);
+
 inline constexpr float k_exterior_cell_span = 4096.0f;
 
 inline GroupHeader group_header(GroupType type, std::uint32_t label) {

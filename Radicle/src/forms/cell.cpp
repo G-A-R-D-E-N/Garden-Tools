@@ -187,6 +187,8 @@ Group* ensure_grid_group(Group& parent,
   return &std::get<Group>(parent.children.back());
 }
 
+}  // namespace
+
 std::optional<std::pair<std::int32_t, std::int32_t>> cell_grid(
     const Record& record) {
   const Subrecord* grid = nullptr;
@@ -206,6 +208,8 @@ std::optional<std::pair<std::int32_t, std::int32_t>> cell_grid(
       read_i32(grid->data, 4),
   };
 }
+
+namespace {
 
 Record detach_created_cell(Plugin& plugin, const FormKey& key) {
   for (std::size_t group_index = 0; group_index < plugin.groups.size(); ++group_index) {

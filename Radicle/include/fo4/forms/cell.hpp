@@ -9,6 +9,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 
 namespace fo4::forms {
 
@@ -83,5 +84,7 @@ const Record* find_exterior_cell(const Plugin& plugin,
                                  std::int32_t y);
 
 const Record* find_persistent_exterior_cell(const Plugin& plugin, const FormKey& worldspace);
+
+std::optional<std::pair<std::int32_t, std::int32_t>> cell_grid(const Record& record);
 
 }  // namespace fo4::forms

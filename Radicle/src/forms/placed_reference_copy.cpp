@@ -274,9 +274,24 @@ void validate_destination_record_path(
   }
 }
 
-}  // namespace detail
-
-namespace {
+void add_missing_masters(Plugin& next,
+                         const Plugin& source,
+                         const std::set<PluginKey>& required_owners) {
+  std::vector<MasterDescriptor> masters;
+  masters.reserve(next.header.masters.size() + required_owners.size());
+  for (const auto& master : next.header.masters) {
+    masters.push_back({master.key, master.kind});
+  }
+  bool added_master = false;
+  for (const auto& owner : required_owners) {
+    if (owner == next.key || has_master(next, owner)) continue;
+    masters.push_back({owner, owner_kind(source, owner)});
+    added_master = true;
+  }
+  if (added_master) {
+    next = remap_plugin_masters(std::move(next), std::move(masters));
+  }
+}
 
 Group* ensure_group_path(Plugin& plugin,
                          const std::vector<const Group*>& source_path,
@@ -314,6 +329,10 @@ Group* ensure_group_path(Plugin& plugin,
   }
   return current;
 }
+
+}  // namespace detail
+
+namespace {
 
 bool replace_record(Plugin& plugin, const FormKey& key, Record replacement) {
   bool replaced = false;
@@ -454,20 +473,7 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
     required_owners.insert(link.key.owner());
   }
 
-  std::vector<MasterDescriptor> masters;
-  masters.reserve(next.header.masters.size() + required_owners.size());
-  for (const auto& master : next.header.masters) {
-    masters.push_back({master.key, master.kind});
-  }
-  bool added_master = false;
-  for (const auto& owner : required_owners) {
-    if (owner == next.key || has_master(next, owner)) continue;
-    masters.push_back({owner, owner_kind(source, owner)});
-    added_master = true;
-  }
-  if (added_master) {
-    next = remap_plugin_masters(std::move(next), std::move(masters));
-  }
+  add_missing_masters(next, source, required_owners);
 
   const auto destination_context = plugin_form_id_context(next);
 
@@ -568,20 +574,7 @@ PlacedReferenceCopyNewResult copy_placed_reference_as_new(
     required_owners.insert(link.key.owner());
   }
 
-  std::vector<MasterDescriptor> masters;
-  masters.reserve(next.header.masters.size() + required_owners.size());
-  for (const auto& master : next.header.masters) {
-    masters.push_back({master.key, master.kind});
-  }
-  bool added_master = false;
-  for (const auto& owner : required_owners) {
-    if (owner == next.key || has_master(next, owner)) continue;
-    masters.push_back({owner, owner_kind(source, owner)});
-    added_master = true;
-  }
-  if (added_master) {
-    next = remap_plugin_masters(std::move(next), std::move(masters));
-  }
+  add_missing_masters(next, source, required_owners);
 
   const auto destination_context = plugin_form_id_context(next);
 
