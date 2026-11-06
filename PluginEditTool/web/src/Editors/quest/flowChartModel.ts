@@ -8,6 +8,7 @@ const END_GAP_Y = 28;
 const END_HEIGHT = 46;
 const END_GAP_X = 8;
 const JUMP_LANE = 40;
+const ARC_BOW = 12;
 
 const ENDINGS = [
   { flag: LOG_ENTRY_FLAG_OPTIONS[0], badge: 'Completes quest' },
@@ -144,6 +145,7 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
   });
 
   for (const { jump, from, to } of arcs) {
+    const bow = to > from ? ARC_BOW : -ARC_BOW;
     arrows.push({
       id: `jump:${jump.from}:${jump.to}`,
       kind: 'jump',
@@ -154,7 +156,7 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
       y1: top,
       x2: to,
       y2: top,
-      d: `M${from} ${top} C${from} ${top - JUMP_LANE} ${to} ${top - JUMP_LANE} ${to} ${top}`,
+      d: `M${from} ${top} C${from + bow} ${top - JUMP_LANE} ${to + bow} ${top - JUMP_LANE} ${to} ${top}`,
     });
   }
 

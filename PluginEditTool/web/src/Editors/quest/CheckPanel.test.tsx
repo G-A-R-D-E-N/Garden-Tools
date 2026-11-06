@@ -1,7 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import QuestEditor from '../QuestEditor';
+import type { QuestSnapshot } from './questBackend';
 import { openQuest, QUEST, stubBackend } from './questTestHarness';
+import { useQuestCheck } from './useQuestCheck';
 
 const scrollIntoView = vi.fn();
 
@@ -13,6 +15,15 @@ const TWO_STAGES = {
 };
 const BRANCH = '000810:Patch.esp';
 const OUT_OF_DATE = 'This list is out of date. Check this quest again.';
+const PLUGIN = 'Patch.esp';
+const EMPTY_SNAPSHOT: QuestSnapshot = { stages: [], objectives: [], aliases: [], jumps: [], fragmentScripts: [] };
+const questRow = (subrecord: string, message: string) =>
+  JSON.stringify([{ Code: 'unresolved_link', Severity: 'error', FormKey: QUEST, Subrecord: subrecord, Message: message }]);
+const deferredReply = () => {
+  let resolve: (raw: string) => void = () => {};
+  const promise = new Promise<string>(done => { resolve = done; });
+  return { promise, resolve };
+};
 
 const checkButton = () => screen.getByRole('button', { name: 'Check this quest' }) as HTMLButtonElement;
 const runCheck = async () => {
@@ -158,4 +169,104 @@ it('Detects: a saved stage makes the check results out of date, and checking aga
   await runCheck();
   await waitFor(() => expect(screen.queryByText(OUT_OF_DATE)).toBeNull());
   expect(screen.getByText('No problems found.')).toBeTruthy();
+});
+
+it('Detects: a slow first record check that finishes after a second run started is dropped, so the second run result is the one shown', async () => {
+  const first = deferredReply();
+  const second = deferredReply();
+  stubBackend({ CheckForErrors: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise) });
+  const { result } = renderHook(() => useQuestCheck(PLUGIN, QUEST, EMPTY_SNAPSHOT));
+  act(() => result.current.run());
+  act(() => result.current.run());
+  await act(async () => { second.resolve(questRow('ALID', 'Second run finding')); });
+  await waitFor(() => expect(result.current.result?.findings.map(finding => finding.message)).toEqual(['Second run finding']));
+  await act(async () => {
+    first.resolve(questRow('ALID', 'First run finding'));
+    await new Promise(done => setTimeout(done, 0));
+  });
+  expect(result.current.result?.findings.map(finding => finding.message)).toEqual(['Second run finding']);
+  expect(result.current.running).toBe(false);
+});
+
+it('Detects: an edit saved while the record check is still running marks the result out of date when it arrives', async () => {
+  let finish: (raw: string) => void = () => {};
+  const backend = stubBackend({
+    GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
+    CheckForErrors: vi.fn(() => new Promise<string>(resolve => { finish = resolve; })),
+  });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  await runCheck();
+  expect(await screen.findByText('Checking this quest...')).toBeTruthy();
+  const logText = await screen.findByLabelText('Stage 10 log entry 1 text');
+  fireEvent.change(logText, { target: { value: 'Find the courier at the gate' } });
+  fireEvent.blur(logText);
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
+  finish('[]');
+  expect(await screen.findByText('No problems found.')).toBeTruthy();
+  expect(screen.getByText(OUT_OF_DATE)).toBeTruthy();
+});
+
+it('Detects: Show the aliases pane on an alias finding moves focus to that pane', async () => {
+  stubBackend({
+    GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
+    CheckForErrors: vi.fn(async () => questRow('ALID', 'Alias link is broken')),
+  });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  await runCheck();
+  fireEvent.click(await screen.findByRole('button', { name: 'Show the aliases pane' }));
+  expect(document.activeElement?.id).toBe('quest-aliases-title');
+});
+
+it('Detects: Show the fragments pane on a script finding moves focus to that pane', async () => {
+  stubBackend({
+    GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
+    CheckForErrors: vi.fn(async () => questRow('VMAD', 'Fragment script is broken')),
+  });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  await runCheck();
+  fireEvent.click(await screen.findByRole('button', { name: 'Show the fragments pane' }));
+  expect(document.activeElement?.id).toBe('quest-fragments-title');
+});
+
+it('Detects: a saved objective makes the check results out of date, so the list is not presented as current', async () => {
+  const backend = stubBackend({ GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)) });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  await runCheck();
+  await screen.findByText('No problems found.');
+  const text = await screen.findByLabelText('Objective 10 text');
+  fireEvent.change(text, { target: { value: 'Locate the courier at the gate' } });
+  fireEvent.blur(text);
+  await waitFor(() => expect(backend.SetQuestObjectives).toHaveBeenCalledTimes(1));
+  expect(await screen.findByText(OUT_OF_DATE)).toBeTruthy();
+});
+
+it('Detects: a saved alias makes the check results out of date, so the list is not presented as current', async () => {
+  const backend = stubBackend({ GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)) });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  await runCheck();
+  await screen.findByText('No problems found.');
+  const name = await screen.findByLabelText('Alias 0 name');
+  fireEvent.change(name, { target: { value: 'Courier North' } });
+  fireEvent.blur(name);
+  await waitFor(() => expect(backend.SetQuestAliases).toHaveBeenCalledTimes(1));
+  expect(await screen.findByText(OUT_OF_DATE)).toBeTruthy();
+});
+
+it('Detects: a written script function makes the check results out of date, because the fragment jumps are read again', async () => {
+  const backend = stubBackend({ GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)) });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  await runCheck();
+  await screen.findByText('No problems found.');
+  fireEvent.change(screen.getByLabelText('Script name'), { target: { value: 'QF_Courier_0010' } });
+  fireEvent.change(screen.getByLabelText('Script output folder'), { target: { value: 'C:/Out' } });
+  fireEvent.change(screen.getByLabelText('Script imports folder'), { target: { value: 'C:/Imports' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Write script function' }));
+  await waitFor(() => expect(backend.SetQuestFragment).toHaveBeenCalledTimes(1));
+  expect(await screen.findByText(OUT_OF_DATE)).toBeTruthy();
 });
