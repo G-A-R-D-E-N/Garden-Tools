@@ -22,6 +22,8 @@ enum class ConditionScopeKind {
   message_button,
   terminal_body_text,
   terminal_menu_item,
+  scene_phase_start,
+  scene_phase_completion,
 };
 
 struct ConditionScopeDescriptor {

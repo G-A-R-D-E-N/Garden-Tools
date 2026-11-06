@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,7 @@ namespace fo4::papyrus {
 enum class RegistrationKind : std::uint8_t {
     CustomEvent = 0,
     Timer = 1,
+    RemoteEvent = 2,
 };
 
 enum class ClockSource : std::uint8_t {
@@ -26,7 +28,9 @@ struct ScriptRegistration {
     double intervalSeconds{0.0};
     bool repeats{false};
     ClockSource clock{ClockSource::RealTime};
+    std::optional<OwnerId> source;
 
+    static ScriptRegistration forRemoteEvent(OwnerId source, std::string eventName);
     static ScriptRegistration forCustomEvent(std::string eventName);
     static ScriptRegistration forTimer(double intervalSeconds, bool repeats,
                                        ClockSource clock = ClockSource::RealTime);
@@ -52,6 +56,7 @@ public:
     bool unregister(std::int64_t handle);
     std::size_t unregisterAll(const OwnerId& owner);
     std::vector<const RegistrationEntry*> matchCustomEvent(const std::string& eventName) const;
+    std::vector<const RegistrationEntry*> matchRemoteEvent(const OwnerId& source, const std::string& eventName) const;
     std::int32_t advance(const std::string& owner, double deltaSeconds, ClockSource clock);
     std::size_t count() const { return entries_.size(); }
     std::int64_t fired() const { return fired_; }

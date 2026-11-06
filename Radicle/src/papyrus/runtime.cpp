@@ -82,9 +82,45 @@ std::optional<InstanceId> Runtime::attach(const std::string& scriptName, const O
     instance.owner = owner;
     instance.script = object->name;
     instance.state = object->autoStateName;
-    instance.properties = std::move(properties);
+    for (auto& [name, value] : properties) instance.properties[fold(name)] = std::move(value);
     instances_.emplace(instance.id, std::move(instance));
     return nextInstance_ - 1;
+}
+
+AttachResult Runtime::attachWithProperties(const std::string& scriptName, const OwnerId& owner,
+                                           const std::vector<std::pair<std::string, Value>>& properties) {
+    AttachResult result;
+    if (findObject(scriptName) == nullptr) {
+        result.refusal = AttachRefusal::UnknownScript;
+        result.reason = "no loaded pex defines the script " + scriptName;
+        return result;
+    }
+    std::map<std::string, Value> folded;
+    for (const auto& [name, value] : properties) {
+        const bool blank = std::all_of(name.begin(), name.end(), [](char ch) {
+            return ch == ' ' || (ch >= '\t' && ch <= '\r');
+        });
+        if (blank) {
+            result.refusal = AttachRefusal::EmptyPropertyName;
+            result.reason = "an empty property name on " + scriptName + " is unsupported";
+            return result;
+        }
+        if (!folded.emplace(fold(name), value).second) {
+            result.refusal = AttachRefusal::DuplicatePropertyName;
+            result.reason = "the property " + name + " is given twice on " + scriptName;
+            return result;
+        }
+    }
+    result.instance = attach(scriptName, owner, std::move(folded));
+    return result;
+}
+
+std::optional<Value> Runtime::instanceProperty(InstanceId instance, const std::string& name) const {
+    const Instance* found = findInstance(instance);
+    if (found == nullptr) return std::nullopt;
+    const auto value = found->properties.find(fold(name));
+    if (value == found->properties.end()) return std::nullopt;
+    return value->second;
 }
 
 bool Runtime::detach(InstanceId instance) {

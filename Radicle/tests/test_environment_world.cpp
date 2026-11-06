@@ -2,6 +2,7 @@
 #include "fo4/c_api_records.h"
 #include "fo4/environment/world.hpp"
 #include "env_node_fixture.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "plugin_bytes.hpp"
 #include "xcll_fixture.hpp"
 
@@ -14,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -107,6 +109,17 @@ protected:
 
 fo4::FormKey key(std::string_view text) {
   return fo4::FormKey::parse(text);
+}
+
+class EnvironmentBorrow : public WorldEnvironmentTest {};
+
+std::vector<fo4::Plugin> read_stamped(const std::vector<std::filesystem::path>& paths) {
+  std::vector<fo4::Plugin> plugins;
+  for (const auto& path : paths) plugins.push_back(fo4::read_plugin_file(path));
+  for (std::size_t i = 1; i < plugins.size(); ++i) {
+    fo4::stamp_master_kinds(plugins[i], std::span<const fo4::Plugin>(plugins).first(i));
+  }
+  return plugins;
 }
 
 Node parented_world(std::uint32_t id, std::uint32_t parent, std::uint8_t flags,
@@ -726,4 +739,84 @@ TEST_F(WorldEnvironmentTest, WorldspaceWithoutDnamResolvesZeroWaterHeight) {
   EXPECT_EQ(c_selection.has_height, 1);
   EXPECT_EQ(c_selection.height, 0.0f);
   radicle_env_destroy(handle);
+}
+
+TEST_F(EnvironmentBorrow, WinnersAndVersionsMatchFromPlugins) {
+  const auto owned = fo4::env::Environment::load(paths_);
+  const auto plugins = read_stamped(paths_);
+  const std::vector<const fo4::Plugin*> ordered{&plugins[0], &plugins[1]};
+  const auto borrowed = fo4::env::Environment::borrow(ordered);
+
+  ASSERT_EQ(borrowed.plugins().size(), owned.plugins().size());
+  for (std::size_t i = 0; i < owned.plugins().size(); ++i) {
+    EXPECT_EQ(borrowed.plugins()[i].key.filename(), owned.plugins()[i].key.filename());
+  }
+  for (const char* id : {"000802:Base.esm", "000811:Base.esm", "000812:Base.esm", "000813:Base.esm", "000900:Patch.esp"}) {
+    const auto form_key = key(id);
+    const auto* owned_win = owned.winner(form_key);
+    const auto* borrowed_win = borrowed.winner(form_key);
+    ASSERT_NE(owned_win, nullptr);
+    ASSERT_NE(borrowed_win, nullptr);
+    EXPECT_EQ(borrowed_win->plugin, owned_win->plugin);
+    EXPECT_EQ(borrowed_win->record->form_key, owned_win->record->form_key);
+    EXPECT_EQ(borrowed.versions(form_key).size(), owned.versions(form_key).size());
+    EXPECT_EQ(borrowed.metadata(*borrowed_win).editor_id, owned.metadata(*owned_win).editor_id);
+  }
+
+  const auto cell = key("000802:Base.esm");
+  const auto owned_children = owned.cell_children(cell);
+  const auto borrowed_children = borrowed.cell_children(cell);
+  ASSERT_EQ(borrowed_children.size(), 3u);
+  ASSERT_EQ(borrowed_children.size(), owned_children.size());
+  for (std::size_t i = 0; i < owned_children.size(); ++i) {
+    EXPECT_EQ(borrowed_children[i].ref->record->form_key, owned_children[i].ref->record->form_key);
+    EXPECT_EQ(borrowed_children[i].ref->plugin, owned_children[i].ref->plugin);
+    EXPECT_EQ(borrowed_children[i].persistent, owned_children[i].persistent);
+  }
+
+  const auto owned_cells = owned.winners_of(fo4::Signature{'C', 'E', 'L', 'L'});
+  const auto borrowed_cells = borrowed.winners_of(fo4::Signature{'C', 'E', 'L', 'L'});
+  ASSERT_EQ(borrowed_cells.size(), owned_cells.size());
+  for (std::size_t i = 0; i < owned_cells.size(); ++i) {
+    EXPECT_EQ(borrowed_cells[i]->record->form_key, owned_cells[i]->record->form_key);
+  }
+
+  const auto* owned_edid = owned.find_by_editor_id("exterior12", fo4::Signature{'C', 'E', 'L', 'L'});
+  const auto* borrowed_edid = borrowed.find_by_editor_id("exterior12", fo4::Signature{'C', 'E', 'L', 'L'});
+  ASSERT_NE(owned_edid, nullptr);
+  ASSERT_NE(borrowed_edid, nullptr);
+  EXPECT_EQ(borrowed_edid->record->form_key, owned_edid->record->form_key);
+}
+
+TEST_F(EnvironmentBorrow, DoesNotCopyPlugins) {
+  const auto plugins = read_stamped(paths_);
+  const std::vector<const fo4::Plugin*> ordered{&plugins[0], &plugins[1]};
+  const auto borrowed = fo4::env::Environment::borrow(ordered);
+
+  EXPECT_EQ(&borrowed.plugin(0), &plugins[0]);
+  EXPECT_EQ(&borrowed.plugin(1), &plugins[1]);
+
+  const auto base_only = key("000810:Base.esm");
+  const auto* base_win = borrowed.winner(base_only);
+  ASSERT_NE(base_win, nullptr);
+  EXPECT_EQ(base_win->record, fo4::find_record(plugins[0], base_only));
+
+  const auto overridden = key("000812:Base.esm");
+  const auto* patch_win = borrowed.winner(overridden);
+  ASSERT_NE(patch_win, nullptr);
+  EXPECT_EQ(patch_win->record, fo4::find_record(plugins[1], overridden));
+}
+
+TEST_F(EnvironmentBorrow, RejectsNullAndDuplicatePlugins) {
+  const auto plugins = read_stamped(paths_);
+  const auto reread_base = fo4::read_plugin_file(paths_[0]);
+  const fo4::Plugin* with_null[] = {&plugins[0], nullptr};
+  const fo4::Plugin* repeated[] = {&plugins[0], &plugins[0]};
+  const fo4::Plugin* same_key[] = {&plugins[0], &reread_base};
+  EXPECT_THROW(fo4::env::Environment::borrow(with_null), fo4::env::EnvironmentError);
+  EXPECT_THROW(fo4::env::Environment::borrow(repeated), fo4::env::EnvironmentError);
+  EXPECT_THROW(fo4::env::Environment::borrow(same_key), fo4::env::EnvironmentError);
+
+  const fo4::Plugin* ordered[] = {&plugins[0], &plugins[1]};
+  EXPECT_NO_THROW(fo4::env::Environment::borrow(ordered));
 }

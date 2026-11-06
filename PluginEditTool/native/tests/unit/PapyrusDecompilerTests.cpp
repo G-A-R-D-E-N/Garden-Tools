@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -338,6 +339,34 @@ TEST_CASE("Decompiler a remote event name is reconstructed") {
     CHECK(text.find("Event Sender.OnSomething(Sender akSender)") != std::string::npos);
 }
 
+TEST_CASE("Decompiler a remote event whose name prefix differs in case from the sender type recompiles to the same name") {
+    Fixture f;
+    f.writeWithScriptObject();
+    f.write("Sender", "Scriptname Sender\n");
+    f.write("Listener",
+            "Scriptname Listener\n"
+            "Event sender.Kick(Sender akSender)\n"
+            "EndEvent\n");
+    auto pex = f.compile("Listener");
+    REQUIRE(pex != nullptr);
+    const std::string text = Decompiler::toSource(*pex);
+    CHECK(text.find("Event Sender.Kick(Sender akSender)") != std::string::npos);
+
+    Fixture f2;
+    f2.writeWithScriptObject();
+    f2.write("Sender", "Scriptname Sender\n");
+    f2.write("Listener", text);
+    auto again = f2.compile("Listener");
+    REQUIRE(again != nullptr);
+    auto lower = [](std::string s) {
+        for (auto& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        return s;
+    };
+    const auto& original = pex->objects.at(0).states.at(0).functions.at(0).name;
+    const auto& recompiled = again->objects.at(0).states.at(0).functions.at(0).name;
+    CHECK(lower(recompiled) == lower(original));
+}
+
 TEST_CASE("Decompiler disassemble lists functions and instructions") {
     Fixture f;
     f.writeWithScriptObject();
@@ -350,4 +379,35 @@ TEST_CASE("Decompiler disassemble lists functions and instructions") {
     CHECK(text.find(".object Asm extends ScriptObject") != std::string::npos);
     CHECK(text.find(".function Go -> None") != std::string::npos);
     CHECK(text.find("assign") != std::string::npos);
+}
+
+TEST_CASE("Decompiler an inherited auto property read maps back to the property name") {
+    const std::string base = "Scriptname InheritBase\nint Property Count = 3 Auto\n";
+    const std::string child =
+            "Scriptname InheritChild extends InheritBase\n"
+            "Function Go()\n"
+            "    int i = Count\n"
+            "    Count = i + 1\n"
+            "EndFunction\n";
+
+    Fixture f;
+    f.writeWithScriptObject();
+    f.write("InheritBase", base);
+    f.write("InheritChild", child);
+    auto pex = f.compile("InheritChild");
+    REQUIRE(pex != nullptr);
+    const std::string text = Decompiler::toSource(*pex);
+    INFO("decompiled source:\n" << text);
+    CHECK(text.find("_Count_var") == std::string::npos);
+    CHECK(text.find("i = Count") != std::string::npos);
+    CHECK(text.find("Count = (i + 1)") != std::string::npos);
+
+    Fixture f2;
+    f2.writeWithScriptObject();
+    f2.write("InheritBase", base);
+    f2.write("InheritChild", text);
+    auto again = f2.compile("InheritChild");
+    REQUIRE(again != nullptr);
+    REQUIRE(again->objects.size() == 1);
+    CHECK(firstDifference(pex->objects[0], again->objects[0]).empty());
 }
