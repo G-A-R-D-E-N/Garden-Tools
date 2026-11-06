@@ -32,6 +32,7 @@ ROOT = Path(r"C:\ci\real-data")
 REPO_DIR = ROOT / "repo"
 LOG_DIR = ROOT / "logs"
 LOCK = ROOT / "run.lock"
+QUEUED = ROOT / "queued.json"
 RUNNER_ENV = Path(r"C:\tools\github-runner\fo4-data\.env")
 RUNNER_KEYS = ("FO4_DATA_DIR", "CMAKE_BUILD_PARALLEL_LEVEL", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA",
                "TEMP", "TMP")
@@ -40,6 +41,8 @@ TIMEOUT = 3 * 3600
 LOCK_MAX_AGE = TIMEOUT + 600
 POLL = 60
 INTERVAL = 120
+RETRY_DELAYS = (5, 15)
+READ_ATTEMPTS = 3
 KEEP_LOGS = 50
 DESC_MAX = 140
 BELOW_NORMAL = 0x00004000
@@ -62,14 +65,24 @@ class Target:
     draft: bool = False
 
 
-def gh(*args):
-    return subprocess.run([GH, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          check=True).stdout
+def run_command(cmd, attempts, cwd=None):
+    for number in range(1, attempts + 1):
+        try:
+            return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                                  check=True).stdout
+        except (subprocess.CalledProcessError, OSError) as error:
+            logging.warning("%s failed (attempt %d of %d): %s", cmd[1], number, attempts, failure_text(error))
+            if number == attempts:
+                raise
+            time.sleep(RETRY_DELAYS[number - 1])
 
 
-def git(*args, cwd=None):
-    return subprocess.run(["git", *args], cwd=cwd or REPO_DIR, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", check=True).stdout
+def gh(*args, attempts=READ_ATTEMPTS):
+    return run_command([GH, *args], attempts)
+
+
+def git(*args, cwd=None, attempts=1):
+    return run_command(["git", *args], attempts, cwd or REPO_DIR)
 
 
 def runner_env():
@@ -96,8 +109,13 @@ def open_targets():
 
 
 def order(targets):
+    def rank(t):
+        if t.number is None:
+            return 0
+        return 1 if t.base == DEV_BRANCH and not t.draft else 2
+
     newest_first = sorted(targets, key=lambda t: t.updated, reverse=True)
-    return sorted(newest_first, key=lambda t: t.number is not None)
+    return sorted(newest_first, key=rank)
 
 
 def current_head(t):
@@ -119,10 +137,11 @@ def changed_paths(t):
     return gh("api", f"repos/{REPO}/compare/{t.parent}...{t.sha}", "--jq", ".files[].filename").splitlines()
 
 
-def latest_state(sha):
-    states = gh("api", f"repos/{REPO}/commits/{sha}/statuses", "--paginate", "--jq",
-                f'.[] | select(.context == "{CONTEXT}") | .state').splitlines()
-    return states[0] if states else None
+def latest_status(sha):
+    lines = gh("api", f"repos/{REPO}/commits/{sha}/statuses", "--paginate", "--jq",
+               f'.[] | select(.context == "{CONTEXT}") | .state + " " + .description').splitlines()
+    state, _, description = lines[0].partition(" ") if lines else (None, "", "")
+    return state, description
 
 
 def passed_earlier(sha):
@@ -144,8 +163,8 @@ def touches(paths):
 def plan(t):
     if t.draft:
         return "draft"
-    state = latest_state(t.sha)
-    if state not in (None, "pending"):
+    state, description = latest_status(t.sha)
+    if state not in (None, "pending") and (state, description) != ("error", "superseded"):
         return "done"
     if passed_earlier(t.sha):
         return "earlier"
@@ -160,9 +179,48 @@ def clean(text):
     return re.sub(r"[^A-Za-z0-9_.,()#: -]", "", text)[:DESC_MAX]
 
 
+def failure_text(error):
+    return clean(" ".join((getattr(error, "stderr", None) or str(error)).split()))
+
+
 def post(sha, state, description):
     gh("api", "--method", "POST", f"repos/{REPO}/statuses/{sha}", "-f", f"state={state}",
-       "-f", f"context={CONTEXT}", "-f", f"description={clean(description)}")
+       "-f", f"context={CONTEXT}", "-f", f"description={clean(description)}", attempts=2)
+
+
+def load_queued():
+    try:
+        return set(json.loads(QUEUED.read_text(encoding="utf-8")))
+    except (FileNotFoundError, ValueError):
+        return set()
+
+
+def save_queued(queued):
+    QUEUED.write_text(json.dumps(sorted(queued)), encoding="utf-8")
+
+
+def post_queue(targets, queued):
+    for position, t in enumerate(targets, 1):
+        text = f"queued (position {position} of {len(targets)})"
+        queued.add(t.sha)
+        try:
+            if latest_status(t.sha) != ("pending", text):
+                post(t.sha, "pending", text)
+        except Exception:
+            logging.exception("%s: queued status not posted", t.name)
+    save_queued(queued)
+
+
+def clear_stale_queue(live, queued):
+    for sha in sorted(queued - live):
+        try:
+            state, description = latest_status(sha)
+            if state == "pending" and description.startswith("queued"):
+                post(sha, "error", "superseded")
+            queued.discard(sha)
+        except Exception:
+            logging.exception("%s: queued status not cleared", sha[:12])
+    save_queued(queued)
 
 
 def failed_names(text):
@@ -196,7 +254,7 @@ def prepare_checkout(t):
         ROOT.mkdir(parents=True, exist_ok=True)
         git("clone", "--no-checkout", REPO_URL, str(REPO_DIR), cwd=ROOT)
     ref = f"refs/pull/{t.number}/merge" if t.number else f"refs/heads/{DEV_BRANCH}"
-    git("fetch", "--no-tags", "origin", f"+{ref}:refs/real-data/candidate")
+    git("fetch", "--no-tags", "origin", f"+{ref}:refs/real-data/candidate", attempts=READ_ATTEMPTS)
     commit, *parents = git("rev-list", "--parents", "-n", "1", "refs/real-data/candidate").split()
     current = parents[1:] == [t.sha] if t.number else commit == t.sha
     if not current:
@@ -211,7 +269,7 @@ def workflow_file():
     path = REPO_DIR / WORKFLOW
     if path.exists():
         return path
-    git("fetch", "--no-tags", "origin", f"+refs/heads/{DEV_BRANCH}:refs/real-data/dev")
+    git("fetch", "--no-tags", "origin", f"+refs/heads/{DEV_BRANCH}:refs/real-data/dev", attempts=READ_ATTEMPTS)
     fallback = ROOT / "fallback" / Path(WORKFLOW).name
     fallback.parent.mkdir(parents=True, exist_ok=True)
     fallback.write_text(git("show", f"refs/real-data/dev:{WORKFLOW}"), encoding="utf-8")
@@ -326,7 +384,10 @@ def run_pass(dry_run=False):
         return Counter()
     counts = Counter()
     try:
-        for t in order(open_targets()):
+        due = []
+        queued = load_queued()
+        targets = order(open_targets())
+        for t in targets:
             try:
                 action = plan(t)
                 counts[action] += 1
@@ -339,9 +400,18 @@ def run_pass(dry_run=False):
                     logging.info("%s %s: not affected", t.name, t.sha[:12])
                     post(t.sha, "success", "not affected")
                 elif action == "run":
-                    run_target(t)
+                    due.append(t)
             except Exception:
                 logging.exception("%s: failed for this target", t.name)
+        if not dry_run:
+            clear_stale_queue({t.sha for t in targets if not t.draft}, queued)
+            post_queue(due, queued)
+        for index, t in enumerate(due):
+            try:
+                run_target(t)
+            except Exception:
+                logging.exception("%s: failed for this target", t.name)
+            post_queue(due[index + 1:], queued)
     finally:
         if not dry_run:
             release_lock()
@@ -352,9 +422,9 @@ def run_pass(dry_run=False):
 
 def request_public_sync():
     try:
-        gh("workflow", "run", SYNC_WORKFLOW, "--repo", PUBLIC_REPO, "--ref", "main")
+        gh("workflow", "run", SYNC_WORKFLOW, "--repo", PUBLIC_REPO, "--ref", "main", attempts=1)
     except (subprocess.CalledProcessError, OSError) as error:
-        logging.warning("public CI sync not started: %s", error)
+        logging.warning("public CI sync not started: %s", failure_text(error))
 
 
 def public_sync_loop():
@@ -394,6 +464,8 @@ def main(argv=None):
 if __name__ == "__main__":
     try:
         sys.exit(main())
+    except SystemExit:
+        raise
     except BaseException:
         logging.exception("service stopped")
         raise
