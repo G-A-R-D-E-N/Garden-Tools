@@ -57,6 +57,8 @@ add_library(
     plugin/RadiclePluginDialogueRead.cpp
     plugin/RadiclePluginScene.cpp
     plugin/RadiclePluginSceneRead.cpp
+    plugin/RadiclePluginFragments.cpp
+    plugin/RadiclePluginDialogueBulk.cpp
     plugin/RadiclePluginStrings.cpp
     plugin/RadiclePluginStringLanguages.cpp
     plugin/RadiclePluginPathIdentity.cpp

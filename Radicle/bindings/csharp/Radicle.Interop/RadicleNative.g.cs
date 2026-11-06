@@ -2785,6 +2785,12 @@ public unsafe struct PexChainFinding
     public nuint ChainNameCount;
 }
 
+public enum ArchivePolicy : int
+{
+    Fail = 0,
+    Skip = 1,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct ScriptSetCandidate
 {
@@ -2803,6 +2809,35 @@ public unsafe struct ScriptSetWinner
     public IntPtr Name;
     public ScriptSetCandidate Winner;
     public uint Replaced;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptSetFailureInfo
+{
+    public nuint ArchiveIndex;
+    public IntPtr Path;
+    public IntPtr Message;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptCensusTotals
+{
+    public nuint ObjectCount;
+    public nuint UnreadableCount;
+    public nuint SiteCount;
+    public nuint ScriptCallCount;
+    public nuint UnresolvedCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptCensusSite
+{
+    public IntPtr Script;
+    public IntPtr Function;
+    public nuint Instruction;
+    public int IsStatic;
+    public IntPtr Target;
+    public IntPtr CalledFunction;
 }
 
 public enum PapyrusValueKind : int
@@ -2970,6 +3005,11 @@ public unsafe struct PapyrusVmadShape
     public int HasBoolean;
     public int Boolean;
     public IntPtr Object;
+    public IntPtr ElementType;
+    public IntPtr Elements;
+    public nuint ElementsLen;
+    public IntPtr Members;
+    public nuint MembersLen;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2990,6 +3030,8 @@ public unsafe struct PapyrusBindReport
     public int Bound;
     public int Unsupported;
     public int SilentlyDefaulted;
+    public IntPtr UnsupportedShapes;
+    public nuint UnsupportedShapeCount;
     public IntPtr Report;
     public IntPtr Digest;
 }
@@ -4727,6 +4769,36 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_chain_report_name")]
     public static extern Status PexChainReportName(IntPtr report, nuint index, IntPtr* out_name);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_open")]
+    public static extern Status ScriptSetOpen(IntPtr* root_paths, nuint root_count, IntPtr* archive_paths, nuint archive_count, ArchivePolicy policy, IntPtr* out_set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_failure_count")]
+    public static extern nuint ScriptSetFailureCount(IntPtr set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_failure")]
+    public static extern Status ScriptSetFailure(IntPtr set, nuint index, ScriptSetFailureInfo* out_failure);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_parent_chain_valid")]
+    public static extern Status ScriptSetParentChainValid(IntPtr set, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? object_name, int* out_valid);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_census")]
+    public static extern Status ScriptSetCensus(IntPtr set, IntPtr* out_census);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_destroy")]
+    public static extern void ScriptCensusDestroy(IntPtr census);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_totals_get")]
+    public static extern Status ScriptCensusTotalsGet(IntPtr census, ScriptCensusTotals* out_totals);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_site_get")]
+    public static extern Status ScriptCensusSiteGet(IntPtr census, nuint index, ScriptCensusSite* out_site);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_unresolved")]
+    public static extern Status ScriptCensusUnresolved(IntPtr census, nuint index, IntPtr* out_text);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_unreadable")]
+    public static extern Status ScriptCensusUnreadable(IntPtr census, nuint index, IntPtr* out_name);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_resolve")]
     public static extern Status ScriptSetResolve(IntPtr assets, int* root_load_index, nuint root_load_index_count, IntPtr* out_set);
 
@@ -4894,6 +4966,18 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_advance_clock")]
     public static extern Status PapyrusRuntimeAdvanceClock(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? owner, double delta_seconds, PapyrusClock clock, int* out_fired);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_attach_with_properties")]
+    public static extern Status PapyrusRuntimeAttachWithProperties(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script, PapyrusOwnerKind owner_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? discriminator, IntPtr* names, IntPtr* values, nuint count, ulong* out_instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_get_property")]
+    public static extern Status PapyrusRuntimeGetProperty(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, IntPtr* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_register_remote_event")]
+    public static extern Status PapyrusRuntimeRegisterRemoteEvent(IntPtr runtime, ulong instance, PapyrusOwnerKind source_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source_base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source_discriminator, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? event_name, long* out_handle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_match_remote_event")]
+    public static extern Status PapyrusRuntimeMatchRemoteEvent(IntPtr runtime, PapyrusOwnerKind source_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source_base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source_discriminator, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? event_name, long* out_handles, ulong* out_instances, nuint capacity, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_string_free")]
     public static extern void PapyrusStringFree(IntPtr text);

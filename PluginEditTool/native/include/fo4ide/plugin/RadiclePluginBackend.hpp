@@ -142,6 +142,12 @@ public:
     Result<nlohmann::json> removeScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setInfoFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addInfoFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeInfoFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setScenePhaseFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addScenePhaseFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addAliasScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeAliasScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addAliasScriptProperty(const nlohmann::json& arguments) override;
@@ -384,6 +390,10 @@ private:
     Result<nlohmann::json> addSceneAction(const nlohmann::json& arguments);
     Result<nlohmann::json> removeSceneAction(const nlohmann::json& arguments);
     Result<nlohmann::json> moveSceneAction(const nlohmann::json& arguments);
+    Result<nlohmann::json> writeInfoFragment(const nlohmann::json& arguments, bool addOnly);
+    Result<nlohmann::json> writeScenePhaseFragment(const nlohmann::json& arguments, bool addOnly);
+    Result<nlohmann::json> createDialogueTopicBulk(const nlohmann::json& arguments);
+    Result<nlohmann::json> getVoicePath(const nlohmann::json& arguments) const;
     std::optional<fo4::RawFormId> resolveDialogueEditorId(const fo4::Plugin& target, std::string_view text) const;
     // Resolves a list value (FormKey text or EditorID) to a FormKey against the
     // loaded plugins, mirroring WriteService.ResolveFk.

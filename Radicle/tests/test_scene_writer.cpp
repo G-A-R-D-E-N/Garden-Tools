@@ -3,6 +3,9 @@
 
 #include <gtest/gtest.h>
 
+#include <string_view>
+#include <utility>
+
 namespace {
 
 using namespace fo4::test::dialogue;
@@ -71,6 +74,36 @@ Bytes payload_scene() {
   return out.bytes;
 }
 
+}
+
+// Detects: a payload row whose exposed signature must be the subrecord the writer stores, so a reader keyed on it cannot miss the member.
+TEST(SceneWriter, PayloadRowsExposeTheSubrecordTheWriterStores) {
+  const std::pair<std::string_view, std::string_view> expected[] = {
+      {"SCEN\\Action\\Topic", "DATA"},
+      {"SCEN\\Action\\DialogueSubtype", "VENC"},
+      {"SCEN\\Action\\AnimArchType", "PNAM"},
+      {"SCEN\\Action\\AudioOutputOverride", "ONAM"},
+      {"SCEN\\Action\\PlayerPositiveDialogueSubtype", "VENC"},
+      {"SCEN\\Action\\PlayerNegativeDialogueSubtype", "PLVD"},
+      {"SCEN\\Action\\PlayerQuestionDialogueSubtype", "DALC"},
+      {"SCEN\\Action\\NpcQuestionDialogueSubtype", "NQUS"},
+      {"SCEN\\Action\\StartSceneTopic", "STSC"},
+      {"SCEN\\Action\\PlaySound", "HTID"},
+      {"SCEN\\Action\\LoopingMax", "DMAX"},
+      {"SCEN\\Action\\TimerMax", "SNAM"},
+      {"SCEN\\Action\\CameraRateOfChange", "CRIS"},
+      {"SCEN\\Action\\DialogueTargetActor", "DTGT"},
+  };
+  const auto rows = fo4::scene_action_payload_paths();
+  for (const auto& row : rows) EXPECT_FALSE(row.signature.to_string().empty()) << row.path;
+  for (const auto& [path, tag] : expected) {
+    const fo4::ScenePayloadPath* found = nullptr;
+    for (const auto& row : rows) {
+      if (row.path == path) found = &row;
+    }
+    ASSERT_NE(found, nullptr) << path;
+    EXPECT_EQ(found->signature.to_string(), tag) << path;
+  }
 }
 
 // Regression guard: create_scene must append the SCEN inside the quest children group with its flags, parent quest, index and tail members.

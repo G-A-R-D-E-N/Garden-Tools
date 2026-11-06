@@ -1,13 +1,13 @@
 #include "RadiclePluginSupport.hpp"
 #include "RadiclePluginQuestInternal.hpp"
-
-#include <fo4ide/plugin/ConditionCodec.hpp>
+#include "RadiclePluginFragmentSupport.hpp"
+#include "RadiclePluginReadJson.hpp"
 
 #include <fo4/forms/dialogue.hpp>
+#include <fo4/plugin/info_responses.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/ctda.hpp>
 #include <fo4/signature.hpp>
-#include <fo4/text/encoding.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace fo4ide::plugin {
@@ -32,42 +33,16 @@ constexpr auto k_knam = fo4::Signature::from_string("KNAM");
 constexpr auto k_tnam = fo4::Signature::from_string("TNAM");
 constexpr auto k_dnam = fo4::Signature::from_string("DNAM");
 constexpr auto k_enam = fo4::Signature::from_string("ENAM");
-constexpr auto k_trda = fo4::Signature::from_string("TRDA");
 constexpr auto k_nam1 = fo4::Signature::from_string("NAM1");
 constexpr auto k_nam2 = fo4::Signature::from_string("NAM2");
 
-template <class T>
-T readAt(const std::vector<std::byte>& payload, std::size_t offset) {
-    T value{};
-    if (offset + sizeof(T) <= payload.size()) std::memcpy(&value, payload.data() + offset, sizeof(T));
-    return value;
-}
+using namespace readjson;
 
 std::vector<std::byte> payloadOf(const fo4::Record& record, fo4::Signature signature) {
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature == signature) return subrecord.data;
     }
     return {};
-}
-
-std::string cp1252Text(const std::vector<std::byte>& payload) {
-    std::string_view bytes(reinterpret_cast<const char*>(payload.data()), payload.size());
-    if (!bytes.empty() && bytes.back() == '\0') bytes.remove_suffix(1);
-    return fo4::text::windows1252_to_utf8(bytes);
-}
-
-void putText(nlohmann::json& object, const char* key, const fo4::Plugin& plugin,
-             const std::vector<std::byte>& payload) {
-    if (plugin.header.tes4_flags.is_localized() && payload.size() == 4) {
-        object[std::string(key) + "Id"] = readAt<std::uint32_t>(payload, 0);
-        return;
-    }
-    object[key] = cp1252Text(payload);
-}
-
-nlohmann::json linkJson(const fo4::Plugin& plugin, std::uint32_t raw) {
-    if (raw == 0 || raw == 0xFFFFFFFFu) return nullptr;
-    return fo4::resolve_plugin_link(fo4::RawFormId{raw}, fo4::plugin_form_id_context(plugin)).to_string();
 }
 
 bool isGroupOf(const fo4::GroupHeader& header, fo4::GroupType type, std::uint32_t label) {
@@ -87,33 +62,43 @@ const fo4::Group* questChildrenOf(const fo4::Plugin& plugin, fo4::RawFormId ques
     return nullptr;
 }
 
-nlohmann::json conditionsJson(const fo4::Plugin& plugin, const fo4::Record& record) {
-    nlohmann::json conditions = nlohmann::json::array();
-    for (const auto& condition : fo4::read_ctda_conditions(record)) {
-        conditions.push_back(describeCondition(condition, plugin));
-    }
-    return conditions;
-}
-
 nlohmann::json responsesOf(const fo4::Plugin& plugin, const fo4::Record& info) {
     nlohmann::json responses = nlohmann::json::array();
-    for (const auto& subrecord : info.subrecords) {
-        if (subrecord.signature == k_trda) {
-            responses.push_back({
-                {"emotion", linkJson(plugin, readAt<std::uint32_t>(subrecord.data, 0))},
-                {"number", readAt<std::uint8_t>(subrecord.data, 4)},
-                {"sound", linkJson(plugin, readAt<std::uint32_t>(subrecord.data, 5))},
-                {"interruptPercent", readAt<std::uint16_t>(subrecord.data, 10)},
-                {"cameraTargetAlias", readAt<std::int32_t>(subrecord.data, 12)},
-                {"cameraLocationAlias", readAt<std::int32_t>(subrecord.data, 16)},
-            });
-            continue;
+    for (const auto& response : fo4::read_info_responses(info)) {
+        if (response.malformed) continue;
+        nlohmann::json row{
+            {"emotion", linkJson(plugin, response.emotion)},
+            {"number", response.number},
+            {"sound", linkJson(plugin, response.sound)},
+            {"interruptPercent", response.interrupt_percent},
+            {"cameraTargetAlias", response.camera_target_alias},
+            {"cameraLocationAlias", response.camera_location_alias},
+        };
+        if (const auto* text = fo4::info_response_subrecord(info, response, k_nam1); text != nullptr) {
+            putText(row, "text", plugin, text->data);
         }
-        if (responses.empty()) continue;
-        if (subrecord.signature == k_nam1) putText(responses.back(), "text", plugin, subrecord.data);
-        if (subrecord.signature == k_nam2) putText(responses.back(), "scriptNotes", plugin, subrecord.data);
+        if (const auto* notes = fo4::info_response_subrecord(info, response, k_nam2); notes != nullptr) {
+            putText(row, "scriptNotes", plugin, notes->data);
+        }
+        responses.push_back(std::move(row));
     }
     return responses;
+}
+
+nlohmann::json fragmentsOf(const fo4::Record& info) {
+    nlohmann::json fragments = nlohmann::json::array();
+    const auto extras = fragmentread::read_info_fragments(info);
+    if (!extras) return fragments;
+    unsigned bit = 0;
+    for (const auto& fragment : extras->fragments) {
+        while (bit < 2 && (extras->flags & (1u << bit)) == 0) ++bit;
+        if (bit >= 2) break;
+        fragments.push_back({{"index", bit},
+                             {"script", fragment.script},
+                             {"function", fragment.function}});
+        ++bit;
+    }
+    return fragments;
 }
 
 nlohmann::json infoJson(const fo4::Plugin& plugin, const fo4::Record& info) {
@@ -126,7 +111,8 @@ nlohmann::json infoJson(const fo4::Plugin& plugin, const fo4::Record& info) {
         {"resetTimeEncoded", resetEncoded},
         {"previous", linkJson(plugin, readAt<std::uint32_t>(payloadOf(info, k_pnam), 0))},
         {"responses", responsesOf(plugin, info)},
-        {"conditions", conditionsJson(plugin, info)},
+        {"conditions", conditionsJson(plugin, fo4::read_ctda_conditions(info))},
+        {"fragments", fragmentsOf(info)},
     };
 }
 
