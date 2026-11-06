@@ -1759,6 +1759,56 @@ public unsafe struct DialogueInfo
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueBranchSpec
+{
+    public IntPtr EditorId;
+    public uint Category;
+    public uint Flags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueTopicSpec
+{
+    public IntPtr EditorId;
+    public IntPtr Name;
+    public float Priority;
+    public int HasBranch;
+    public FormKey Branch;
+    public int HasKeyword;
+    public FormKey Keyword;
+    public byte TopicFlags;
+    public byte Category;
+    public ushort Subtype;
+    public IntPtr SubtypeName;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueResponseSpec
+{
+    public IntPtr Text;
+    public IntPtr ScriptNotes;
+    public int HasEmotion;
+    public FormKey Emotion;
+    public int HasSound;
+    public FormKey Sound;
+    public byte Number;
+    public ushort InterruptPercent;
+    public int CameraTargetAlias;
+    public int CameraLocationAlias;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueInfoSpec
+{
+    public ushort Flags;
+    public ushort ResetTimeEncoded;
+    public IntPtr Responses;
+    public nuint ResponseCount;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct ScenePhase
 {
     public IntPtr Name;
@@ -3951,6 +4001,21 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_action_name")]
     public static extern Status PluginSetSceneActionName(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_dialogue_branch")]
+    public static extern Status PluginCreateDialogueBranch(IntPtr plugin, FormKey quest, DialogueBranchSpec* spec, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_dialogue_topic")]
+    public static extern Status PluginCreateDialogueTopic(IntPtr plugin, FormKey quest, DialogueTopicSpec* spec, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_dialogue_branch_start")]
+    public static extern Status PluginSetDialogueBranchStart(IntPtr plugin, FormKey branch, FormKey topic);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_dialogue_info")]
+    public static extern Status PluginCreateDialogueInfo(IntPtr plugin, FormKey topic, DialogueInfoSpec* spec, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_dialogue_info")]
+    public static extern Status PluginRemoveDialogueInfo(IntPtr plugin, FormKey info);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_list_read")]
     public static extern Status PluginListRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_rows, nuint* out_count);
