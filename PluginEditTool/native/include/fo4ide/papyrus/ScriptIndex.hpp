@@ -55,6 +55,9 @@ public:
 
     static const Declaration* findMemberOn(const Script* script, std::string_view memberName);
 
+    // Functions and events only: a call must bind to a callable even when a property shares its name.
+    static const Declaration* findCallableOn(const Script* script, std::string_view memberName);
+
 private:
     bool snapshotOnly_{false};
     std::optional<std::string> snapshotFlags_;
