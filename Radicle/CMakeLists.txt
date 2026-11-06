@@ -250,6 +250,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin/writer.cpp
   src/schema/condition_functions.cpp
   src/schema/condition_scope_path.cpp
+  src/plugin/edit_history.cpp
   src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
@@ -765,6 +766,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_reference_create.cpp
     tests/test_placed_reference_move.cpp
     tests/test_placed_reference_move_exterior.cpp
+    tests/test_edit_history.cpp
     tests/test_record_flags.cpp
     tests/test_record_flags_deleted.cpp
     tests/test_extension_light_kinds.cpp
