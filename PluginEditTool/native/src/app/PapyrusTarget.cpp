@@ -11,6 +11,7 @@
 #include <utility>
 #include <fo4/papyrus/analysis_service.hpp>
 #include <fo4/papyrus/decompile_service.hpp>
+#include <fo4/papyrus/script_names.hpp>
 
 #include "PapyrusStaging.hpp"
 #include "ServiceTargetSupport.hpp"
@@ -434,7 +435,7 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
         const auto fileDir = full.parent_path();
         std::string objName;
         try {
-            objName = extractScriptName(readFileText(full));
+            objName = fo4::papyrus::extractScriptName(readFileText(full));
         } catch (...) {
         }
         std::vector<std::string> segments;

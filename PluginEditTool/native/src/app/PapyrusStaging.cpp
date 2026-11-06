@@ -13,24 +13,6 @@ namespace fo4ide::app {
 
 using namespace support;
 
-std::string extractScriptName(const std::string& text) {
-    std::istringstream stream(text);
-    std::string line;
-    while (std::getline(stream, line)) {
-        auto l = trim(line);
-        if (l.empty() || l.front() == ';') continue;
-        if (toLower(l).rfind("scriptname ", 0) == 0) {
-            std::istringstream tokens(l);
-            std::string token;
-            std::vector<std::string> parts;
-            while (tokens >> token) parts.push_back(token);
-            if (parts.size() >= 2) return parts[1];
-        }
-        break;
-    }
-    return "";
-}
-
 Result<std::optional<std::filesystem::path>> stageNamespacedScripts(
     const std::vector<std::filesystem::path>& files, const std::filesystem::path& staging) {
     if (files.empty()) return std::nullopt;
@@ -41,7 +23,7 @@ Result<std::optional<std::filesystem::path>> stageNamespacedScripts(
         for (const auto& file : files) {
             std::string obj;
             try {
-                obj = extractScriptName(readFileText(file));
+                obj = fo4::papyrus::extractScriptName(readFileText(file));
             } catch (...) {
             }
             if (!obj.empty() && !fo4::papyrus::safeScriptObjectName(obj)) {

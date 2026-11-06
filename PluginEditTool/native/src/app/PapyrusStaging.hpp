@@ -9,7 +9,6 @@
 
 namespace fo4ide::app {
 
-std::string extractScriptName(const std::string& text);
 Result<std::optional<std::filesystem::path>> stageNamespacedScripts(
     const std::vector<std::filesystem::path>& files, const std::filesystem::path& staging);
 

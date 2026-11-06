@@ -1,5 +1,6 @@
 #include <fo4/papyrus/decompile_service.hpp>
 #include <fo4/papyrus/decompiler.hpp>
+#include <fo4/papyrus/script_names.hpp>
 #include <fo4/io/atomic_write.hpp>
 #include <fo4/pex/pex.hpp>
 
@@ -37,13 +38,6 @@ bool endsWithIgnoreCase(std::string_view value, std::string_view suffix) {
     return std::equal(value.begin(), value.end(), suffix.begin(), [](unsigned char a, unsigned char b) {
         return std::tolower(a) == std::tolower(b);
     });
-}
-
-std::string extractScriptName(const std::string& text) {
-    std::istringstream stream(text);
-    std::string keyword, name;
-    stream >> keyword >> name;
-    return keyword == "ScriptName" ? name : "";
 }
 
 void writeFileText(const std::filesystem::path& path, std::string_view text) {
