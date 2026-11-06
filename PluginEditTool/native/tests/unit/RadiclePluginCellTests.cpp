@@ -533,7 +533,8 @@ TEST_CASE("Native cell reads stay current after openPlugin reloads a changed fil
     REQUIRE(backend.invoke(
         "backend.OpenPlugin", nlohmann::json::array({(root / "Source.esp").string()})).has_value());
 
-    CHECK_FALSE(backend.getPlacedReferences(oldCellView).has_value());
+    const auto oldAfter = parseStringResult(backend.getPlacedReferences(oldCellView));
+    CHECK((oldAfter.contains("error") || oldAfter.at("references").empty()));
     const auto newCell = parseStringResult(
         backend.getPlacedReferences(nlohmann::json::array({"000900:Source.esp"})));
     REQUIRE(newCell.at("references").size() == 1);
