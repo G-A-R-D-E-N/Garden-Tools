@@ -33,6 +33,7 @@ const rpc = vi.hoisted(() => ({
     UndoCellEdit: vi.fn(),
     RedoCellEdit: vi.fn(),
     GetCellEditHistory: vi.fn(),
+    GetCellProperties: vi.fn(),
   },
 }));
 
@@ -138,6 +139,7 @@ beforeEach(() => {
   });
   rpc.cell.RedoCellEdit.mockResolvedValue('{}');
   rpc.cell.GetCellEditHistory.mockResolvedValue('{"undoCount":1,"redoCount":0}');
+  rpc.cell.GetCellProperties.mockResolvedValue('{"cellFormKey":"00ABCD:Fallout4.esm","cellEditorId":"TestCell","values":{},"descriptors":[]}');
 });
 afterEach(() => { cleanup(); localStorage.clear(); });
 

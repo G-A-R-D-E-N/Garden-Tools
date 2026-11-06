@@ -14,6 +14,7 @@ vi.mock('./backend', () => ({
     SearchWorldspaces: async () => '[]',
     GetPlacedReferencesAtGrid: bridge.load,
     GetGeometryBatch: bridge.geometry,
+    GetCellProperties: async () => '{"values":{},"descriptors":[]}',
   }),
   getBackend: () => ({}),
 }));

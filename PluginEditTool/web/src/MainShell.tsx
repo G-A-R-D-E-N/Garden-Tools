@@ -404,7 +404,7 @@ export default function MainShell() {
           <button className={`activity-btn ${showAudio ? 'active' : ''}`} onClick={() => setShowAudio(true)} title="Audio (convert to/from xWMA, merge/split fuz)">
             <Music size={22} strokeWidth={1.5} />
           </button>
-          <button className={`activity-btn ${showCell ? 'active' : ''}`} onClick={() => setShowCell(true)} title="Cell Viewer (read-only 3D, like Creation Kit's render window)">
+          <button className={`activity-btn ${showCell ? 'active' : ''}`} onClick={() => setShowCell(true)} title="Cell Viewer (3D view with placed-reference and cell edits, like Creation Kit's render window)">
             <Boxes size={22} strokeWidth={1.5} />
           </button>
           <button className={`activity-btn ${showSpreadsheet ? 'active' : ''}`} onClick={() => setShowSpreadsheet(true)} title="Spreadsheet (bulk-edit every record of one type)">
