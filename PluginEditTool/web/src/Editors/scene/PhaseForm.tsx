@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { diffDraft, repointPhaseEdits, type Run, type SceneChanges } from './sceneChanges';
 import {
-  PHASE_FLAGS, actionsUsingPhase, phaseName, type SceneDto, type ScenePhase, type Spec,
+  PHASE_FLAGS, actionsUsingPhase, phaseName, toNumber, type SceneDto, type ScenePhase, type Spec,
 } from './sceneModel';
-import { ConditionsSummary, Field, FlagBoxes, RemovePanel, toNumber } from './sceneFormParts';
+import { ConditionsSummary, Field, FlagBoxes, RemovePanel } from './sceneFormParts';
 
 interface Props {
   scene: SceneDto;

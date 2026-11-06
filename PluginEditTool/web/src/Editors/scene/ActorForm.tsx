@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { diffDraft, repointActorEdits, type Run, type SceneChanges } from './sceneChanges';
 import {
-  ACTOR_BEHAVIOR_FLAGS, ACTOR_FLAGS, actionsUsingActor, actorName, aliasLabel, type SceneActor, type SceneDto, type Spec,
+  ACTOR_BEHAVIOR_FLAGS, ACTOR_FLAGS, actionsUsingActor, actorName, aliasLabel, toNumber, type SceneActor, type SceneDto, type Spec,
 } from './sceneModel';
-import { Field, FlagBoxes, RemovePanel, toNumber } from './sceneFormParts';
+import { Field, FlagBoxes, RemovePanel } from './sceneFormParts';
 
 interface Props {
   scene: SceneDto;
