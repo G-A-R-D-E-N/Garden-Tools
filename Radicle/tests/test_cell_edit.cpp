@@ -842,10 +842,10 @@ TEST_F(CellEditTest, EditCreatesMissingSubrecordsInSchemaOrder) {
   const auto reread = reread_patched(dir_, patch);
   const auto* ref = reread.winner(cell);
   ASSERT_NE(ref, nullptr);
-  const auto lighting = fo4::env::decode_cell(reread, *ref).lighting;
-  ASSERT_TRUE(lighting.has_value());
-  EXPECT_FLOAT_EQ(lighting->directional_fade, 1.0f);
-  EXPECT_FLOAT_EQ(lighting->fog_power, 1.0f);
+  const auto decoded = fo4::env::decode_cell(reread, *ref).lighting;
+  ASSERT_TRUE(decoded.has_value());
+  EXPECT_FLOAT_EQ(decoded->directional_fade, 1.0f);
+  EXPECT_FLOAT_EQ(decoded->fog_power, 1.0f);
 }
 
 TEST_F(CellEditTest, ClearingALinkRemovesItsSubrecord) {
@@ -941,7 +941,9 @@ TEST_F(CellEditTest, CellPropertyDescriptorsCoverEveryEditableMember) {
     EXPECT_TRUE(found) << member;
   }
   for (const auto& descriptor : descriptors) {
-    if (descriptor.kind == fo4::forms::CellPropertyKind::link) EXPECT_FALSE(descriptor.targets.empty());
+    if (descriptor.kind == fo4::forms::CellPropertyKind::link) {
+      EXPECT_FALSE(descriptor.targets.empty());
+    }
   }
 }
 
