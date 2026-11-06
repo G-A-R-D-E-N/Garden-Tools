@@ -1,4 +1,4 @@
-import { LOG_ENTRY_FLAG_OPTIONS, type QuestObjective, type QuestStage } from './questModel';
+import { LOG_ENTRY_FLAG_OPTIONS, type QuestObjective, type QuestStage, type StageJump } from './questModel';
 
 const PAD = 12;
 const BOX_WIDTH = 220;
@@ -7,6 +7,7 @@ const COLUMN_GAP = 56;
 const END_GAP_Y = 28;
 const END_HEIGHT = 46;
 const END_GAP_X = 8;
+const JUMP_LANE = 40;
 
 const ENDINGS = [
   { flag: LOG_ENTRY_FLAG_OPTIONS[0], badge: 'Completes quest' },
@@ -30,7 +31,7 @@ export interface FlowBox {
 
 export interface FlowArrow {
   id: string;
-  kind: 'next' | 'ends';
+  kind: 'next' | 'ends' | 'jump';
   from: string;
   to: string;
   title: string;
@@ -38,6 +39,7 @@ export interface FlowArrow {
   y1: number;
   x2: number;
   y2: number;
+  d?: string;
 }
 
 export interface FlowChart {
@@ -65,9 +67,17 @@ function firstJournalLine(stage: QuestStage): string {
   return entry ? journalLine(entry.logText) : '';
 }
 
-export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[]): FlowChart {
+export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[], jumps: StageJump[] = []): FlowChart {
   const ordered = [...stages].sort((a, b) => a.index - b.index);
   const objectiveNumbers = new Set(objectives.map(objective => objective.index));
+  const centres = new Map<number, number>(ordered.map((stage, column): [number, number] => [stage.index, columnX(column) + BOX_WIDTH / 2]));
+  const links = jumps.flatMap(jump => {
+    const from = centres.get(jump.from);
+    const to = centres.get(jump.to);
+    return from === undefined || to === undefined || jump.from === jump.to ? [] : [{ jump, from, to }];
+  });
+  const arcs = [...new Map(links.map(link => [`${link.jump.from}:${link.jump.to}`, link] as const)).values()];
+  const top = PAD + (arcs.length > 0 ? JUMP_LANE : 0);
   const boxes: FlowBox[] = [];
   const arrows: FlowArrow[] = [];
 
@@ -83,7 +93,7 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
     const id = stageId(stage.index);
     const state: FlowState = !text && !objectiveNumbers.has(stage.index) ? 'problem' : endings.length > 0 ? 'ending' : 'ok';
     boxes.push({
-      id, kind: 'stage', stageIndex: stage.index, x, y: PAD, width: BOX_WIDTH, height: STAGE_HEIGHT, text, badges, state,
+      id, kind: 'stage', stageIndex: stage.index, x, y: top, width: BOX_WIDTH, height: STAGE_HEIGHT, text, badges, state,
     });
 
     const endWidth = (BOX_WIDTH - END_GAP_X * (endings.length - 1)) / endings.length;
@@ -93,7 +103,7 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
         kind: 'end',
         stageIndex: stage.index,
         x: x + at * (endWidth + END_GAP_X),
-        y: PAD + STAGE_HEIGHT + END_GAP_Y,
+        y: top + STAGE_HEIGHT + END_GAP_Y,
         width: endWidth,
         height: END_HEIGHT,
         text: ending.flag.label,
@@ -108,7 +118,7 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
         to: endBox.id,
         title: `Stage ${stage.index} ends the quest here (${ending.flag.label})`,
         x1: x + BOX_WIDTH / 2,
-        y1: PAD + STAGE_HEIGHT,
+        y1: top + STAGE_HEIGHT,
         x2: endBox.x + endWidth / 2,
         y2: endBox.y,
       });
@@ -123,12 +133,27 @@ export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[
         to: stageId(next.index),
         title: `Next in number order: stage ${stage.index} to stage ${next.index}`,
         x1: x + BOX_WIDTH,
-        y1: PAD + STAGE_HEIGHT / 2,
+        y1: top + STAGE_HEIGHT / 2,
         x2: columnX(column + 1),
-        y2: PAD + STAGE_HEIGHT / 2,
+        y2: top + STAGE_HEIGHT / 2,
       });
     }
   });
+
+  for (const { jump, from, to } of arcs) {
+    arrows.push({
+      id: `jump:${jump.from}:${jump.to}`,
+      kind: 'jump',
+      from: stageId(jump.from),
+      to: stageId(jump.to),
+      title: `Script jump: stage ${jump.from} sets stage ${jump.to}`,
+      x1: from,
+      y1: top,
+      x2: to,
+      y2: top,
+      d: `M${from} ${top} C${from} ${top - JUMP_LANE} ${to} ${top - JUMP_LANE} ${to} ${top}`,
+    });
+  }
 
   return {
     boxes,

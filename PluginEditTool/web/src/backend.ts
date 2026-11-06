@@ -27,6 +27,8 @@ export interface Backend {
   SetQuestFragment(plugin: string, record: string, stage: number, logEntryIndex: number, scriptName: string,
                    outputDirectory: string, importsDirectory: string, actionsJson: string):
     Promise<string | { script: string; function: string; source: string; pex: string }>;
+  GetQuestFragments(plugin: string, formKey: string): Promise<string | object>;
+  GetQuestScript(scriptName: string, importsDirectory?: string): Promise<string | object>;
   GetDialogue(plugin: string, questFormKey: string): Promise<string | object>;
   CreateDialogueBranch(plugin: string, questFormKey: string, spec: Record<string, unknown>): Promise<string | { formKey: string }>;
   CreateDialogueTopic(plugin: string, questFormKey: string, spec: Record<string, unknown>): Promise<string | { formKey: string }>;
