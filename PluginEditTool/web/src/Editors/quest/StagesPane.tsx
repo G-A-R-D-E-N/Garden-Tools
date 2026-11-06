@@ -31,7 +31,7 @@ export default function StagesPane({ stages, selected, onCommit }: Props) {
   return (
     <section className="quest-pane" aria-labelledby="quest-stages-title">
       <header className="quest-pane-header">
-        <h4 id="quest-stages-title">Stages</h4>
+        <h4 id="quest-stages-title" tabIndex={-1}>Stages</h4>
         <HelpTip topicId="quest-stage" />
         <button type="button" className="sidebar-action-btn" onClick={addStage}>Add stage</button>
       </header>

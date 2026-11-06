@@ -63,7 +63,7 @@ export interface Backend {
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
   CleanUnusedMasters(plugin: string, apply: boolean): Promise<string>;
-  CheckForErrors(plugin: string, limit: number): Promise<string>;
+  CheckForErrors(plugin: string, limit?: number): Promise<string>;
   FindUnreachable(plugin: string, limit: number): Promise<string>;
   LootCleaningReport(plugin: string): Promise<string>;
   UpdateOnam(plugin: string): Promise<string>;

@@ -77,7 +77,7 @@ export default function FragmentsPane({ plugin, formKey, push, onWritten }: Prop
   return (
     <section className="quest-pane" aria-labelledby="quest-fragments-title">
       <header className="quest-pane-header">
-        <h4 id="quest-fragments-title">Fragments</h4>
+        <h4 id="quest-fragments-title" tabIndex={-1}>Fragments</h4>
         <HelpTip topicId="quest-fragment" />
       </header>
       <p className="quest-note">
