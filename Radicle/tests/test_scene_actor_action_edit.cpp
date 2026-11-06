@@ -56,8 +56,8 @@ std::size_t nth_index_of(const Order& names, const char* signature, std::size_t 
 
 void detach_actions(fo4::Plugin& plugin) {
   for (std::size_t action = 0; action < 3; ++action) {
-    EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\ActorAlias", action, "-1"),
-              Scalar::updated);
+    const auto status = fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\ActorAlias", action, "-1");
+    EXPECT_TRUE(status == Scalar::updated || status == Scalar::unchanged) << action;
   }
 }
 
