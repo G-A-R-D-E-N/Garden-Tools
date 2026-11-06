@@ -277,7 +277,8 @@ void Decompiler::emitFunction(std::ostringstream& sb, const PexObject& obj,
         auto rest = fn.name.substr(std::string("::remote_").size());
         std::string type = fn.params.empty() ? "" : fn.params[0].type;
         std::string ev = rest;
-        if (!type.empty() && startsWith(rest, type + "_")) {
+        if (!type.empty() && rest.size() > type.size() && iequals(rest.substr(0, type.size()), type) &&
+            rest[type.size()] == '_') {
             ev = rest.substr(type.size() + 1);
         } else {
             const auto idx = rest.find("_On");

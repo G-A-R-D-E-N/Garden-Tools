@@ -34481,6 +34481,8 @@
     { "record": "PERK", "container": "Tabs", "member": "Conditions", "scope": "perk_effect_tab" },
     { "record": "QUST", "container": "Aliases", "member": "Conditions", "scope": "alias" },
     { "record": "QUST", "container": "Targets", "member": "Conditions", "scope": "quest_target" },
+    { "record": "SCEN", "container": "Phases", "member": "Start Conditions", "scope": "scene_phase_start" },
+    { "record": "SCEN", "container": "Phases", "member": "Completion Conditions", "scope": "scene_phase_completion" },
     { "record": "SPEL", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "TERM", "container": "Body Text", "member": "Conditions", "scope": "terminal_body_text" },
     { "record": "TERM", "container": "Menu Items", "member": "Conditions", "scope": "terminal_menu_item" }
