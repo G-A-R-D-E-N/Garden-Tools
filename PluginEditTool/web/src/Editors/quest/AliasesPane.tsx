@@ -41,7 +41,7 @@ export default function AliasesPane({ aliases, onCommit }: Props) {
   return (
     <section className="quest-pane" aria-labelledby="quest-aliases-title">
       <header className="quest-pane-header">
-        <h4 id="quest-aliases-title">Aliases</h4>
+        <h4 id="quest-aliases-title" tabIndex={-1}>Aliases</h4>
         <HelpTip topicId="alias" />
         <button type="button" className="sidebar-action-btn" onClick={addAlias}>Add alias</button>
       </header>

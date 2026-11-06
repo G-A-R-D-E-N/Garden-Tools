@@ -54,6 +54,15 @@
       }
     ]
   },
+  "backend.CheckForErrors": [
+    {"Code": "unsupported_vmad_property", "Severity": "warning", "Plugin": "Patch.esp", "FormKey": "000800:Patch.esp", "Subrecord": "VMAD", "Detail": "", "Target": "", "Message": "Script property type is not supported"},
+    {"Code": "unresolved_link", "Severity": "error", "Plugin": "Patch.esp", "FormKey": "000802:Patch.esp", "Subrecord": "", "Detail": "", "Target": "000123:Fallout4.esm", "Message": "Link target is missing"},
+    {"Code": "scene_action_alias_unknown", "Severity": "error", "Plugin": "Patch.esp", "FormKey": "000900:Patch.esp", "Subrecord": "", "Detail": "", "Target": "", "Message": "Scene action alias is unknown"},
+    {"Code": "deleted_target", "Severity": "warning", "Plugin": "Fallout4.esm", "FormKey": "000555:Fallout4.esm", "Subrecord": "", "Detail": "", "Target": "", "Message": "Link points at a deleted record"}
+  ],
+  "backend.GetReferencedBy": [
+    {"Plugin": "Patch.esp", "FormKey": "000900:Patch.esp", "EditorID": "BagInTheAlley", "Type": "SCEN"}
+  ],
   "backend.ResolveFormKeyLabels": {"000910:Fallout4.esm": "Worried"},
   "backend.GetScene": {
     "formKey": "000900:Patch.esp", "editorId": "BagInTheAlley", "flags": 1,

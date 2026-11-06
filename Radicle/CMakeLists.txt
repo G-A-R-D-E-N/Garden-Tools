@@ -319,7 +319,10 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/papyrus/runtime.cpp
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
+  src/papyrus/decompile_service.cpp
+  src/papyrus/compile_staging.cpp
   src/papyrus/decompiler.cpp
+  src/papyrus/script_names.cpp
   src/papyrus/decompiler_expr.cpp
   src/papyrus/decompiler_stmt.cpp
   src/papyrus/lexer.cpp
@@ -1053,6 +1056,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_source_real.cpp
     tests/test_papyrus_decompiler.cpp
     tests/test_papyrus_decompiler_real.cpp
+    tests/test_papyrus_decompiler_sample.cpp
+    tests/test_papyrus_compile_staging.cpp
     tests/test_papyrus_lexer.cpp
     tests/test_papyrus_parser.cpp
     tests/test_papyrus_parse_real.cpp

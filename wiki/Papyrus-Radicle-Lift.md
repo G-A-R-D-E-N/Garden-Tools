@@ -30,7 +30,7 @@ Radicle now has the whole Papyrus stack (front end, semantics, decompiler, F4SE 
 
 Still on PET after #921: Decompile, and `GraphCompiler.cs` / `GraphCompiler.cpp` (calls the old copy). Deleting PET's copies and retiring the C# oracle come after the gates.
 
-What stays in fo4ide: `PapyrusPanel`, the Blueprint canvas and layout, `PapyrusTarget`, `PapyrusStaging`, `GraphTarget`, wiki lookup glue.
+What stays in fo4ide: `PapyrusPanel`, the Blueprint canvas and layout, `PapyrusTarget`, `GraphTarget`, wiki lookup glue. Compile staging has moved to Radicle (`Radicle/src/papyrus/compile_staging.cpp`: `planCompile`, `stageNamespacedScripts`, `removeCompileStaging`); `PapyrusStaging` no longer exists.
 
 ## SWF and AVM work merged after #921 (to `nomad/dev`)
 
