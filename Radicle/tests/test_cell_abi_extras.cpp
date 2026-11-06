@@ -7,6 +7,10 @@
 
 #include <gtest/gtest.h>
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
