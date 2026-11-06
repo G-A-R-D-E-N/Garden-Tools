@@ -232,7 +232,6 @@ add_library(
     papyrus/Resolver.cpp
     papyrus/TypeChecker.cpp
     papyrus/CodeGenerator.cpp
-    papyrus/Decompiler.cpp
     papyrus/Symbols.cpp
     papyrus/CreationKitFidelity.cpp
     papyrus/AnalysisService.cpp
@@ -273,7 +272,6 @@ add_library(
     fo4ide_app
     app/ServiceTargets.cpp
     app/PapyrusTarget.cpp
-    app/PapyrusStaging.cpp
     app/GraphTarget.cpp
     app/AppInteropTarget.cpp
     app/AudioTarget.cpp
