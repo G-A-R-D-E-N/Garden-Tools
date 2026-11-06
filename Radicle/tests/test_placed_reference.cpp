@@ -3,9 +3,12 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/signature.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstdint>
+#include <cstring>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -109,6 +112,13 @@ fo4::Plugin fixture() {
   return plugin;
 }
 
+const fo4::Subrecord* find_subrecord(const fo4::Record& record, std::string_view signature) {
+  const auto wanted = fo4::Signature::from_string(signature);
+  const auto found = std::find_if(record.subrecords.begin(), record.subrecords.end(),
+                                  [&](const fo4::Subrecord& sub) { return sub.signature == wanted; });
+  return found == record.subrecords.end() ? nullptr : &*found;
+}
+
 }  // namespace
 
 TEST(PlacedReference, EnumeratesPersistentAndTemporaryCellChildren) {
@@ -210,4 +220,60 @@ TEST(PlacedReference, LiveReferenceWithoutDataIsRejected) {
   auto record = placed_record(fo4::Signature::from_string("PHZD"), key, base, plugin, 1.0f, 1.0f);
   std::erase_if(record.subrecords, [](const fo4::Subrecord& sub) { return sub.signature == fo4::sig_data; });
   EXPECT_THROW(fo4::forms::decode_placed_reference(plugin, record), fo4::forms::PlacedReferenceError);
+}
+
+TEST(PlacedReference, EditorIdSetThenClearErasesEdidSubrecord) {
+  auto plugin = fixture();
+  const fo4::FormKey refr{plugin.key, fo4::LocalFormId{0x802}};
+
+  ASSERT_TRUE(fo4::forms::set_placed_reference_editor_id(plugin, refr, "Crate"));
+  const auto* renamed = fo4::find_record(plugin, refr);
+  ASSERT_NE(renamed, nullptr);
+  const auto* renamed_edid = find_subrecord(*renamed, "EDID");
+  ASSERT_NE(renamed_edid, nullptr);
+  EXPECT_EQ(renamed_edid->data, zstring("Crate"));
+
+  ASSERT_TRUE(fo4::forms::set_placed_reference_editor_id(plugin, refr, ""));
+  const auto* cleared = fo4::find_record(plugin, refr);
+  ASSERT_NE(cleared, nullptr);
+  EXPECT_EQ(find_subrecord(*cleared, "EDID"), nullptr);
+}
+
+TEST(PlacedReference, ScaleSetThenClearWritesAndRemovesXscl) {
+  auto plugin = fixture();
+  const fo4::FormKey refr{plugin.key, fo4::LocalFormId{0x802}};
+
+  ASSERT_TRUE(fo4::forms::set_placed_reference_scale(plugin, refr, 2.0f));
+  const auto* scaled = fo4::find_record(plugin, refr);
+  ASSERT_NE(scaled, nullptr);
+  const auto* scaled_xscl = find_subrecord(*scaled, "XSCL");
+  ASSERT_NE(scaled_xscl, nullptr);
+  EXPECT_EQ(scaled_xscl->data, f32_bytes(2.0f));
+
+  ASSERT_TRUE(fo4::forms::set_placed_reference_scale(plugin, refr, std::nullopt));
+  const auto* unscaled = fo4::find_record(plugin, refr);
+  ASSERT_NE(unscaled, nullptr);
+  EXPECT_EQ(find_subrecord(*unscaled, "XSCL"), nullptr);
+}
+
+TEST(PlacedReference, EnableParentSetWritesXespBytesAndClearRemovesIt) {
+  auto plugin = fixture();
+  const fo4::FormKey refr{plugin.key, fo4::LocalFormId{0x802}};
+  const fo4::FormKey parent{plugin.key, fo4::LocalFormId{0x801}};
+
+  ASSERT_TRUE(fo4::forms::set_placed_reference_enable_parent(plugin, refr, parent, 1));
+  const auto* parented = fo4::find_record(plugin, refr);
+  ASSERT_NE(parented, nullptr);
+  const auto* xesp = find_subrecord(*parented, "XESP");
+  ASSERT_NE(xesp, nullptr);
+  ASSERT_EQ(xesp->data.size(), 8u);
+  std::uint32_t parent_raw = 0;
+  std::memcpy(&parent_raw, xesp->data.data(), 4);
+  EXPECT_EQ(parent_raw, 0x801u);
+  EXPECT_EQ(std::to_integer<int>(xesp->data[4]), 1);
+
+  ASSERT_TRUE(fo4::forms::set_placed_reference_enable_parent(plugin, refr, std::nullopt, 0));
+  const auto* unparented = fo4::find_record(plugin, refr);
+  ASSERT_NE(unparented, nullptr);
+  EXPECT_EQ(find_subrecord(*unparented, "XESP"), nullptr);
 }
