@@ -299,6 +299,20 @@ public:
     virtual Result<nlohmann::json> removeScriptProperty(const nlohmann::json&) {
         return std::unexpected(Error{"ScriptBackendUnavailable", "Script property writes are unavailable"});
     }
+    // Constraint: quest fragment removal refuses unmanaged script source and leaves the plugin unchanged.
+    virtual Result<nlohmann::json> removeQuestFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"QuestFragmentBackendUnavailable", "Quest fragment removal is unavailable"});
+    }
+    virtual Result<nlohmann::json> getQuestFragments(const nlohmann::json&) const {
+        return std::unexpected(Error{"QuestFragmentBackendUnavailable", "Quest fragment queries are unavailable"});
+    }
+    // edit_quest_script must stage only a Quest-extending script and must never write into the game Data folder.
+    virtual Result<nlohmann::json> getQuestScript(const nlohmann::json&) const {
+        return std::unexpected(Error{"QuestScriptBackendUnavailable", "Quest script reads are unavailable"});
+    }
+    virtual Result<nlohmann::json> editQuestScript(const nlohmann::json&) {
+        return std::unexpected(Error{"QuestScriptBackendUnavailable", "Quest script edits are unavailable"});
+    }
     // Constraint: quest alias script writes keep the in-memory plugin unchanged on refusal.
     virtual Result<nlohmann::json> addAliasScript(const nlohmann::json&) {
         return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script writes are unavailable"});

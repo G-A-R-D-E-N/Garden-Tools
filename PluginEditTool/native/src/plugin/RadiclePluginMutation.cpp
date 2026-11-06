@@ -213,6 +213,10 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "SetQuestStages") return setQuestStages(arguments);
     if (method == "SetQuestObjectives") return setQuestObjectives(arguments);
     if (method == "SetQuestFragment") return setQuestFragment(arguments);
+    if (method == "RemoveQuestFragment") return removeQuestFragment(arguments);
+    if (method == "GetQuestFragments") return getQuestFragments(arguments);
+    if (method == "GetQuestScript") return getQuestScript(arguments);
+    if (method == "EditQuestScript") return editQuestScript(arguments);
     if (method == "GetQuestObjectives") return getQuestObjectives(arguments);
     if (method == "GetQuestStages") return getQuestStages(arguments);
     if (method == "GetQuestAliases") return getQuestAliases(arguments);
