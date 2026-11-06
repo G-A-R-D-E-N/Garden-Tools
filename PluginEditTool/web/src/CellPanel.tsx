@@ -200,13 +200,14 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     await runLoad(() => cell.GetPlacedReferences(id));
   };
 
-  const resolveWorldspaceFormKey = (wsOverride?: string): string | null => {
-    const ws = (wsOverride ?? worldspace).trim();
-    if (!ws) return null;
-    if (ws.includes(':')) return ws;
-    const hit = (wsMatches ?? []).find(h =>
-      (h.EditorID && h.EditorID === ws) || h.FormKey === ws);
-    return hit?.FormKey ?? null;
+  const resolveWorldspaceFormKey = async (ws: string): Promise<string | null> => {
+    if (!cell || !ws) return null;
+    try {
+      const reply = JSON.parse(await cell.ResolveWorldspaceId(ws)) as { worldspaceFormKey?: string | null };
+      return reply.worldspaceFormKey ?? null;
+    } catch {
+      return null;
+    }
   };
 
   const loadGrid = async (wsOverride?: string) => {
@@ -223,7 +224,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const createExteriorCell = async () => {
     const backend = getBackend();
     if (!backend || !cell) return;
-    const formKey = resolveWorldspaceFormKey();
+    const formKey = await resolveWorldspaceFormKey(worldspace.trim());
     const x = parseCellGridCoordinate(gridX);
     const y = parseCellGridCoordinate(gridY);
     if (!formKey || x === null || y === null) {

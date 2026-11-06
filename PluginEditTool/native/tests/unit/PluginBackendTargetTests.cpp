@@ -606,6 +606,16 @@ TEST_CASE("Cell search routes through the native record index and honors its lim
     CHECK(backend.invokedBackendArguments[1] == "WRLD");
 }
 
+TEST_CASE("Cell ResolveWorldspaceId reaches the plugin backend resolver") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "cell");
+
+    const auto result = target.invoke("ResolveWorldspaceId", nlohmann::json::array({"WorldOne"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "CellBackendUnavailable");
+    CHECK(backend.invokedOperation.empty());
+}
+
 TEST_CASE("Cell GetPlugins reuses the native environment plugin list") {
     RoutingBackend backend;
     fo4ide::app::PluginBackendTarget target(backend, "cell");
