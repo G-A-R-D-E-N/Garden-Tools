@@ -594,7 +594,7 @@ class RemoteCommandTest(ServiceTest):
 class RemoteTest(ServiceTest):
     def setUp(self):
         super().setUp()
-        self.sent, self.has_workflow, self.git_calls = "", True, []
+        self.sent, self.has_workflow, self.git_calls, self.git_cwds = "", True, [], []
         self.enterContext(mock.patch.object(rds, "git", side_effect=self.fake_git))
         self.enterContext(mock.patch.object(rds, "fetch_candidate", return_value=True))
         self.enterContext(mock.patch.object(rds, "current_head", side_effect=lambda t: t.sha))
@@ -604,6 +604,7 @@ class RemoteTest(ServiceTest):
 
     def fake_git(self, *args, **kwargs):
         self.git_calls.append(args)
+        self.git_cwds.append(kwargs.get("cwd"))
         if args[:2] == ("update-ref", "-d"):
             self.sent = ""
         outputs = {"ls-tree": rds.WORKFLOW + "\n" if self.has_workflow else "", "for-each-ref": self.sent + "\n",
@@ -614,9 +615,11 @@ class RemoteTest(ServiceTest):
         codes = list(exit_codes)
 
         def start(worker, t, log_path, bundle_name):
+            code = codes.pop(0)
+            shell_code, mark = code if isinstance(code, tuple) else (code, None)
             log_path.parent.mkdir(parents=True, exist_ok=True)
-            log_path.write_text(CTEST_PASS, encoding="utf-8")
-            return FakeProc(codes.pop(0))
+            log_path.write_text(CTEST_PASS + (f"REAL_DATA_EXIT={mark}\n" if mark is not None else ""), encoding="utf-8")
+            return FakeProc(shell_code)
 
         return self.enterContext(mock.patch.object(rds, "start_remote", side_effect=start))
 
@@ -683,6 +686,14 @@ class BundleTest(RemoteTest):
                 self.assertEqual([arg for arg in bundle if arg.startswith("^")], prerequisites)
 
 
+    # Detects: bundles cut from the shallow local job repo, which the VM rejects as incomplete.
+    def test_remote_git_runs_in_the_full_history_repo(self):
+        self.start_with(0)
+        rds.run_remote(target(), VM, rds.LOG_DIR / "x.log")
+        self.assertTrue(self.git_cwds)
+        self.assertEqual(set(self.git_cwds), {rds.REMOTE_DIR})
+
+
 class RemoteStopTest(RemoteTest):
     # Detects: a superseded VM run that keeps building because only the local ssh client was killed.
     def test_superseded_vm_run_kills_the_remote_tree_through_run_pid(self):
@@ -711,6 +722,15 @@ class FetchRetryTest(RemoteTest):
                    if call[:2] == ("bundle", "create")]
         self.assertEqual(bundles, [[f"^{OLD}"], []])
         self.assertIn(("update-ref", "-d", "refs/real-data/sent-vm"), self.git_calls)
+        self.assertEqual(self.gh.states_posted(), ["pending", "success"])
+
+
+    # Detects: the VM's PowerShell shell turning exit 97 into 1, so a lost prerequisite reads as a failed run.
+    def test_exit_code_comes_from_the_marker_when_the_shell_flattens_it(self):
+        self.sent = OLD
+        start = self.start_with((1, 97), (1, 0))
+        rds.run_target_remote(target(), VM)
+        self.assertEqual(start.call_count, 2)
         self.assertEqual(self.gh.states_posted(), ["pending", "success"])
 
 

@@ -127,12 +127,17 @@ jobs:
             '^Radicle/(src|include/fo4)/forms/proj_expl_hazd\.'
           )
           $coreRegex = $core -join '|'
-          git fetch --no-tags --depth=1 origin "$env:GITHUB_BASE_REF"
+          $base = 'HEAD^1'
+          git rev-parse -q --verify 'HEAD^2' | Out-Null
           if ($LASTEXITCODE -ne 0) {
-            Write-Output "::warning::could not fetch base branch $env:GITHUB_BASE_REF; running all real-data tests."
-            exit 0
+            git fetch --no-tags --depth=1 origin "$env:GITHUB_BASE_REF"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Output "::warning::could not fetch base branch $env:GITHUB_BASE_REF; running all real-data tests."
+              exit 0
+            }
+            $base = 'FETCH_HEAD'
           }
-          $changed = @(git diff --name-only --no-renames FETCH_HEAD HEAD)
+          $changed = @(git diff --name-only --no-renames $base HEAD)
           if ($LASTEXITCODE -ne 0 -or -not $changed) {
             Write-Output '::warning::could not determine the changed files; running all real-data tests.'
             exit 0

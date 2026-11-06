@@ -3144,6 +3144,18 @@ The checks run in this order. The base name must match `SAFE_BASE` (letters, dig
 
 An ssh exit of 255 (connection lost, or the transfer failed to connect) posts `error` "vm data runner unreachable", and the worker sleeps `POLL * 5` before taking more work. An exit of 97 means `run_remote.ps1` could not fetch the bundle: the sent ref is deleted and the whole history is sent once more. A second 97 posts `error` "vm data runner fetch failed". Both error texts are in `RETRY_ERRORS`, so `plan` treats such a head as due again. Other transfer failures raise and are logged; the head keeps its `pending` status until the next pass plans it again.
 
+## ci/real-data-service/real_data_service.py:REMOTE_DIR — a full clone for VM bundles
+
+`ROOT/repo` is shallow, because the Select step's `git fetch --depth=1` in older workflows leaves boundary commits in `.git/shallow`. A bundle cut from it fails on the VM with "did not send all necessary objects" (checked against the live repo on 2026-11-06). So remote workers fetch, check, bundle and record `sent-<name>` in `ROOT/remote.git`, a bare clone that nothing fetches with `--depth`. `test_remote_git_runs_in_the_full_history_repo` pins that every remote git call uses it.
+
+## ci/real-data-service/real_data_service.py:EXIT_MARK — exit codes from the VM
+
+The VM's OpenSSH default shell is Windows PowerShell, and `powershell -Command` returns 1 for any failing native command. So an `exit 97` from `run_remote.ps1` arrived as 1 (checked 2026-11-06 with `cmd /c exit 97` over the host-to-VM ssh). `run_remote.ps1` prints `REAL_DATA_EXIT=<code>` before every exit, and `run_remote` takes the last such line over the ssh exit code. An ssh exit of 255 comes from the local client and is still checked first. `test_exit_code_comes_from_the_marker_when_the_shell_flattens_it` pins it.
+
+## .github/workflows/native-real-data.yml:Select real-data tests — base from the merge commit
+
+The service checks out `refs/pull/<n>/merge`, whose first parent is the base tip. When `HEAD^2` exists, the step diffs against `HEAD^1` and fetches nothing. That works on the VM, which has no `origin`, and it stops shallowing the PC repo. A commit that is not a merge falls back to fetching the base, as before.
+
 ## ci/real-data-service/real_data_service.py:run_remote — what is bundled, and when sent moves
 
 The bundle holds `refs/real-data/candidate-<name>`. It is incremental, `^refs/real-data/sent-<name>`, when that ref exists and names a different commit, because git refuses an empty bundle. A commit the VM already has gets a full bundle. The sent ref moves to the candidate only after `run_remote.ps1` printed `REAL_DATA_FETCHED`, which means the VM has the objects. The check runs after the job exits, including after a superseded or timed-out job, since the VM fetched in each case. The transfer is `tar cf -` piped into `tar xf -` on the VM, which does not translate line endings.

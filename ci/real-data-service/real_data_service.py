@@ -31,6 +31,7 @@ EXCLUDED_PREFIXES = ("Radicle/docs/",)
 EXCLUDED_SUFFIXES = (".md",)
 ROOT = Path(r"C:\ci\real-data")
 REPO_DIR = ROOT / "repo"
+REMOTE_DIR = ROOT / "remote.git"  # full history: bundles from the shallow REPO_DIR are incomplete
 LOG_DIR = ROOT / "logs"
 LOCK = ROOT / "run.lock"
 QUEUED = ROOT / "queued.json"
@@ -55,13 +56,14 @@ FAILED_SECTION = "The following tests FAILED:"
 FAILED = re.compile(r"(\d+) - (.+?) \(([A-Za-z][A-Za-z ]*)\)[ \t\r]*$", re.M)
 CANDIDATE = "refs/real-data/candidate"
 FETCHED = "REAL_DATA_FETCHED"
+EXIT_MARK = re.compile(r"^REAL_DATA_EXIT=(\d+)\s*$", re.M)  # the VM shell turns every failing exit code into 1
 FETCH_FAILED = 97
 UNREACHABLE = 255
 UNREACHABLE_TEXT = "vm data runner unreachable"
 FETCH_FAILED_TEXT = "vm data runner fetch failed"
 RETRY_ERRORS = ("superseded", UNREACHABLE_TEXT, FETCH_FAILED_TEXT)
 SAFE_BASE = re.compile(r"[A-Za-z0-9._/-]*")
-GIT_LOCK = threading.RLock()  # every git call on REPO_DIR takes this; the local job's own git does not
+GIT_LOCK = threading.RLock()  # every service git call takes this; the local job's own git does not
 
 
 @dataclass(frozen=True)
@@ -271,14 +273,16 @@ def remove_tree(path):
         shutil.rmtree(path, onexc=retry_writable)
 
 
-def fetch_candidate(t, ref_name):
+def fetch_candidate(t, ref_name, repo=None):
     ref = f"refs/pull/{t.number}/merge" if t.number else f"refs/heads/{DEV_BRANCH}"
+    repo = repo or REPO_DIR
     with GIT_LOCK:
-        if not (REPO_DIR / ".git").exists():
+        if not (repo / ("HEAD" if repo == REMOTE_DIR else ".git")).exists():
             ROOT.mkdir(parents=True, exist_ok=True)
-            git("clone", "--no-checkout", REPO_URL, str(REPO_DIR), cwd=ROOT)
-        git("fetch", "--no-tags", "--no-write-fetch-head", "origin", f"+{ref}:{ref_name}", attempts=READ_ATTEMPTS)
-        commit, *parents = git("rev-list", "--parents", "-n", "1", ref_name).split()
+            git("clone", "--bare" if repo == REMOTE_DIR else "--no-checkout", REPO_URL, str(repo), cwd=ROOT)
+        git("fetch", "--no-tags", "--no-write-fetch-head", "origin", f"+{ref}:{ref_name}", cwd=repo,
+            attempts=READ_ATTEMPTS)
+        commit, *parents = git("rev-list", "--parents", "-n", "1", ref_name, cwd=repo).split()
         return parents[1:] == [t.sha] if t.number else commit == t.sha
 
 
@@ -400,18 +404,20 @@ def stop_remote(worker, proc):
 def run_remote(t, worker, log_path):
     ref = f"refs/real-data/candidate-{worker.name}"
     sent_ref = f"refs/real-data/sent-{worker.name}"
-    candidate = git("rev-parse", ref).strip()
-    sent = git("for-each-ref", "--format=%(objectname)", sent_ref).strip()
+    candidate = git("rev-parse", ref, cwd=REMOTE_DIR).strip()
+    sent = git("for-each-ref", "--format=%(objectname)", sent_ref, cwd=REMOTE_DIR).strip()
     bundle = ROOT / "bundles" / f"{worker.name}.bundle"
     bundle.parent.mkdir(parents=True, exist_ok=True)
-    git("bundle", "create", str(bundle), ref, *([f"^{sent}"] if sent and sent != candidate else []))
+    git("bundle", "create", str(bundle), ref, *([f"^{sent}"] if sent and sent != candidate else []), cwd=REMOTE_DIR)
     send_bundle(worker, bundle)
     rc = finish_job(t, start_remote(worker, t, log_path, bundle.name), lambda proc: stop_remote(worker, proc))
-    if FETCHED in log_path.read_text(encoding="utf-8", errors="replace"):
-        git("update-ref", sent_ref, candidate)
+    text = log_path.read_text(encoding="utf-8", errors="replace")
+    if FETCHED in text:
+        git("update-ref", sent_ref, candidate, cwd=REMOTE_DIR)
     if rc == UNREACHABLE:
         raise Unreachable()
-    return rc
+    marks = EXIT_MARK.findall(text)
+    return int(marks[-1]) if rc is not None and marks else rc
 
 
 def run_target_remote(t, worker):
@@ -419,10 +425,10 @@ def run_target_remote(t, worker):
     if not SAFE_BASE.fullmatch(t.base):
         logging.info("%s %s: base %s needs the local runner", t.name, t.sha[:12], t.base)
         return False
-    if not fetch_candidate(t, ref):
+    if not fetch_candidate(t, ref, REMOTE_DIR):
         logging.info("%s %s: merge ref not current; left due", t.name, t.sha[:12])
         return None
-    if not git("ls-tree", "--name-only", ref, "--", WORKFLOW).strip():
+    if not git("ls-tree", "--name-only", ref, "--", WORKFLOW, cwd=REMOTE_DIR).strip():
         logging.info("%s %s: no workflow in the commit; left for the local runner", t.name, t.sha[:12])
         return False
     post(t.sha, "pending", f"running on the {worker.name} data runner")
@@ -433,7 +439,7 @@ def run_target_remote(t, worker):
         if rc == FETCH_FAILED:
             logging.warning("%s %s: %s lacks the previous commit; sending full history", t.name, t.sha[:12],
                             worker.name)
-            git("update-ref", "-d", f"refs/real-data/sent-{worker.name}")
+            git("update-ref", "-d", f"refs/real-data/sent-{worker.name}", cwd=REMOTE_DIR)
             rc = run_remote(t, worker, log_path)
     except Unreachable:
         logging.warning("%s %s: %s unreachable", t.name, t.sha[:12], worker.name)
