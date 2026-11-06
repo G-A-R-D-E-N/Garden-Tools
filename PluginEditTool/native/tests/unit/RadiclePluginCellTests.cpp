@@ -734,3 +734,39 @@ TEST_CASE("Native cell edit history lookup ignores ASCII case and refuses an unl
     REQUIRE_FALSE(unloaded.has_value());
     CHECK(unloaded.error().type == "PluginNotLoaded");
 }
+
+TEST_CASE("Native cell reads fail with the duplicate plugin named and recover once it leaves the load order") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "first" / "Source.esp", sourcePlugin());
+    writeBytes(root / "second" / "Source.esp", sourcePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json withDuplicate{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "first" / "Source.esp"),
+            pluginEntry("Source.esp", root / "second" / "Source.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", withDuplicate).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto failed = backend.getPlacedReferences(cellView);
+    REQUIRE_FALSE(failed.has_value());
+    CHECK(failed.error().type == "CellReadFailed");
+    CHECK(failed.error().message.find("duplicate or unnamed plugin in load order") != std::string::npos);
+    CHECK_FALSE(backend.getPlacedReferences(cellView).has_value());
+
+    const nlohmann::json withoutDuplicate{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "first" / "Source.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", withoutDuplicate).has_value());
+    const auto recovered = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(recovered.at("references").size() == 1);
+    CHECK(recovered.at("references")[0].at("position").at("x") == 10.0f);
+}
