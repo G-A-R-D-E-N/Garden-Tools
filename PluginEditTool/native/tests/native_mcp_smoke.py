@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -26,6 +27,16 @@ def main(executable):
             deadline = threading.Timer(60, process.kill)
             deadline.start()
             request_id = 0
+            def backtrace():
+                debugger = shutil.which("gdb")
+                if debugger is None:
+                    return " (no gdb on this runner)"
+                try:
+                    rerun = subprocess.run([debugger, "-batch", "-ex", "run", "-ex", "bt 30", "--args", executable, "--mcp", "--mo2", str(root)], input="", capture_output=True, text=True, env=environment, cwd=root, timeout=30)
+                    return " " + rerun.stdout[-6000:]
+                except Exception as error:
+                    return " (gdb failed: " + str(error) + ")"
+
 
             def rpc(method, params=None):
                 nonlocal request_id
@@ -33,7 +44,7 @@ def main(executable):
                 process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}}) + "\n")
                 process.stdin.flush()
                 line = process.stdout.readline()
-                assert line, "Native MCP exited or timed out before responding"
+                assert line, "Native MCP exited or timed out before responding: " + (errors.flush() or errors.seek(0) or errors.read()) + backtrace()
                 response = json.loads(line)
                 assert response["id"] == request_id, response
                 assert "error" not in response, response
