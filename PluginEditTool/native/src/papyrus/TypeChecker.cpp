@@ -1,4 +1,5 @@
 #include <fo4ide/papyrus/TypeChecker.hpp>
+#include <fo4ide/papyrus/Resolver.hpp>
 
 #include <cctype>
 #include <string>
@@ -354,28 +355,10 @@ void TypeChecker::checkCall(State& state, const CallExpression& call) {
 }
 
 Type TypeChecker::parameterType(const Parameter& parameter, const Script* owner) {
-    const std::string& name = parameter.type.name;
-    std::optional<Type> resolved;
-    if (const Type* primitive = Type::primitive(name)) resolved = *primitive;
-
-    if (!resolved && owner) {
-        for (const Script* level : index_.baseChain(owner)) {
-            for (const auto& s : level->structs) {
-                if (iequals(s.name, name)) {
-                    resolved = Type::structOf(level->name, name);
-                    break;
-                }
-            }
-            if (resolved) break;
-        }
-    }
-
-    if (!resolved) {
-        const Script* script = index_.resolve(name);
-        resolved = script ? Type::object(script->name) : Type::error();
-    }
-
-    return parameter.type.isArray ? Type::arrayOf(*resolved) : *resolved;
+    // The parameter type must resolve exactly as the resolver does, so Script#Struct splits on its owner.
+    const auto resolved = Resolver::resolveTypeName(index_, parameter.type.name, owner);
+    const Type type = resolved ? *resolved : Type::error();
+    return parameter.type.isArray ? Type::arrayOf(type) : type;
 }
 
 void TypeChecker::checkAssignable(State& state, const Type& target, const Type& value,

@@ -194,6 +194,69 @@ TEST_CASE("Quest fragment source refuses unowned or ambiguous scripts") {
     CHECK_FALSE(updateQuestFragmentSource(typed, "QF_Test", 10, 0, actions));
 }
 
+TEST_CASE("Quest fragment source emits objective flags only when given") {
+    using namespace fo4ide::papyrus;
+    const auto plain = updateQuestFragmentSource({}, "QF_Flags", 10, 0,
+        {{QuestFragmentActionKind::Display, 3}, {QuestFragmentActionKind::Complete, 4}});
+    REQUIRE(plain.has_value());
+    CHECK(plain->find("SetObjectiveDisplayed(3)\n") != std::string::npos);
+    CHECK(plain->find("SetObjectiveCompleted(4)\n") != std::string::npos);
+    QuestFragmentAction hide{QuestFragmentActionKind::Display, 5};
+    hide.visible = false;
+    const auto hidden = updateQuestFragmentSource({}, "QF_Flags", 10, 0, {hide});
+    REQUIRE(hidden.has_value());
+    CHECK(hidden->find("SetObjectiveDisplayed(5, false, false)\n") != std::string::npos);
+    QuestFragmentAction force{QuestFragmentActionKind::Display, 6};
+    force.force = true;
+    const auto forced = updateQuestFragmentSource({}, "QF_Flags", 10, 0, {force});
+    REQUIRE(forced.has_value());
+    CHECK(forced->find("SetObjectiveDisplayed(6, true, true)\n") != std::string::npos);
+    QuestFragmentAction uncomplete{QuestFragmentActionKind::Complete, 7};
+    uncomplete.completed = false;
+    const auto reopened = updateQuestFragmentSource({}, "QF_Flags", 10, 0, {uncomplete});
+    REQUIRE(reopened.has_value());
+    CHECK(reopened->find("SetObjectiveCompleted(7, false)\n") != std::string::npos);
+    QuestFragmentAction done{QuestFragmentActionKind::Complete, 8};
+    done.completed = true;
+    const auto completed = updateQuestFragmentSource({}, "QF_Flags", 10, 0, {done});
+    REQUIRE(completed.has_value());
+    CHECK(completed->find("SetObjectiveCompleted(8, true)\n") != std::string::npos);
+}
+
+TEST_CASE("Quest fragment source refuses objective flags on the wrong action kind") {
+    using namespace fo4ide::papyrus;
+    QuestFragmentAction displayCompleted{QuestFragmentActionKind::Display, 1};
+    displayCompleted.completed = true;
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Flags", 10, 0, {displayCompleted}).has_value());
+    QuestFragmentAction completeVisible{QuestFragmentActionKind::Complete, 1};
+    completeVisible.visible = true;
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Flags", 10, 0, {completeVisible}).has_value());
+    QuestFragmentAction completeForce{QuestFragmentActionKind::Complete, 1};
+    completeForce.force = false;
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Flags", 10, 0, {completeForce}).has_value());
+    QuestFragmentAction stageFlag{QuestFragmentActionKind::SetStage, 20};
+    stageFlag.completed = true;
+    CHECK_FALSE(updateQuestFragmentSource({}, "QF_Flags", 10, 0, {stageFlag}).has_value());
+}
+
+TEST_CASE("Quest fragment source removes one managed function and refuses unmanaged source") {
+    using namespace fo4ide::papyrus;
+    const std::vector<QuestFragmentAction> actions{{QuestFragmentActionKind::SetStage, 20}};
+    const auto first = updateQuestFragmentSource({}, "QF_Test", 10, 0, actions);
+    REQUIRE(first.has_value());
+    const auto both = updateQuestFragmentSource(*first, "QF_Test", 20, 0, actions);
+    REQUIRE(both.has_value());
+    REQUIRE(isManagedQuestFragmentSource(*both));
+    const auto removed = removeQuestFragmentSource(*both, "QF_Test", 10, 0);
+    REQUIRE(removed.has_value());
+    CHECK(removed->find("Fragment_Stage_0010_Item_00") == std::string::npos);
+    CHECK(removed->find("SetStage(20)") != std::string::npos);
+    CHECK_FALSE(Parser::parse(*removed).hasErrors());
+    CHECK_FALSE(removeQuestFragmentSource(*removed, "QF_Test", 10, 0).has_value());
+    CHECK_FALSE(removeQuestFragmentSource("Scriptname QF_Test Extends Quest\n", "QF_Test", 10, 0).has_value());
+    CHECK_FALSE(isManagedQuestFragmentSource("Scriptname QF_Test Extends Quest\n"));
+}
+
 namespace {
 
 struct PapyrusTargetFixture {
