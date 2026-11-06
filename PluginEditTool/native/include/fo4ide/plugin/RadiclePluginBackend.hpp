@@ -62,6 +62,7 @@ using LoadMo2AfterPendingCheckHook = void (*)();
 void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook);
 using WriteOpLockedHook = void (*)();
 void setWriteOpLockedHook(WriteOpLockedHook hook);
+void setWriteOpPendingHook(WriteOpLockedHook hook);
 void setSaveIoLockedHook(WriteOpLockedHook hook);
 using LoadReadWindowHook = void (*)();
 void setLoadReadWindowHook(LoadReadWindowHook hook);
@@ -162,12 +163,22 @@ public:
     Result<nlohmann::json> removeScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setInfoFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addInfoFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeInfoFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setScenePhaseFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addScenePhaseFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addAliasScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeAliasScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addAliasScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeAliasScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> setAliasScriptValue(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> removeQuestFragment(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getQuestFragments(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> getQuestScript(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> editQuestScript(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
     Result<nlohmann::json> addPackageProcedure(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removePackageProcedure(const nlohmann::json& arguments) override;
@@ -189,6 +200,7 @@ public:
 #ifdef FO4IDE_TEST_HOOKS
     std::weak_ptr<const fo4::ConflictGraph> cachedGraphForTest() const;
     Result<nlohmann::json> testSetQuestFragment(const nlohmann::json& arguments);
+    std::optional<std::pair<std::string, std::vector<std::uint8_t>>> testStagedQuestScript(std::string_view plugin) const;
     void testSetJournalRoot(std::filesystem::path root);
 #ifdef __linux__
     bool testHasReadAuthority(const std::filesystem::path& root) const;
@@ -316,6 +328,10 @@ private:
         StateHold restore_;
     };
 
+    // Constraint: plugins_ is replaced by lifecycle operations, so this snapshot takes a read OpLock.
+    std::vector<std::string> archivePluginNames() const;
+    // Requires: caller holds an OpLock.
+    std::vector<std::string> archivePluginNamesLocked() const;
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
     bool stageQuestFragmentMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated,
@@ -336,6 +352,27 @@ private:
     Result<nlohmann::json> savePlugin(const nlohmann::json& arguments);
     Result<nlohmann::json> createRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> setQuestFragment(const nlohmann::json& arguments);
+    struct QuestFragmentWrite {
+        fo4::Plugin mutated{};
+        fo4::FormKey key{};
+        std::string scriptName{};
+        std::filesystem::path sourcePath{};
+        std::filesystem::path pexPath{};
+        std::filesystem::path imports{};
+        std::string function{};
+        std::string source{};
+        std::optional<std::string> originalSource{};
+        std::optional<std::string> originalPex{};
+        bool hasSource{false};
+        bool hasHeader{false};
+        bool hasBinding{false};
+    };
+    Result<QuestFragmentWrite> prepareQuestFragmentLocked(const LoadedPlugin& loaded, const fo4::FormKey& key,
+                                                          std::uint16_t stage, std::uint32_t index,
+                                                          std::string_view scriptName, std::string_view outputDirectory,
+                                                          std::string_view importsDirectory) const;
+    Result<nlohmann::json> stageQuestFragmentWriteLocked(LoadedPlugin& loaded, QuestFragmentWrite write,
+                                                         const std::string& source);
     Result<nlohmann::json> deleteRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> renumberRecord(const nlohmann::json& arguments);
     Result<nlohmann::json> setField(const nlohmann::json& arguments);
@@ -353,6 +390,32 @@ private:
     Result<nlohmann::json> getQuestObjectives(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getQuestStages(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getQuestAliases(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> createDialogueBranch(const nlohmann::json& arguments);
+    Result<nlohmann::json> createDialogueTopic(const nlohmann::json& arguments);
+    Result<nlohmann::json> setDialogueBranchStart(const nlohmann::json& arguments);
+    Result<nlohmann::json> createInfo(const nlohmann::json& arguments);
+    Result<nlohmann::json> setInfo(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeInfo(const nlohmann::json& arguments);
+    Result<nlohmann::json> getDialogue(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> createScene(const nlohmann::json& arguments);
+    Result<nlohmann::json> getScene(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> setScene(const nlohmann::json& arguments);
+    Result<nlohmann::json> setScenePhase(const nlohmann::json& arguments);
+    Result<nlohmann::json> addScenePhase(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeScenePhase(const nlohmann::json& arguments);
+    Result<nlohmann::json> moveScenePhase(const nlohmann::json& arguments);
+    Result<nlohmann::json> setSceneActor(const nlohmann::json& arguments);
+    Result<nlohmann::json> addSceneActor(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeSceneActor(const nlohmann::json& arguments);
+    Result<nlohmann::json> setSceneAction(const nlohmann::json& arguments);
+    Result<nlohmann::json> addSceneAction(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeSceneAction(const nlohmann::json& arguments);
+    Result<nlohmann::json> moveSceneAction(const nlohmann::json& arguments);
+    Result<nlohmann::json> writeInfoFragment(const nlohmann::json& arguments, bool addOnly);
+    Result<nlohmann::json> writeScenePhaseFragment(const nlohmann::json& arguments, bool addOnly);
+    Result<nlohmann::json> createDialogueTopicBulk(const nlohmann::json& arguments);
+    Result<nlohmann::json> getVoicePath(const nlohmann::json& arguments) const;
+    std::optional<fo4::RawFormId> resolveDialogueEditorId(const fo4::Plugin& target, std::string_view text) const;
     // Resolves a list value (FormKey text or EditorID) to a FormKey against the
     // loaded plugins, mirroring WriteService.ResolveFk.
     std::optional<fo4::FormKey> resolveListValue(std::string_view value) const;
