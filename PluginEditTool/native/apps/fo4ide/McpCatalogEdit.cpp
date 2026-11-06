@@ -60,6 +60,7 @@ const CatalogTool kTools[] = {
     {"duplicate_placed_reference", "cell", "DuplicatePlacedReference", "form_key:string,patch_plugin:string,offset:object?", "Editor operation: duplicate a placed reference into a patch plugin. offset adds {x,y,z,rx,ry,rz} to the copy's transform. Recorded for undo_cell_edit and redo_cell_edit; in memory until save_plugin."},
     {"delete_placed_reference", "cell", "DeletePlacedReference", "form_key:string,patch_plugin:string", "Editor operation: delete a placed reference in a patch plugin. Returns status deleted or markedDeleted. Recorded for undo_cell_edit and redo_cell_edit; in memory until save_plugin."},
     {"set_cell_properties", "cell", "SetCellProperties", "form_key:string,patch_plugin:string,changes:object", "Editor operation: edit cell properties in a patch plugin. changes keys are the names from get_cell_properties; a null link clears it. Recorded for undo_cell_edit and redo_cell_edit; in memory until save_plugin."},
+    {"cleanup_cell", "cell", "ApplyCellCleanup", "cell_id:string,patch_plugin:string,mode:string,max_count:integer?,by_model:boolean?", "Editor operation: remove the placed references that plan_cell_cleanup lists from a patch plugin. Recorded for undo_cell_edit and redo_cell_edit; in memory until save_plugin."},
 };
 
 }

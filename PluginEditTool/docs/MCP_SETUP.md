@@ -5,8 +5,8 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **192 tools**: 75 hand-written tools (73 `if (!add(` registrations in `McpTools.cpp` plus `material_set_fields` and `archive_pack`) and 117 catalog
-tools. The 117 catalog tools are the editor parity set: 29 read-side (`McpCatalogRead.cpp`), 56 edit-side
+It advertises **194 tools**: 75 hand-written tools (73 `if (!add(` registrations in `McpTools.cpp` plus `material_set_fields` and `archive_pack`) and 119 catalog
+tools. The 119 catalog tools are the editor parity set: 30 read-side (`McpCatalogRead.cpp`), 57 edit-side
 (`McpCatalogEdit.cpp`) and 32 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
 blueprint graphs and `load_script`).
 
@@ -228,6 +228,7 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `get_placed_references_at_grid` | `worldspace`, `grid_x`, `grid_y` | no | Editor query: get placed references at grid. Placed-reference or cell operation. |
 | `resolve_worldspace` | `cell_id` | no | Editor query: resolve the worldspace that owns a cell. Placed-reference or cell operation. |
 | `get_cell_properties` | `cell_id` | no | Editor query: get cell properties (lighting, water, owner, regions and so on) with the descriptors that `set_cell_properties` accepts. Placed-reference or cell operation. |
+| `plan_cell_cleanup` | `cell_id`, `patch_plugin`, `mode`, [`max_count`], [`by_model`] | no | Editor query: plan removing duplicate or excess placed references from a cell in a patch plugin. `mode` is `dedupe` or `excess`; `max_count` is the number of non-persistent references kept in `excess` mode. Read-only: the patch is not changed. |
 | `search_worldspaces` | `query`, [`limit`] | no | Editor query: search worldspaces. Placed-reference or cell operation. |
 | `get_geometry_batch` | `rel_model_paths_json` | no | Editor query: get geometry batch. Same RPC the desktop editor uses. |
 | `search_cells` | `query`, [`limit`] | no | Editor query: search cells. Placed-reference or cell operation. |
@@ -287,6 +288,7 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `duplicate_placed_reference` | `form_key`, `patch_plugin`, [`offset`] | memory | Editor operation: duplicate a placed reference into a patch plugin. `offset` adds `x`, `y`, `z`, `rx`, `ry`, `rz` to the copy's transform. Recorded for undo and redo. |
 | `delete_placed_reference` | `form_key`, `patch_plugin` | memory | Editor operation: delete a placed reference in a patch plugin. Returns status `deleted` or `markedDeleted`. Recorded for undo and redo. |
 | `set_cell_properties` | `form_key`, `patch_plugin`, `changes` | memory | Editor operation: edit cell properties in a patch plugin. `changes` keys are the names from `get_cell_properties`; a null link clears it. Recorded for undo and redo. |
+| `cleanup_cell` | `cell_id`, `patch_plugin`, `mode`, [`max_count`], [`by_model`] | memory | Editor operation: remove the placed references that `plan_cell_cleanup` lists from a patch plugin. Returns the entries and `removed`. Recorded for undo and redo. |
 | `load_script` | `path` | no | Editor operation: load script. Same RPC the desktop editor uses. |
 | `script_analyze` | `text`, [`path`] | no | Editor query: analyze. Papyrus source operation. |
 | `script_symbol_at` | `text`, [`path`], [`offset`], [`imports`] | no | Editor operation: symbol at. Papyrus source operation. |

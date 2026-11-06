@@ -37,6 +37,7 @@ struct DuplicateResult;
 struct DeleteResult;
 struct CellEdit;
 struct CellEditResult;
+struct CleanupPlan;
 }
 
 namespace fo4ide::plugin {
@@ -143,6 +144,8 @@ public:
     Result<nlohmann::json> deletePlacedReference(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getCellProperties(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setCellProperties(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> planCellCleanup(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> applyCellCleanup(const nlohmann::json& arguments) override;
     Result<nlohmann::json> createPlacedObject(const nlohmann::json& arguments) override;
     Result<nlohmann::json> createInteriorCell(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getLeveledList(const nlohmann::json& arguments) const override;
@@ -545,6 +548,7 @@ private:
     Result<fo4::forms::DeleteResult> deletePlacedReferenceLocked(LoadedPlugin& patch, const fo4::FormKey& key);
     Result<fo4::forms::CellEditResult> setCellPropertiesLocked(
         LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::CellEdit& edit);
+    std::optional<Error> applyCellCleanupLocked(LoadedPlugin& patch, const fo4::forms::CleanupPlan& plan);
     std::string dirtyPluginListLocked() const;
 
     // Constraint: references from this proxy must not be held across a stage, because the next access may rebuild the graph.
