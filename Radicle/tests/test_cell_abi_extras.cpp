@@ -1,4 +1,4 @@
-#include "fo4/c_api_env.h"
+#include "fo4/c_api_cell.h"
 
 #include "env_node_fixture.hpp"
 #include "plugin_bytes.hpp"
@@ -48,8 +48,41 @@ std::vector<std::byte> make_extras() {
   const auto short_tail = rec("CELL", 0x801, {{"XCLL", xcll_bytes(135)}});
   const auto bad_regions = rec("CELL", 0x802, {{"XCLR", {std::byte{0}, std::byte{0}}}});
   const auto world = rec("WRLD", 0x803, {{"EDID", zstring("NotACell")}});
-  return make_plugin({}, {top("CELL", {grp(0, 2, {grp(0, 3, {cell, short_tail, bad_regions})})}),
-                          top("WRLD", {world})});
+  const auto stat = rec("STAT", 0x2100,
+                        {{"EDID", zstring("TableStat")}, {"MODL", zstring("Props\\Table.nif")}});
+  const auto scol = rec("SCOL", 0x2200,
+                        {{"EDID", zstring("TableCollection")},
+                         {"ONAM", bytes_of({0x2100})},
+                         {"DATA", floats({1.0f, 2.0f, 3.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+                                          4.0f, 5.0f, 6.0f, 0.0f, 0.0f, 0.0f, 1.0f})}});
+  const auto merged = rec("CELL", 0x804, {{"EDID", zstring("Merged")}, {"DATA", {std::byte{0x01}, std::byte{0}}}});
+  const auto merged_refs = grp(0x804, 9,
+                               {rec("REFR", 0x2001,
+                                    {{"NAME", bytes_of({0x2100})},
+                                     {"DATA", floats({10.0f, 20.0f, 30.0f, 0.0f, 0.0f, 0.0f})}}),
+                                rec("REFR", 0x2002,
+                                    {{"NAME", bytes_of({0x2200})},
+                                     {"DATA", floats({40.0f, 50.0f, 60.0f, 0.0f, 0.0f, 0.0f})}})});
+  return make_plugin({}, {top("CELL", {grp(0, 2, {grp(0, 3, {cell, short_tail, bad_regions, merged, merged_refs})})}),
+                          top("WRLD", {world}), top("STAT", {stat}), top("SCOL", {scol})});
+}
+
+std::vector<std::byte> make_patch() {
+  const auto merged = rec("CELL", 0x804, {{"EDID", zstring("Merged")}, {"DATA", {std::byte{0x01}, std::byte{0}}}});
+  const auto refs = grp(0x804, 9,
+                        {rec("REFR", 0x2002,
+                             {{"NAME", bytes_of({0x2200})},
+                              {"DATA", floats({70.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f})}}),
+                         rec("REFR", 0x01000003,
+                             {{"NAME", bytes_of({0x2100})},
+                              {"DATA", floats({80.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f})}})});
+  return make_plugin({"Extras.esp"}, {top("CELL", {grp(0, 2, {grp(0, 3, {merged, refs})})})});
+}
+
+void write_file(const std::filesystem::path& path, const std::vector<std::byte>& bytes) {
+  std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+  stream.write(reinterpret_cast<const char*>(bytes.data()),
+               static_cast<std::streamsize>(bytes.size()));
 }
 
 class CellAbiTest : public ::testing::Test {
@@ -58,16 +91,14 @@ protected:
     const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
     root_ = std::filesystem::temp_directory_path() / ("radicle_cell_abi_" + std::to_string(id));
     std::filesystem::create_directories(root_);
-    const auto path = root_ / "Extras.esp";
-    const auto bytes = make_extras();
-    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-    stream.write(reinterpret_cast<const char*>(bytes.data()),
-                 static_cast<std::streamsize>(bytes.size()));
-    stream.close();
-    const auto text = path.u8string();
-    const std::string utf8(text.begin(), text.end());
-    const char* raw[] = {utf8.c_str()};
-    ASSERT_EQ(radicle_env_load(raw, 1, &env_), RADICLE_STATUS_OK) << radicle_last_error();
+    write_file(root_ / "Extras.esp", make_extras());
+    write_file(root_ / "Patch.esp", make_patch());
+    const auto base = (root_ / "Extras.esp").u8string();
+    const auto patch = (root_ / "Patch.esp").u8string();
+    const std::string base_utf8(base.begin(), base.end());
+    const std::string patch_utf8(patch.begin(), patch.end());
+    const char* raw[] = {base_utf8.c_str(), patch_utf8.c_str()};
+    ASSERT_EQ(radicle_env_load(raw, 2, &env_), RADICLE_STATUS_OK) << radicle_last_error();
   }
 
   void TearDown() override {
@@ -209,6 +240,134 @@ TEST_F(CellAbiTest, ReportsShortTailsMalformedSubrecordsAndNonCells) {
   EXPECT_EQ(radicle_cell_get_water_currents(env_, nullptr, nullptr, &count),
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_cell_get_info(env_, short_tail, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(CellAbiTest, ResolveCellByKeyAndEditorId) {
+  radicle_form_key key{};
+  ASSERT_EQ(radicle_env_resolve_cell(env_, "Extras", &key), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_STREQ(key.plugin, "Extras.esp");
+  EXPECT_EQ(key.local_id, 0x800u);
+
+  ASSERT_EQ(radicle_env_resolve_cell(env_, "merged", &key), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(key.local_id, 0x804u);
+
+  ASSERT_EQ(radicle_env_resolve_cell(env_, "000800:Extras.esp", &key), RADICLE_STATUS_OK);
+  EXPECT_EQ(key.local_id, 0x800u);
+
+  EXPECT_EQ(radicle_env_resolve_cell(env_, "NotACell", &key), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(key.plugin, nullptr);
+
+  ASSERT_EQ(radicle_env_resolve_worldspace(env_, "NotACell", &key), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_STREQ(key.plugin, "Extras.esp");
+  EXPECT_EQ(key.local_id, 0x803u);
+  EXPECT_EQ(radicle_env_resolve_worldspace(env_, "Merged", &key), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_env_resolve_cell(env_, nullptr, &key), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(CellAbiTest, FindCellAtGridNotFound) {
+  radicle_form_key found{};
+  EXPECT_EQ(radicle_env_find_cell_at_grid(env_, {"Extras.esp", 0x803}, 0, 0, &found),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(found.plugin, nullptr);
+  EXPECT_EQ(radicle_env_find_cell_at_grid(env_, {"Extras.esp", 0x803}, 200, 0, &found),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_env_find_cell_at_grid(env_, {nullptr, 0}, 0, 0, &found),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(CellAbiTest, CellViewListsMergedReferencesAndBaseInfo) {
+  radicle_cell_view* view = nullptr;
+  ASSERT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x804}, &view), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(view, nullptr);
+
+  radicle_cell_summary summary{};
+  ASSERT_EQ(radicle_cell_view_summary(view, &summary), RADICLE_STATUS_OK);
+  EXPECT_STREQ(summary.key.plugin, "Extras.esp");
+  EXPECT_EQ(summary.key.local_id, 0x804u);
+  EXPECT_STREQ(summary.editor_id, "Merged");
+  EXPECT_EQ(summary.interior, 1);
+  EXPECT_EQ(summary.winning_plugin, 1u);
+
+  ASSERT_EQ(radicle_cell_view_reference_count(view), 3u);
+
+  radicle_cell_reference first{};
+  ASSERT_EQ(radicle_cell_view_reference(view, 0, &first), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_STREQ(first.key.plugin, "Extras.esp");
+  EXPECT_EQ(first.key.local_id, 0x2001u);
+  EXPECT_STREQ(first.record_type, "PlacedObject");
+  EXPECT_EQ(first.winning_plugin, 0u);
+  EXPECT_EQ(first.position[0], 10.0f);
+  ASSERT_NE(first.base_info, nullptr);
+  EXPECT_STREQ(first.base_info->type_name, "Static");
+  EXPECT_STREQ(first.base_info->model_path, "Props\\Table.nif");
+
+  radicle_cell_reference second{};
+  ASSERT_EQ(radicle_cell_view_reference(view, 1, &second), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(second.key.local_id, 0x2002u);
+  EXPECT_EQ(second.winning_plugin, 1u);
+  EXPECT_EQ(second.position[0], 70.0f);
+  ASSERT_NE(second.base_info, nullptr);
+  EXPECT_STREQ(second.base_info->type_name, "StaticCollection");
+  EXPECT_EQ(second.base_info->scol_part_count, 1u);
+
+  radicle_scol_part part{};
+  ASSERT_EQ(radicle_cell_view_scol_part(view, 1, 0, &part), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_STREQ(part.model_path, "Props\\Table.nif");
+  ASSERT_EQ(part.placement_count, 2u);
+  EXPECT_EQ(part.placements[1].position[0], 4.0f);
+  EXPECT_EQ(part.placements[1].scale, 1.0f);
+
+  radicle_cell_reference third{};
+  ASSERT_EQ(radicle_cell_view_reference(view, 2, &third), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_STREQ(third.key.plugin, "Patch.esp");
+  EXPECT_EQ(third.key.local_id, 3u);
+  EXPECT_EQ(third.winning_plugin, 1u);
+  EXPECT_EQ(third.position[0], 80.0f);
+  ASSERT_NE(third.base_info, nullptr);
+  EXPECT_STREQ(third.base_info->model_path, "Props\\Table.nif");
+
+  EXPECT_EQ(radicle_cell_view_scol_part(view, 0, 0, &part), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_cell_view_free(view);
+
+  radicle_base_object_info* info = nullptr;
+  ASSERT_EQ(radicle_env_base_object_info(env_, {"Extras.esp", 0x2200}, &info), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(info, nullptr);
+  EXPECT_STREQ(info->signature, "SCOL");
+  EXPECT_STREQ(info->type_name, "StaticCollection");
+  ASSERT_EQ(info->scol_part_count, 1u);
+  EXPECT_STREQ(info->scol_parts[0].model_path, "Props\\Table.nif");
+  radicle_base_object_info_free(info);
+}
+
+TEST_F(CellAbiTest, CellViewFreeIsNullSafe) {
+  radicle_cell_view_free(nullptr);
+  radicle_base_object_info_free(nullptr);
+  EXPECT_EQ(radicle_cell_view_reference_count(nullptr), 0u);
+
+  radicle_cell_view* view = nullptr;
+  EXPECT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x9999}, &view), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(view, nullptr);
+  radicle_base_object_info* info = nullptr;
+  EXPECT_EQ(radicle_env_base_object_info(env_, {"Extras.esp", 0x9999}, &info),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(info, nullptr);
+
+  ASSERT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x804}, &view), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  radicle_cell_reference reference{};
+  EXPECT_EQ(radicle_cell_view_reference(view, 3, &reference), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_scol_part part{};
+  EXPECT_EQ(radicle_cell_view_scol_part(view, 2, 0, &part), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_cell_view_free(view);
 }
 
 }  // namespace
