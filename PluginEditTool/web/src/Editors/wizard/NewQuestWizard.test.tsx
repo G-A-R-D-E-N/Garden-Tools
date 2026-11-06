@@ -89,6 +89,11 @@ it('Detects: when the objectives call fails, the wizard stops, says part of the 
   expect(onCreated).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Create quest' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Open the quest anyway' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+  fireEvent.change(screen.getByLabelText('What does the player get as a reward?'), { target: { value: '100 caps' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.queryByRole('button', { name: 'Create quest' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Open the quest anyway' })).toBeTruthy();
 });
 
 it('Detects: when the aliases call fails, no objectives call is sent, because the game rejects objective targets that are not aliases yet', async () => {

@@ -49,11 +49,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
   const flow: WizardStep[] = template ? [PLUGIN_QUESTION, ...template.questions] : [];
   const current = flow[step];
   const answered = (question: WizardStep) => (answers[question.id] ?? '').trim() !== '';
-  const setAnswer = (id: string, value: string) => {
-    setAnswers(prev => ({ ...prev, [id]: value }));
-    setMadeKey(null);
-    setError(null);
-  };
+  const setAnswer = (id: string, value: string) => setAnswers(prev => ({ ...prev, [id]: value }));
 
   const choose = (next: QuestTemplate) => {
     setTemplate(next);
@@ -103,8 +99,8 @@ export default function NewQuestWizard({ onBack, onCreated }: {
           onClick={() => setHelpOpen(open => !open)}>Help</button>
       </header>
       <p className="editor-purpose">
-        Answer a few plain questions. The wizard makes a quest draft with stages, objectives and aliases, then opens
-        it in the Quest editor.
+        Answer a few plain questions. The wizard builds a quest draft from your answers, then opens it in the Quest
+        editor.
       </p>
       {error && <ErrorNote error={error} />}
 
