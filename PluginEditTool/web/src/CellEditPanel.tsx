@@ -29,7 +29,7 @@ export default function CellEditPanel({ reference, canUndo, canRedo, onEdit, onD
   reference: CellPlacedReference;
   canUndo: boolean;
   canRedo: boolean;
-  onEdit: (changes: CellEditChanges) => Promise<void>;
+  onEdit: (changes: CellEditChanges) => Promise<boolean>;
   onDelete: () => void;
   onDuplicate: () => void;
   onUndoEdit: () => void;
@@ -37,13 +37,13 @@ export default function CellEditPanel({ reference, canUndo, canRedo, onEdit, onD
 }) {
   const pending = useRef(new Set<Field>());
 
-  const commit = async (field: Field, text: string) => {
+  const commit = async (field: Field, input: HTMLInputElement, stored: string) => {
     if (pending.current.has(field)) return;
-    const changes = changesFor(reference, field, text);
+    const changes = changesFor(reference, field, input.value);
     if (!changes) return;
     pending.current.add(field);
     try {
-      await onEdit(changes);
+      if (!(await onEdit(changes))) input.value = stored;
     } finally {
       pending.current.delete(field);
     }
@@ -57,8 +57,8 @@ export default function CellEditPanel({ reference, canUndo, canRedo, onEdit, onD
         type={type}
         step={type === 'number' ? 'any' : undefined}
         defaultValue={value}
-        onBlur={e => void commit(field, e.currentTarget.value)}
-        onKeyDown={e => { if (e.key === 'Enter') void commit(field, e.currentTarget.value); }}
+        onBlur={e => void commit(field, e.currentTarget, value)}
+        onKeyDown={e => { if (e.key === 'Enter') void commit(field, e.currentTarget, value); }}
       />
     </label>
   );

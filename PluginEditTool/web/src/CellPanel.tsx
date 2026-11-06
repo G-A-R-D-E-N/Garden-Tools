@@ -111,6 +111,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   };
 
   const gizmoPatchRef = useRef<string | null>(null);
+  const busyRef = useRef(false);
 
 
 
@@ -417,6 +418,12 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     return picked.target;
   };
 
+  const exclusive = async (run: () => Promise<boolean>): Promise<boolean> => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    try { return await run(); } finally { busyRef.current = false; }
+  };
+
   const refreshEditCounts = async (patch: string) => {
     const c = getCell();
     if (!c) return;
@@ -424,7 +431,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setEditCounts({ undo: h.undoCount, redo: h.redoCount });
   };
 
-  const reloadReferences = async (select: string | null) => {
+  const reloadReferences = async (select: string | null, from: string | null) => {
     const c = getCell();
     const cellKey = result?.cellFormKey;
     if (!c || !cellKey) return;
@@ -433,36 +440,45 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     if (mine !== loadSeq.current) return;
     if (parsed.error) { appendLog('✗ ' + parsed.error); return; }
     setResult(parsed);
-    setSelected(parsed.references?.find(r => r.formKey === select) ?? null);
+    setSelected(prev => {
+      const key = prev?.formKey === from ? select : (prev?.formKey ?? null);
+      return parsed.references?.find(r => r.formKey === key) ?? null;
+    });
   };
 
-  const mutate = async (label: string, patch: string, act: (c: CellHost) => Promise<string | null>) => {
+  const mutate = async (label: string, patch: string, from: string | null,
+    act: (c: CellHost) => Promise<string | null>): Promise<boolean> => {
     const c = getCell();
     const backend = getBackend();
-    if (!c || !backend) return;
+    if (!c || !backend) return false;
     try {
       const select = await act(c);
       const saveMsg = await backend.SavePlugin(patch, '');
       appendLog(`• ${label} -> ${patch}`);
       if (/error|fail/i.test(saveMsg)) appendLog('✗ save: ' + saveMsg);
-      await reloadReferences(select);
-      await refreshEditCounts(patch);
+      await reloadReferences(select, from);
+      return true;
     } catch (e) {
       appendLog(`✗ ${label} failed: ` + errorText(e));
+      return false;
+    } finally {
+      await refreshEditCounts(patch).catch(e => appendLog('✗ edit counts: ' + errorText(e)));
     }
   };
 
-  const editSelected = async (label: string, act: (c: CellHost, patch: string) => Promise<string | null>) => {
+  const editSelected = (label: string, from: string | null,
+    act: (c: CellHost, patch: string) => Promise<string | null>): Promise<boolean> => exclusive(async () => {
     const patch = await ensurePatch();
-    if (!patch) { appendLog(`x ${label} not saved -- no patch plugin chosen.`); return; }
-    await mutate(label, patch, c => act(c, patch));
-  };
+    if (!patch) { appendLog(`x ${label} not saved -- no patch plugin chosen.`); return false; }
+    return mutate(label, patch, from, c => act(c, patch));
+  });
 
-  const editReference = async (changes: CellEditChanges) => {
-    if (!selected) return;
+  const editReference = async (changes: CellEditChanges): Promise<boolean> => {
+    if (!selected) return false;
     const key = selected.formKey;
-    await editSelected(`edit ${selected.editorId || key}`, async (c, patch) => {
-      await c.EditPlacedReference(key, patch, changes);
+    return editSelected(`edit ${selected.editorId || key}`, key, async (c, patch) => {
+      const reply = JSON.parse(await c.EditPlacedReference(key, patch, changes)) as { relocated?: boolean };
+      if (reply.relocated) appendLog(`• ${key} moved into another cell`);
       return key;
     });
   };
@@ -470,7 +486,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const deleteSelected = async () => {
     if (!selected) return;
     const key = selected.formKey;
-    await editSelected(`delete ${selected.editorId || key}`, async (c, patch) => {
+    await editSelected(`delete ${selected.editorId || key}`, key, async (c, patch) => {
       await c.DeletePlacedReference(key, patch);
       return null;
     });
@@ -479,7 +495,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const duplicateSelected = async () => {
     if (!selected) return;
     const key = selected.formKey;
-    await editSelected(`duplicate ${selected.editorId || key}`, async (c, patch) => {
+    await editSelected(`duplicate ${selected.editorId || key}`, key, async (c, patch) => {
       const copy = JSON.parse(await c.DuplicatePlacedReference(key, patch, null)) as { newFormKey?: string };
       return copy.newFormKey ?? null;
     });
@@ -489,34 +505,36 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     const patch = gizmoPatchRef.current;
     if (!patch || (undo ? editCounts.undo : editCounts.redo) === 0) return;
     const key = selected?.formKey ?? null;
-    await mutate(undo ? 'undo edit' : 'redo edit', patch, async c => {
+    await exclusive(() => mutate(undo ? 'undo edit' : 'redo edit', patch, key, async c => {
       await (undo ? c.UndoCellEdit(patch) : c.RedoCellEdit(patch));
       return key;
-    });
+    }));
   };
 
   const moveEnd = useCallback(async (ref: CellPlacedReference) => {
     const c = getCell();
     const backend = getBackend();
     if (!c || !backend) return;
-    const patch = await ensurePatch();
-    if (!patch) { appendLog('x move not saved -- no patch plugin chosen.'); return; }
-    try {
-      const msg = await c.SetPlacedReferenceTransform(
-        ref.formKey, patch,
-        ref.position.x, ref.position.y, ref.position.z,
-        ref.rotation.x, ref.rotation.y, ref.rotation.z);
-      if (/error|fail|invalid|could not|choose/i.test(msg)) { appendLog(`✗ move: ${msg}`); return; }
-      const saveMsg = await backend.SavePlugin(patch, '');
-      appendLog(`• moved ${ref.editorId || ref.formKey} -> ${patch}`);
-      if (/error|fail/i.test(saveMsg)) appendLog('✗ save: ' + saveMsg);
-      await refreshEditCounts(patch);
-    } catch (e) {
-      appendLog('✗ move failed: ' + (e instanceof Error ? e.message : String(e)));
-      return;
-    }
-
-
+    const moved = await exclusive(async () => {
+      const patch = await ensurePatch();
+      if (!patch) { appendLog('x move not saved -- no patch plugin chosen.'); return false; }
+      try {
+        const msg = await c.SetPlacedReferenceTransform(
+          ref.formKey, patch,
+          ref.position.x, ref.position.y, ref.position.z,
+          ref.rotation.x, ref.rotation.y, ref.rotation.z);
+        if (/error|fail|invalid|could not|choose/i.test(msg)) { appendLog(`✗ move: ${msg}`); return false; }
+        const saveMsg = await backend.SavePlugin(patch, '');
+        appendLog(`• moved ${ref.editorId || ref.formKey} -> ${patch}`);
+        if (/error|fail/i.test(saveMsg)) appendLog('✗ save: ' + saveMsg);
+      } catch (e) {
+        appendLog('✗ move failed: ' + (e instanceof Error ? e.message : String(e)));
+        return false;
+      }
+      await refreshEditCounts(patch).catch(e => appendLog('✗ edit counts: ' + errorText(e)));
+      return true;
+    });
+    if (!moved) return;
 
     setSelected(prev => prev && prev.formKey === ref.formKey
       ? { ...prev, position: { ...ref.position }, rotation: { ...ref.rotation } }

@@ -88,11 +88,13 @@ export default function CellViewport(
 
 
   const worldCenterRef = useRef(new THREE.Vector3());
+  const savedViewRef = useRef<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const gizmoModeRef = useRef<'translate' | 'rotate'>('translate');
 
 
   useEffect(() => {
     const mount = mountRef.current;
-    if (!mount || references.length === 0) return;
+    if (!mount || references.length === 0) { savedViewRef.current = null; return; }
     let cancelled = false;
 
     const width = mount.clientWidth || 600;
@@ -512,6 +514,7 @@ export default function CellViewport(
 
     const transformControls = new TransformControls(camera, renderer.domElement);
     transformControls.size = 0.9;
+    transformControls.setMode(gizmoModeRef.current);
     scene.add(transformControls.getHelper());
     const gizmoAnchor = new THREE.Object3D();
     scene.add(gizmoAnchor);
@@ -657,6 +660,13 @@ export default function CellViewport(
     };
     cameraApiRef.current = { focus: focusOn, topDown: topDownOn, setOrbitTarget };
     setOrbitTarget(selectedKey ?? null);
+    const savedView = savedViewRef.current;
+    if (savedView) {
+      camera.position.copy(savedView.position);
+      controls.target.copy(savedView.target);
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
 
 
 
@@ -679,8 +689,8 @@ export default function CellViewport(
       else if (k === 'f' && e.shiftKey) { focusOn(selectedKeyRef.current ?? null); e.preventDefault(); }
       else if (k === 't' && !e.ctrlKey && !e.altKey && !e.shiftKey) { topDownOn(selectedKeyRef.current ?? null); e.preventDefault(); }
       else if (k === 'm' && !e.ctrlKey && !e.altKey) { onToggleMarkersRef.current?.(); e.preventDefault(); }
-      else if (k === 'g' && !e.ctrlKey && !e.altKey) { transformControls.setMode('translate'); e.preventDefault(); }
-      else if (k === 'r' && !e.ctrlKey && !e.altKey) { transformControls.setMode('rotate'); e.preventDefault(); }
+      else if (k === 'g' && !e.ctrlKey && !e.altKey) { gizmoModeRef.current = 'translate'; transformControls.setMode('translate'); e.preventDefault(); }
+      else if (k === 'r' && !e.ctrlKey && !e.altKey) { gizmoModeRef.current = 'rotate'; transformControls.setMode('rotate'); e.preventDefault(); }
     };
     window.addEventListener('keydown', onKeyDown);
 
@@ -738,6 +748,7 @@ export default function CellViewport(
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('keydown', onKeyDown);
       if (texStatsTimer) clearTimeout(texStatsTimer);
+      savedViewRef.current = { position: camera.position.clone(), target: controls.target.clone() };
       transformControls.dispose();
       controls.dispose();
       disposables.forEach(d => d.dispose());

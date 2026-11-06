@@ -63,6 +63,7 @@ const REF: CellPlacedReference = {
   rotation: { x: 0, y: 0, z: 0 },
   scale: 1,
 };
+const OTHER: CellPlacedReference = { ...REF, formKey: '000811:Fallout4.esm', editorId: 'Door03' };
 
 let refs: CellPlacedReference[] = [];
 
@@ -97,7 +98,7 @@ async function openSelected() {
   render(<CellPanel onClose={() => {}} />);
   await waitFor(() => expect((screen.getByRole('button', { name: 'Load Cell' }) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button', { name: 'Load Cell' }));
-  await waitFor(() => expect(rpc.viewport?.references).toHaveLength(1));
+  await waitFor(() => expect(rpc.viewport?.references).toHaveLength(refs.length));
   act(() => view().onSelect?.(view().references[0]));
   await screen.findByLabelText('Pos X');
 }
@@ -144,11 +145,12 @@ describe('Cell Viewer reference editing', () => {
   it('sends one EditPlacedReference per committed field and nothing on a later blur', async () => {
     await openSelected();
     commitField('Pos X', '5');
-    await waitFor(() => expect(rpc.cell.EditPlacedReference).toHaveBeenCalledTimes(1));
+    fireEvent.blur(screen.getByLabelText('Pos X'));
+    await waitFor(() => expect(view().references[0].position.x).toBe(5));
+    expect(rpc.cell.EditPlacedReference).toHaveBeenCalledTimes(1);
     expect(rpc.cell.EditPlacedReference).toHaveBeenLastCalledWith(REF.formKey, PATCH, {
       transform: { x: 5, y: 2, z: 3, rx: 0, ry: 0, rz: 0 },
     });
-    await waitFor(() => expect(view().references[0].position.x).toBe(5));
     fireEvent.blur(screen.getByLabelText('Pos X'));
     expect(rpc.cell.EditPlacedReference).toHaveBeenCalledTimes(1);
 
@@ -165,6 +167,15 @@ describe('Cell Viewer reference editing', () => {
     expect(rpc.cell.EditPlacedReference).toHaveBeenCalledTimes(3);
   });
 
+  it('a field commit made while another edit is in flight is dropped and cannot revert the first field', async () => {
+    await openSelected();
+    commitField('Pos X', '5');
+    commitField('Pos Y', '7');
+    await waitFor(() => expect(view().references[0].position.x).toBe(5));
+    expect(rpc.cell.EditPlacedReference).toHaveBeenCalledTimes(1);
+    expect(view().references[0].position).toEqual({ x: 5, y: 2, z: 3 });
+  });
+
   it('the Delete action calls DeletePlacedReference for the selected reference and clears the selection', async () => {
     await openSelected();
     act(() => view().onDeleteSelected?.());
@@ -173,12 +184,28 @@ describe('Cell Viewer reference editing', () => {
     await waitFor(() => expect(view().selectedKey ?? null).toBeNull());
   });
 
+  it('a second delete pressed while the first is running opens the patch picker once and sends one delete', async () => {
+    await openSelected();
+    act(() => { view().onDeleteSelected?.(); view().onDeleteSelected?.(); });
+    await waitFor(() => expect(rpc.cell.DeletePlacedReference).toHaveBeenCalledTimes(1));
+    expect(rpc.pick).toHaveBeenCalledTimes(1);
+  });
+
   it('the Duplicate action calls DuplicatePlacedReference and selects the new copy', async () => {
     await openSelected();
     act(() => view().onDuplicateSelected?.());
     await waitFor(() => expect(rpc.cell.DuplicatePlacedReference).toHaveBeenCalledTimes(1));
     expect(rpc.cell.DuplicatePlacedReference).toHaveBeenCalledWith(REF.formKey, PATCH, null);
     await waitFor(() => expect(view().selectedKey).toBe(NEW_KEY));
+  });
+
+  it('a selection made during an in-flight edit survives the reload', async () => {
+    refs = [REF, OTHER];
+    await openSelected();
+    commitField('Pos X', '5');
+    act(() => view().onSelect?.(view().references[1]));
+    await waitFor(() => expect(view().references[0].position.x).toBe(5));
+    expect(view().selectedKey).toBe(OTHER.formKey);
   });
 
   it('Ctrl+Z calls UndoCellEdit, reloads the reference, and leaves hidden meshes hidden', async () => {
@@ -195,6 +222,15 @@ describe('Cell Viewer reference editing', () => {
     expect(view().hiddenRefs?.has(REF.formKey)).toBe(true);
   });
 
+  it('a second undo pressed while the first is running is dropped', async () => {
+    await openSelected();
+    commitField('Pos X', '5');
+    await waitFor(() => expect(undoEditButton().disabled).toBe(false));
+    act(() => { view().onUndoEdit?.(); view().onUndoEdit?.(); });
+    await waitFor(() => expect(view().references[0].position.x).toBe(1));
+    expect(rpc.cell.UndoCellEdit).toHaveBeenCalledTimes(1);
+  });
+
   it('the visibility Undo button restores hidden meshes and never calls UndoCellEdit', async () => {
     await openSelected();
     act(() => view().onHideSelected?.());
@@ -206,7 +242,7 @@ describe('Cell Viewer reference editing', () => {
 });
 
 const keyEvent = (key: string, mods: { ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean } = {}) =>
-  ({ key, ctrlKey: false, altKey: false, shiftKey: false, ...mods });
+  ({ key, ctrlKey: false, altKey: false, shiftKey: false, repeat: false, ...mods });
 
 describe('cellEditKey', () => {
   const cases: [string, { ctrlKey?: boolean }, CellEditKey | null][] = [
@@ -219,5 +255,8 @@ describe('cellEditKey', () => {
   ];
   it.each(cases)('maps %s with %o to %s', (key, mods, expected) => {
     expect(cellEditKey(keyEvent(key, mods))).toBe(expected);
+  });
+  it('ignores an auto-repeated key so holding Ctrl+Z does not undo again and again', () => {
+    expect(cellEditKey({ ...keyEvent('z', { ctrlKey: true }), repeat: true })).toBeNull();
   });
 });
