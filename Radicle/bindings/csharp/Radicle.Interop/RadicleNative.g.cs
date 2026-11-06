@@ -84,6 +84,14 @@ public unsafe struct FormKey
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct StaticPlacement
+{
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public float Scale;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct EnvPluginInfo
 {
     public IntPtr Filename;
@@ -2140,14 +2148,6 @@ public unsafe struct CellSummary
     public FormKey Worldspace;
     public nuint WinningPlugin;
     public int Localized;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct StaticPlacement
-{
-    public fixed float Position[3];
-    public fixed float Rotation[3];
-    public float Scale;
 }
 
 [StructLayout(LayoutKind.Sequential)]
