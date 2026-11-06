@@ -372,6 +372,7 @@ Result<nlohmann::json> RadiclePluginBackend::editPlacedReference(const nlohmann:
 
 Result<fo4::forms::PlacedReferenceEditResult> RadiclePluginBackend::editPlacedReferenceLocked(
     LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::PlacedReferenceEdit& edit) {
+    CommitScope commit;
     const auto env = borrowedEnvironment();
     auto mutated = patch.plugin;
     fo4::forms::PlacedReferenceEditResult result;
