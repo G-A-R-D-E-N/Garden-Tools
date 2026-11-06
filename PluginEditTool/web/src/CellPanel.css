@@ -288,6 +288,10 @@
 .cell-selected-row { display: flex; justify-content: space-between; gap: 8px; }
 .cell-selected-row span { color: var(--muted, #9aa0aa); }
 .cell-selected-row strong { color: #e6e8ec; font-weight: 500; text-align: right; word-break: break-all; }
+.cell-edit { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; font-size: 11px; }
+.cell-edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+.cell-edit-field { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--muted, #9aa0aa); }
+.cell-edit-field input { width: 6em; min-width: 0; }
 
 
 .cell-layers { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }

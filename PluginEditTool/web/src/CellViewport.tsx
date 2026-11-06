@@ -5,6 +5,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import type { NifGeo } from './NifViewport';
 import type { CellPlacedReference } from './backend';
 import { billboardMatrix, vertsCentroid } from './util/billboard';
+import { cellEditKey } from './util/cellEditKeys';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 import { makeEffectMaterial, applyVertexColors } from './util/effectMaterial';
 import { applyHidden, applySelection, applyVisibility, type InstanceRef } from './util/cellInstances';
@@ -23,7 +24,8 @@ export type CellTextureStats = {
 
 export default function CellViewport(
   { references, geometry, loadTexture, hiddenTypes, hiddenRefs, selectedKey, onSelect,
-    onHideSelected, onUnhideAll, onToggleMarkers, onUndo, onRedo, onMoveEnd, onTextureStats }: {
+    onHideSelected, onUnhideAll, onToggleMarkers, onUndoEdit, onRedoEdit, onDeleteSelected, onDuplicateSelected,
+    onMoveEnd, onTextureStats }: {
     references: CellPlacedReference[];
     geometry: CellGeoMap;
     loadTexture?: (modelPath: string, relTexPath: string) => Promise<string>;
@@ -35,11 +37,10 @@ export default function CellViewport(
     onHideSelected?: () => void;
     onUnhideAll?: () => void;
     onToggleMarkers?: () => void;
-    onUndo?: () => void;
-    onRedo?: () => void;
-
-
-
+    onUndoEdit?: () => void;
+    onRedoEdit?: () => void;
+    onDeleteSelected?: () => void;
+    onDuplicateSelected?: () => void;
     onMoveEnd?: (ref: CellPlacedReference) => void;
   }
 ) {
@@ -50,8 +51,10 @@ export default function CellViewport(
   const onHideSelectedRef = useRef(onHideSelected);
   const onUnhideAllRef = useRef(onUnhideAll);
   const onToggleMarkersRef = useRef(onToggleMarkers);
-  const onUndoRef = useRef(onUndo);
-  const onRedoRef = useRef(onRedo);
+  const onUndoEditRef = useRef(onUndoEdit);
+  const onRedoEditRef = useRef(onRedoEdit);
+  const onDeleteSelectedRef = useRef(onDeleteSelected);
+  const onDuplicateSelectedRef = useRef(onDuplicateSelected);
   const onMoveEndRef = useRef(onMoveEnd);
   const selectedKeyRef = useRef(selectedKey);
   const hiddenRefsRef = useRef(hiddenRefs);
@@ -60,8 +63,10 @@ export default function CellViewport(
     onHideSelectedRef.current = onHideSelected;
     onUnhideAllRef.current = onUnhideAll;
     onToggleMarkersRef.current = onToggleMarkers;
-    onUndoRef.current = onUndo;
-    onRedoRef.current = onRedo;
+    onUndoEditRef.current = onUndoEdit;
+    onRedoEditRef.current = onRedoEdit;
+    onDeleteSelectedRef.current = onDeleteSelected;
+    onDuplicateSelectedRef.current = onDuplicateSelected;
     onMoveEndRef.current = onMoveEnd;
     selectedKeyRef.current = selectedKey;
     hiddenRefsRef.current = hiddenRefs;
@@ -663,14 +668,17 @@ export default function CellViewport(
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const k = e.key.toLowerCase();
-      if (k === '1' && e.altKey) { onUnhideAllRef.current?.(); e.preventDefault(); }
+      const editKey = cellEditKey(e);
+      if (editKey === 'delete') { onDeleteSelectedRef.current?.(); e.preventDefault(); }
+      else if (editKey === 'duplicate') { onDuplicateSelectedRef.current?.(); e.preventDefault(); }
+      else if (editKey === 'undo') { onUndoEditRef.current?.(); e.preventDefault(); }
+      else if (editKey === 'redo') { onRedoEditRef.current?.(); e.preventDefault(); }
+      else if (k === '1' && e.altKey) { onUnhideAllRef.current?.(); e.preventDefault(); }
       else if (k === '1') { onHideSelectedRef.current?.(); e.preventDefault(); }
       else if (k === 'd' && !e.ctrlKey && !e.altKey && !e.shiftKey) { onSelectRef.current?.(null); e.preventDefault(); }
       else if (k === 'f' && e.shiftKey) { focusOn(selectedKeyRef.current ?? null); e.preventDefault(); }
       else if (k === 't' && !e.ctrlKey && !e.altKey && !e.shiftKey) { topDownOn(selectedKeyRef.current ?? null); e.preventDefault(); }
       else if (k === 'm' && !e.ctrlKey && !e.altKey) { onToggleMarkersRef.current?.(); e.preventDefault(); }
-      else if (k === 'z' && e.ctrlKey) { onUndoRef.current?.(); e.preventDefault(); }
-      else if (k === 'y' && e.ctrlKey) { onRedoRef.current?.(); e.preventDefault(); }
       else if (k === 'g' && !e.ctrlKey && !e.altKey) { transformControls.setMode('translate'); e.preventDefault(); }
       else if (k === 'r' && !e.ctrlKey && !e.altKey) { transformControls.setMode('rotate'); e.preventDefault(); }
     };
