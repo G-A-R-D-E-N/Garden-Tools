@@ -89,7 +89,9 @@ class FanOutTest : public ::testing::Test {
   InstanceId attach(const char* scriptName, const std::string& form, bool initialize = true) {
     const auto instance = runtime_->attach(scriptName, OwnerId::forForm(form));
     EXPECT_TRUE(instance.has_value());
-    if (initialize) EXPECT_EQ(runtime_->initialize(*instance), Status::Ok);
+    if (initialize) {
+      EXPECT_EQ(runtime_->initialize(*instance), Status::Ok);
+    }
     return *instance;
   }
 
