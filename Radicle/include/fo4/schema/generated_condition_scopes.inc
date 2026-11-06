@@ -9,6 +9,8 @@ inline constexpr ConditionScopeDescriptor k_generated_condition_scopes[] = {
   {Signature::from_string("PERK"), "Tabs", "Conditions", ConditionScopeKind::perk_effect_tab},
   {Signature::from_string("QUST"), "Aliases", "Conditions", ConditionScopeKind::alias},
   {Signature::from_string("QUST"), "Targets", "Conditions", ConditionScopeKind::quest_target},
+  {Signature::from_string("SCEN"), "Phases", "Completion Conditions", ConditionScopeKind::scene_phase_completion},
+  {Signature::from_string("SCEN"), "Phases", "Start Conditions", ConditionScopeKind::scene_phase_start},
   {Signature::from_string("SPEL"), "Effects", "Conditions", ConditionScopeKind::effect},
   {Signature::from_string("TERM"), "Body Text", "Conditions", ConditionScopeKind::terminal_body_text},
   {Signature::from_string("TERM"), "Menu Items", "Conditions", ConditionScopeKind::terminal_menu_item},

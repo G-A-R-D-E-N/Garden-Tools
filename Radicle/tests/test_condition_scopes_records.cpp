@@ -742,3 +742,55 @@ TEST(ConditionScopesRecords, EffectOnlyRecordRefusesBareWriteAndKeepsEffectList)
             fo4::ConditionMutationStatus::unchanged);
   EXPECT_EQ(fo4::write_plugin(plugin), fo4::write_plugin(before));
 }
+
+TEST(ConditionScopesRecords, ScenePhaseConditionScopesReadInsertAndReplacePerPhase) {
+  auto plugin = make_plugin("SCEN", {
+      {"HNAM", {}},
+      {"NAM0", zstring("P1")},
+      {"CTDA", ctda_bytes(1)},
+      {"NEXT", {}},
+      {"CTDA", ctda_bytes(2)},
+      {"NEXT", {}},
+      {"WNAM", u32_bytes(350)},
+      {"HNAM", {}},
+      {"HNAM", {}},
+      {"NAM0", zstring("P2")},
+      {"NEXT", {}},
+      {"NEXT", {}},
+      {"WNAM", u32_bytes(350)},
+      {"HNAM", {}},
+      {"PNAM", u32_bytes(0)},
+      {"INAM", u32_bytes(0)},
+  });
+  const auto start = descriptor_for("SCEN", "Phases[0].Start Conditions");
+  const auto completion = descriptor_for("SCEN", "Phases[0].Completion Conditions");
+  const auto second = descriptor_for("SCEN", "Phases[1].Start Conditions");
+  ASSERT_TRUE(start.has_value());
+  ASSERT_TRUE(completion.has_value());
+  ASSERT_TRUE(second.has_value());
+  EXPECT_TRUE(descriptor_for("SCEN", "Faces[0].Start Conditions").has_value() == false);
+
+  const auto key = fo4::FormKey::parse("000800:Cond.esp");
+  const auto* record = cond_record(plugin);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(functions_in(*record, *start, 0), Functions{1});
+  EXPECT_EQ(functions_in(*record, *completion, 0), Functions{2});
+  EXPECT_TRUE(functions_in(*record, *second, 1).empty());
+  EXPECT_EQ(fo4::schema::read_scoped_conditions(*record, *start, 2).error,
+            fo4::schema::ScopedConditionStatus::container_index_out_of_range);
+
+  const std::vector<fo4::CtdaCondition> inserted{function_condition(7)};
+  EXPECT_EQ(fo4::schema::set_record_scoped_conditions(plugin, key, *second, 1, inserted),
+            fo4::schema::ScopedConditionStatus::updated);
+  const std::vector<fo4::CtdaCondition> replaced{function_condition(9)};
+  EXPECT_EQ(fo4::schema::set_record_scoped_conditions(plugin, key, *completion, 0, replaced),
+            fo4::schema::ScopedConditionStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cond.esp");
+  const auto* after = cond_record(reread);
+  ASSERT_NE(after, nullptr);
+  EXPECT_EQ(functions_in(*after, *start, 0), Functions{1});
+  EXPECT_EQ(functions_in(*after, *completion, 0), Functions{9});
+  EXPECT_EQ(functions_in(*after, *second, 1), Functions{7});
+  EXPECT_TRUE(functions_in(*after, *completion, 1).empty());
+}

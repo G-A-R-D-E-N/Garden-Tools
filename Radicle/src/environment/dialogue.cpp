@@ -160,6 +160,8 @@ Scene decode_scene(const Environment& env, const RecordRef& ref) {
   }
   out.flags = Scope{r, subs.first(layout.first_group)}.u32(sig("FNAM"));
   out.parent_quest = Scope{r, subs.subspan(layout.tail)}.link(sig("PNAM"));
+  out.template_scene = Scope{r, subs.subspan(layout.tail)}.link(sig("TNAM"));
+  out.index = Scope{r, subs.subspan(layout.tail)}.u32(sig("XNAM"));
   out.conditions = conditions(r, layout.tail, subs.size());
   return out;
 }
