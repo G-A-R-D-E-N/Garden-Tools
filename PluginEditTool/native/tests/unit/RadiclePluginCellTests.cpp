@@ -122,25 +122,25 @@ std::vector<std::byte> basePlugin() {
     return out.bytes;
 }
 
-std::vector<std::byte> sourcePlugin() {
-    fo4::test::ByteWriter out;
-    writeHeader(out, {"Base.esm"});
-
+void writeInteriorCell(fo4::test::ByteWriter& out,
+                       std::uint32_t cellId,
+                       std::uint32_t referenceId,
+                       std::uint32_t baseId) {
     const auto top = fo4::test::begin_group(out, "CELL", 0);
     const auto block = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_block);
     const auto subblock = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_subblock);
 
-    const auto cell = fo4::test::begin_record(out, "CELL", 0, 0x00000800u);
+    const auto cell = fo4::test::begin_record(out, "CELL", 0, cellId);
     const std::vector<std::byte> cellData{std::byte{1}, std::byte{0}};
     fo4::test::write_subrecord(out, "DATA", cellData);
     fo4::test::end_record(out, cell);
 
-    const auto children = beginGroupRaw(out, 0x00000800u, fo4::GroupType::cell_children);
+    const auto children = beginGroupRaw(out, cellId, fo4::GroupType::cell_children);
     const auto temporary = beginGroupRaw(
-        out, 0x00000800u, fo4::GroupType::cell_temporary_children);
-    const auto reference = fo4::test::begin_record(out, "REFR", 0, 0x00000801u);
+        out, cellId, fo4::GroupType::cell_temporary_children);
+    const auto reference = fo4::test::begin_record(out, "REFR", 0, referenceId);
     fo4::test::ByteWriter name;
-    name.u32(0x00000802u);
+    name.u32(baseId);
     fo4::test::write_subrecord(out, "NAME", name.bytes);
     fo4::test::ByteWriter transform;
     for (int index = 0; index < 6; ++index) {
@@ -153,6 +153,41 @@ std::vector<std::byte> sourcePlugin() {
     endGroupRaw(out, subblock);
     endGroupRaw(out, block);
     fo4::test::end_group(out, top);
+}
+
+std::vector<std::byte> sourcePlugin() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, {"Base.esm"});
+    writeInteriorCell(out, 0x00000800u, 0x00000801u, 0x00000802u);
+    return out.bytes;
+}
+
+std::vector<std::byte> movedPlugin() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, {"Base.esm"});
+    writeInteriorCell(out, 0x01000900u, 0x00000801u, 0x00000802u);
+    return out.bytes;
+}
+
+std::vector<std::byte> decalCellPlugin() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, {});
+    const auto top = fo4::test::begin_group(out, "TXST", 0);
+    const auto decal = fo4::test::begin_record(out, "TXST", 0, 0x00000810u);
+    fo4::test::ByteWriter bounds;
+    bounds.u16(0);
+    bounds.u16(0);
+    bounds.u16(0);
+    bounds.u16(128);
+    bounds.u16(64);
+    bounds.u16(0);
+    fo4::test::write_subrecord(out, "OBND", bounds.bytes);
+    std::string diffuse = "Textures\\Decal.dds";
+    diffuse.push_back('\0');
+    fo4::test::write_subrecord(out, "TX00", std::string_view{diffuse});
+    fo4::test::end_record(out, decal);
+    fo4::test::end_group(out, top);
+    writeInteriorCell(out, 0x00000800u, 0x00000811u, 0x00000810u);
     return out.bytes;
 }
 
@@ -359,4 +394,87 @@ TEST_CASE("Native cell takes each placed base's model from its type-aware primar
     CHECK(refs[5].at("modelPath") == "");
     CHECK(refs[6].at("modelPath") == "Armor\\ArmoFixture.nif");
     CHECK(refs[7].at("recordType") == "PlacedTrap");
+}
+
+TEST_CASE("Native cell reports decal width and height") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto decalPath = root / "Decal.esp";
+    writeBytes(decalPath, decalCellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({pluginEntry("Decal.esp", decalPath)})}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto view = parseStringResult(
+        backend.getPlacedReferences(nlohmann::json::array({"000800:Decal.esp"})));
+    const auto& refs = view.at("references");
+    REQUIRE(refs.size() == 1);
+    CHECK(refs[0].at("decalDiffuse") == "Textures\\Decal.dds");
+    CHECK(refs[0].at("decalWidth") == 128.0f);
+    CHECK(refs[0].at("decalHeight") == 64.0f);
+}
+
+TEST_CASE("Native cell hides a reference moved to another cell") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+    writeBytes(root / "Moved.esp", movedPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp"),
+            pluginEntry("Moved.esp", root / "Moved.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto oldCell = parseStringResult(
+        backend.getPlacedReferences(nlohmann::json::array({"000800:Base.esm"})));
+    CHECK(oldCell.at("references").empty());
+
+    const auto newCell = parseStringResult(
+        backend.getPlacedReferences(nlohmann::json::array({"000900:Moved.esp"})));
+    REQUIRE(newCell.at("references").size() == 1);
+    CHECK(newCell.at("references")[0].at("formKey") == "000801:Base.esm");
+}
+
+TEST_CASE("Native cell environment cache is dropped after a staged edit") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esm", basePlugin());
+    writeBytes(root / "Source.esp", sourcePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", root / "Base.esm"),
+            pluginEntry("Source.esp", root / "Source.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto cellView = nlohmann::json::array({"000800:Base.esm"});
+    const auto before = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(before.at("references").size() == 1);
+    CHECK(before.at("references")[0].at("position").at("x") == 10.0f);
+
+    REQUIRE(backend.setPlacedReferenceTransform(nlohmann::json::array({
+        "000801:Base.esm", "Source.esp", 100.0, 200.0, 300.0, 1.5, 2.5, 3.5
+    })).has_value());
+    const auto afterFirst = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(afterFirst.at("references").size() == 1);
+    CHECK(afterFirst.at("references")[0].at("position").at("x") == 100.0f);
+
+    REQUIRE(backend.setPlacedReferenceTransform(nlohmann::json::array({
+        "000801:Base.esm", "Source.esp", 500.0, 200.0, 300.0, 1.5, 2.5, 3.5
+    })).has_value());
+    const auto afterSecond = parseStringResult(backend.getPlacedReferences(cellView));
+    REQUIRE(afterSecond.at("references").size() == 1);
+    CHECK(afterSecond.at("references")[0].at("position").at("x") == 500.0f);
 }

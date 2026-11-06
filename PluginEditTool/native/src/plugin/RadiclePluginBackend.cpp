@@ -467,6 +467,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         }
         plugins_ = std::move(loaded);
         ++mutationEpoch_;
+        dropBorrowedEnvironmentLocked();
 #if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
         testReadRoots_ = std::move(candidateReadRoots);
 #endif
@@ -631,6 +632,7 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
                 .stagedQuestFragments = std::nullopt,
             });
         }
+        dropBorrowedEnvironmentLocked();
 
         std::vector<fo4::MasterDescriptor> knownKinds;
         knownKinds.reserve(plugins_.size());
@@ -748,6 +750,7 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
         fo4::apply_master_kinds(reloaded, knownKinds);
         CommitScope commit;
         loaded->plugin = std::move(reloaded); loaded->diskBaseline = loaded->plugin.original_data;
+        dropBorrowedEnvironmentLocked();
         loaded->loadedTime = readTime;
         loaded->stagedLocalization.reset(); loaded->stagedAllocation.reset(); loaded->stagedPluginLanguages.clear(); loaded->stagedPluginStringIds.clear();
         loaded->stagedQuestFragments.reset();

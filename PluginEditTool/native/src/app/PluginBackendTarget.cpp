@@ -529,6 +529,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         }
         if (method == "GetPlacedReferences") return backend_.getPlacedReferences(args);
         if (method == "GetPlacedReferencesAtGrid") return backend_.getPlacedReferencesAtGrid(args);
+        if (method == "ResolveWorldspace") return backend_.resolveWorldspace(args);
         if (method == "SetPlacedReferenceTransform") return backend_.setPlacedReferenceTransform(args);
     }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);

@@ -546,6 +546,7 @@ Result<void> RadiclePluginBackend::stageLocalizedStringsAndPlugin(
     static_assert(std::is_nothrow_swappable_v<LocalizedReferences> && std::is_nothrow_swappable_v<std::set<std::string>>);
     using std::swap;
     swap(loaded->plugin, mutated);
+    dropBorrowedEnvironmentLocked();
     static_assert(std::is_nothrow_swappable_v<decltype(loaded->stagedAllocation)>); if (hasAllocation) loaded->stagedAllocation.swap(retained);
     loaded->stagedPluginLanguages.swap(dependentLanguages);
     loaded->stagedPluginStringIds.swap(dependentIds);

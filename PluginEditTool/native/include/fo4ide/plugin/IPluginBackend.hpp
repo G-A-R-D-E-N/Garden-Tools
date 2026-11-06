@@ -213,6 +213,9 @@ public:
     virtual Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json&) const {
         return std::unexpected(Error{"CellBackendUnavailable", "Exterior-cell queries are unavailable"});
     }
+    virtual Result<nlohmann::json> resolveWorldspace(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Worldspace queries are unavailable"});
+    }
     virtual Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
     }

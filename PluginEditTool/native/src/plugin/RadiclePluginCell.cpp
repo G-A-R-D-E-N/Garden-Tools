@@ -2,38 +2,24 @@
 
 #include <fo4ide/core/JsonInt.hpp>
 
-#include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <exception>
-#include <map>
+#include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
-#include <fo4/environment/placed.hpp>
+#include <fo4/environment/cell_view.hpp>
 #include <fo4/forms/cell.hpp>
 #include <fo4/forms/placed_reference.hpp>
-#include <fo4/forms/static_collection.hpp>
 #include <fo4/plugin/reader.hpp>
-#include <fo4/plugin/visit.hpp>
 #include <fo4/plugin/writer.hpp>
-#include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
 
-using support::editorId;
-
 namespace {
-
-constexpr auto k_cell = fo4::Signature::from_string("CELL");
-constexpr auto k_wrld = fo4::Signature::from_string("WRLD");
-constexpr auto k_scol = fo4::Signature::from_string("SCOL");
-constexpr auto k_txst = fo4::Signature::from_string("TXST");
-constexpr auto k_tx00 = fo4::Signature::from_string("TX00");
-constexpr auto k_full = fo4::Signature::from_string("FULL");
 
 std::optional<int> intArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size()) return std::nullopt;
@@ -45,119 +31,9 @@ std::optional<float> floatArgument(const nlohmann::json& args, std::size_t index
     return args[index].get<float>();
 }
 
-std::string lower(std::string_view value) {
-    std::string out(value);
-    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return out;
-}
-
-std::string zstring(const fo4::Record& record, fo4::Signature signature) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != signature || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
-}
-
-std::string primaryModelPath(const fo4::Record& record) {
-    fo4::env::RecordRef ref{};
-    ref.record = &record;
-    const auto path = fo4::env::primary_model_path(ref);
-    return path ? std::string(*path) : std::string{};
-}
-
-std::string friendlyBaseType(fo4::Signature signature) {
-    const auto value = signature.to_string();
-    if (value == "STAT") return "Static";
-    if (value == "SCOL") return "StaticCollection";
-    if (value == "ACTI") return "Activator";
-    if (value == "CONT") return "Container";
-    if (value == "FURN") return "Furniture";
-    if (value == "LIGH") return "Light";
-    if (value == "NPC_") return "Npc";
-    if (value == "DOOR") return "Door";
-    if (value == "MSTT") return "MovableStatic";
-    if (value == "TXST") return "TextureSet";
-    return value;
-}
-
-bool cellInterior(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_data) continue;
-        if (subrecord.data.size() < 2) return false;
-        const auto low = std::to_integer<unsigned int>(subrecord.data[0]);
-        const auto high = std::to_integer<unsigned int>(subrecord.data[1]);
-        const auto flags = static_cast<unsigned int>(low | (high << 8));
-        return (flags & 0x1u) != 0;
-    }
-    return false;
-}
-
-template <class Plugins>
-std::optional<fo4::FormKey> resolveRecordKey(
-    const Plugins& plugins,
-    std::string_view id,
-    fo4::Signature requiredSignature) {
-    if (id.empty()) return std::nullopt;
-    if (id.find(':') != std::string_view::npos) {
-        try {
-            auto key = fo4::FormKey::parse(id);
-            for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
-                const auto* record = fo4::find_record(it->plugin, key);
-                if (record != nullptr && record->header.signature == requiredSignature) return key;
-            }
-            return std::nullopt;
-        } catch (const std::exception&) {
-            return std::nullopt;
-        }
-    }
-
-    const auto wanted = lower(id);
-    std::optional<fo4::FormKey> result;
-    for (const auto& loaded : plugins) {
-        fo4::visit_records(loaded.plugin, [&](const fo4::Record& record) {
-            if (record.header.signature != requiredSignature) return;
-            if (lower(editorId(record)) == wanted) result = record.form_key;
-        });
-    }
-    return result;
-}
-
-struct MergedReference {
-    fo4::FormKey key;
-    fo4::forms::PlacedReferenceKind kind{fo4::forms::PlacedReferenceKind::object};
-    std::optional<fo4::FormKey> base;
-    std::string editorId;
-    fo4::forms::PositionRotation transform{};
-    float scale{1.0f};
-};
-
-template <class Plugins>
-const fo4::Record* winningRecord(const Plugins& plugins, const fo4::FormKey& key) {
-    for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
-        if (const auto* record = fo4::find_record(it->plugin, key); record != nullptr) return record;
-    }
-    return nullptr;
-}
-
-template <class Plugins>
-nlohmann::json staticCollectionPartsJson(
-    const Plugins& plugins,
-    const fo4::Plugin& owner,
-    const fo4::Record& collection) {
-    const auto decoded = fo4::forms::decode_static_collection_parts(owner, collection);
+nlohmann::json scolPartsJson(const fo4::env::BaseObjectInfo& base) {
     nlohmann::json parts = nlohmann::json::array();
-    for (const auto& part : decoded) {
-        const auto* staticRecord = winningRecord(plugins, part.static_record);
-        if (staticRecord == nullptr) continue;
-        const auto modelPath = primaryModelPath(*staticRecord);
-        if (modelPath.empty() || part.placements.empty()) continue;
-
+    for (const auto& part : base.scol_parts) {
         nlohmann::json placements = nlohmann::json::array();
         for (const auto& placement : part.placements) {
             placements.push_back({
@@ -167,111 +43,84 @@ nlohmann::json staticCollectionPartsJson(
             });
         }
         parts.push_back({
-            {"modelPath", modelPath},
+            {"modelPath", part.model_path},
             {"placements", std::move(placements)}
         });
     }
     return parts.empty() ? nlohmann::json(nullptr) : std::move(parts);
 }
 
-template <class Plugins>
-nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& cellKey) {
-    const fo4::Record* winningCell = nullptr;
-    bool winningCellLocalized = false;
-    for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
-        const auto* record = fo4::find_record(it->plugin, cellKey);
-        if (record == nullptr) continue;
-        winningCell = record;
-        winningCellLocalized = it->plugin.header.tes4_flags.is_localized();
-        break;
-    }
-    if (winningCell == nullptr || winningCell->header.signature != k_cell) {
-        return {{"error", "Cell not found: " + cellKey.to_string()}};
-    }
-
-    std::map<fo4::FormKey, MergedReference> merged;
-    for (const auto& loaded : plugins) {
-        const auto* cellVersion = fo4::find_record(loaded.plugin, cellKey);
-        if (cellVersion == nullptr || cellVersion->header.signature != k_cell) continue;
-        const auto refs = fo4::forms::placed_references_for_cell(loaded.plugin, cellKey);
-        for (const auto& ref : refs) {
-            if (ref.record == nullptr) continue;
-            const auto key = ref.record->form_key;
-            if (ref.deleted) {
-                merged.erase(key);
-                continue;
-            }
-            merged[key] = MergedReference{
-                .key = key,
-                .kind = ref.kind,
-                .base = ref.base,
-                .editorId = ref.editor_id,
-                .transform = ref.transform,
-                .scale = ref.scale,
-            };
-        }
-    }
-
+nlohmann::json placedReferencesJson(const fo4::env::CellReferences& cells) {
     nlohmann::json references = nlohmann::json::array();
-    std::size_t withModel = 0;
-    for (const auto& [key, ref] : merged) {
-        std::string baseEditorId;
-        std::string baseType;
-        std::string modelPath;
+    for (const auto& ref : cells.references) {
+        const auto* base = ref.base_info ? &*ref.base_info : nullptr;
         nlohmann::json decalDiffuse = nullptr;
+        nlohmann::json decalWidth = nullptr;
+        nlohmann::json decalHeight = nullptr;
         nlohmann::json scolParts = nullptr;
-        if (ref.base.has_value()) {
-            for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
-                const auto* baseRecord = fo4::find_record(it->plugin, *ref.base);
-                if (baseRecord == nullptr) continue;
-                baseEditorId = editorId(*baseRecord);
-                baseType = friendlyBaseType(baseRecord->header.signature);
-                modelPath = primaryModelPath(*baseRecord);
-                if (baseRecord->header.signature == k_scol) {
-                    scolParts = staticCollectionPartsJson(plugins, it->plugin, *baseRecord);
-                } else if (baseRecord->header.signature == k_txst) {
-                    const auto diffuse = zstring(*baseRecord, k_tx00);
-                    if (!diffuse.empty()) decalDiffuse = diffuse;
-                }
-                break;
-            }
+        if (base != nullptr && base->decal) {
+            decalDiffuse = base->decal->diffuse;
+            if (base->decal->width) decalWidth = *base->decal->width;
+            if (base->decal->height) decalHeight = *base->decal->height;
         }
-        if (!modelPath.empty()) ++withModel;
+        if (base != nullptr) scolParts = scolPartsJson(*base);
 
         references.push_back({
-            {"formKey", key.to_string()},
-            {"editorId", ref.editorId},
-            {"recordType", ref.kind == fo4::forms::PlacedReferenceKind::object ? "PlacedObject"
-                           : ref.kind == fo4::forms::PlacedReferenceKind::variant ? "PlacedTrap"
-                                                                                 : "PlacedNpc"},
-            {"baseType", baseType},
-            {"baseFormKey", ref.base.has_value() ? ref.base->to_string() : std::string{}},
-            {"baseEditorId", baseEditorId},
-            {"modelPath", modelPath},
+            {"formKey", ref.key.to_string()},
+            {"editorId", ref.editor_id},
+            {"recordType", ref.record_type},
+            {"baseType", base != nullptr ? base->type_name : std::string{}},
+            {"baseFormKey", ref.base ? ref.base->to_string() : std::string{}},
+            {"baseEditorId", base != nullptr ? base->editor_id : std::string{}},
+            {"modelPath", base != nullptr ? base->model_path : std::string{}},
             {"decalDiffuse", std::move(decalDiffuse)},
-            {"decalWidth", nullptr},
-            {"decalHeight", nullptr},
+            {"decalWidth", std::move(decalWidth)},
+            {"decalHeight", std::move(decalHeight)},
             {"scolParts", std::move(scolParts)},
             {"position", {
                 {"x", ref.transform.x}, {"y", ref.transform.y}, {"z", ref.transform.z}}},
             {"rotation", {
                 {"x", ref.transform.rx}, {"y", ref.transform.ry}, {"z", ref.transform.rz}}},
-            {"scale", ref.scale}
+            {"scale", ref.scale},
+            {"persistent", ref.persistent},
+            {"initiallyDisabled", ref.initially_disabled},
+            {"isMarker", base != nullptr && base->editor_marker}
         });
     }
 
-    const auto cellName = winningCellLocalized ? std::string{} : zstring(*winningCell, k_full);
+    const auto& cell = cells.cell;
+    const auto cellName = cell.localized || cell.name.kind != fo4::env::NameKind::inline_text
+        ? std::string{}
+        : std::string(cell.name.text);
     return {
-        {"cellFormKey", cellKey.to_string()},
-        {"cellEditorId", editorId(*winningCell)},
+        {"cellFormKey", cell.key.to_string()},
+        {"cellEditorId", cell.editor_id},
         {"cellName", cellName},
-        {"interior", cellInterior(*winningCell)},
+        {"interior", cell.interior},
         {"referenceCount", references.size()},
-        {"withModelCount", withModel},
+        {"withModelCount", cells.with_model_count},
         {"references", std::move(references)}
     };
 }
 
+}
+
+std::shared_ptr<const fo4::env::Environment> RadiclePluginBackend::borrowedEnvironment() const {
+    std::scoped_lock lock(environmentMutex_);
+    if (borrowedEnvironment_ && borrowedEnvironmentEpoch_ == mutationEpoch_) return borrowedEnvironment_;
+    borrowedEnvironment_.reset();
+    std::vector<const fo4::Plugin*> loadOrder;
+    loadOrder.reserve(plugins_.size());
+    for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
+    borrowedEnvironment_ = std::make_shared<const fo4::env::Environment>(
+        fo4::env::Environment::borrow(loadOrder));
+    borrowedEnvironmentEpoch_ = mutationEpoch_;
+    return borrowedEnvironment_;
+}
+
+void RadiclePluginBackend::dropBorrowedEnvironmentLocked() const {
+    std::scoped_lock lock(environmentMutex_);
+    borrowedEnvironment_.reset();
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getPlacedReferences(
@@ -282,12 +131,39 @@ Result<nlohmann::json> RadiclePluginBackend::getPlacedReferences(
     }
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto key = resolveRecordKey(plugins_, cellId, k_cell);
-    if (!key.has_value()) {
-        return nlohmann::json(nlohmann::json{{"error", "Cell not found: " + cellId}}.dump());
-    }
     try {
-        return nlohmann::json(placedReferencesJson(plugins_, *key).dump());
+        const auto env = borrowedEnvironment();
+        const auto key = fo4::env::resolve_cell_id(*env, cellId);
+        if (!key.has_value()) {
+            return nlohmann::json(nlohmann::json{{"error", "Cell not found: " + cellId}}.dump());
+        }
+        return nlohmann::json(placedReferencesJson(fo4::env::list_cell_references(*env, *key)).dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"CellReadFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::resolveWorldspace(
+    const nlohmann::json& arguments) const {
+    const auto cellId = support::stringArgument(arguments, 0);
+    if (cellId.empty()) {
+        return std::unexpected(Error{"CellMissing", "Cell FormKey or EditorID is empty"});
+    }
+
+    OpLock lock(*this, OpLock::Mode::Read);
+    try {
+        const auto env = borrowedEnvironment();
+        const auto key = fo4::env::resolve_cell_id(*env, cellId);
+        if (!key.has_value()) {
+            return nlohmann::json(nlohmann::json{{"error", "Cell not found: " + cellId}}.dump());
+        }
+        const auto summary = fo4::env::describe_cell(*env, *key);
+        nlohmann::json worldspace = nullptr;
+        if (summary && summary->worldspace) worldspace = summary->worldspace->to_string();
+        return nlohmann::json(nlohmann::json{
+            {"cellFormKey", key->to_string()},
+            {"worldspaceFormKey", worldspace}
+        }.dump());
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CellReadFailed", error.what()});
     }
@@ -306,25 +182,19 @@ Result<nlohmann::json> RadiclePluginBackend::getPlacedReferencesAtGrid(
     }
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto worldKey = resolveRecordKey(plugins_, worldId, k_wrld);
-    if (!worldKey.has_value()) {
-        return nlohmann::json(nlohmann::json{{"error", "Worldspace not found: " + worldId}}.dump());
-    }
-
-    std::optional<fo4::FormKey> cellKey;
     try {
-        for (const auto& loaded : plugins_) {
-            if (const auto* cell = fo4::forms::find_exterior_cell(
-                    loaded.plugin, *worldKey, *x, *y); cell != nullptr) {
-                cellKey = cell->form_key;
-            }
+        const auto env = borrowedEnvironment();
+        const auto worldKey = fo4::env::resolve_worldspace_id(*env, worldId);
+        if (!worldKey.has_value()) {
+            return nlohmann::json(nlohmann::json{{"error", "Worldspace not found: " + worldId}}.dump());
         }
+        const auto cellKey = fo4::env::find_cell_at_grid(*env, *worldKey, *x, *y);
         if (!cellKey.has_value()) {
             return nlohmann::json(nlohmann::json{
                 {"error", "Cell not found at grid " + std::to_string(*x) + "," + std::to_string(*y)}
             }.dump());
         }
-        return nlohmann::json(placedReferencesJson(plugins_, *cellKey).dump());
+        return nlohmann::json(placedReferencesJson(fo4::env::list_cell_references(*env, *cellKey)).dump());
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CellReadFailed", error.what()});
     }
