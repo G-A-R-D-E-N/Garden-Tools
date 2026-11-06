@@ -188,6 +188,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/cell_create.cpp
   src/forms/cell_override.cpp
   src/forms/cell_properties.cpp
+  src/forms/cell_cleanup.cpp
   src/forms/components.cpp
   src/forms/effects.cpp
   src/forms/placed_reference.cpp
@@ -758,6 +759,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_reference_move.cpp
     tests/test_placed_reference_move_exterior.cpp
     tests/test_cell_edit.cpp
+    tests/test_cell_cleanup.cpp
     tests/test_record_flags.cpp
     tests/test_record_flags_deleted.cpp
     tests/test_extension_light_kinds.cpp
