@@ -1,7 +1,7 @@
 import { addStageAfter, nextStageNumber } from './flowChartEdits';
 import { buildFlowChart } from './flowChartModel';
 import FlowChartPanel from './FlowChartPanel';
-import type { QuestObjective, QuestStage, StageSelection } from './questModel';
+import type { QuestObjective, QuestStage, StageEdit, StageSelection } from './questModel';
 import './FlowChart.css';
 
 interface Props {
@@ -9,15 +9,15 @@ interface Props {
   objectives: QuestObjective[];
   selected: StageSelection | null;
   onSelect: (index: number | null) => void;
-  onCommit: (next: QuestStage[], label: string) => void;
+  onEdit: (edit: StageEdit, label: string) => void;
 }
 
-export default function FlowChart({ stages, objectives, selected, onSelect, onCommit }: Props) {
+export default function FlowChart({ stages, objectives, selected, onSelect, onEdit }: Props) {
   const chart = buildFlowChart(stages, objectives);
   const current = stages.find(stage => stage.index === selected?.index);
   const addNext = (after: number) => {
     const index = nextStageNumber(stages, after);
-    onCommit(addStageAfter(stages, after), `Add stage ${index}`);
+    onEdit(latest => addStageAfter(latest, after), `Add stage ${index}`);
     onSelect(index);
   };
   return (
@@ -30,7 +30,7 @@ export default function FlowChart({ stages, objectives, selected, onSelect, onCo
         edited here. Click a stage to open its details beside the chart.
       </p>
       {stages.length === 0 ? (
-        <div className="editor-empty">There are no stages to draw yet.</div>
+        <div className="editor-empty">No stages yet. Use Add stage in the Stages pane.</div>
       ) : (
         <div className="quest-flow-body">
           <div className="quest-flow-scroll">
@@ -72,9 +72,9 @@ export default function FlowChart({ stages, objectives, selected, onSelect, onCo
             </div>
           </div>
           {current && (
-            <FlowChartPanel key={current.index} stage={current} stages={stages}
+            <FlowChartPanel key={current.index} stage={current}
               hasObjective={objectives.some(objective => objective.index === current.index)}
-              onCommit={onCommit} onSelect={onSelect} />
+              onEdit={onEdit} onSelect={onSelect} />
           )}
         </div>
       )}

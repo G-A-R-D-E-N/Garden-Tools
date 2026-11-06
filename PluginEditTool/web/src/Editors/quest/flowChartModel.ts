@@ -1,8 +1,8 @@
 import { LOG_ENTRY_FLAG_OPTIONS, type QuestObjective, type QuestStage } from './questModel';
 
 const PAD = 12;
-const BOX_WIDTH = 180;
-const STAGE_HEIGHT = 150;
+const BOX_WIDTH = 220;
+const STAGE_HEIGHT = 200;
 const COLUMN_GAP = 56;
 const END_GAP_Y = 28;
 const END_HEIGHT = 46;
@@ -51,14 +51,18 @@ const stageId = (index: number) => `stage:${index}`;
 
 const columnX = (column: number) => PAD + column * (BOX_WIDTH + COLUMN_GAP);
 
-const hasFlag = (stage: QuestStage, bit: number) => stage.logEntries.some(entry => (entry.flags & bit) !== 0);
+export const hasFlag = (stage: QuestStage, bit: number) => stage.logEntries.some(entry => (entry.flags & bit) !== 0);
+
+const journalLine = (text: string): string => text.split(/\r?\n/).map(part => part.trim()).find(part => part !== '') ?? '';
+
+export function journalEntryIndex(stage: QuestStage): number {
+  const at = stage.logEntries.findIndex(entry => journalLine(entry.logText) !== '');
+  return at === -1 ? 0 : at;
+}
 
 function firstJournalLine(stage: QuestStage): string {
-  for (const entry of stage.logEntries) {
-    const line = entry.logText.split(/\r?\n/).map(part => part.trim()).find(part => part !== '');
-    if (line) return line;
-  }
-  return '';
+  const entry = stage.logEntries[journalEntryIndex(stage)];
+  return entry ? journalLine(entry.logText) : '';
 }
 
 export function buildFlowChart(stages: QuestStage[], objectives: QuestObjective[]): FlowChart {

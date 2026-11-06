@@ -14,7 +14,8 @@ const withEntry = (stage: QuestStage, entryAt: number, entry: StageLogEntry): Qu
 
 export default function StagesPane({ stages, selected, onCommit }: Props) {
   const selectedCard = useRef<HTMLDivElement>(null);
-  useEffect(() => { selectedCard.current?.scrollIntoView({ block: 'nearest' }); }, [selected]);
+  const selectedPresent = stages.some(stage => stage.index === selected?.index);
+  useEffect(() => { selectedCard.current?.scrollIntoView({ block: 'nearest' }); }, [selected, selectedPresent]);
 
   const replaceStage = (position: number, next: QuestStage, label: string) =>
     onCommit(stages.map((stage, i) => (i === position ? next : stage)), label);

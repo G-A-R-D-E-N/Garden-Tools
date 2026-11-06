@@ -86,6 +86,7 @@
 }
 
 .quest-flow-add {
+  flex: none;
   align-self: flex-start;
   margin: 0 6px 6px;
   font-size: 11px;

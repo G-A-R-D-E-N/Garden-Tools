@@ -61,6 +61,61 @@ it('Detects: the + next step button on a flow chart box saves the stages with a 
   fireEvent.click(await screen.findByRole('button', { name: '+ next step' }));
   await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
   expect(JSON.parse(backend.SetQuestStages.mock.calls[0][2]).map((item: { index: number }) => item.index)).toEqual([10, 20]);
+  expect(await screen.findByRole('complementary', { name: 'Stage 20 details' })).toBeTruthy();
+});
+
+it('Detects: editing the journal text in the flow chart panel saves it, and Undo writes the old text back', async () => {
+  const backend = stubBackend();
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  fireEvent.click(await screen.findByRole('button', { name: /^Stage 10/ }));
+  const journal = await screen.findByLabelText('Stage 10 journal text');
+  fireEvent.change(journal, { target: { value: 'Meet at the dock' } });
+  fireEvent.blur(journal);
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
+  expect(JSON.parse(backend.SetQuestStages.mock.calls[0][2])[0].logEntries[0].logText).toBe('Meet at the dock');
+  await waitFor(() => expect(undoButton().disabled).toBe(false));
+  fireEvent.click(undoButton());
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(backend.SetQuestStages.mock.calls[1][2])[0].logEntries[0].logText).toBe('Find the courier');
+});
+
+it('Detects: the Completes the quest checkbox in the flow chart panel saves the flag on the first log entry', async () => {
+  const backend = stubBackend();
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  fireEvent.click(await screen.findByRole('button', { name: /^Stage 10/ }));
+  const outcome = await screen.findByRole('group', { name: 'Stage 10 outcome' });
+  fireEvent.click(within(outcome).getByRole('checkbox', { name: 'Completes the quest' }));
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
+  expect(JSON.parse(backend.SetQuestStages.mock.calls[0][2])[0].logEntries[0].flags).toBe(1);
+  await waitFor(() => expect((within(screen.getByRole('group', { name: 'Stage 10 outcome' }))
+    .getByRole('checkbox', { name: 'Completes the quest' }) as HTMLInputElement).checked).toBe(true));
+});
+
+it('Detects: Remove step names the objective that is kept and saves nothing until it is confirmed', async () => {
+  const backend = stubBackend();
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  fireEvent.click(await screen.findByRole('button', { name: /^Stage 10/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove step' }));
+  expect(screen.getByText(/Objective 10 is NOT removed/)).toBeTruthy();
+  expect(backend.SetQuestStages).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep stage 10' }));
+  expect(screen.getByRole('button', { name: 'Remove step' })).toBeTruthy();
+  expect(backend.SetQuestStages).not.toHaveBeenCalled();
+});
+
+it('Detects: confirming Remove step saves an empty stage list and closes the panel', async () => {
+  const backend = stubBackend();
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  fireEvent.click(await screen.findByRole('button', { name: /^Stage 10/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove step' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Yes, remove stage 10' }));
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
+  expect(JSON.parse(backend.SetQuestStages.mock.calls[0][2])).toEqual([]);
+  expect(screen.queryByRole('complementary', { name: 'Stage 10 details' })).toBeNull();
 });
 
 it('Detects: changing the outcome of a log entry with no journal text does not write an empty log text', async () => {

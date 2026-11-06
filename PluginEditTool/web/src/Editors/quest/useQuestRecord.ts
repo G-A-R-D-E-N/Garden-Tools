@@ -1,21 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getBackend } from '../../backend';
 import { errorText } from '../../errors';
 import { friendlyError, type FriendlyMessage } from '../friendlyErrors';
 import type { UndoEntry } from '../useUndoStack';
 import { readQuest, writeAliases, writeObjectives, writeStages, type QuestSnapshot } from './questBackend';
-import type { QuestAlias, QuestObjective, QuestStage } from './questModel';
+import type { QuestAlias, QuestObjective, QuestStage, StageEdit } from './questModel';
 
 export function useQuestRecord(plugin: string, formKey: string, push: (entry: UndoEntry) => void) {
   const backend = getBackend();
   const [snapshot, setSnapshot] = useState<QuestSnapshot | null>(null);
   const [error, setError] = useState<FriendlyMessage | null>(() => (backend ? null : { text: 'No backend bridge.' }));
+  const latestStages = useRef<QuestStage[]>([]);
 
   useEffect(() => {
     if (!backend) return;
     let live = true;
     readQuest(backend, plugin, formKey).then(
-      loaded => { if (live) setSnapshot(loaded); },
+      loaded => {
+        if (!live) return;
+        latestStages.current = loaded.stages;
+        setSnapshot(loaded);
+      },
       (e: unknown) => { if (live) setError(friendlyError(errorText(e))); });
     return () => { live = false; };
   }, [backend, plugin, formKey]);
@@ -37,10 +42,19 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
   const storeField = <K extends keyof QuestSnapshot>(key: K) => (value: QuestSnapshot[K]) =>
     setSnapshot(s => (s ? { ...s, [key]: value } : s));
 
-  const commitStages = (next: QuestStage[], label: string) => {
+  const editStages = (edit: StageEdit, label: string) => {
     if (!backend || !snapshot) return;
-    commit(label, snapshot.stages, next, value => writeStages(backend, plugin, formKey, value), storeField('stages'));
+    const prev = latestStages.current;
+    const next = edit(prev);
+    latestStages.current = next;
+    const store = (value: QuestStage[]) => {
+      latestStages.current = value;
+      storeField('stages')(value);
+    };
+    commit(label, prev, next, value => writeStages(backend, plugin, formKey, value), store);
   };
+
+  const commitStages = (next: QuestStage[], label: string) => editStages(() => next, label);
 
   const commitObjectives = (next: QuestObjective[], label: string) => {
     if (!backend || !snapshot) return;
@@ -52,5 +66,5 @@ export function useQuestRecord(plugin: string, formKey: string, push: (entry: Un
     commit(label, snapshot.aliases, next, value => writeAliases(backend, plugin, formKey, value), storeField('aliases'));
   };
 
-  return { snapshot, error, commitStages, commitObjectives, commitAliases };
+  return { snapshot, error, commitStages, editStages, commitObjectives, commitAliases };
 }
