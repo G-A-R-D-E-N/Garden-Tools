@@ -538,10 +538,10 @@ private:
     void dropConflictGraphLocked() const;
     std::shared_ptr<const fo4::env::Environment> borrowedEnvironment() const;
     void dropBorrowedEnvironmentLocked();
+    void dropBorrowedEnvironmentOnlyLocked();
     Result<fo4::forms::PlacedReferenceEditResult> editPlacedReferenceLocked(
         LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::PlacedReferenceEdit& edit);
     void stageCellEditLocked(LoadedPlugin& patch, fo4::Plugin mutated);
-    void syncCellEditHistoryLocked();
     Result<nlohmann::json> stepCellEditHistory(const nlohmann::json& arguments, bool undo);
     Result<fo4::forms::DuplicateResult> duplicatePlacedReferenceLocked(
         LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::DuplicateOptions& options);
@@ -579,7 +579,6 @@ private:
     mutable std::shared_ptr<const fo4::env::Environment> borrowedEnvironment_;
     mutable std::uint64_t borrowedEnvironmentEpoch_{0};
     std::map<std::string, fo4::PluginEditHistory> cellEditHistories_;
-    std::uint64_t cellEditHistoryEpoch_{0};
     mutable bool graphDirty_{true};
     mutable std::chrono::steady_clock::time_point graphLastUse_{};
     mutable std::chrono::seconds graphIdleLimit_{60};
