@@ -126,7 +126,6 @@ std::vector<std::byte> nested_info_source(bool external_pnam = false,
   fo4::test::end_record(out, quest);
   const auto quest_children = begin_group_raw(
       out, 0x00000800u, fo4::GroupType::cell_visible_distant_children);
-  const auto dial_top = fo4::test::begin_group(out, "DIAL", 0);
   const auto dial = fo4::test::begin_record(
       out, wrong_dial_signature ? "SCEN" : "DIAL", 0, 0x00000801u);
   fo4::test::ByteWriter qnam;
@@ -148,7 +147,6 @@ std::vector<std::byte> nested_info_source(bool external_pnam = false,
         out, 0x00000801u, fo4::GroupType::topic_children);
     end_group_raw(out, duplicate);
   }
-  fo4::test::end_group(out, dial_top);
   end_group_raw(out, quest_children);
   fo4::test::end_group(out, quest_top);
   return out.bytes;
@@ -170,17 +168,13 @@ std::vector<std::byte> nested_info_target(bool with_topic,
   fo4::test::end_record(out, quest);
   const auto quest_children = begin_group_raw(
       out, 0x01000800u, fo4::GroupType::cell_visible_distant_children);
-  if (!with_dial) {
-    end_group_raw(out, quest_children);
-    fo4::test::end_group(out, quest_top);
-    return out.bytes;
+  if (with_dial) {
+    const auto dial = fo4::test::begin_record(out, "DIAL", 0, 0x01000801u);
+    fo4::test::ByteWriter qnam;
+    qnam.u32(qnam_mismatch ? 0x01000899u : 0x01000800u);
+    fo4::test::write_subrecord(out, "QNAM", qnam.bytes);
+    fo4::test::end_record(out, dial);
   }
-  const auto dial_top = fo4::test::begin_group(out, "DIAL", 0);
-  const auto dial = fo4::test::begin_record(out, "DIAL", 0, 0x01000801u);
-  fo4::test::ByteWriter qnam;
-  qnam.u32(qnam_mismatch ? 0x01000899u : 0x01000800u);
-  fo4::test::write_subrecord(out, "QNAM", qnam.bytes);
-  fo4::test::end_record(out, dial);
   if (with_topic) {
     const auto topic = begin_group_raw(
         out, 0x01000801u, fo4::GroupType::topic_children);
@@ -199,11 +193,7 @@ std::vector<std::byte> nested_info_target(bool with_topic,
     }
     end_group_raw(out, topic);
   }
-  fo4::test::end_group(out, dial_top);
-  end_group_raw(out, quest_children);
-  fo4::test::end_group(out, quest_top);
   if (external_predecessor_wrong_topic) {
-    const auto wrong_dial_top = fo4::test::begin_group(out, "DIAL", 0);
     const auto wrong_dial = fo4::test::begin_record(out, "DIAL", 0, 0x01000806u);
     fo4::test::end_record(out, wrong_dial);
     const auto wrong_topic = begin_group_raw(
@@ -212,8 +202,9 @@ std::vector<std::byte> nested_info_target(bool with_topic,
     fo4::test::write_subrecord(out, "EDID", std::string_view{"MasterInfo\0", 11});
     fo4::test::end_record(out, previous);
     end_group_raw(out, wrong_topic);
-    fo4::test::end_group(out, wrong_dial_top);
   }
+  end_group_raw(out, quest_children);
+  fo4::test::end_group(out, quest_top);
   return out.bytes;
 }
 
@@ -226,7 +217,6 @@ std::vector<std::byte> same_plugin_info_source(bool with_topic = true,
   fo4::test::end_record(out, quest);
   const auto quest_children = begin_group_raw(
       out, 0x00000800u, fo4::GroupType::cell_visible_distant_children);
-  const auto dial_top = fo4::test::begin_group(out, "DIAL", 0);
   const auto dial = fo4::test::begin_record(out, "DIAL", 0, 0x00000801u);
   fo4::test::end_record(out, dial);
   if (with_topic) {
@@ -245,7 +235,6 @@ std::vector<std::byte> same_plugin_info_source(bool with_topic = true,
     }
     end_group_raw(out, topic);
   }
-  fo4::test::end_group(out, dial_top);
   end_group_raw(out, quest_children);
   fo4::test::end_group(out, quest_top);
   return out.bytes;
@@ -444,6 +433,20 @@ TEST(InfoCopyNew, CreatesOnlyMissingTopicChildrenGroup) {
   EXPECT_EQ(direct_info_keys(target, 0x01000801u),
             std::vector<fo4::FormKey>{result.new_info});
   EXPECT_NE(find_group(target, fo4::GroupType::topic_children, 0x01000801u), nullptr);
+}
+
+TEST(InfoCopyNew, CreatesTopicGroupBesideSiblingDialTopicGroup) {
+  const auto source = fo4::read_plugin(nested_info_source(), "Source.esp");
+  auto target = fo4::read_plugin(
+      nested_info_target(false, false, true, true, false, true), "Patch.esp");
+
+  const auto result = fo4::forms::copy_info_as_new(
+      target, source, fo4::FormKey::parse("000802:Source.esp"));
+  EXPECT_EQ(result.status, fo4::forms::InfoCopyNewStatus::created);
+  EXPECT_EQ(direct_info_keys(target, 0x01000801u),
+            std::vector<fo4::FormKey>{result.new_info});
+  EXPECT_EQ(direct_info_keys(target, 0x01000806u),
+            std::vector<fo4::FormKey>{fo4::FormKey::parse("000803:Base.esm")});
 }
 
 TEST(InfoCopyNew, FailsWithoutDestinationDialAndLeavesBytesUnchanged) {

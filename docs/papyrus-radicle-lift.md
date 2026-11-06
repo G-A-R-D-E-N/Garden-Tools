@@ -24,7 +24,7 @@ Radicle already has: the Papyrus VM (interpreter, scheduler, save state, quest r
 | 6 Graph | `nomad/gt-papyrus-lift-graph` | GraphTypeResolver, NodePalette, Validator, Lifter, Compiler, ScriptLoader, PapyrusSourceWriter, tool service (107 PET graph tests ported; nlohmann_json 3.12.0 via FetchContent) | Reviewed twice (APPROVE, Lows on #752), merged as PR #896. CI not read yet. `GraphTarget.cpp` stays in PET. |
 | 7 PET rewire | not started | fo4ide calls Radicle, own copies deleted, C# oracle retired | Only after the Radicle copies pass the gates below. |
 
-What stays in fo4ide: `PapyrusPanel`, the Blueprint canvas and layout, `PapyrusTarget`, `PapyrusStaging`, `GraphTarget`, wiki lookup glue.
+What stays in fo4ide: `PapyrusPanel`, the Blueprint canvas and layout, `PapyrusTarget`, `GraphTarget`, wiki lookup glue. Compile staging has moved to Radicle (`Radicle/src/papyrus/compile_staging.cpp`: `planCompile`, `stageNamespacedScripts`, `removeCompileStaging`); `PapyrusStaging` no longer exists.
 
 ## Gates to pass before PET deletes its copy
 

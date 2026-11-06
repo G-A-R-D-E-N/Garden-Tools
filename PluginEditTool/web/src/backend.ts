@@ -20,6 +20,35 @@ export interface Backend {
   SetComponents(plugin: string, record: string, componentsJson: string): Promise<string>;
   SetQuestAliases(plugin: string, record: string, aliasesJson: string): Promise<string>;
   SetQuestStages(plugin: string, record: string, stagesJson: string): Promise<string>;
+  GetQuestStages(plugin: string, formKey: string, context?: object): Promise<string | object>;
+  GetQuestObjectives(plugin: string, formKey: string, context?: object): Promise<string | object>;
+  GetQuestAliases(plugin: string, formKey: string): Promise<string | object>;
+  SetQuestObjectives(plugin: string, record: string, objectivesJson: string): Promise<string>;
+  SetQuestFragment(plugin: string, record: string, stage: number, logEntryIndex: number, scriptName: string,
+                   outputDirectory: string, importsDirectory: string, actionsJson: string):
+    Promise<string | { script: string; function: string; source: string; pex: string }>;
+  GetDialogue(plugin: string, questFormKey: string): Promise<string | object>;
+  CreateDialogueBranch(plugin: string, questFormKey: string, spec: Record<string, unknown>): Promise<string | { formKey: string }>;
+  CreateDialogueTopic(plugin: string, questFormKey: string, spec: Record<string, unknown>): Promise<string | { formKey: string }>;
+  CreateDialogueTopicBulk(plugin: string, questFormKey: string, spec: Record<string, unknown>): Promise<string | object>;
+  SetDialogueBranchStart(plugin: string, branchFormKey: string, topicFormKey: string): Promise<string>;
+  CreateInfo(plugin: string, topicFormKey: string, spec: Record<string, unknown>): Promise<string | { formKey: string }>;
+  SetInfo(plugin: string, infoFormKey: string, spec: Record<string, unknown>): Promise<string>;
+  RemoveInfo(plugin: string, infoFormKey: string): Promise<string>;
+  GetScene(plugin: string, sceneFormKey: string): Promise<string | object>;
+  CreateScene(plugin: string, questFormKey: string, spec?: Record<string, unknown>): Promise<string | { formKey: string }>;
+  SetScene(plugin: string, sceneFormKey: string, spec: Record<string, unknown>): Promise<string>;
+  AddScenePhase(plugin: string, sceneFormKey: string, index: number, spec?: Record<string, unknown>): Promise<string>;
+  SetScenePhase(plugin: string, sceneFormKey: string, phaseIndex: number, spec: Record<string, unknown>): Promise<string>;
+  MoveScenePhase(plugin: string, sceneFormKey: string, fromIndex: number, toIndex: number): Promise<string>;
+  RemoveScenePhase(plugin: string, sceneFormKey: string, phaseIndex: number): Promise<string>;
+  AddSceneActor(plugin: string, sceneFormKey: string, index: number): Promise<string>;
+  SetSceneActor(plugin: string, sceneFormKey: string, actorIndex: number, spec: Record<string, unknown>): Promise<string>;
+  RemoveSceneActor(plugin: string, sceneFormKey: string, actorIndex: number): Promise<string>;
+  AddSceneAction(plugin: string, sceneFormKey: string, index: number, type: number): Promise<string>;
+  SetSceneAction(plugin: string, sceneFormKey: string, actionIndex: number, spec: Record<string, unknown>): Promise<string>;
+  MoveSceneAction(plugin: string, sceneFormKey: string, fromIndex: number, toIndex: number): Promise<string>;
+  RemoveSceneAction(plugin: string, sceneFormKey: string, actionIndex: number): Promise<string>;
   SetConditions(plugin: string, record: string, conditionsJson: string): Promise<string>;
   AddListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
   RemoveListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
