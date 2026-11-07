@@ -4,6 +4,10 @@ import { stubBackend } from './quest/questTestHarness';
 import ReadOnlyFieldset from './ReadOnlyFieldset';
 import WritableScope from './WritableScope';
 
+type WritableBackend = ReturnType<typeof stubBackend> & {
+  CopyAsOverride: ReturnType<typeof vi.fn>;
+};
+
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const page = (onCopied?: (target: string) => void) => (
@@ -40,7 +44,7 @@ it('Detects: Copy as override calls CopyAsOverride with the read-only plugin, th
   const backend = stubBackend({
     GetEditablePlugins: vi.fn(async () => '["Other.esp"]'),
     CopyAsOverride: vi.fn(async () => 'Copied the record to Other.esp'),
-  });
+  }) as WritableBackend;
   const onCopied = vi.fn();
   render(page(onCopied));
   fireEvent.click(await screen.findByRole('button', { name: 'Copy as override' }));
