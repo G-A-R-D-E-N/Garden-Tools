@@ -48,6 +48,7 @@ type WizardBackend = ReturnType<typeof stubBackend> & {
   SetField: ReturnType<typeof vi.fn>;
   CreateSeqFile: ReturnType<typeof vi.fn>;
   SetDialogueBranchStart: ReturnType<typeof vi.fn>;
+  DeleteRecord: ReturnType<typeof vi.fn>;
 };
 
 function wizardBackend(overrides: Record<string, unknown> = {}): WizardBackend {
@@ -58,6 +59,7 @@ function wizardBackend(overrides: Record<string, unknown> = {}): WizardBackend {
     CreateRecord: vi.fn(async () => JSON.stringify({ formKey: CREATED })),
     SetField: vi.fn(async () => 'ok'),
     CreateSeqFile: vi.fn(async () => 'Wrote Patch.esp.seq.'),
+    DeleteRecord: vi.fn(async () => 'ok'),
     ...sceneStubs(),
     ...overrides,
   }) as WizardBackend;
@@ -264,6 +266,70 @@ it('Detects: when CreateRecord returns no form key, the wizard stops before any 
   expect(alert.textContent).toContain('The game did not confirm that the quest was made.');
   expect(alert.textContent).not.toContain('Part of the quest was made');
   expect(backend.SetQuestStages).not.toHaveBeenCalled();
+});
+
+it('Detects: a localized plugin disables every template with the reason shown on the plugin step and the chooser, and the wizard creates nothing', async () => {
+  const stubs = sceneStubs();
+  const backend = wizardBackend({
+    ...stubs,
+    GetActivePlugins: vi.fn(async () => JSON.stringify([{ ...PLUGINS[0], Localized: true }])),
+  });
+  render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /Talk to someone/ }));
+  await screen.findByRole('option', { name: 'Patch.esp' });
+  fireEvent.change(screen.getByLabelText('Which plugin should the quest go in?'), { target: { value: 'Patch.esp' } });
+  expect(screen.getByText(/keeps its text in string files \(it is localized\)/)).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+  for (const title of ['Fetch an item', 'Kill a target', 'Talk to someone', 'Escort', 'Choice with two endings']) {
+    expect((screen.getByRole('button', { name: new RegExp(title) }) as HTMLButtonElement).disabled).toBe(true);
+  }
+  expect(screen.getByText(/keeps its text in string files \(it is localized\)/)).toBeTruthy();
+  expect(backend.CreateRecord).not.toHaveBeenCalled();
+  expect(backend.SetQuestStages).not.toHaveBeenCalled();
+  for (const mock of Object.values(stubs)) expect(mock).not.toHaveBeenCalled();
+});
+
+it('Detects: the delete button deletes every record the failed run made, scene and dialogue first and the quest last, in reverse creation order', async () => {
+  const backend = wizardBackend({
+    CreateInfo: vi.fn(async () => { throw new Error('Localized plugin refuses this record.'); }),
+  });
+  render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  await answerTalkSteps();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', { name: 'Delete the half-made quest' }));
+  await waitFor(() => expect(backend.DeleteRecord).toHaveBeenCalledTimes(3));
+  expect(backend.DeleteRecord.mock.calls).toEqual([['Patch.esp', TOPIC], ['Patch.esp', BRANCH], ['Patch.esp', CREATED]]);
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Deleted 3 records from the half-made quest.'));
+  expect(screen.getByRole('button', { name: 'Create quest' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Open the quest anyway' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Delete the half-made quest' })).toBeNull();
+});
+
+it('Detects: a record the game refuses to delete is kept and reported, the others are deleted, and a retry deletes what is left', async () => {
+  let refuseTopic = true;
+  const backend = wizardBackend({
+    CreateInfo: vi.fn(async () => { throw new Error('Localized plugin refuses this record.'); }),
+    DeleteRecord: vi.fn(async (_plugin: string, key: string) => {
+      if (key === TOPIC && refuseTopic) throw new Error('Topic is still the start of a branch.');
+      return 'ok';
+    }),
+  });
+  render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  await answerTalkSteps();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', { name: 'Delete the half-made quest' }));
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Deleted 2 of 3 records.'));
+  expect(backend.DeleteRecord.mock.calls.map(call => call[1])).toEqual([TOPIC, BRANCH, CREATED, TOPIC]);
+  expect(screen.queryByRole('button', { name: 'Create quest' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Open the quest anyway' })).toBeNull();
+  refuseTopic = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Delete the half-made quest' }));
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Deleted 1 record from the half-made quest.'));
+  expect(backend.DeleteRecord).toHaveBeenLastCalledWith('Patch.esp', TOPIC);
+  expect(screen.getByRole('button', { name: 'Create quest' })).toBeTruthy();
 });
 
 it('Detects: a plugin that is not open for editing is not offered as the place for the new quest', async () => {

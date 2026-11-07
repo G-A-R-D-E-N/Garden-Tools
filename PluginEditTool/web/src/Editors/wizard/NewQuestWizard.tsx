@@ -9,7 +9,9 @@ import HelpTip from '../help/HelpTip';
 import { SCREEN_TOPICS } from '../help/helpContent';
 import { ErrorNote } from '../quest/questControls';
 import { buildCreateCalls } from './createCalls';
-import { isLinked, questNameError, runQuestCalls, type Answers, type FormKeys, type QuestRun } from './questCalls';
+import {
+  deleteMadeRecords, isLinked, madeRecordKeys, questNameError, runQuestCalls, type Answers, type FormKeys, type QuestRun,
+} from './questCalls';
 import { describeSceneAndDialogue } from './sceneCalls';
 import type { PluginQuestion, QuestTemplate, RecordQuestion, WizardStep } from './templateTypes';
 import { QUEST_TEMPLATES } from './templates/registry';
@@ -18,6 +20,7 @@ import './NewQuestWizard.css';
 const PLUGIN_QUESTION: PluginQuestion = {
   id: 'plugin', kind: 'plugin', label: 'Which plugin should the quest go in?', help: 'wizard-plugin',
 };
+const LOCALIZED_REASON = 'This plugin keeps its text in string files (it is localized). The wizard cannot write dialogue text into a localized plugin yet, so templates with dialogue or scenes (Talk to someone, Escort, Choice with two endings) are unavailable here. Fetch an item and Kill a target also write journal and objective text, which the wizard cannot write into a localized plugin yet, so they are unavailable too. Choose a plugin that is not localized to use the wizard.';
 
 export default function NewQuestWizard({ onBack, onCreated }: {
   onBack: () => void;
@@ -33,6 +36,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
   const [helpOpen, setHelpOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [madeKey, setMadeKey] = useState<string | null>(null);
+  const [rollback, setRollback] = useState<string[] | null>(null);
   const [error, setError] = useState<FriendlyMessage | null>(() => (backend ? null : { text: 'No backend bridge.' }));
 
   useEffect(() => {
@@ -49,6 +53,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     return () => { live = false; };
   }, [backend]);
 
+  const pluginLocalized = plugins.some(plugin => plugin.Name === answers.plugin && plugin.Localized === true);
   const flow: WizardStep[] = template ? [PLUGIN_QUESTION, ...template.questions] : [];
   const current = flow[step];
   const answered = (question: WizardStep) => (answers[question.id] ?? '').trim() !== '';
@@ -68,6 +73,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     setFormKeys({});
     setError(null);
     setMadeKey(null);
+    setRollback(null);
   };
 
   const chooseRecord = async (question: RecordQuestion, formKey: string) => {
@@ -82,20 +88,40 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     }
   };
 
+  const deleteHalfMade = async () => {
+    if (!backend || rollback === null) return;
+    setBusy(true);
+    const outcome = await deleteMadeRecords(backend, answers.plugin, rollback);
+    setBusy(false);
+    setMadeKey(prev => (prev !== null && outcome.remaining.includes(prev) ? prev : null));
+    setRollback(outcome.remaining.length > 0 ? outcome.remaining : null);
+    if (outcome.remaining.length === 0) {
+      setError({ text: `Deleted ${rollback.length} record${rollback.length === 1 ? '' : 's'} from the half-made quest. You can create the quest again.` });
+      return;
+    }
+    const failure = friendlyError(outcome.error ?? '');
+    setError({
+      ...failure,
+      text: `Deleted ${rollback.length - outcome.remaining.length} of ${rollback.length} records. The rest could not be deleted: ${failure.text} Try the delete again, or remove the rest by hand.`,
+    });
+  };
+
   const create = async () => {
-    if (!backend || !template) return;
+    if (!backend || !template || pluginLocalized) return;
     setBusy(true);
     setError(null);
     setMadeKey(null);
+    setRollback(null);
     const run: QuestRun = { formKey: null, made: new Map() };
     try {
       await runQuestCalls(backend, buildCreateCalls(template, answers, formKeys), run);
     } catch (e) {
       const failure = friendlyError(errorText(e));
       setError(run.formKey
-        ? { ...failure, text: `${failure.text} Part of the quest was made. Open it to see what is there.` }
+        ? { ...failure, text: `${failure.text} Part of the quest was made. Open it to see what is there, or delete the half-made quest.` }
         : failure);
       setMadeKey(run.formKey);
+      setRollback(run.formKey ? madeRecordKeys(run) : null);
       setBusy(false);
       return;
     }
@@ -130,16 +156,27 @@ export default function NewQuestWizard({ onBack, onCreated }: {
           editor.
         </p>
         {error && <ErrorNote error={error} />}
+        {rollback !== null && (
+          <div className="wizard-nav">
+            <button type="button" className="sidebar-action-btn" disabled={busy} onClick={() => void deleteHalfMade()}>
+              Delete the half-made quest
+            </button>
+          </div>
+        )}
 
         {template === null && (
-          <div className="editors-cards">
-            {QUEST_TEMPLATES.map(item => (
-              <button key={item.id} type="button" className="editors-card" onClick={() => choose(item)}>
-                <span className="editors-card-title">{item.title}</span>
-                <span className="editors-card-text">{item.summary}</span>
-              </button>
-            ))}
-          </div>
+          <>
+            {pluginLocalized && <p className="editor-purpose" role="note">{LOCALIZED_REASON}</p>}
+            <div className="editors-cards">
+              {QUEST_TEMPLATES.map(item => (
+                <button key={item.id} type="button" className="editors-card" disabled={pluginLocalized}
+                  onClick={() => choose(item)}>
+                  <span className="editors-card-title">{item.title}</span>
+                  <span className="editors-card-text">{item.summary}</span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         {template !== null && current && (
@@ -157,6 +194,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
                 {plugins.map(plugin => <option key={plugin.Name} value={plugin.Name}>{plugin.Name}</option>)}
               </select>
             )}
+            {current.kind === 'plugin' && pluginLocalized && <p className="editor-purpose" role="note">{LOCALIZED_REASON}</p>}
             {current.kind === 'record' && (
               <div className="wizard-answer-row">
                 <span>{answers[current.id] || 'Nothing chosen yet.'}</span>
@@ -169,7 +207,8 @@ export default function NewQuestWizard({ onBack, onCreated }: {
             <div className="wizard-nav">
               <button type="button" className="sidebar-action-btn"
                 onClick={() => (step === 0 ? setTemplate(null) : setStep(step - 1))}>Previous</button>
-              <button type="button" className="sidebar-action-btn" disabled={!answered(current) || problem !== null}
+              <button type="button" className="sidebar-action-btn"
+                disabled={!answered(current) || problem !== null || pluginLocalized}
                 onClick={() => setStep(step + 1)}>Next</button>
             </div>
           </div>
@@ -215,10 +254,13 @@ export default function NewQuestWizard({ onBack, onCreated }: {
             <div className="wizard-nav">
               <button type="button" className="sidebar-action-btn" disabled={busy}
                 onClick={() => setStep(step - 1)}>Previous</button>
-              {madeKey === null
-                ? <button type="button" className="sidebar-action-btn" disabled={busy} onClick={create}>Create quest</button>
-                : <button type="button" className="sidebar-action-btn"
-                    onClick={() => onCreated({ formKey: madeKey, plugin: answers.plugin })}>Open the quest anyway</button>}
+              {madeKey === null && rollback === null && (
+                <button type="button" className="sidebar-action-btn" disabled={busy || pluginLocalized} onClick={create}>Create quest</button>
+              )}
+              {madeKey !== null && (
+                <button type="button" className="sidebar-action-btn"
+                  onClick={() => onCreated({ formKey: madeKey, plugin: answers.plugin })}>Open the quest anyway</button>
+              )}
             </div>
           </div>
         )}

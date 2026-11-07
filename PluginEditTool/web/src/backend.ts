@@ -135,7 +135,7 @@ export interface Backend {
 export type PluginKind = 'master' | 'plugin' | 'light';
 
 export interface ActivePlugin {
-  Name: string; Kind: PluginKind; LoadOrder: number; Editable: boolean; Size: number;
+  Name: string; Kind: PluginKind; LoadOrder: number; Editable: boolean; Localized: boolean; Size: number;
 }
 export interface RecordTypeEntry { Type: string; FriendlyName: string; Count: number; }
 export interface BreadcrumbNode { Kind: string; Label: string; FormKey: string; }
