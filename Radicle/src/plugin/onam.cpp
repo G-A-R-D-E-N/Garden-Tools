@@ -20,14 +20,30 @@ std::uint64_t structure_fingerprint(const Plugin& plugin) {
          static_cast<std::uint64_t>(record_count);
 }
 
+bool same_tes4(const Record& a, const Record& b) {
+  const auto& x = a.header;
+  const auto& y = b.header;
+  return x.signature == y.signature && x.data_size == y.data_size &&
+         x.flags.value() == y.flags.value() && x.form_id.value() == y.form_id.value() &&
+         x.timestamp == y.timestamp && x.version_control == y.version_control &&
+         x.form_version == y.form_version && x.vc_version == y.vc_version &&
+         a.compressed == b.compressed && a.undecodable == b.undecodable &&
+         a.uncompressed_size == b.uncompressed_size &&
+         std::ranges::equal(a.subrecords, b.subrecords, [](const Subrecord& left, const Subrecord& right) {
+           return left.signature == right.signature && left.data == right.data &&
+                  left.extended_size == right.extended_size;
+         });
+}
+
 bool original_structure_is_intact(const Plugin& plugin) {
   if (plugin.original_structure_fingerprint == 0 ||
       structure_fingerprint(plugin) != plugin.original_structure_fingerprint) {
     return false;
   }
   return std::ranges::all_of(collect_records(plugin),
-                             [](const Record* record) {
-                               return !record->original_range.empty();
+                             [&](const Record* record) {
+                               return !record->original_range.empty() ||
+                                      (record == &plugin.tes4 && tes4_matches_hedr_repair(plugin));
                              });
 }
 
@@ -79,6 +95,10 @@ Subrecord make_onam(std::span<const RawFormId> form_ids) {
 }
 
 }  // namespace
+
+bool tes4_matches_hedr_repair(const Plugin& plugin) {
+  return plugin.tes4_after_hedr_repair && same_tes4(plugin.tes4, *plugin.tes4_after_hedr_repair);
+}
 
 void rebuild_tes4_onam(Plugin& plugin, bool preserve_intact_structure) {
   if (preserve_intact_structure && original_structure_is_intact(plugin)) return;

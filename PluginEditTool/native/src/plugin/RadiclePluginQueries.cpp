@@ -227,6 +227,7 @@ Result<nlohmann::json> RadiclePluginBackend::getActivePlugins() const {
             {"Kind", pluginKind(loaded.plugin)},
             {"LoadOrder", index},
             {"Editable", isEditable(loaded)},
+            {"Localized", loaded.plugin.header.tes4_flags.is_localized()},
             {"Pending", loaded.dirty || hasStagedStringTables(loaded.name)},
             {"Size", fo4::plugin_original_bytes(loaded.plugin).size()}
         });
@@ -588,6 +589,22 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
         {"masters", std::move(masters)},
         {"light", fo4::classify_plugin_kind(loaded->plugin.header.tes4_flags, loaded->plugin.key) == fo4::PluginKind::light}
     }.dump());
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getPlugins() const {
+    nlohmann::json rows = nlohmann::json::array();
+    OpLock lock(*this, OpLock::Mode::Read);
+    for (const auto& loaded : plugins_) {
+        rows.push_back({
+            {"Key", loaded.name},
+            {"ConflictStatus", 0},
+            {"IsRecordNode", false},
+            {"HasChildren", !loaded.plugin.groups.empty()},
+            {"FilePath", loaded.path.string()},
+            {"Pending", loaded.dirty || hasStagedStringTables(loaded.name)}
+        });
+    }
+    return nlohmann::json(rows.dump());
 }
 
 }

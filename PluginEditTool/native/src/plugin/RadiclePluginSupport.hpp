@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <format>
 #include <limits>
 #include <optional>
@@ -24,6 +25,9 @@
 #include <fo4/plugin/reader.hpp>
 
 namespace fo4ide::plugin::support {
+
+bool sameLocalizedPath(const std::filesystem::path& left, const std::filesystem::path& right);
+bool sameLocalizedSpelling(const std::filesystem::path& left, const std::filesystem::path& right);
 
 struct EslSlots {
     std::uint32_t first;
@@ -137,7 +141,7 @@ inline Result<std::string> stringLanguage(const nlohmann::json& arguments) {
             "string table language must be an alphanumeric token"
         });
     }
-    return language;
+    return fo4::text::fold(language);
 }
 
 inline std::string displayText(std::string_view language, const std::vector<std::byte>& bytes) {

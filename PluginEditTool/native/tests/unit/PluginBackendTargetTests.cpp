@@ -231,6 +231,66 @@ public:
         return recordTypedCall("RemoveScriptProperty", args);
     }
 
+    fo4ide::Result<nlohmann::json> setInfoFragment(const nlohmann::json& args) override {
+        return recordTypedCall("SetInfoFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addInfoFragment(const nlohmann::json& args) override {
+        return recordTypedCall("AddInfoFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeInfoFragment(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveInfoFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> setScenePhaseFragment(const nlohmann::json& args) override {
+        return recordTypedCall("SetScenePhaseFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addScenePhaseFragment(const nlohmann::json& args) override {
+        return recordTypedCall("AddScenePhaseFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveScenePhaseFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeQuestFragment(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveQuestFragment", args);
+    }
+
+    fo4ide::Result<nlohmann::json> getQuestFragments(const nlohmann::json& args) const override {
+        return recordTypedCall("GetQuestFragments", args);
+    }
+
+    fo4ide::Result<nlohmann::json> getQuestScript(const nlohmann::json& args) const override {
+        return recordTypedCall("GetQuestScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> editQuestScript(const nlohmann::json& args) override {
+        return recordTypedCall("EditQuestScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addAliasScript(const nlohmann::json& args) override {
+        return recordTypedCall("AddAliasScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeAliasScript(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveAliasScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addAliasScriptProperty(const nlohmann::json& args) override {
+        return recordTypedCall("AddAliasScriptProperty", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeAliasScriptProperty(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveAliasScriptProperty", args);
+    }
+
+    fo4ide::Result<nlohmann::json> setAliasScriptValue(const nlohmann::json& args) override {
+        return recordTypedCall("SetAliasScriptValue", args);
+    }
+
     fo4ide::Result<nlohmann::json> releaseMemory(const nlohmann::json& args) override {
         return recordTypedCall("ReleaseMemory", args);
     }
@@ -586,6 +646,16 @@ TEST_CASE("Cell search routes through the native record index and honors its lim
     CHECK(backend.invokedBackendArguments[1] == "WRLD");
 }
 
+TEST_CASE("Cell ResolveWorldspaceId reaches the plugin backend resolver") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "cell");
+
+    const auto result = target.invoke("ResolveWorldspaceId", nlohmann::json::array({"WorldOne"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "CellBackendUnavailable");
+    CHECK(backend.invokedOperation.empty());
+}
+
 TEST_CASE("Cell GetPlugins reuses the native environment plugin list") {
     RoutingBackend backend;
     fo4ide::app::PluginBackendTarget target(backend, "cell");
@@ -694,7 +764,12 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
         "EditFactionEntries", "GetWeaponDamageTypes", "GetPerkEffects", "SetPerkEffects", "CreatePlacedObject",
         "CreateInteriorCell", "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound",
         "AddPackageProcedure", "RemovePackageProcedure",
-        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty", "ReleaseMemory"};
+        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty", "AddAliasScript",
+        "RemoveAliasScript", "AddAliasScriptProperty", "RemoveAliasScriptProperty", "SetAliasScriptValue",
+        "ReleaseMemory",
+        "SetInfoFragment", "AddInfoFragment", "RemoveInfoFragment",
+        "SetScenePhaseFragment", "AddScenePhaseFragment", "RemoveScenePhaseFragment",
+        "RemoveQuestFragment", "GetQuestFragments", "GetQuestScript", "EditQuestScript"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());
@@ -733,6 +808,15 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.removeScript(args), "ScriptBackendUnavailable");
     unavailable(base.addScriptProperty(args), "ScriptBackendUnavailable");
     unavailable(base.removeScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.removeQuestFragment(args), "QuestFragmentBackendUnavailable");
+    unavailable(base.getQuestFragments(args), "QuestFragmentBackendUnavailable");
+    unavailable(base.getQuestScript(args), "QuestScriptBackendUnavailable");
+    unavailable(base.editQuestScript(args), "QuestScriptBackendUnavailable");
+    unavailable(base.addAliasScript(args), "ScriptBackendUnavailable");
+    unavailable(base.removeAliasScript(args), "ScriptBackendUnavailable");
+    unavailable(base.addAliasScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.removeAliasScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.setAliasScriptValue(args), "ScriptBackendUnavailable");
     unavailable(base.getLeveledList(args), "LeveledListBackendUnavailable");
     unavailable(base.setLeveledListSettings(args), "LeveledListBackendUnavailable");
     unavailable(base.editLeveledListEntry(args), "LeveledListBackendUnavailable");
@@ -743,4 +827,10 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.getWeaponDamageTypes(args), "WeaponBackendUnavailable");
     unavailable(base.getPerkEffects(args), "PerkBackendUnavailable");
     unavailable(base.setPerkEffects(args), "PerkBackendUnavailable");
+    unavailable(base.setInfoFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.addInfoFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.removeInfoFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.setScenePhaseFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.addScenePhaseFragment(args), "FragmentBackendUnavailable");
+    unavailable(base.removeScenePhaseFragment(args), "FragmentBackendUnavailable");
 }

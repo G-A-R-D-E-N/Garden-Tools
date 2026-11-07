@@ -43,11 +43,16 @@ void emit(std::vector<CheckFinding>& out, const Plugin& plugin, const FormKey& r
 }  // namespace
 
 std::vector<CheckFinding> check_record_levels(const Plugin& plugin) {
+  return check_record_levels(plugin, collect_records(plugin));
+}
+
+std::vector<CheckFinding> check_record_levels(const Plugin& plugin,
+                                              std::span<const Record* const> records) {
   std::vector<CheckFinding> out;
   const auto master_count = plugin.header.masters.size();
   const bool light = plugin.header.tes4_flags.is_small_file();
   const auto context = plugin_form_id_context(plugin);
-  for (const auto* record : collect_records(plugin)) {
+  for (const auto* record : records) {
     const auto raw = record->header.form_id;
     if (raw.is_null()) continue;
     const auto index = static_cast<std::size_t>(raw.index_byte());

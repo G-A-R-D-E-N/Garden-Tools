@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -60,6 +61,31 @@ bool default_usable(const Plugin& plugin,
   if (!rule.has_default()) return false;
   return !(plugin.header.tes4_flags.is_localized() &&
            schema::is_localized_field(record, rule.signature));
+}
+
+std::optional<std::uint32_t> supplied_id(const Plugin& plugin,
+                                         Signature record,
+                                         std::span<const LocalizedRowId> ids,
+                                         Signature subrecord) {
+  if (!plugin.header.tes4_flags.is_localized() || !schema::is_localized_field(record, subrecord)) {
+    return std::nullopt;
+  }
+  for (const auto& id : ids) {
+    if (id.subrecord == subrecord) return id.id;
+  }
+  return std::nullopt;
+}
+
+std::vector<std::byte> row_payload(const Plugin& plugin,
+                                   const Record& record,
+                                   const schema::SubrecordAuthoringConstraint& rule,
+                                   std::span<const LocalizedRowId> ids) {
+  if (const auto id = supplied_id(plugin, record.header.signature, ids, rule.signature)) {
+    std::vector<std::byte> bytes(4);
+    std::memcpy(bytes.data(), &*id, bytes.size());
+    return bytes;
+  }
+  return default_payload(plugin, record, rule);
 }
 
 std::vector<std::size_t> subrecord_counts(Rules rules, const Record& record) {
@@ -217,7 +243,8 @@ RecordCreateResult create_with_rules(Plugin& plugin,
                                      Signature signature,
                                      std::string_view editor_id,
                                      Rules explicit_rules,
-                                     bool explicit_given) {
+                                     bool explicit_given,
+                                     std::span<const LocalizedRowId> ids) {
   const auto rules = explicit_given ? explicit_rules : generated_rules(signature);
   if (rules.empty()) return {RecordCreateStatus::not_authorable, {}};
   const auto constraint = schema::record_authoring_constraint(signature);
@@ -237,7 +264,9 @@ RecordCreateResult create_with_rules(Plugin& plugin,
             ? (!explicit_given && rule.maximum == 1 && default_usable(plugin, signature, rule))
             : editable(rule);
     if (!creatable) return {RecordCreateStatus::not_authorable, {}};
-    if (!default_usable(plugin, signature, rule)) return {RecordCreateStatus::no_default, {}};
+    if (!default_usable(plugin, signature, rule) && !supplied_id(plugin, signature, ids, rule.signature)) {
+      return {RecordCreateStatus::no_default, {}};
+    }
   }
 
   Record built;
@@ -253,7 +282,7 @@ RecordCreateResult create_with_rules(Plugin& plugin,
     }
     for (std::uint16_t count = 0; count < rule.minimum; ++count) {
       built.subrecords.push_back(
-          Subrecord{rule.signature, default_payload(plugin, built, rule), false});
+          Subrecord{rule.signature, row_payload(plugin, built, rule, ids), false});
     }
   }
 
@@ -297,14 +326,29 @@ SubrecordRemoveStatus remove_record_subrecord(Plugin& plugin,
 }
 
 RecordCreateResult create_record(Plugin& plugin, Signature record, std::string_view editor_id) {
-  return create_with_rules(plugin, record, editor_id, {}, false);
+  return create_with_rules(plugin, record, editor_id, {}, false, {});
 }
 
 RecordCreateResult create_record(Plugin& plugin,
                                  Signature record,
                                  std::string_view editor_id,
                                  Rules rules) {
-  return create_with_rules(plugin, record, editor_id, rules, true);
+  return create_with_rules(plugin, record, editor_id, rules, true, {});
+}
+
+RecordCreateResult create_record_with_localized_rows(Plugin& plugin,
+                                                     Signature record,
+                                                     std::string_view editor_id,
+                                                     std::span<const LocalizedRowId> localized_ids) {
+  return create_with_rules(plugin, record, editor_id, {}, false, localized_ids);
+}
+
+RecordCreateResult create_record_with_localized_rows(Plugin& plugin,
+                                                     Signature record,
+                                                     std::string_view editor_id,
+                                                     std::span<const LocalizedRowId> localized_ids,
+                                                     Rules rules) {
+  return create_with_rules(plugin, record, editor_id, rules, true, localized_ids);
 }
 
 }  // namespace fo4

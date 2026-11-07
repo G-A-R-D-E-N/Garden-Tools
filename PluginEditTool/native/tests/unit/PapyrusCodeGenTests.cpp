@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -36,7 +37,7 @@ using fo4ide::papyrus::TypeChecker;
 std::string uniqueRoot() {
     const auto base = std::filesystem::temp_directory_path() / "fo4re-codegen";
     std::filesystem::create_directories(base);
-    return (base / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
+    return (base / fo4ide_test::uniqueTempName())
         .string();
 }
 
@@ -746,4 +747,65 @@ TEST_CASE("CodeGen a debug only call is dropped only when asked for") {
     REQUIRE(stripped.success);
     REQUIRE(stripped.pex != nullptr);
     CHECK(listing(function(stripped.pex->objects[0], "Go")).empty());
+}
+
+TEST_CASE("CodeGen a Script#Struct[] parameter resolves to the struct of the imported script") {
+    Fixture f;
+    f.writeWithScriptObject();
+    f.write("Holder", "Scriptname Holder\nStruct Memory\n    int fId = 0\nEndStruct\n");
+    f.write("Consumer",
+            "Scriptname Consumer\nFunction Take(Holder#Memory[] akItems)\nEndFunction\n"
+            "Function Go()\n    Holder#Memory[] items = new Holder#Memory[2]\n    Take(items)\n"
+            "EndFunction\n");
+    const auto result = f.compile("Consumer");
+    std::string joined;
+    for (const auto& d : result.diagnostics) joined += d.toString() + " | ";
+    INFO("diagnostics: " << joined);
+    CHECK(joined.empty());
+    CHECK(result.success);
+}
+
+TEST_CASE("CodeGen a call through an object binds to the function not a same-named property") {
+    Fixture f;
+    f.writeWithScriptObject();
+    f.write("Holder",
+            "Scriptname Holder\nint Property Dive Auto\n"
+            "Function Dive(float paulCut = 0.5)\nEndFunction\n");
+    f.write("Caller",
+            "Scriptname Caller\nHolder Property Target Auto\n"
+            "Function Go()\n    Target.Dive()\nEndFunction\n");
+    const auto result = f.compile("Caller");
+    std::string joined;
+    for (const auto& d : result.diagnostics) joined += d.toString() + " | ";
+    INFO("diagnostics: " << joined);
+    REQUIRE(result.success);
+    CHECK(joined.empty());
+
+    const auto lines = listing(function(result.pex->objects[0], "Go"));
+    CHECK(std::any_of(lines.begin(), lines.end(), [](const std::string& line) {
+        return line.rfind("callmethod Dive ", 0) == 0;
+    }));
+    CHECK(std::none_of(lines.begin(), lines.end(), [](const std::string& line) {
+        return line.rfind("propget", 0) == 0;
+    }));
+}
+
+TEST_CASE("CodeGen a bare call inside the owning script binds to the function not the property") {
+    Fixture f;
+    f.writeWithScriptObject();
+    f.write("Owner",
+            "Scriptname Owner\nint Property Dive Auto\n"
+            "Function Dive(float paulCut = 0.5)\nEndFunction\n"
+            "Function Go()\n    Dive()\nEndFunction\n");
+    const auto result = f.compile("Owner");
+    std::string joined;
+    for (const auto& d : result.diagnostics) joined += d.toString() + " | ";
+    INFO("diagnostics: " << joined);
+    REQUIRE(result.success);
+    CHECK(joined.empty());
+
+    const auto lines = listing(function(result.pex->objects[0], "Go"));
+    CHECK(std::any_of(lines.begin(), lines.end(), [](const std::string& line) {
+        return line.rfind("callmethod Dive ", 0) == 0;
+    }));
 }

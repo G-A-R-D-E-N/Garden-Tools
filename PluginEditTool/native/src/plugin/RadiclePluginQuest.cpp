@@ -1,4 +1,5 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <array>
@@ -26,6 +27,7 @@
 #include <fo4/forms/quest.hpp>
 #include <fo4/graph/conflict_graph.hpp>
 #include <fo4/io/atomic_write.hpp>
+#include <fo4/io/path_text.hpp>
 #include <fo4/localization/strings.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
@@ -34,6 +36,7 @@
 #include <fo4/schema/localized_fields.hpp>
 #include <fo4/schema/vmad.hpp>
 #include <fo4/signature.hpp>
+#include <fo4/text/encoding.hpp>
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 
 #include "RadiclePluginQuestInternal.hpp"
@@ -41,6 +44,7 @@
 namespace fo4ide::plugin {
 
 using namespace questinternal;
+using fo4::env::StringSource;
 
 #ifdef FO4IDE_TEST_HOOKS
 void setLocalizedQuestBeforeCommitHook(LocalizedQuestBeforeCommitHook hook) {
@@ -56,11 +60,13 @@ namespace {
 
 bool knownStageKey(std::string_view key) {
     return key == "index" || key == "flags" || key == "logEntry" ||
-           key == "logEntries" || key == "complete" || key == "fail";
+           key == "logEntries" || key == "complete" || key == "fail" ||
+           key == "startUp" || key == "flagNames" || key == "unknownFlagBits";
 }
 
 bool knownLogEntryKey(std::string_view key) {
-    return key == "flags" || key == "note" || key == "logText" || key == "conditions";
+    return key == "flags" || key == "note" || key == "logText" || key == "conditions" ||
+           key == "logTextId" || key == "textMissing" || key == "conditionsUnreadable";
 }
 
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
@@ -96,6 +102,7 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                         adapterConditionUnrepresentable(plugin, graph, condition)) {
                     return error;
                 }
+                if (const auto error = nonFiniteConditionError(condition)) return error;
             }
             bool sawNam2 = false;
             bool sawCnam = false;
@@ -210,16 +217,23 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
     const bool localized = loaded->plugin.header.tes4_flags.is_localized();
     fo4::forms::QuestStages previousStages;
     std::optional<LocalizedQuestTables> localizedTables;
+    std::optional<StagedLocalization> localizationState;
+    std::optional<LocalizedStringAllocation> sourceAllocation;
     if (localized && arguments.is_array() && arguments.size() > 3) {
         localizedTables.emplace();
         std::filesystem::path stringsDirectory;
         if (arguments[3].is_object() && arguments[3].contains("stringsDirectory") &&
             arguments[3]["stringsDirectory"].is_string()) {
-            stringsDirectory = arguments[3]["stringsDirectory"].get<std::string>();
+            stringsDirectory = fo4::io::from_utf8(arguments[3]["stringsDirectory"].get<std::string>());
         }
+        bool allowAbsent = false;
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+        allowAbsent = !stringsDirectory.empty() && !testJournalRoot_.empty() && !dataDirectory_.empty() &&
+            support::sameLocalizedPath(stringsDirectory, loaded->path.parent_path() / "Strings");
+#endif
         const auto allowedDirectory =
             stringsDirectory.empty() ? std::nullopt
-                                     : allowedLocalizationDirectory(stringsDirectory);
+                                     : allowedLocalizationDirectory(stringsDirectory, allowAbsent);
         if (!stringsDirectory.empty() && !allowedDirectory.has_value()) {
             return std::unexpected(Error{
                 "LocalizedSidecarPathNotAllowed",
@@ -227,56 +241,82 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     stringsDirectory.string()
             });
         }
-        if (hasStagedStringTables(loaded->name)) {
-            return std::unexpected(Error{
-                "LocalizedEditBlockedByPendingStrings",
-                "Save or discard the pending string edits before editing localized quest text"
-            });
-        }
         if (const auto error = loadLocalizedQuestTables(
                 arguments, loaded->path,
-                allowedDirectory.value_or(std::filesystem::path{}), *localizedTables)) {
+                allowedDirectory.value_or(std::filesystem::path{}), *localizedTables, allowAbsent)) {
             return std::unexpected(*error);
         }
-        if (loaded->stagedLocalization.has_value()) {
-            const auto& staged = *loaded->stagedLocalization;
-            if (staged.dlstringsPath != localizedTables->dlstringsPath ||
-                staged.stringsPath != localizedTables->stringsPath ||
-                staged.ilstringsPath != localizedTables->ilstringsPath) {
-                return std::unexpected(Error{
-                    "LocalizedSidecarPathNotAllowed",
-                    "pending localization sidecars do not match the requested stringsDirectory"
-                });
-            }
-            try {
-                localizedTables->dlstrings = fo4::localization::read_string_table(
-                    staged.dlstringsBytes,
-                    fo4::localization::StringTableKind::dlstrings);
-            } catch (const std::exception& error) {
-                return std::unexpected(Error{
-                    "LocalizedLogTableInvalid",
-                    "could not parse staged DLSTRINGS: " + std::string(error.what())
-                });
-            }
-            localizedTables->originalStringsBytes = staged.originalStringsBytes;
-            localizedTables->originalDlstringsBytes = staged.originalDlstringsBytes;
-            localizedTables->originalIlstringsBytes = staged.originalIlstringsBytes;
-            std::uint32_t maximum = 0;
-            for (const auto* table : {&localizedTables->strings,
-                                      &localizedTables->dlstrings,
-                                      &localizedTables->ilstrings}) {
-                for (const auto& entry : table->entries) {
-                    maximum = std::max(maximum, entry.id);
+        auto loadedLocalization = loaded->stagedLocalization.value_or(StagedLocalization{});
+        const auto overlay = [&](const std::filesystem::path& path,
+                                 std::string_view kind,
+                                 StringSource source,
+                                 fo4::localization::LocalizedStringTable& table,
+                                 const std::vector<std::byte>& original, bool originalExists)
+            -> std::optional<Error> {
+            auto file = localizationFile(path.parent_path(), fo4::io::utf8(path.filename()),
+                                         kind, localizedTables->language, original, originalExists);
+            if (!file) return Error{"LocalizedSidecarPathNotAllowed", "localized table is outside an approved writable root"};
+            if (auto staged = stagedStringTable(loaded->name, localizedTables->language, source, path)) {
+                if (staged->file.originalExists != file->originalExists ||
+                    staged->file.originalSize != file->originalSize ||
+                    staged->file.originalHash != file->originalHash) {
+                    return Error{"LocalizedSidecarChangedOnDisk", "localized sibling table changed after it was staged; reload before writing"};
                 }
+                table = std::move(staged->table);
+                *file = std::move(staged->file);
             }
-            if (maximum == std::numeric_limits<std::uint32_t>::max()) {
-                return std::unexpected(Error{
-                    "LocalizedLogTableFull",
-                    "localized string-table ID space is exhausted"
-                });
+            file->finalBytes.clear();
+            file->verifyOnly = true;
+            const auto previous = std::find_if(loadedLocalization.participants.begin(), loadedLocalization.participants.end(),
+                [&](const StagedLocalizationFile& item) { return support::sameLocalizedPath(item.path, file->path); });
+            if (previous == loadedLocalization.participants.end()) loadedLocalization.participants.push_back(std::move(*file));
+            else if (previous->originalExists != file->originalExists ||
+                     previous->originalSize != file->originalSize ||
+                     previous->originalHash != file->originalHash) {
+                return Error{"LocalizedSidecarChangedOnDisk", "localized sibling table baseline changed while editing"};
             }
-            localizedTables->nextId = maximum + 1;
+            return std::nullopt;
+        };
+        if (const auto error = overlay(localizedTables->stringsPath, "strings", StringSource::normal,
+                                       localizedTables->strings, localizedTables->originalStringsBytes, localizedTables->stringsExist)) return std::unexpected(*error);
+        if (const auto error = overlay(localizedTables->dlstringsPath, "dlstrings", StringSource::dl,
+                                       localizedTables->dlstrings, localizedTables->originalDlstringsBytes, localizedTables->dlstringsExist)) return std::unexpected(*error);
+        if (const auto error = overlay(localizedTables->ilstringsPath, "ilstrings", StringSource::il,
+                                       localizedTables->ilstrings, localizedTables->originalIlstringsBytes, localizedTables->ilstringsExist)) return std::unexpected(*error);
+        std::uint32_t maximum = 0;
+        for (const auto* table : {&localizedTables->strings, &localizedTables->dlstrings, &localizedTables->ilstrings}) {
+            for (const auto& entry : table->entries) maximum = std::max(maximum, entry.id);
         }
+        if (maximum == std::numeric_limits<std::uint32_t>::max()) return std::unexpected(Error{"LocalizedLogTableFull", "localized string-table ID space is exhausted"});
+        localizedTables->nextId = maximum + 1;
+        bool heldSources = false;
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+        if (!testJournalRoot_.empty() && (!dataDirectory_.empty() ||
+            (loaded->stagedAllocation && loaded->stagedAllocation->heldGeneration))) {
+            if (!support::sameLocalizedPath(localizedTables->stringsPath.parent_path(), loaded->path.parent_path() / "Strings"))
+                return std::unexpected(Error{"LocalizedSourcesUnavailable", "custom quest string roots require held-source authorization"});
+            auto held = testOpenHeldLocalizedStrings(*loaded, localizedTables->language);
+            if (!held) return std::unexpected(held.error());
+            for (const auto& snapshot : held->sourceSnapshots) {
+                if ((snapshot.resolved.source == StringSource::normal && !localizedTables->stringsExist) ||
+                    (snapshot.resolved.source == StringSource::dl && !localizedTables->dlstringsExist) ||
+                    (snapshot.resolved.source == StringSource::il && !localizedTables->ilstringsExist))
+                    return std::unexpected(Error{"LocalizedAllocationSnapshotUnsupported", "a missing destination resolves to another source"});
+            }
+            localizedTables->nextId = std::max(localizedTables->nextId, held->nextId);
+            sourceAllocation.emplace(std::move(*held)); heldSources = true;
+        }
+#endif
+        if (!heldSources) {
+            sourceAllocation.emplace(); sourceAllocation->language = localizedTables->language;
+            const auto globalNext = nextLocalizedStringId(*loaded, &*sourceAllocation);
+            if (!globalNext) return std::unexpected(globalNext.error());
+            sourceAllocation->sourceSnapshots = sourceAllocation->allocationSources.at(sourceAllocation->language);
+            const auto combined = includeLocalizedDirectory(*loaded, *sourceAllocation, localizedTables->stringsPath.parent_path(), *globalNext);
+            if (!combined) return std::unexpected(combined.error());
+            localizedTables->nextId = std::max(localizedTables->nextId, *combined);
+        }
+        localizationState = std::move(loadedLocalization);
     }
     try {
         previousStages = fo4::forms::decode_quest_stages(loaded->plugin, questKey);
@@ -295,7 +335,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
     fo4::forms::QuestStages stages;
     std::vector<std::vector<std::vector<PendingQuestCondition>>> pendingConditions;
     std::vector<fo4::FormKey> conditionKeys;
+    bool rawConditionsPresent = false;
     std::set<std::uint16_t> indexes;
+    std::vector<std::vector<bool>> textMissingLogs;
 
     for (const auto& element : *stagesJson) {
         if (!element.is_object()) {
@@ -309,6 +351,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         }
         fo4::forms::QuestStage stage;
         pendingConditions.emplace_back();
+        textMissingLogs.emplace_back();
         std::uint32_t index = 0;
         std::uint32_t flags = 0;
         if (!questUnsigned(element, "index", 0, index) ||
@@ -324,14 +367,29 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 "stage flags must be 0..255"
             });
         }
+        const auto startUpField = element.find("startUp");
+        if (startUpField != element.end() && !startUpField->is_null() &&
+            !startUpField->is_boolean()) {
+            return std::unexpected(Error{
+                "InvalidQuestStagePayload",
+                "startUp must be a boolean"
+            });
+        }
         stage.index = static_cast<std::uint16_t>(index);
-        stage.flags = static_cast<std::uint8_t>(flags);
+        const bool hasRawFlags = element.contains("flags") && !element["flags"].is_null();
+        const bool hasStartUp = startUpField != element.end() && startUpField->is_boolean();
         for (const auto& previous : previousStages.stages) {
             if (previous.index == stage.index) {
                 stage.unknown = previous.unknown;
+                if (hasStartUp && !hasRawFlags) flags = previous.flags;
                 break;
             }
         }
+        if (hasStartUp) {
+            constexpr auto runOnStart = static_cast<std::uint32_t>(fo4::forms::QuestStageFlag::RunOnStart);
+            flags = startUpField->get<bool>() ? (flags | runOnStart) : (flags & ~runOnStart);
+        }
+        stage.flags = static_cast<std::uint8_t>(flags);
         if (!indexes.insert(stage.index).second) {
             return std::unexpected(Error{
                 "InvalidQuestStagePayload",
@@ -406,6 +464,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             entries.push_back(std::move(one));
         }
 
+        std::vector<bool> omittedConditions;
         for (const auto& entryJson : entries) {
             if (!entryJson.is_object()) {
                 return std::unexpected(Error{
@@ -449,6 +508,9 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                         "note cannot contain an embedded NUL"
                     });
                 }
+                const auto encoded = fo4::text::utf8_to_windows1252(*note);
+                if (!encoded) return std::unexpected(Error{"InvalidQuestStagePayload", "note must be representable in Windows-1252"});
+                note = *encoded;
                 entry.note = note;
                 fo4::Subrecord nam2;
                 nam2.signature = fo4::Signature::from_string("NAM2");
@@ -462,6 +524,11 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                         "logText cannot contain an embedded NUL"
                     });
                 }
+                if (!localized) {
+                    const auto encoded = fo4::text::utf8_to_windows1252(*logText);
+                    if (!encoded) return std::unexpected(Error{"InvalidQuestStagePayload", "logText must be representable in Windows-1252"});
+                    logText = *encoded;
+                }
                 fo4::schema::LocalizedString value;
                 value.text = logText;
                 entry.log_text = value;
@@ -470,8 +537,28 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 cnam.data = fo4::schema::write_localized_string(value);
                 entry.members.push_back(std::move(cnam));
             }
+            if (localized && entryJson.contains("logTextId") && !logText.has_value()) {
+                return std::unexpected(Error{
+                    "InvalidQuestStagePayload",
+                    "a localized log entry with logTextId must also send logText, or drop logTextId; omitting logText would drop the CNAM"
+                });
+            }
+            bool textMissing = false;
+            if (const auto field = entryJson.find("textMissing"); field != entryJson.end() && !field->is_null()) {
+                if (!field->is_boolean()) {
+                    return std::unexpected(Error{"InvalidQuestStagePayload", "log entry textMissing must be a boolean"});
+                }
+                textMissing = field->get<bool>();
+            }
+            if (textMissing && !logText.has_value()) {
+                return std::unexpected(Error{
+                    "InvalidQuestStagePayload",
+                    "a log entry with textMissing must also send logText (empty) so its existing ID is kept"
+                });
+            }
             std::vector<PendingQuestCondition> parsedConditions;
-            if (entryJson.contains("conditions") && !entryJson["conditions"].is_null()) {
+            const bool conditionsGiven = entryJson.contains("conditions");
+            if (conditionsGiven && !entryJson["conditions"].is_null()) {
                 if (!entryJson["conditions"].is_array()) {
                     return std::unexpected(Error{
                         "InvalidQuestStagePayload",
@@ -480,17 +567,35 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 }
                 for (const auto& conditionJson : entryJson["conditions"]) {
                     PendingQuestCondition pending;
-                    if (const auto error = parseQuestCondition(
-                            conditionJson, graph_, pending, conditionKeys)) {
+                    if (const auto error = parseQuestStageCondition(
+                            conditionJson, loaded->plugin, graph_, pending, conditionKeys)) {
                         return std::unexpected(*error);
                     }
+                    rawConditionsPresent = rawConditionsPresent || pending.preserved;
                     parsedConditions.push_back(std::move(pending));
                 }
             }
+            omittedConditions.push_back(!conditionsGiven);
+            textMissingLogs.back().push_back(textMissing);
             stage.log_entries.push_back(std::move(entry));
             pendingConditions.back().push_back(std::move(parsedConditions));
         }
+        if (const auto error = checkOmittedStageConditions(
+                previousStages, stage.index, stage.log_entries.size(), omittedConditions)) {
+            return std::unexpected(*error);
+        }
+        for (std::size_t entryIndex = 0; entryIndex < omittedConditions.size(); ++entryIndex) {
+            if (!omittedConditions[entryIndex]) continue;
+            auto carried = carriedStageConditionRun(
+                previousStages, stage.index, entryIndex, stage.log_entries.size());
+            rawConditionsPresent = rawConditionsPresent || !carried.empty();
+            auto& members = stage.log_entries[entryIndex].members;
+            members.insert(members.begin(), carried.begin(), carried.end());
+        }
         stages.stages.push_back(std::move(stage));
+    }
+    if (const auto error = refuseOwnerMasterShift(loaded->plugin, conditionKeys, rawConditionsPresent)) {
+        return std::unexpected(*error);
     }
 
     try {
@@ -523,17 +628,23 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                             localizedTables->language, *entry.log_text->text, text)) {
                         return std::unexpected(*error);
                     }
+                    const bool textMissing = textMissingLogs[stageIndex][entryIndex];
+                    if (textMissing && !previousId.has_value()) {
+                        return std::unexpected(Error{
+                            "InvalidQuestStagePayload",
+                            "a log entry with textMissing has no existing CNAM ID to keep; reload the quest"
+                        });
+                    }
                     if (previousId.has_value()) {
                         const auto* previousText = fo4::localization::find_string(
                             localizedTables->dlstrings, *previousId);
-                        if (previousText == nullptr) {
-                            return std::unexpected(Error{
-                                "LocalizedLogTableInvalid",
-                                "DLSTRINGS is missing existing QUST CNAM ID " +
-                                    std::to_string(*previousId)
-                            });
+                        if (text.empty() && previousText == nullptr) {
+                            id = *previousId;
+                        } else if (previousText != nullptr && previousText->text == text) {
+                            id = *previousId;
+                        } else if (text.empty()) {
+                            id = 0u;
                         }
-                        if (previousText->text == text) id = *previousId;
                     }
                     if (!id.has_value()) {
                         if (localizedTables->nextId == std::numeric_limits<std::uint32_t>::max()) {
@@ -568,26 +679,38 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 const auto& pending = pendingConditions[stageIndex][entryIndex];
                 if (pending.empty()) continue;
                 std::vector<fo4::CtdaCondition> encoded;
+                std::vector<fo4::CtdaCondition> fresh;
+                std::vector<std::size_t> freshPositions;
                 encoded.reserve(pending.size());
-                for (auto condition : pending) {
-                    if (condition.param1.has_value()) {
-                        condition.condition.param1 =
-                            static_cast<std::int32_t>(encodeKey(condition.param1));
-                    }
-                    if (condition.param2.has_value()) {
-                        condition.condition.param2 =
-                            static_cast<std::int32_t>(encodeKey(condition.param2));
-                    }
-                    if (condition.reference.has_value()) {
-                        condition.condition.reference = encodeKey(condition.reference);
-                    }
-                    if (condition.compareGlobal.has_value()) {
-                        condition.condition.comparison_raw = encodeKey(condition.compareGlobal);
+                for (std::size_t position = 0; position < pending.size(); ++position) {
+                    auto condition = pending[position];
+                    if (!condition.preserved) {
+                        if (condition.param1.has_value()) {
+                            condition.condition.param1 =
+                                static_cast<std::int32_t>(encodeKey(condition.param1));
+                        }
+                        if (condition.param2.has_value()) {
+                            condition.condition.param2 =
+                                static_cast<std::int32_t>(encodeKey(condition.param2));
+                        }
+                        if (condition.reference.has_value()) {
+                            condition.condition.reference = encodeKey(condition.reference);
+                        }
+                        if (condition.compareGlobal.has_value()) {
+                            condition.condition.comparison_raw = encodeKey(condition.compareGlobal);
+                        }
+                        freshPositions.push_back(position);
+                        fresh.push_back(condition.condition);
                     }
                     encoded.push_back(std::move(condition.condition));
                 }
                 carryConditionPadding(
-                    previousLogEntryConditions(previousStages, stage.index, entryIndex), encoded);
+                    previousConditionsNotPreserved(
+                        previousLogEntryConditions(previousStages, stage.index, entryIndex), pending),
+                    fresh);
+                for (std::size_t j = 0; j < freshPositions.size(); ++j) {
+                    encoded[freshPositions[j]].padding = fresh[j].padding;
+                }
                 auto run = fo4::serialize_ctda_run(encoded);
                 auto& members = stage.log_entries[entryIndex].members;
                 members.insert(members.begin(), run.begin(), run.end());
@@ -598,39 +721,27 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
 #ifdef FO4IDE_TEST_HOOKS
             if (localizedQuestBeforeCommitHook != nullptr) localizedQuestBeforeCommitHook();
 #endif
-            try {
-                if (readLocalizedFileBytes(localizedTables->stringsPath) !=
-                        localizedTables->originalStringsBytes ||
-                    readLocalizedFileBytes(localizedTables->dlstringsPath) !=
-                        localizedTables->originalDlstringsBytes ||
-                    readLocalizedFileBytes(localizedTables->ilstringsPath) !=
-                        localizedTables->originalIlstringsBytes) {
-                    return std::unexpected(Error{
-                        "LocalizedSidecarChangedOnDisk",
-                        "localized sibling table changed after it was read; reload before writing"
-                    });
-                }
-            } catch (const std::exception& error) {
-                return std::unexpected(Error{
-                    "LocalizedLogTableInvalid",
-                    "could not re-read localized DLSTRINGS before staging: " +
-                        std::string(error.what())
-                });
+            const auto baseline = std::find_if(
+                localizationState->participants.begin(), localizationState->participants.end(),
+                [&](const StagedLocalizationFile& file) { return support::sameLocalizedPath(file.path, localizedTables->dlstringsPath); });
+            if (baseline == localizationState->participants.end()) {
+                return std::unexpected(Error{"LocalizedLogTableInvalid", "DLSTRINGS baseline is missing"});
             }
-            StagedLocalization staged{
-                localizedTables->dlstringsPath,
-                fo4::localization::write_string_table(localizedTables->dlstrings),
-                localizedTables->originalDlstringsBytes,
-                localizedTables->stringsPath,
-                localizedTables->originalStringsBytes,
-                localizedTables->ilstringsPath,
-                localizedTables->originalIlstringsBytes,
-            };
-            {
-                CommitScope commit;
-                stageLocalizationMutationLocked(*loaded, std::move(staged));
-                stagePluginMutationLocked(*loaded, std::move(mutated));
+            auto staged = prepareStringTable(
+                loaded->name, localizedTables->language, StringSource::dl,
+                localizedTables->dlstrings, localizedTables->dlstringsPath.parent_path(), &*baseline);
+            if (!staged) return std::unexpected(staged.error());
+            const auto participant = std::find_if(
+                localizationState->participants.begin(), localizationState->participants.end(),
+                [&](const StagedLocalizationFile& file) { return support::sameLocalizedPath(file.path, staged->file.path); });
+            if (participant == localizationState->participants.end()) {
+                return std::unexpected(Error{"LocalizedLogTableInvalid", "DLSTRINGS baseline is missing"});
             }
+            *participant = staged->file;
+            auto stagedResult = stageQuestLocalizationMutationLocked(
+                *loaded, std::move(*localizationState), std::move(mutated), StringSource::dl,
+                std::move(*staged), std::move(*sourceAllocation));
+            if (!stagedResult) return std::unexpected(stagedResult.error());
             return nlohmann::json(
                 "Set " + std::to_string(stages.stages.size()) + " quest stage(s) on " +
                 recordText + " in " + pluginName + ". SavePlugin to persist.");

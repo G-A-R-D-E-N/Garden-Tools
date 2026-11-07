@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -26,6 +27,16 @@ def main(executable):
             deadline = threading.Timer(60, process.kill)
             deadline.start()
             request_id = 0
+            def backtrace():
+                debugger = shutil.which("gdb")
+                if debugger is None:
+                    return " (no gdb on this runner)"
+                try:
+                    rerun = subprocess.run([debugger, "-batch", "-ex", "run", "-ex", "bt 30", "--args", executable, "--mcp", "--mo2", str(root)], input="", capture_output=True, text=True, env=environment, cwd=root, timeout=30)
+                    return " " + rerun.stdout[-6000:]
+                except Exception as error:
+                    return " (gdb failed: " + str(error) + ")"
+
 
             def rpc(method, params=None):
                 nonlocal request_id
@@ -33,7 +44,7 @@ def main(executable):
                 process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}}) + "\n")
                 process.stdin.flush()
                 line = process.stdout.readline()
-                assert line, "Native MCP exited or timed out before responding"
+                assert line, "Native MCP exited or timed out before responding: " + (errors.flush() or errors.seek(0) or errors.read()) + backtrace()
                 response = json.loads(line)
                 assert response["id"] == request_id, response
                 assert "error" not in response, response
@@ -47,7 +58,7 @@ def main(executable):
             try:
                 assert rpc("initialize")["serverInfo"]["name"] == "fo4editor"
                 names = {tool["name"] for tool in rpc("tools/list")["tools"]}
-                required = {"list_plugins", "open_plugin", "create_plugin", "create_record", "get_record", "set_field", "save_plugin", "discard_plugin", "list_record_types", "list_records"}
+                required = {"list_plugins", "open_plugin", "create_plugin", "create_record", "get_record", "set_field", "save_plugin", "discard_plugin", "list_record_types", "list_records", "set_quest_fragment", "remove_quest_fragment", "get_quest_fragments", "get_quest_script", "edit_quest_script"}
                 assert required <= names, f"Missing native plugin tools: {sorted(required - names)}"
                 status = json.loads(call("get_mo2_status"))
                 assert status["loaded"] and status["profile"] == "Smoke", status
@@ -144,7 +155,7 @@ def main(executable):
                 gap_base = gap_path.read_bytes()
                 tools = {tool["name"]: tool for tool in rpc("tools/list")["tools"]}
                 assert len(tools) >= 160, f"Expected at least 160 MCP tools, got {len(tools)}"
-                for name in ("add_master", "add_masters", "set_script_value", "get_condition_functions", "create_placed_object","create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types", "get_perk_effects", "set_perk_effects", "add_sound_file", "remove_sound_file", "add_package_procedure", "remove_package_procedure", "set_sound_base", "create_sound", "add_script", "remove_script", "add_script_property", "remove_script_property", "get_magic_effects", "add_magic_effect", "set_magic_effect", "remove_magic_effect", "get_conflicts", "get_record_details", "get_conflict_matrix", "delete_record", "copy_as_override", "get_conditions", "set_conditions", "set_components", "describe_element", "add_element", "strings_list_tables", "graph_core_palette", "script_read_script", "archive_extract_file", "get_placed_references"):
+                for name in ("add_master", "add_masters", "set_script_value", "get_condition_functions", "create_placed_object","create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types", "get_perk_effects", "set_perk_effects", "get_perk_links", "set_perk_next", "set_perk_sound", "set_perk_swf", "add_sound_file", "remove_sound_file", "add_package_procedure", "remove_package_procedure", "set_sound_base", "create_sound", "add_script", "remove_script", "add_script_property", "remove_script_property", "add_alias_script", "remove_alias_script", "add_alias_script_property", "remove_alias_script_property", "set_alias_script_value", "get_magic_effects", "add_magic_effect", "set_magic_effect", "remove_magic_effect", "get_conflicts", "get_record_details", "get_conflict_matrix", "delete_record", "copy_as_override", "get_conditions", "set_conditions", "set_components", "describe_element", "add_element", "strings_list_tables", "graph_core_palette", "script_read_script", "archive_extract_file", "get_placed_references", "set_info_fragment", "add_info_fragment", "remove_info_fragment", "set_scene_phase_fragment", "add_scene_phase_fragment", "remove_scene_phase_fragment"):
                     assert name in tools, f"Missing MCP tool: {name}"
                 placed_schema = tools["create_placed_object"]["inputSchema"]
                 assert placed_schema["properties"]["x"]["type"] == "number", placed_schema
@@ -154,6 +165,10 @@ def main(executable):
                 leveled_schema = tools["set_leveled_list_settings"]["inputSchema"]
                 assert leveled_schema["properties"]["flags"]["type"] == "integer", leveled_schema
                 assert set(leveled_schema["required"]) == {"plugin", "form_key", "chance_none", "max_count", "flags"}, leveled_schema
+                perk_item = tools["set_perk_effects"]["inputSchema"]["properties"]["effects"]["items"]
+                assert perk_item["required"] == ["type"], perk_item
+                assert {"value", "value2", "form", "actorValue", "text", "data"} <= set(perk_item["properties"]["parameters"]["properties"]), perk_item
+                assert perk_item["properties"]["tabs"]["items"]["properties"]["conditions"]["items"]["properties"]["function"]["type"] == "string", perk_item
                 placed_args = {"plugin": gap, "cell": "000800:NativeMcpGap.esp", "baseObject": "000801:NativeMcpGap.esp", "x": 1, "y": 2, "z": 3}
                 assert call("create_placed_object", {"plugin": gap, "cell": "000800:NativeMcpGap.esp", "baseObject": "000801:NativeMcpGap.esp", "x": 1, "y": 2}, failed=True) == "Missing argument: z"
                 assert call("create_placed_object", dict(placed_args, x="1"), failed=True) == "x must be number"

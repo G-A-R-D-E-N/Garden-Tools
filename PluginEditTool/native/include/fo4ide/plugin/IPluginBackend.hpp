@@ -82,6 +82,9 @@ public:
             "Native ONAM update is unavailable for this backend"
         });
     }
+    virtual Result<nlohmann::json> repairHedrCount(const nlohmann::json&) {
+        return std::unexpected(Error{"RepairHedrCountUnavailable", "Native HEDR repair is unavailable for this backend"});
+    }
     virtual Result<nlohmann::json> compactToEsl(const nlohmann::json&) {
         return std::unexpected(Error{
             "CompactToEslUnavailable",
@@ -151,6 +154,12 @@ public:
             "Native check for errors is unavailable for this backend"
         });
     }
+    virtual Result<nlohmann::json> checkQuest(const nlohmann::json&) const {
+        return std::unexpected(Error{
+            "CheckQuestUnavailable",
+            "Native quest check is unavailable for this backend"
+        });
+    }
     virtual Result<nlohmann::json> findUnreachable(const nlohmann::json&) const {
         return std::unexpected(Error{
             "FindUnreachableUnavailable",
@@ -213,8 +222,44 @@ public:
     virtual Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json&) const {
         return std::unexpected(Error{"CellBackendUnavailable", "Exterior-cell queries are unavailable"});
     }
+    virtual Result<nlohmann::json> resolveWorldspace(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Worldspace queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> resolveWorldspaceId(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Worldspace queries are unavailable"});
+    }
     virtual Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> editPlacedReference(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> undoCellEdit(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell edit history is unavailable"});
+    }
+    virtual Result<nlohmann::json> redoCellEdit(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell edit history is unavailable"});
+    }
+    virtual Result<nlohmann::json> getCellEditHistory(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell edit history is unavailable"});
+    }
+    virtual Result<nlohmann::json> duplicatePlacedReference(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> deletePlacedReference(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> getCellProperties(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell properties are unavailable"});
+    }
+    virtual Result<nlohmann::json> setCellProperties(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell property writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> planCellCleanup(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell cleanup is unavailable"});
+    }
+    virtual Result<nlohmann::json> applyCellCleanup(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell cleanup writes are unavailable"});
     }
     virtual Result<nlohmann::json> createPlacedObject(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference creation is unavailable"});
@@ -243,6 +288,18 @@ public:
     }
     virtual Result<nlohmann::json> setPerkEffects(const nlohmann::json&) {
         return std::unexpected(Error{"PerkBackendUnavailable", "PERK effect writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> getPerkLinks(const nlohmann::json&) const {
+        return std::unexpected(Error{"PerkBackendUnavailable", "PERK link queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> setPerkNext(const nlohmann::json&) {
+        return std::unexpected(Error{"PerkBackendUnavailable", "PERK next writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setPerkSound(const nlohmann::json&) {
+        return std::unexpected(Error{"PerkBackendUnavailable", "PERK sound writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setPerkSwf(const nlohmann::json&) {
+        return std::unexpected(Error{"PerkBackendUnavailable", "PERK swf writes are unavailable"});
     }
     // Constraint: sound structure writes keep the in-memory plugin unchanged on refusal.
     // Constraint: package tree writes keep the in-memory plugin unchanged on refusal.
@@ -286,6 +343,55 @@ public:
     }
     virtual Result<nlohmann::json> removeScriptProperty(const nlohmann::json&) {
         return std::unexpected(Error{"ScriptBackendUnavailable", "Script property writes are unavailable"});
+    }
+    // Constraint: dialogue fragment writes keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> setInfoFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"FragmentBackendUnavailable", "INFO fragment writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> addInfoFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"FragmentBackendUnavailable", "INFO fragment writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeInfoFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"FragmentBackendUnavailable", "INFO fragment writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setScenePhaseFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"FragmentBackendUnavailable", "Scene phase fragment writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> addScenePhaseFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"FragmentBackendUnavailable", "Scene phase fragment writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeScenePhaseFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"FragmentBackendUnavailable", "Scene phase fragment writes are unavailable"});
+    }
+    // Constraint: quest fragment removal refuses unmanaged script source and leaves the plugin unchanged.
+    virtual Result<nlohmann::json> removeQuestFragment(const nlohmann::json&) {
+        return std::unexpected(Error{"QuestFragmentBackendUnavailable", "Quest fragment removal is unavailable"});
+    }
+    virtual Result<nlohmann::json> getQuestFragments(const nlohmann::json&) const {
+        return std::unexpected(Error{"QuestFragmentBackendUnavailable", "Quest fragment queries are unavailable"});
+    }
+    // edit_quest_script must stage only a Quest-extending script and must never write into the game Data folder.
+    virtual Result<nlohmann::json> getQuestScript(const nlohmann::json&) const {
+        return std::unexpected(Error{"QuestScriptBackendUnavailable", "Quest script reads are unavailable"});
+    }
+    virtual Result<nlohmann::json> editQuestScript(const nlohmann::json&) {
+        return std::unexpected(Error{"QuestScriptBackendUnavailable", "Quest script edits are unavailable"});
+    }
+    // Constraint: quest alias script writes keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> addAliasScript(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeAliasScript(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> addAliasScriptProperty(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script property writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeAliasScriptProperty(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script property writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setAliasScriptValue(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Quest alias script value writes are unavailable"});
     }
     virtual Result<nlohmann::json> getFaction(const nlohmann::json&) const {
         return std::unexpected(Error{"FactionBackendUnavailable", "Faction queries are unavailable"});

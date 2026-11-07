@@ -1,0 +1,142 @@
+.papyrus-modal.editors-modal {
+  width: min(1800px, 98vw);
+  height: 96vh;
+  max-height: 96vh;
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.editors-modal .papyrus-header {
+  gap: 8px;
+}
+
+.editors-modal .sidebar-action-btn {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.editors-cards {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+  overflow: auto;
+}
+
+.editors-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.editors-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.editors-card-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.editors-card-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.editors-tour {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 18px;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--accent-info);
+  border-radius: var(--radius);
+}
+
+.editors-tour p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.editors-tour-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.editor-screen {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-screen-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 16px 18px;
+  overflow: auto;
+}
+
+.editor-screen:focus {
+  outline: none;
+}
+
+.editor-screen-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.editor-screen-header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+}
+
+.editor-purpose {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.editor-empty {
+  padding: 28px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.editors-card:focus-visible,
+.editor-screen button:focus-visible,
+.editors-modal button:focus-visible {
+  outline: 2px solid var(--accent-info);
+  outline-offset: 2px;
+}

@@ -144,8 +144,12 @@ struct QuestVmadFragment {
 
 struct QuestVmadAliasScripts {
   std::int16_t alias_id{0};
+  std::int16_t version{0};
   std::int16_t script_format{0};
   std::vector<VmadScript> scripts;
+  std::size_t offset{0};
+  std::size_t script_count_offset{0};
+  std::size_t end{0};
 };
 
 struct QuestVmadExtras {
@@ -158,6 +162,7 @@ struct QuestVmadExtras {
   bool fully_consumed{false};
   std::size_t count_offset{0};
   std::size_t entries_begin{0};
+  std::size_t aliases_count_offset{0};
 };
 
 QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int16_t object_format);
@@ -183,5 +188,26 @@ struct SceneVmadExtras {
 // The extras span must begin after the leading script list.
 SceneVmadExtras read_scene_vmad_extras(std::span<const std::byte> data,
                                        std::int16_t object_format);
+
+struct InfoVmadFragment {
+  std::uint8_t unknown{0};
+  std::string script;
+  std::string function;
+  std::size_t offset{0};
+  std::size_t end{0};
+};
+
+struct InfoVmadExtras {
+  std::int8_t version{3};
+  std::uint8_t flags{0};
+  std::vector<InfoVmadFragment> fragments;
+  bool unsupported{false};
+  std::string unsupported_reason;
+  bool fully_consumed{false};
+};
+
+// The extras span must begin after the leading script list.
+InfoVmadExtras read_info_vmad_extras(std::span<const std::byte> data,
+                                     std::int16_t object_format);
 
 }  // namespace fo4

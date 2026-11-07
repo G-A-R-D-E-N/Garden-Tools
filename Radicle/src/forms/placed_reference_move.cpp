@@ -73,6 +73,7 @@ PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
   if (is_interior_cell(*cell)) {
     if (bucket_matches) return commit(PlacedReferenceMoveStatus::moved);
     detail::move_reference_to_bucket(*located, wanted_bucket, context);
+    next.original_structure_fingerprint = 0;
     return commit(PlacedReferenceMoveStatus::moved);
   }
 
@@ -105,7 +106,10 @@ PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
   }
 
   if (target_key == cell_key) {
-    if (!bucket_matches) detail::move_reference_to_bucket(*located, wanted_bucket, context);
+    if (!bucket_matches) {
+      detail::move_reference_to_bucket(*located, wanted_bucket, context);
+      next.original_structure_fingerprint = 0;
+    }
     return commit(PlacedReferenceMoveStatus::moved);
   }
   if (bucket_type == GroupType::cell_visible_distant_children) {
@@ -126,6 +130,7 @@ PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
   auto* target_bucket = detail::ensure_reference_bucket(
       *target_children, detail::group_header(wanted_bucket, target_label), context, context);
   target_bucket->children.emplace_back(std::move(moved));
+  next.original_structure_fingerprint = 0;
   return commit(PlacedReferenceMoveStatus::relocated);
 }
 

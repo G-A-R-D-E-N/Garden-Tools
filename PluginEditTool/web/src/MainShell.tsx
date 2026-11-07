@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow, Languages, Eye,
+  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow, Languages, Eye, Pencil,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import SwfPanel from './SwfPanel';
@@ -53,6 +53,7 @@ import type { SearchHit } from './backend';
 import type { RecordTab } from './RecordView';
 import { errorMessage } from './errors';
 import ExplorerTree from './Shell/ExplorerTree';
+import EditorsHome from './Editors/EditorsHome';
 
 const hitKey = (h: SearchHit) => `${h.FormKey}|${h.Plugin}`;
 
@@ -74,6 +75,7 @@ export default function MainShell() {
   const [showPrevis, setShowPrevis] = useState(false);
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
   const [showBlueprint, setShowBlueprint] = useState(false);
+  const [showEditors, setShowEditors] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
   const [shellTab, setShellTab] = useState<ShellTab>('home');
@@ -406,7 +408,7 @@ export default function MainShell() {
           <button className={`activity-btn ${showAudio ? 'active' : ''}`} onClick={() => setShowAudio(true)} title="Audio (convert to/from xWMA, merge/split fuz)">
             <Music size={22} strokeWidth={1.5} />
           </button>
-          <button className={`activity-btn ${showCell ? 'active' : ''}`} onClick={() => setShowCell(true)} title="Cell Viewer (read-only 3D, like Creation Kit's render window)">
+          <button className={`activity-btn ${showCell ? 'active' : ''}`} onClick={() => setShowCell(true)} title="Cell Viewer (3D view with placed-reference and cell edits, like Creation Kit's render window)">
             <Boxes size={22} strokeWidth={1.5} />
           </button>
           <button className={`activity-btn ${showPrevis ? 'active' : ''}`} onClick={() => setShowPrevis(true)} title="Previs report (read-only: which cells this load order broke)">
@@ -417,6 +419,9 @@ export default function MainShell() {
           </button>
           <button className={`activity-btn ${showBlueprint ? 'active' : ''}`} onClick={() => setShowBlueprint(true)} title="Blueprint (node graph that compiles to Papyrus)">
             <Workflow size={22} strokeWidth={1.5} />
+          </button>
+          <button className={`activity-btn ${showEditors ? 'active' : ''}`} onClick={() => setShowEditors(true)} title="Editors (quest, dialogue and scene)">
+            <Pencil size={22} strokeWidth={1.5} />
           </button>
         </div>
       </div>
@@ -721,6 +726,7 @@ export default function MainShell() {
       {showPrevis && <PrevisPanel onClose={() => setShowPrevis(false)} />}
       {showSpreadsheet && <SpreadsheetPanel onClose={() => setShowSpreadsheet(false)} />}
       {showBlueprint && <BlueprintPanel onClose={() => setShowBlueprint(false)} />}
+      {showEditors && <EditorsHome onClose={() => setShowEditors(false)} />}
     </div>
   );
 }

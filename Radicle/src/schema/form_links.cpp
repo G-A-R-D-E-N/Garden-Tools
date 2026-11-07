@@ -637,56 +637,71 @@ std::vector<FormLinkHit> collect_form_links(const Plugin& plugin) {
   return collect_form_links_detailed(plugin).links;
 }
 
-FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
-  FormLinkCollection result;
+namespace {
+
+void collect_record_links(const Record& record, const PluginFormIdContext& context,
+                          const FormLinkTypeLookup& type_lookup, FormLinkCollection& result) {
   auto& hits = result.links;
   bool current_record_incomplete = false;
   bool current_record_unsupported = false;
+  std::map<std::uint32_t, std::size_t> ordinals;
+  const auto schema_offsets = schema::schema_formlink_offsets(record);
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == sig_vmad) {
+      const auto coverage = vmad_coverage(sub.data, record.header.signature);
+      if (!coverage.complete()) current_record_incomplete = true;
+      if (coverage.unsupported) current_record_unsupported = true;
+    }
+    const auto ordinal = ordinals[sub.signature.packed()]++;
+    const bool claimed = visit_formlink_offsets(
+        record, sub, schema_offsets, false, type_lookup, &context, [&](std::size_t position) {
+      if (position + 4 > sub.data.size()) {
+        return;
+      }
+      FormLinkHit hit;
+      hit.record = record.form_key;
+      hit.subrecord = sub.signature;
+      hit.subrecord_ordinal = ordinal;
+      hit.offset = position;
+      hit.raw = RawFormId{read_u32(sub.data, position)};
+      if (!hit.raw.is_null()) {
+        try {
+          hit.key = resolve_plugin_link(hit.raw, context);
+        } catch (const FormIdError&) {
+        }
+      }
+      hits.push_back(std::move(hit));
+    });
+    if (!claimed && sub.data.size() != 4 && is_listed_formid_signature(sub.signature) &&
+        !allowed_unclaimed_payload(record.header.signature, sub.signature)) {
+      result.unclaimed_link_payloads.push_back(
+          UnclaimedLinkPayload{record.form_key, sub.signature, ordinal, sub.data.size()});
+    }
+  }
+  if (current_record_incomplete) {
+    ++result.records_with_incomplete_vmad;
+  }
+  if (current_record_unsupported) {
+    result.unsupported_vmad_records.push_back(record.form_key);
+  }
+}
+
+}  // namespace
+
+FormLinkCollection collect_record_form_links(const Record& record,
+                                             const PluginFormIdContext& context,
+                                             const FormLinkTypeLookup& type_lookup) {
+  FormLinkCollection result;
+  collect_record_links(record, context, type_lookup, result);
+  return result;
+}
+
+FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
+  FormLinkCollection result;
   const auto context = plugin_form_id_context(plugin);
   const auto type_lookup = plugin_type_lookup(plugin);
   visit_records(plugin, [&](const Record& record) {
-    current_record_incomplete = false;
-    current_record_unsupported = false;
-    std::map<std::uint32_t, std::size_t> ordinals;
-    const auto schema_offsets = schema::schema_formlink_offsets(record);
-    for (const auto& sub : record.subrecords) {
-      if (sub.signature == sig_vmad) {
-        const auto coverage = vmad_coverage(sub.data, record.header.signature);
-        if (!coverage.complete()) current_record_incomplete = true;
-        if (coverage.unsupported) current_record_unsupported = true;
-      }
-      const auto ordinal = ordinals[sub.signature.packed()]++;
-      const bool claimed = visit_formlink_offsets(
-          record, sub, schema_offsets, false, type_lookup, &context, [&](std::size_t offset) {
-        if (offset + 4 > sub.data.size()) {
-          return;
-        }
-        FormLinkHit hit;
-        hit.record = record.form_key;
-        hit.subrecord = sub.signature;
-        hit.subrecord_ordinal = ordinal;
-        hit.offset = offset;
-        hit.raw = RawFormId{read_u32(sub.data, offset)};
-        if (!hit.raw.is_null()) {
-          try {
-            hit.key = resolve_plugin_link(hit.raw, context);
-          } catch (const FormIdError&) {
-          }
-        }
-        hits.push_back(std::move(hit));
-      });
-      if (!claimed && sub.data.size() != 4 && is_listed_formid_signature(sub.signature) &&
-          !allowed_unclaimed_payload(record.header.signature, sub.signature)) {
-        result.unclaimed_link_payloads.push_back(
-            UnclaimedLinkPayload{record.form_key, sub.signature, ordinal, sub.data.size()});
-      }
-    }
-    if (current_record_incomplete) {
-      ++result.records_with_incomplete_vmad;
-    }
-    if (current_record_unsupported) {
-      result.unsupported_vmad_records.push_back(record.form_key);
-    }
+    collect_record_links(record, context, type_lookup, result);
   });
   return result;
 }

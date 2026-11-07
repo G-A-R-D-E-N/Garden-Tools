@@ -585,6 +585,15 @@ struct SwfTag {
   void clear_decoded();
 };
 
+// Invariant: counts every tag below these, so the sum of subtree sizes is the pre-order flat span.
+inline std::size_t subtree_size(const std::vector<SwfTag>& tags) noexcept {
+  std::size_t total = 0;
+  for (const auto& tag : tags) {
+    total += 1 + subtree_size(tag.children);
+  }
+  return total;
+}
+
 struct SwfFile {
   SwfHeader header{};
   std::vector<SwfTag> tags;

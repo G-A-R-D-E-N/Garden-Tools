@@ -73,6 +73,29 @@ void restore_subs(fo4::Plugin& plugin, const FormKey& key, const Subs& saved) {
   });
 }
 
+bool has_subrecord(const fo4::Record& record, std::string_view signature) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == Signature::from_string(signature)) return true;
+  }
+  return false;
+}
+
+std::vector<std::string> signatures_collapsing_pkc2(const fo4::Record& record) {
+  std::vector<std::string> out;
+  for (const auto& sub : record.subrecords) {
+    const auto name = sub.signature.to_string();
+    if (name == "PKC2" && !out.empty() && out.back() == "PKC2") continue;
+    out.push_back(name);
+  }
+  return out;
+}
+
+int travel_node_count(const fo4::env::PackageProcedureTree& tree) {
+  int count = 0;
+  for (const auto& node : tree.nodes) count += node.name == "Travel" ? 1 : 0;
+  return count;
+}
+
 }  // namespace
 
 TEST(PackageTreeReal, AddsAndRemovesALeafOnAnOfficialPackageAndRestoresIt) {
@@ -200,4 +223,34 @@ TEST(PackageTreeReal, RemovesALeafWithInputsDropsOnlyItsInputsAndKeepsReferences
   }
   RecordProperty("cascaded_leaves_removed", cascaded);
   EXPECT_GT(cascaded, 0);
+}
+
+TEST(PackageTreeReal, CreatesATravelPackageWithTheLayoutOfAVanillaFourInputTravelPackage) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR for read-only official coverage";
+  record_game_build(detect_game_build(dir));
+  const auto path = std::filesystem::path(dir) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::exists(path));
+  auto plugin = fo4::read_plugin_file(path);
+  std::vector<std::string> vanilla;
+  for (const auto& key : pack_records(plugin)) {
+    const auto* record = fo4::find_record(plugin, key);
+    if (record == nullptr) continue;
+    const auto tree = fo4::env::decode_package_procedure(*record);
+    if (!tree.decoded || tree.inputs.size() != 4u || travel_node_count(tree) != 1) continue;
+    if (has_subrecord(*record, "PTDA") || has_subrecord(*record, "CTDA")) continue;
+    vanilla = signatures_collapsing_pkc2(*record);
+    break;
+  }
+  if (vanilla.empty()) GTEST_SKIP() << "no vanilla PACK with one Travel procedure and four data inputs";
+
+  fo4::env::TravelPackageOptions options;
+  options.location_type = fo4::env::PackageLocationType::near_self;
+  const auto created = fo4::env::create_travel_package(plugin, "TravelReal", options);
+  ASSERT_EQ(created.status, fo4::env::TravelPackageStatus::created);
+  const auto* record = fo4::find_record(plugin, created.key);
+  ASSERT_NE(record, nullptr);
+  const auto tree = fo4::env::decode_package_procedure(*record);
+  ASSERT_TRUE(tree.decoded);
+  EXPECT_EQ(signatures_collapsing_pkc2(*record), vanilla);
 }

@@ -824,55 +824,6 @@ TEST_CASE("Native SetQuestStages preserves unchanged localized CNAM IDs") {
     CHECK(readBytes(path) == before);
 }
 
-TEST_CASE("Native SetQuestStages allocates changed localized CNAM from the full ID set") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPluginWith(fo4::RecordFlags::localized, [](fo4::test::ByteWriter& out) {
-        writeIndx(out, 10, 0, 0);
-        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
-        writeU32(out, "CNAM", 42);
-    }));
-    writeLocalizationSet(
-        root,
-        {{100, rawBytes("Other")}},
-        {{42, rawBytes("Existing")}},
-        {{200, rawBytes("Other")}});
-    const auto stringsBefore = readBytes(root / "Strings" / "Patch_en.STRINGS");
-    const auto ilstringsBefore = readBytes(root / "Strings" / "Patch_en.ILSTRINGS");
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 10}, {"logEntry", "Changed"}}}),
-            localizedQuestContext(root)
-        }));
-    REQUIRE(result.has_value());
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-
-    const auto disk = fo4::read_plugin_file(path);
-    const auto decoded = fo4::forms::decode_quest_stages(
-        disk, fo4::FormKey::parse("000800:Patch.esp"));
-    REQUIRE(decoded.stages.size() == 1u);
-    REQUIRE(decoded.stages[0].log_entries.size() == 1u);
-    REQUIRE(decoded.stages[0].log_entries[0].log_text.has_value());
-    CHECK(decoded.stages[0].log_entries[0].log_text->id == 201u);
-
-    const auto dlstrings = fo4::localization::read_string_table_file(
-        root / "Strings" / "Patch_en.DLSTRINGS",
-        fo4::localization::StringTableKind::dlstrings);
-    REQUIRE(dlstrings.entries.size() == 2u);
-    CHECK(fo4::localization::find_string(dlstrings, 42u) != nullptr);
-    CHECK(fo4::localization::find_string(dlstrings, 201u) != nullptr);
-    CHECK(readBytes(root / "Strings" / "Patch_en.STRINGS") == stringsBefore);
-    CHECK(readBytes(root / "Strings" / "Patch_en.ILSTRINGS") == ilstringsBefore);
-}
-
 TEST_CASE("Native SetQuestStages reuses existing English CP1252 CNAM IDs") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -904,40 +855,6 @@ TEST_CASE("Native SetQuestStages reuses existing English CP1252 CNAM IDs") {
     CHECK(readBytes(root / "Strings" / "Patch_en.DLSTRINGS") == before);
 }
 
-TEST_CASE("Native SetQuestStages writes English CNAM text as CP1252") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
-    writeLocalizationSet(
-        root,
-        {{100, rawBytes("Other")}},
-        {},
-        {{200, rawBytes("Other")}});
-    const auto cafe = std::string{"Caf"} + "\xc3\xa9";
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 10}, {"logEntry", cafe}}}),
-            localizedQuestContext(root)
-        }));
-    REQUIRE(result.has_value());
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto table = fo4::localization::read_string_table_file(
-        root / "Strings" / "Patch_en.DLSTRINGS",
-        fo4::localization::StringTableKind::dlstrings);
-    const auto* entry = fo4::localization::find_string(table, 201u);
-    REQUIRE(entry != nullptr);
-    CHECK(entry->text == std::vector<std::byte>{
-        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xe9}});
-}
-
 TEST_CASE("Native SetQuestStages refuses English CNAM text outside CP1252") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -967,40 +884,6 @@ TEST_CASE("Native SetQuestStages refuses English CNAM text outside CP1252") {
     CHECK(readBytes(root / "Strings" / "Patch_en.DLSTRINGS") == dlstringsBefore);
 }
 
-TEST_CASE("Native SetQuestStages writes supported non-English CNAM text as UTF-8") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
-    writeLocalizationSet(
-        root,
-        {{100, rawBytes("Other")}},
-        {},
-        {{200, rawBytes("Other")}},
-        "de");
-    const auto text = std::string{"Gr"} + "\xc3\xbc" + "\xc3\x9f" + "e";
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 10}, {"logEntry", text}}}),
-            localizedQuestContext(root, "de")
-        }));
-    REQUIRE(result.has_value());
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto table = fo4::localization::read_string_table_file(
-        root / "Strings" / "Patch_de.DLSTRINGS",
-        fo4::localization::StringTableKind::dlstrings);
-    const auto* entry = fo4::localization::find_string(table, 201u);
-    REQUIRE(entry != nullptr);
-    CHECK(entry->text == rawBytes(text));
-}
-
 TEST_CASE("Native SetQuestStages rejects unsupported localized language tokens") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -1026,38 +909,6 @@ TEST_CASE("Native SetQuestStages rejects unsupported localized language tokens")
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "InvalidLocalizedQuestContext");
     CHECK(readBytes(path) == pluginBefore);
-}
-
-TEST_CASE("Native SetQuestStages allocates a brand-new localized CNAM") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
-    writeLocalizationSet(
-        root,
-        {{100, rawBytes("Other")}},
-        {},
-        {{200, rawBytes("Other")}});
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 10}, {"logEntry", "New"}}}),
-            localizedQuestContext(root)
-        }));
-    REQUIRE(result.has_value());
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto table = fo4::localization::read_string_table_file(
-        root / "Strings" / "Patch_en.DLSTRINGS",
-        fo4::localization::StringTableKind::dlstrings);
-    const auto* entry = fo4::localization::find_string(table, 201u);
-    REQUIRE(entry != nullptr);
-    CHECK(entry->text == rawBytes("New"));
 }
 
 TEST_CASE("Native SetQuestStages refuses stale localized allocation participants") {
@@ -2242,6 +2093,535 @@ TEST_CASE("Native SetQuestStages replaces a lossless existing CTDA run") {
     CHECK(decoded.stages[0].index == 20u);
 }
 
+namespace {
+
+using QuestMember = std::pair<std::string, std::vector<std::byte>>;
+
+std::vector<QuestMember> questMembers(const std::filesystem::path& path) {
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(record != nullptr);
+    std::vector<QuestMember> members;
+    for (const auto& sub : record->subrecords) members.emplace_back(sub.signature.to_string(), sub.data);
+    return members;
+}
+
+nlohmann::json conditionedLogEntries() {
+    return nlohmann::json::array({
+        {
+            {"flags", 0},
+            {"logText", "Start"},
+            {"note", "n1"},
+            {"conditions", nlohmann::json::array({
+                {
+                    {"function", "GetGraphVariableInt"},
+                    {"operator", "=="},
+                    {"cis1", "KeywordOne"},
+                    {"value", 1.0}
+                },
+                {
+                    {"function", "GetIsID"},
+                    {"operator", "!="},
+                    {"param1", "000800:Patch.esp"},
+                    {"value", 0.0}
+                }
+            })}
+        },
+        {
+            {"flags", 2},
+            {"conditions", nlohmann::json::array({
+                {
+                    {"function", "GetIsID"},
+                    {"operator", "=="},
+                    {"param1", "000800:Patch.esp"},
+                    {"value", 1.0}
+                }
+            })}
+        },
+        {
+            {"flags", 1},
+            {"logText", "Done"}
+        }
+    });
+}
+
+nlohmann::json conditionedStageTen() {
+    return nlohmann::json{{"index", 10}, {"flags", 0}, {"logEntries", conditionedLogEntries()}};
+}
+
+nlohmann::json editorStageTen() {
+    return nlohmann::json{{"index", 10}, {"flags", 0}, {"logEntries", nlohmann::json::array({
+        {{"flags", 0}, {"logText", "Start"}, {"note", "n1"}},
+        {{"flags", 2}},
+        {{"flags", 1}, {"logText", "Done"}}
+    })}};
+}
+
+void writeConditionedQuest(const std::filesystem::path& path) {
+    writeBytes(path, questPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", nlohmann::json::array({conditionedStageTen()})})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+}
+
+void writeObjectiveWithKeyword(fo4::test::ByteWriter& out, bool localizedText) {
+    fo4::test::ByteWriter qobj;
+    qobj.u16(10);
+    fo4::test::write_subrecord(out, "QOBJ", qobj.bytes);
+    writeU32(out, "FNAM", 1);
+    if (localizedText) {
+        writeU32(out, "NNAM", 42);
+    } else {
+        fo4::test::write_subrecord(out, "NNAM", std::string_view{"Find the courier\0", 17});
+    }
+    fo4::test::ByteWriter qsta;
+    qsta.u32(1);
+    qsta.u32(2);
+    qsta.u32(0x801);
+    fo4::test::write_subrecord(out, "QSTA", qsta.bytes);
+    writeSimpleAlias(out);
+}
+
+void writeObjectiveQuest(const std::filesystem::path& path, std::uint32_t flags, bool localizedText) {
+    writeBytes(path, questPluginWith(flags, [localizedText](fo4::test::ByteWriter& out) {
+        writeObjectiveWithKeyword(out, localizedText);
+    }));
+}
+
+}
+
+TEST_CASE("Native quest stage round trip does not rewrite log-entry CTDA or CIS members") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeConditionedQuest(path);
+    const auto before = questMembers(path);
+    CHECK(std::count_if(before.begin(), before.end(), [](const QuestMember& member) {
+        return member.first == "CTDA";
+    }) == 3);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto read = backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE(read.has_value());
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", read->at("stages")})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(questMembers(path) == before);
+}
+
+TEST_CASE("Native SetQuestStages keeps log-entry conditions when the payload omits conditions") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeConditionedQuest(path);
+    const auto before = questMembers(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", nlohmann::json::array({editorStageTen()})})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(questMembers(path) == before);
+}
+
+TEST_CASE("Native SetQuestStages keeps each remaining log entry's own conditions when a conditioned log entry is deleted and an entry added with explicit conditions") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const nlohmann::json threeConditioned{{"index", 10}, {"flags", 0}, {"logEntries", nlohmann::json::array({
+        {{"flags", 0}, {"logText", "First"}, {"conditions", nlohmann::json::array({
+            {{"function", "GetIsID"}, {"operator", "=="}, {"param1", "000800:Patch.esp"}, {"value", 1.0}}
+        })}},
+        {{"flags", 0}, {"logText", "Middle"}, {"conditions", nlohmann::json::array({
+            {{"function", "GetGraphVariableInt"}, {"operator", "=="}, {"cis1", "KeywordOne"}, {"value", 1.0}}
+        })}},
+        {{"flags", 1}, {"logText", "Last"}, {"conditions", nlohmann::json::array({
+            {{"function", "GetIsID"}, {"operator", "!="}, {"param1", "000800:Patch.esp"}, {"value", 0.0}}
+        })}}
+    })}};
+    const auto saveStages = [&path](const nlohmann::json& stages) {
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        REQUIRE(backend.invokeBackend(
+            "SetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages})).has_value());
+        REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    };
+    const auto conditionMembersByEntry = [](const std::filesystem::path& file) {
+        const auto decoded = fo4::forms::decode_quest_stages(
+            fo4::read_plugin_file(file), fo4::FormKey::parse("000800:Patch.esp"));
+        REQUIRE(decoded.stages.size() == 1u);
+        std::vector<std::vector<QuestMember>> entries;
+        for (const auto& entry : decoded.stages[0].log_entries) {
+            std::vector<QuestMember> members;
+            for (const auto& sub : entry.members) {
+                const auto name = sub.signature.to_string();
+                if (name == "CTDA" || name == "CIS1" || name == "CIS2") members.emplace_back(name, sub.data);
+            }
+            entries.push_back(std::move(members));
+        }
+        return entries;
+    };
+    saveStages(nlohmann::json::array({threeConditioned}));
+    const auto before = conditionMembersByEntry(path);
+    REQUIRE(before.size() == 3u);
+    CHECK(std::all_of(before.begin(), before.end(), [](const auto& members) { return !members.empty(); }));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto read = backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE(read.has_value());
+    auto stages = read->at("stages");
+    REQUIRE(stages.size() == 1u);
+    auto& entries = stages[0]["logEntries"];
+    REQUIRE(entries.size() == 3u);
+    entries.erase(entries.begin() + 1);
+    entries.push_back(nlohmann::json{{"flags", 0}, {"logText", "Added"}, {"conditions", nlohmann::json::array()}});
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto after = conditionMembersByEntry(path);
+    REQUIRE(after.size() == 3u);
+    CHECK(after[0] == before[0]);
+    CHECK(after[1] == before[2]);
+    CHECK(after[2].empty());
+    const auto hasCis1 = [](const std::vector<std::vector<QuestMember>>& entriesToScan) {
+        return std::any_of(entriesToScan.begin(), entriesToScan.end(), [](const auto& members) {
+            return std::any_of(members.begin(), members.end(), [](const QuestMember& member) {
+                return member.first == "CIS1";
+            });
+        });
+    };
+    CHECK(hasCis1(before));
+    CHECK_FALSE(hasCis1(after));
+}
+
+TEST_CASE("Native SetQuestStages clears log-entry conditions only for an explicit empty or null conditions value") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeConditionedQuest(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const nlohmann::json cleared{{"index", 10}, {"flags", 0}, {"logEntries", nlohmann::json::array({
+        {{"flags", 0}, {"logText", "Start"}, {"note", "n1"}, {"conditions", nlohmann::json::array()}},
+        {{"flags", 2}, {"conditions", nlohmann::json::array()}},
+        {{"flags", 1}, {"logText", "Done"}, {"conditions", nullptr}}
+    })}};
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", nlohmann::json::array({cleared})})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto names = recordSignatures(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    CHECK(std::find(names.begin(), names.end(), "CTDA") == names.end());
+    CHECK(std::find(names.begin(), names.end(), "CIS1") == names.end());
+    CHECK(std::find(names.begin(), names.end(), "CNAM") != names.end());
+}
+
+TEST_CASE("Native SetQuestStages refuses a log-entry count change on a conditioned stage without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeConditionedQuest(path);
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{
+                {"index", 10},
+                {"logEntries", nlohmann::json::array({{{"flags", 0}, {"logText", "Start"}}})}
+            }})
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidQuestStagePayload");
+    CHECK(result.error().message.find("log entry count") != std::string::npos);
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native SetQuestStages gives a new stage index no conditions when its log entries omit conditions") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeConditionedQuest(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const nlohmann::json newStage{{"index", 20}, {"logEntries", nlohmann::json::array({
+        {{"flags", 0}, {"logText", "Later"}}
+    })}};
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({editorStageTen(), newStage})
+        })).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto decoded = fo4::forms::decode_quest_stages(
+        fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.stages.size() == 2u);
+    CHECK(decoded.stages[0].index == 10u);
+    std::vector<fo4::CtdaCondition> kept;
+    std::size_t consumed = 0;
+    REQUIRE(fo4::forms::lossless_quest_log_entry_conditions(
+        decoded.stages[0].log_entries[0].members, kept, consumed));
+    CHECK(kept.size() == 2u);
+    CHECK(decoded.stages[1].index == 20u);
+    REQUIRE(decoded.stages[1].log_entries.size() == 1u);
+    CHECK(std::none_of(decoded.stages[1].log_entries[0].members.begin(),
+                       decoded.stages[1].log_entries[0].members.end(),
+                       [](const fo4::Subrecord& member) {
+                           return member.signature.to_string() == "CTDA";
+                       }));
+}
+
+TEST_CASE("Native SetQuestStages refuses a new condition owner master while carried conditions exist without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto path = root / "Patch.esp";
+    writeBytes(masterPath, npcMasterPlugin());
+    writeConditionedQuest(path);
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            {
+                {"name", "Master.esm"},
+                {"path", masterPath.string()},
+                {"source", "MasterMod"},
+                {"resolved", true}
+            },
+            {
+                {"name", "Patch.esp"},
+                {"path", path.string()},
+                {"source", "QuestTest"},
+                {"resolved", true}
+            }
+        })}}).has_value());
+
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{
+                {"index", 10},
+                {"logEntries", nlohmann::json::array({
+                    {{"flags", 0}, {"logText", "Start"}, {"note", "n1"}},
+                    {{"flags", 2}, {"conditions", nlohmann::json::array({
+                        {{"function", "GetIsID"}, {"param1", "000800:Master.esm"}, {"value", 1.0}}
+                    })}},
+                    {{"flags", 1}, {"logText", "Done"}}
+                })}
+            }})
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidQuestStagePayload");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native GetQuestStages reports an unreadable log-entry condition run without failing the read") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto checkStage = [&path](const std::vector<std::byte>& ctda) {
+        writeBytes(path, questPluginWith(0, [&ctda](fo4::test::ByteWriter& out) {
+            writeIndx(out, 10, 0, 0);
+            fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+            fo4::test::write_subrecord(out, "CTDA", ctda);
+            fo4::test::write_subrecord(out, "CNAM", std::string_view{"HasCondition\0", 13});
+            writeU32(out, "ANAM", 0);
+        }));
+        const auto before = readBytes(path);
+
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        const auto read = backend.invokeBackend(
+            "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+        REQUIRE(read.has_value());
+        const auto& entry = read->at("stages").at(0).at("logEntries").at(0);
+        CHECK(entry.at("conditionsUnreadable") == true);
+        CHECK_FALSE(entry.contains("conditions"));
+
+        const auto result = backend.invokeBackend(
+            "SetQuestStages",
+            nlohmann::json::array({
+                "Patch.esp",
+                "000800:Patch.esp",
+                nlohmann::json::array({{{"index", 20}, {"logEntry", "replacement"}}})
+            }));
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+        CHECK(readBytes(path) == before);
+    };
+    checkStage(std::vector<std::byte>(33, std::byte{0}));
+    checkStage(makeCtdaPayload(8, 1, std::numeric_limits<float>::quiet_NaN()));
+}
+
+TEST_CASE("Native SetQuestStages refuses a localized logTextId without logText without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin(fo4::RecordFlags::localized));
+    writeLocalizationSet(root, {{42, rawBytes("Existing")}}, {}, {});
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{
+                {"index", 10},
+                {"logEntries", nlohmann::json::array({{{"flags", 0}, {"logTextId", 42}}})}
+            }}),
+            localizedQuestContext(root)
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidQuestStagePayload");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native quest stage round trip writes no CNAM or NAM2 for absent logText or note") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    {
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        REQUIRE(backend.invokeBackend(
+            "SetQuestStages",
+            nlohmann::json::array({
+                "Patch.esp",
+                "000800:Patch.esp",
+                nlohmann::json::array({{{"index", 10}, {"logEntries", nlohmann::json::array({{{"flags", 1}}})}}})
+            })).has_value());
+        REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    }
+    const auto before = questMembers(path);
+    CHECK(std::none_of(before.begin(), before.end(), [](const QuestMember& member) {
+        return member.first == "CNAM" || member.first == "NAM2";
+    }));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto read = backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE(read.has_value());
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", read->at("stages")})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(questMembers(path) == before);
+}
+
+TEST_CASE("Native quest objective round trip keeps flagNames, aliasName, keyword and display text byte-identical") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeObjectiveQuest(path, 0, false);
+    const auto before = questMembers(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto read = backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE(read.has_value());
+    const auto& objective = read->at("objectives").at(0);
+    CHECK(objective.at("displayText") == "Find the courier");
+    CHECK(objective.at("flagNames") == nlohmann::json::array({"ORedWithPrevious"}));
+    const auto& target = objective.at("targets").at(0);
+    CHECK(target.at("aliasName") == "Existing");
+    CHECK(target.at("keyword") == "000801:Patch.esp");
+
+    REQUIRE(backend.invokeBackend(
+        "SetQuestObjectives",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", read->at("objectives")})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(questMembers(path) == before);
+}
+
+TEST_CASE("Native SetQuestObjectives refuses a target keyword that differs from the saved keyword without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeObjectiveQuest(path, 0, false);
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend(
+        "SetQuestObjectives",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000800:Patch.esp",
+            nlohmann::json::array({{
+                {"index", 10},
+                {"flags", 1},
+                {"displayText", "Find the courier"},
+                {"targets", nlohmann::json::array({{
+                    {"alias", 1},
+                    {"flags", 2},
+                    {"keyword", "000999:Patch.esp"}
+                }})}
+            }})
+        }));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidQuestObjectivePayload");
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native quest objective localized displayTextId survives a get and set round trip") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeObjectiveQuest(path, fo4::RecordFlags::localized, true);
+    writeLocalizationSet(root, {{42, rawBytes("Find the courier")}}, {}, {});
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto context = localizedQuestContext(root);
+    const auto read = backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", context}));
+    REQUIRE(read.has_value());
+    const auto objectives = read->at("objectives");
+    REQUIRE(objectives.size() == 1u);
+    CHECK(objectives.at(0).at("displayTextId") == 42);
+    CHECK(objectives.at(0).at("displayText") == "Find the courier");
+
+    REQUIRE(backend.invokeBackend(
+        "SetQuestObjectives",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", objectives, context})).has_value());
+    const auto again = backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", context}));
+    REQUIRE(again.has_value());
+    CHECK(again->at("objectives") == objectives);
+}
+
 nlohmann::json oneConditionStage(const nlohmann::json& condition) {
     return nlohmann::json::array({
         {
@@ -2640,7 +3020,7 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
                     {"kind", "reference"},
                     {"id", 1},
                     {"name", "Rich"},
-                    {"flags", 0},
+                    {"flags", 2},
                     {"keywords", nlohmann::json::array({"000800:Master.esm"})},
                     {"items", nlohmann::json::array({
                         {{"item", "000801:Master.esm"}, {"count", 2}}
@@ -2704,6 +3084,8 @@ TEST_CASE("Native SetQuestAliases writes keywords items packages spells factions
         CHECK(alias.factions[0] == fo4::FormKey::parse("000803:Master.esm"));
         REQUIRE(alias.packages.size() == 1u);
         CHECK(alias.packages[0] == fo4::FormKey::parse("000804:Master.esm"));
+        REQUIRE(alias.flags.has_value());
+        CHECK((*alias.flags & 0x2u) != 0u);
     }
 
     const auto locationExtras = backend.invokeBackend(
@@ -3789,7 +4171,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                 {"id", 1},
                 {"name", "LocRef"},
                 {"flags", 0},
-                {"locationAliasReference", {{"alias", 3}, {"referenceType", "000800:Master.esm"}}}
+                {"locationAliasReference", {{"alias", 3}, {"referenceType", "000800:Master.esm"}}},
+                {"conditions", nlohmann::json::array()}
             }
         })));
     REQUIRE(locRef.has_value());
@@ -3809,7 +4192,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                 {"id", 1},
                 {"name", "Ext"},
                 {"flags", 0},
-                {"externalAlias", {{"quest", "000800:Patch.esp"}, {"alias", 4}}}
+                {"externalAlias", {{"quest", "000800:Patch.esp"}, {"alias", 4}}},
+                {"conditions", nlohmann::json::array()}
             }
         })));
     REQUIRE(external.has_value());
@@ -3829,7 +4213,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                 {"id", 1},
                 {"name", "Near"},
                 {"flags", 0},
-                {"findMatchingNearAlias", {{"alias", -3}, {"type", 1}}}
+                {"findMatchingNearAlias", {{"alias", -3}, {"type", 1}}},
+                {"conditions", nlohmann::json::array()}
             }
         })));
     REQUIRE(near.has_value());
@@ -3849,7 +4234,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                 {"id", 1},
                 {"name", "Evt"},
                 {"flags", 0},
-                {"findMatchingFromEvent", {{"event", 17}, {"data", 4}}}
+                {"findMatchingFromEvent", {{"event", 17}, {"data", 4}}},
+                {"conditions", nlohmann::json::array()}
             }
         })));
     REQUIRE(fromEvent.has_value());
@@ -3922,7 +4308,8 @@ TEST_CASE("Native SetQuestAliases writes remaining location fill types") {
                 {"kind", "location"},
                 {"id", 2},
                 {"flags", 0},
-                {"externalAliasLocation", {{"quest", "000800:Patch.esp"}, {"alias", 8}}}
+                {"externalAliasLocation", {{"quest", "000800:Patch.esp"}, {"alias", 8}}},
+                {"closestToAlias", nullptr}
             }
         })));
     REQUIRE(extLoc.has_value());
@@ -4385,7 +4772,7 @@ TEST_CASE("Native SetQuestAliases refuses existing remaining-member coverage gap
             writeU32(out, "SPOR", 0);
             fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
         },
-        "is null");
+        "zero-valued");
 
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);

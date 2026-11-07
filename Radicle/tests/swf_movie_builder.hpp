@@ -239,4 +239,40 @@ inline std::vector<std::byte> square_shape(std::uint16_t id, std::int32_t size, 
   return square_with_fill(id, size, fill.body, stroke);
 }
 
+inline std::vector<std::byte> frame_label(std::string_view name) {
+  SwfBuilder body;
+  body.text(name);
+  return body.body;
+}
+
+/* Invariant: with no leading tags, flat index 1 is the sprite's placement child and flat index 4 is the root placement after the DefineSprite. */
+inline std::vector<std::byte> placement_after_sprite_movie(int leading_tags = 0) {
+  SwfBuilder sprite;
+  sprite.u16(7);
+  sprite.u16(1);
+  for (int tag = 0; tag < leading_tags; ++tag) sprite.tag(43, frame_label("pad"), false);
+  SwfBuilder child;
+  child.u8(0x02);
+  child.u16(1);
+  child.u16(7);
+  sprite.tag(26, child.body, false);
+  sprite.tag(1);
+  sprite.tag(0);
+
+  SwfBuilder place;
+  place.u8(0x02);
+  place.u16(2);
+  place.u16(7);
+
+  SwfBuilder body;
+  body.rect(0, 11000, 0, 8000, 15);
+  body.u16(0x0C00);
+  body.u16(1);
+  body.tag(39, sprite.body, false);
+  body.tag(26, place.body, false);
+  body.tag(1);
+  body.tag(0);
+  return wrap_body(body.body, 6, false, false);
+}
+
 }  // namespace swf_test

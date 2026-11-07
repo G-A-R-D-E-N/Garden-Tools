@@ -432,6 +432,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveElementFromSelected") return backend_.removeElementFromSelected(args);
         if (method == "CleanUnusedMasters") return backend_.cleanUnusedMasters(args);
         if (method == "UpdateOnam") return backend_.updateOnam(args);
+        if (method == "RepairHedrCount") return backend_.repairHedrCount(args);
         if (method == "CopyAsDisabledOverride") return backend_.copyAsDisabledOverride(args);
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
@@ -460,6 +461,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "CreateSeqFile") return backend_.createSeqFile(args);
         if (method == "ComparePluginTo") return backend_.comparePluginTo(args);
         if (method == "CheckForErrors") return backend_.checkForErrors(args);
+        if (method == "CheckQuest") return backend_.checkQuest(args);
         if (method == "FindUnreachable") return backend_.findUnreachable(args);
         if (method == "LootCleaningReport") return backend_.lootCleaningReport(args);
         if (method == "RevertOverrides") {
@@ -496,9 +498,28 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveScript") return backend_.removeScript(args);
         if (method == "AddScriptProperty") return backend_.addScriptProperty(args);
         if (method == "RemoveScriptProperty") return backend_.removeScriptProperty(args);
+        if (method == "SetInfoFragment") return backend_.setInfoFragment(args);
+        if (method == "AddInfoFragment") return backend_.addInfoFragment(args);
+        if (method == "RemoveInfoFragment") return backend_.removeInfoFragment(args);
+        if (method == "SetScenePhaseFragment") return backend_.setScenePhaseFragment(args);
+        if (method == "AddScenePhaseFragment") return backend_.addScenePhaseFragment(args);
+        if (method == "RemoveScenePhaseFragment") return backend_.removeScenePhaseFragment(args);
+        if (method == "RemoveQuestFragment") return backend_.removeQuestFragment(args);
+        if (method == "GetQuestFragments") return backend_.getQuestFragments(args);
+        if (method == "GetQuestScript") return backend_.getQuestScript(args);
+        if (method == "EditQuestScript") return backend_.editQuestScript(args);
+        if (method == "AddAliasScript") return backend_.addAliasScript(args);
+        if (method == "RemoveAliasScript") return backend_.removeAliasScript(args);
+        if (method == "AddAliasScriptProperty") return backend_.addAliasScriptProperty(args);
+        if (method == "RemoveAliasScriptProperty") return backend_.removeAliasScriptProperty(args);
+        if (method == "SetAliasScriptValue") return backend_.setAliasScriptValue(args);
         if (method == "EditNpcEntries") return backend_.editNpcEntries(args);
         if (method == "GetPerkEffects") return backend_.getPerkEffects(args);
         if (method == "SetPerkEffects") return backend_.setPerkEffects(args);
+        if (method == "GetPerkLinks") return backend_.getPerkLinks(args);
+        if (method == "SetPerkNext") return backend_.setPerkNext(args);
+        if (method == "SetPerkSound") return backend_.setPerkSound(args);
+        if (method == "SetPerkSwf") return backend_.setPerkSwf(args);
         if (method == "GetFaction") return backend_.getFaction(args);
         if (method == "EditFactionEntries") return backend_.editFactionEntries(args);
         if (method == "GetWeaponDamageTypes") return backend_.getWeaponDamageTypes(args);
@@ -519,7 +540,19 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         }
         if (method == "GetPlacedReferences") return backend_.getPlacedReferences(args);
         if (method == "GetPlacedReferencesAtGrid") return backend_.getPlacedReferencesAtGrid(args);
+        if (method == "ResolveWorldspace") return backend_.resolveWorldspace(args);
+        if (method == "ResolveWorldspaceId") return backend_.resolveWorldspaceId(args);
         if (method == "SetPlacedReferenceTransform") return backend_.setPlacedReferenceTransform(args);
+        if (method == "EditPlacedReference") return backend_.editPlacedReference(args);
+        if (method == "UndoCellEdit") return backend_.undoCellEdit(args);
+        if (method == "RedoCellEdit") return backend_.redoCellEdit(args);
+        if (method == "GetCellEditHistory") return backend_.getCellEditHistory(args);
+        if (method == "DuplicatePlacedReference") return backend_.duplicatePlacedReference(args);
+        if (method == "DeletePlacedReference") return backend_.deletePlacedReference(args);
+        if (method == "GetCellProperties") return backend_.getCellProperties(args);
+        if (method == "SetCellProperties") return backend_.setCellProperties(args);
+        if (method == "PlanCellCleanup") return backend_.planCellCleanup(args);
+        if (method == "ApplyCellCleanup") return backend_.applyCellCleanup(args);
     }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);
 }

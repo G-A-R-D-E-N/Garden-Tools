@@ -239,7 +239,8 @@ namespace detail {
 void decode_alias_semantics(QuestAlias& alias,
                             const PluginFormIdContext* context,
                             const Plugin* plugin,
-                            const RecordIndex* index) {
+                            const RecordIndex* index,
+                            const FormLinkTypeLookup* owner_types) {
   alias.unresolved_links.clear();
   t_unresolved = &alias.unresolved_links;
   struct Guard {
@@ -340,7 +341,7 @@ void decode_alias_semantics(QuestAlias& alias,
   }
 
   if (alias.kind == QuestAliasKind::reference && context != nullptr) {
-    decode_alias_extras(alias, *context, plugin, index);
+    decode_alias_extras(alias, *context, plugin, index, owner_types);
   }
 }
 
@@ -351,7 +352,8 @@ namespace {
 QuestAliases decode_quest_aliases_record(const Plugin& plugin,
                                          const FormKey& key,
                                          const Record* record,
-                                         const RecordIndex* record_index) {
+                                         const RecordIndex* record_index,
+                                         const FormLinkTypeLookup* owner_types) {
   if (record == nullptr) {
     throw QuestError("QUST record not found: " + key.to_string());
   }
@@ -406,7 +408,7 @@ QuestAliases decode_quest_aliases_record(const Plugin& plugin,
           ++index;
         }
       }
-      decode_alias_semantics(alias, &context, &plugin, record_index);
+      decode_alias_semantics(alias, &context, &plugin, record_index, owner_types);
       result.aliases.push_back(std::move(alias));
       continue;
     }
@@ -438,7 +440,7 @@ QuestAliases decode_quest_aliases_record(const Plugin& plugin,
           "QUST " + std::string(alias_label(alias.kind)) +
           " alias is missing required ALED end marker");
     }
-    decode_alias_semantics(alias, &context, &plugin, record_index);
+    decode_alias_semantics(alias, &context, &plugin, record_index, owner_types);
     result.aliases.push_back(std::move(alias));
   }
 
@@ -455,11 +457,17 @@ QuestAliases decode_quest_aliases_record(const Plugin& plugin,
 }  // namespace
 
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key) {
-  return decode_quest_aliases_record(plugin, key, find_record(plugin, key), nullptr);
+  return decode_quest_aliases_record(plugin, key, find_record(plugin, key), nullptr, nullptr);
 }
 
 QuestAliases decode_quest_aliases(const RecordIndex& index, const FormKey& key) {
-  return decode_quest_aliases_record(index.plugin(), key, index.find(key), &index);
+  return decode_quest_aliases_record(index.plugin(), key, index.find(key), &index, nullptr);
+}
+
+QuestAliases decode_quest_aliases(const Plugin& plugin,
+                                  const FormKey& key,
+                                  const FormLinkTypeLookup& owner_types) {
+  return decode_quest_aliases_record(plugin, key, find_record(plugin, key), nullptr, &owner_types);
 }
 
 }  // namespace fo4::forms

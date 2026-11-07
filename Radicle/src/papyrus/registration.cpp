@@ -19,6 +19,10 @@ std::string fold(const std::string& text) {
 
 bool finite(double value) { return std::isfinite(value); }
 
+bool blank(const std::string& text) {
+    return std::all_of(text.begin(), text.end(), [](char ch) { return ch == ' ' || (ch >= '\t' && ch <= '\r'); });
+}
+
 }  // namespace
 
 ScriptRegistration ScriptRegistration::forCustomEvent(std::string eventName) {
@@ -26,6 +30,16 @@ ScriptRegistration ScriptRegistration::forCustomEvent(std::string eventName) {
     ScriptRegistration registration;
     registration.kind = RegistrationKind::CustomEvent;
     registration.eventName = std::move(eventName);
+    return registration;
+}
+
+ScriptRegistration ScriptRegistration::forRemoteEvent(OwnerId source, std::string eventName) {
+    if (blank(source.baseFormKey)) throw std::invalid_argument("a remote event needs a source owner");
+    if (blank(eventName)) throw std::invalid_argument("an event registration needs a name");
+    ScriptRegistration registration;
+    registration.kind = RegistrationKind::RemoteEvent;
+    registration.eventName = std::move(eventName);
+    registration.source = std::move(source);
     return registration;
 }
 
@@ -46,6 +60,11 @@ const RegistrationEntry* RegistrationRegistry::registerRegistration(const OwnerI
     if (registration.kind == RegistrationKind::Timer &&
         (!finite(registration.intervalSeconds) || registration.intervalSeconds <= 0.0)) {
         throw std::invalid_argument("a timer needs a finite positive interval");
+    }
+    if (registration.kind == RegistrationKind::RemoteEvent &&
+        (!registration.source.has_value() || blank(registration.source->baseFormKey) ||
+         blank(registration.eventName))) {
+        throw std::invalid_argument("a remote event needs a source owner and event name");
     }
     RegistrationEntry entry;
     entry.handle = nextHandle_++;
@@ -77,6 +96,18 @@ std::vector<const RegistrationEntry*> RegistrationRegistry::matchCustomEvent(
     const std::string wanted = fold(eventName);
     for (const RegistrationEntry& entry : entries_) {
         if (entry.registration.kind != RegistrationKind::CustomEvent) continue;
+        if (fold(entry.registration.eventName) == wanted) matches.push_back(&entry);
+    }
+    return matches;
+}
+
+std::vector<const RegistrationEntry*> RegistrationRegistry::matchRemoteEvent(
+    const OwnerId& source, const std::string& eventName) const {
+    std::vector<const RegistrationEntry*> matches;
+    const std::string wanted = fold(eventName);
+    for (const RegistrationEntry& entry : entries_) {
+        if (entry.registration.kind != RegistrationKind::RemoteEvent) continue;
+        if (!entry.registration.source.has_value() || *entry.registration.source != source) continue;
         if (fold(entry.registration.eventName) == wanted) matches.push_back(&entry);
     }
     return matches;

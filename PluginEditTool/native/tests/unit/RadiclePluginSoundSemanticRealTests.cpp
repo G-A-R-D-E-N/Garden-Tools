@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -17,7 +18,7 @@ namespace {
 
 struct TempRoot {
     std::filesystem::path path = std::filesystem::temp_directory_path() /
-        ("fo4ide_sound_real_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("fo4ide_sound_real_" + fo4ide_test::uniqueTempName());
     ~TempRoot() {
         std::error_code error;
         std::filesystem::remove_all(path, error);

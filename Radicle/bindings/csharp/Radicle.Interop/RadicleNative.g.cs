@@ -84,6 +84,14 @@ public unsafe struct FormKey
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct StaticPlacement
+{
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public float Scale;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct EnvPluginInfo
 {
     public IntPtr Filename;
@@ -608,14 +616,6 @@ public unsafe struct WeatherInfo
     public int HasParameters;
     public WeatherParameters Parameters;
     public IntPtr Internal;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct StaticPlacement
-{
-    public fixed float Position[3];
-    public fixed float Rotation[3];
-    public float Scale;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -1759,6 +1759,64 @@ public unsafe struct DialogueInfo
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueBranchSpec
+{
+    public IntPtr EditorId;
+    public uint Category;
+    public uint Flags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueTopicSpec
+{
+    public IntPtr EditorId;
+    public IntPtr Name;
+    public float Priority;
+    public int HasBranch;
+    public FormKey Branch;
+    public int HasKeyword;
+    public FormKey Keyword;
+    public byte TopicFlags;
+    public byte Category;
+    public ushort Subtype;
+    public IntPtr SubtypeName;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SceneSpec
+{
+    public IntPtr EditorId;
+    public uint Flags;
+    public uint Index;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueResponseSpec
+{
+    public IntPtr Text;
+    public IntPtr ScriptNotes;
+    public int HasEmotion;
+    public FormKey Emotion;
+    public int HasSound;
+    public FormKey Sound;
+    public byte Number;
+    public ushort InterruptPercent;
+    public int CameraTargetAlias;
+    public int CameraLocationAlias;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueInfoSpec
+{
+    public ushort Flags;
+    public ushort ResetTimeEncoded;
+    public IntPtr Responses;
+    public nuint ResponseCount;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct ScenePhase
 {
     public IntPtr Name;
@@ -2130,6 +2188,241 @@ public unsafe struct CellChild
 {
     public IntPtr Record;
     public int Persistent;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellSummary
+{
+    public FormKey Key;
+    public IntPtr EditorId;
+    public NameKind NameKind;
+    public IntPtr NameText;
+    public uint NameStringId;
+    public int Interior;
+    public int HasGrid;
+    public int GridX;
+    public int GridY;
+    public int HasWorldspace;
+    public FormKey Worldspace;
+    public nuint WinningPlugin;
+    public int Localized;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScolPart
+{
+    public IntPtr ModelPath;
+    public IntPtr Placements;
+    public nuint PlacementCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct BaseObjectInfo
+{
+    public FormKey Key;
+    public fixed byte Signature[5];
+    public IntPtr EditorId;
+    public IntPtr TypeName;
+    public IntPtr ModelPath;
+    public int EditorMarker;
+    public int HasDecal;
+    public IntPtr DecalDiffuse;
+    public int HasDecalWidth;
+    public float DecalWidth;
+    public int HasDecalHeight;
+    public float DecalHeight;
+    public IntPtr ScolParts;
+    public nuint ScolPartCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellReference
+{
+    public FormKey Key;
+    public IntPtr RecordType;
+    public IntPtr EditorId;
+    public int HasBase;
+    public FormKey Base;
+    public IntPtr BaseInfo;
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public float Scale;
+    public int Persistent;
+    public int InitiallyDisabled;
+    public nuint WinningPlugin;
+}
+
+public enum PlacedEditStatus : int
+{
+    Edited = 0,
+    ReferenceMissing = 1,
+    ReferenceDeleted = 2,
+    TargetCellMissing = 3,
+    FieldAbsent = 4,
+}
+
+public enum DuplicateStatus : int
+{
+    Duplicated = 0,
+    ReferenceMissing = 1,
+    ReferenceDeleted = 2,
+    ParentCellMissing = 3,
+    UnsupportedSignature = 4,
+}
+
+public enum DeleteStatus : int
+{
+    Deleted = 0,
+    MarkedDeleted = 1,
+    Referenced = 2,
+    ReferenceMissing = 3,
+    AlreadyDeleted = 4,
+}
+
+public enum CellOverrideStatus : int
+{
+    Inserted = 0,
+    AlreadyExists = 1,
+    SourceMissing = 2,
+    NotACell = 3,
+}
+
+public enum CellEditStatus : int
+{
+    Edited = 0,
+    CellMissing = 1,
+    CellDeleted = 2,
+    NotACell = 3,
+    TargetMissing = 4,
+    TargetTypeNotAllowed = 5,
+    TargetNotMaster = 6,
+    InteriorFlagLocked = 7,
+    InvalidValue = 8,
+    Malformed = 9,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct LinkedReferenceEdit
+{
+    public FormKey Keyword;
+    public FormKey Reference;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlacedEdit
+{
+    public int HasTransform;
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public int HasScale;
+    public int HasScaleValue;
+    public float Scale;
+    public int HasEditorId;
+    public IntPtr EditorId;
+    public int HasRecordFlags;
+    public uint RecordFlags;
+    public int HasComments;
+    public IntPtr Comments;
+    public int HasLocationReference;
+    public FormKey LocationReference;
+    public int HasOwnership;
+    public FormKey Owner;
+    public int NoCrime;
+    public int HasFactionRank;
+    public int FactionRank;
+    public int HasEnableParent;
+    public FormKey EnableParent;
+    public byte EnableParentFlags;
+    public int HasLinkedReferences;
+    public IntPtr LinkedReferences;
+    public nuint LinkedReferenceCount;
+    public int HasTeleport;
+    public FormKey TeleportDoor;
+    public fixed float TeleportPosition[3];
+    public fixed float TeleportRotation[3];
+    public int HasPrimitive;
+    public fixed float PrimitiveBounds[3];
+    public uint PrimitiveType;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlacedEditResult
+{
+    public PlacedEditStatus Status;
+    public IntPtr CopiedFrom;
+    public int Relocated;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DuplicateOptions
+{
+    public fixed float OffsetPosition[3];
+    public fixed float OffsetRotation[3];
+    public int KeepEditorId;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellLightingEdit
+{
+    public int HasAmbient;
+    public ByteColor Ambient;
+    public int HasDirectional;
+    public ByteColor Directional;
+    public int HasFogNearColor;
+    public ByteColor FogNearColor;
+    public int HasFogNear;
+    public float FogNear;
+    public int HasFogFar;
+    public float FogFar;
+    public int HasDirectionalRotationXy;
+    public int DirectionalRotationXy;
+    public int HasDirectionalRotationZ;
+    public int DirectionalRotationZ;
+    public int HasDirectionalFade;
+    public float DirectionalFade;
+    public int HasFogClipDistance;
+    public float FogClipDistance;
+    public int HasFogPower;
+    public float FogPower;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellEdit
+{
+    public int HasFlags;
+    public ushort Flags;
+    public int HasLighting;
+    public CellLightingEdit Lighting;
+    public int HasLightingTemplate;
+    public FormKey LightingTemplate;
+    public int HasWaterHeight;
+    public float WaterHeight;
+    public int HasWater;
+    public FormKey Water;
+    public int HasImageSpace;
+    public FormKey ImageSpace;
+    public int HasEncounterZone;
+    public FormKey EncounterZone;
+    public int HasLocation;
+    public FormKey Location;
+    public int HasAcousticSpace;
+    public FormKey AcousticSpace;
+    public int HasMusicType;
+    public FormKey MusicType;
+    public int HasSkyWeatherRegion;
+    public FormKey SkyWeatherRegion;
+    public int HasGodRays;
+    public FormKey GodRays;
+    public int HasLockList;
+    public FormKey LockList;
+    public int HasOwner;
+    public FormKey Owner;
+    public int HasOwnerRank;
+    public int OwnerRank;
+    public int HasRegions;
+    public IntPtr Regions;
+    public nuint RegionCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2640,6 +2933,19 @@ public unsafe struct SwfInstanceTransform
     public SwfTransform Transform;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfPlacementMatrixFields
+{
+    public byte HasScale;
+    public int ScaleX;
+    public int ScaleY;
+    public byte HasRotate;
+    public int Rotate0;
+    public int Rotate1;
+    public int TranslateX;
+    public int TranslateY;
+}
+
 public enum PexOperandRole : int
 {
     None = 0,
@@ -2714,6 +3020,12 @@ public unsafe struct PexChainFinding
     public nuint ChainNameCount;
 }
 
+public enum ArchivePolicy : int
+{
+    Fail = 0,
+    Skip = 1,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct ScriptSetCandidate
 {
@@ -2732,6 +3044,35 @@ public unsafe struct ScriptSetWinner
     public IntPtr Name;
     public ScriptSetCandidate Winner;
     public uint Replaced;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptSetFailureInfo
+{
+    public nuint ArchiveIndex;
+    public IntPtr Path;
+    public IntPtr Message;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptCensusTotals
+{
+    public nuint ObjectCount;
+    public nuint UnreadableCount;
+    public nuint SiteCount;
+    public nuint ScriptCallCount;
+    public nuint UnresolvedCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptCensusSite
+{
+    public IntPtr Script;
+    public IntPtr Function;
+    public nuint Instruction;
+    public int IsStatic;
+    public IntPtr Target;
+    public IntPtr CalledFunction;
 }
 
 public enum PapyrusValueKind : int
@@ -2815,12 +3156,33 @@ public enum PapyrusNativeKind : int
     EngineObject = 2,
 }
 
+public enum PapyrusNativeFlags : int
+{
+    MayWait = 1,
+    AcceptScriptInstance = 2,
+}
+
 public enum PapyrusOverrideOutcome : int
 {
     NotRegistered = 0,
     Declined = 1,
     Handled = 2,
     Refused = 3,
+}
+
+public enum PapyrusCallState : int
+{
+    Pending = 0,
+    Waiting = 1,
+    Done = 2,
+    Failed = 3,
+    Dropped = 4,
+}
+
+public enum PapyrusOninitPolicy : int
+{
+    Refuse = 0,
+    Queue = 1,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2836,6 +3198,35 @@ public unsafe struct PapyrusStepResult
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusCallInfo
+{
+    public nuint StructSize;
+    public PapyrusCallState State;
+    public PapyrusStatus Status;
+    public ulong Instructions;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusRuntimeStats
+{
+    public nuint StructSize;
+    public int Ready;
+    public int Waiting;
+    public int Completed;
+    public int Parked;
+    public int Paused;
+    public int Refused;
+    public int Dropped;
+    public int WaitingEvents;
+    public int RefusedCompletions;
+    public int QueuedDuringOninit;
+    public int NativeTargetRefusals;
+    public int OverridesHandled;
+    public int OverridesDeclined;
+    public int OverridesRefused;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct PapyrusRuntimeCallbacks
 {
     public IntPtr User;
@@ -2843,6 +3234,16 @@ public unsafe struct PapyrusRuntimeCallbacks
     public IntPtr CallNative;
     public IntPtr OverrideFunction;
     public IntPtr BeginLatent;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusEngineCallbacks
+{
+    public nuint StructSize;
+    public IntPtr User;
+    public IntPtr CallNativeEx;
+    public IntPtr GetProperty;
+    public IntPtr SetProperty;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2899,6 +3300,11 @@ public unsafe struct PapyrusVmadShape
     public int HasBoolean;
     public int Boolean;
     public IntPtr Object;
+    public IntPtr ElementType;
+    public IntPtr Elements;
+    public nuint ElementsLen;
+    public IntPtr Members;
+    public nuint MembersLen;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2919,6 +3325,8 @@ public unsafe struct PapyrusBindReport
     public int Bound;
     public int Unsupported;
     public int SilentlyDefaulted;
+    public IntPtr UnsupportedShapes;
+    public nuint UnsupportedShapeCount;
     public IntPtr Report;
     public IntPtr Digest;
 }
@@ -2950,6 +3358,147 @@ public unsafe struct PapyrusAliasReport
     public nuint Count;
     public int Filled;
     public int Open;
+    public IntPtr Report;
+    public IntPtr Digest;
+}
+
+public enum PapyrusFanoutResult : int
+{
+    Delivered = 0,
+    Refused = 1,
+    SkippedParked = 2,
+    NoHandler = 3,
+    UnknownOwner = 4,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusLifecycleProperty
+{
+    public IntPtr Script;
+    public IntPtr Name;
+    public IntPtr Type;
+    public int HasAlias;
+    public IntPtr Text;
+    public int HasReal;
+    public double Real;
+    public int HasInteger;
+    public long Integer;
+    public int HasBoolean;
+    public int Boolean;
+    public IntPtr Object;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusQuestStartupInput
+{
+    public IntPtr Quest;
+    public int StartGameEnabled;
+    public IntPtr Scripts;
+    public nuint ScriptCount;
+    public int Fragments;
+    public int Aliases;
+    public IntPtr Unsupported;
+    public nuint UnsupportedCount;
+    public IntPtr Properties;
+    public nuint PropertyCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusAliasScriptInput
+{
+    public IntPtr Quest;
+    public int AliasId;
+    public IntPtr Script;
+    public IntPtr Properties;
+    public nuint PropertyCount;
+    public IntPtr Objectives;
+    public nuint ObjectiveCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusActorAliasInput
+{
+    public PapyrusAliasScriptInput Alias;
+    public int Bound;
+    public IntPtr Target;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusQuestStartupPlan
+{
+    public int Ready;
+    public int Blocked;
+    public int Skipped;
+    public IntPtr Report;
+    public IntPtr Digest;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusQuestStartupResult
+{
+    public int Applied;
+    public int Started;
+    public int AttachedScripts;
+    public IntPtr Reasons;
+    public nuint ReasonCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusAliasAttachReport
+{
+    public int Attached;
+    public int Skipped;
+    public int Refused;
+    public int Properties;
+    public int Natives;
+    public int Objectives;
+    public IntPtr Report;
+    public IntPtr Digest;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusActorBindReport
+{
+    public int Bound;
+    public int Unbound;
+    public int Attached;
+    public int Refused;
+    public IntPtr Report;
+    public IntPtr Digest;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusLifecycleCounters
+{
+    public int Started;
+    public int Blocked;
+    public int Skipped;
+    public int AttachedScripts;
+    public int Approximations;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusFanoutOutcome
+{
+    public IntPtr OwnerKey;
+    public ulong Instance;
+    public IntPtr Script;
+    public PapyrusFanoutResult Result;
+    public PapyrusStatus Status;
+    public IntPtr Reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusFanoutReport
+{
+    public IntPtr Outcomes;
+    public nuint Count;
+    public int Delivered;
+    public int Refused;
+    public int SkippedParked;
+    public int NoHandler;
+    public int UnknownOwner;
+    public IntPtr Handler;
     public IntPtr Report;
     public IntPtr Digest;
 }
@@ -2995,7 +3544,7 @@ public unsafe struct PrevisCell
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 104u;
+    public const uint CompiledAbiVersion = 434u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3828,6 +4377,27 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_action_name")]
     public static extern Status PluginSetSceneActionName(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_dialogue_branch")]
+    public static extern Status PluginCreateDialogueBranch(IntPtr plugin, FormKey quest, DialogueBranchSpec* spec, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_dialogue_topic")]
+    public static extern Status PluginCreateDialogueTopic(IntPtr plugin, FormKey quest, DialogueTopicSpec* spec, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_dialogue_branch_start")]
+    public static extern Status PluginSetDialogueBranchStart(IntPtr plugin, FormKey branch, FormKey topic);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_dialogue_info")]
+    public static extern Status PluginCreateDialogueInfo(IntPtr plugin, FormKey topic, DialogueInfoSpec* spec, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_update_dialogue_info")]
+    public static extern Status PluginUpdateDialogueInfo(IntPtr plugin, FormKey info, DialogueInfoSpec* spec);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_dialogue_info")]
+    public static extern Status PluginRemoveDialogueInfo(IntPtr plugin, FormKey info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_scene")]
+    public static extern Status PluginCreateScene(IntPtr plugin, FormKey quest, SceneSpec* spec, FormKey* out_key);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_list_read")]
     public static extern Status PluginListRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_rows, nuint* out_count);
 
@@ -3995,6 +4565,78 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_landscape")]
     public static extern Status EnvCellLandscape(IntPtr env, FormKey cell, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_resolve_cell")]
+    public static extern Status EnvResolveCell(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_resolve_worldspace")]
+    public static extern Status EnvResolveWorldspace(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_cell_at_grid")]
+    public static extern Status EnvFindCellAtGrid(IntPtr env, FormKey world, int x, int y, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_view")]
+    public static extern Status EnvCellView(IntPtr env, FormKey cell, IntPtr* out_view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_summary")]
+    public static extern Status CellViewSummary(IntPtr view, CellSummary* out_summary);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_reference_count")]
+    public static extern nuint CellViewReferenceCount(IntPtr view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_reference")]
+    public static extern Status CellViewReference(IntPtr view, nuint index, CellReference* out_reference);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_scol_part")]
+    public static extern Status CellViewScolPart(IntPtr view, nuint reference_index, nuint part_index, ScolPart* out_part);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_free")]
+    public static extern void CellViewFree(IntPtr view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_base_object_info")]
+    public static extern Status EnvBaseObjectInfo(IntPtr env, FormKey @base, BaseObjectInfo** out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_base_object_info_free")]
+    public static extern void BaseObjectInfoFree(BaseObjectInfo* info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_edit_placed_reference")]
+    public static extern Status PluginEditPlacedReference(IntPtr patch, IntPtr env, FormKey reference, PlacedEdit* edit, PlacedEditResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_duplicate_placed_reference")]
+    public static extern Status PluginDuplicatePlacedReference(IntPtr patch, IntPtr env, FormKey reference, DuplicateOptions* options, DuplicateStatus* out_status, FormKey* out_new);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_delete_placed_reference")]
+    public static extern Status PluginDeletePlacedReference(IntPtr patch, IntPtr env, FormKey reference, DeleteStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_cell_override")]
+    public static extern Status PluginCopyCellOverride(IntPtr patch, IntPtr source, FormKey cell, CellOverrideStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_edit_cell")]
+    public static extern Status PluginEditCell(IntPtr patch, IntPtr env, FormKey cell, CellEdit* edit, CellEditStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_create")]
+    public static extern Status PluginHistoryCreate(IntPtr* out_history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_destroy")]
+    public static extern void PluginHistoryDestroy(IntPtr history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_record")]
+    public static extern Status PluginHistoryRecord(IntPtr history, IntPtr before);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_undo")]
+    public static extern Status PluginHistoryUndo(IntPtr history, IntPtr patch);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_redo")]
+    public static extern Status PluginHistoryRedo(IntPtr history, IntPtr patch);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_undo_count")]
+    public static extern Status PluginHistoryUndoCount(IntPtr history, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_redo_count")]
+    public static extern Status PluginHistoryRedoCount(IntPtr history, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_revision")]
+    public static extern Status PluginHistoryRevision(IntPtr history, ulong* out_revision);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_delta_patch")]
     public static extern Status EnvBuildDeltaPatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? older_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? newer_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, DeltaPatchCounts* out_counts);
@@ -4458,6 +5100,30 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_insert_instance_transform_keyframe")]
     public static extern Status SwfInsertInstanceTransformKeyframe(IntPtr history, uint root_frame, uint instance_id, SwfTransform* transform, SwfPlanResult* out_result);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_placements_json")]
+    public static extern Status SwfPlacementsJson(IntPtr history, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_placement_matrix_at")]
+    public static extern Status SwfPlacementMatrixAt(IntPtr history, nuint tag_index, SwfPlacementMatrixFields* out_matrix);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_set_placement_depth")]
+    public static extern Status SwfSetPlacementDepth(IntPtr history, nuint tag_index, ushort depth, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_set_placement_transform")]
+    public static extern Status SwfSetPlacementTransform(IntPtr history, nuint tag_index, int x, int y, int scale_x, int scale_y, int rotate0, int rotate1, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_insert_placement_keyframe")]
+    public static extern Status SwfInsertPlacementKeyframe(IntPtr history, nuint tag_index, uint frame, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_abc_text_edit")]
+    public static extern Status SwfHistoryAbcTextEdit(IntPtr history, nuint abc, uint body, nuint offset, byte* text, nuint size, byte insert, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_abc_apply_text")]
+    public static extern Status SwfHistoryAbcApplyText(IntPtr history, nuint abc, byte* text, nuint size, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_action_tags_json")]
+    public static extern Status SwfActionTagsJson(IntPtr history, byte** out_text, nuint* out_size);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_call_operand_role")]
     public static extern PexOperandRole PexCallOperandRole(byte opcode, nuint index);
 
@@ -4499,6 +5165,36 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_chain_report_name")]
     public static extern Status PexChainReportName(IntPtr report, nuint index, IntPtr* out_name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_open")]
+    public static extern Status ScriptSetOpen(IntPtr* root_paths, nuint root_count, IntPtr* archive_paths, nuint archive_count, ArchivePolicy policy, IntPtr* out_set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_failure_count")]
+    public static extern nuint ScriptSetFailureCount(IntPtr set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_failure")]
+    public static extern Status ScriptSetFailure(IntPtr set, nuint index, ScriptSetFailureInfo* out_failure);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_parent_chain_valid")]
+    public static extern Status ScriptSetParentChainValid(IntPtr set, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? object_name, int* out_valid);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_census")]
+    public static extern Status ScriptSetCensus(IntPtr set, IntPtr* out_census);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_destroy")]
+    public static extern void ScriptCensusDestroy(IntPtr census);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_totals_get")]
+    public static extern Status ScriptCensusTotalsGet(IntPtr census, ScriptCensusTotals* out_totals);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_site_get")]
+    public static extern Status ScriptCensusSiteGet(IntPtr census, nuint index, ScriptCensusSite* out_site);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_unresolved")]
+    public static extern Status ScriptCensusUnresolved(IntPtr census, nuint index, IntPtr* out_text);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_census_unreadable")]
+    public static extern Status ScriptCensusUnreadable(IntPtr census, nuint index, IntPtr* out_name);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_resolve")]
     public static extern Status ScriptSetResolve(IntPtr assets, int* root_load_index, nuint root_load_index_count, IntPtr* out_set);
@@ -4638,6 +5334,33 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_send_event")]
     public static extern Status PapyrusRuntimeSendEvent(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function, IntPtr* args, nuint arg_count, PapyrusStatus* out_status);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_call_function")]
+    public static extern Status PapyrusRuntimeCallFunction(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function, IntPtr* args, nuint arg_count, ulong* out_ticket, PapyrusStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_call_result")]
+    public static extern Status PapyrusRuntimeCallResult(IntPtr runtime, ulong ticket, int consume, PapyrusCallInfo* out_info, IntPtr* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_set_oninit_policy")]
+    public static extern Status PapyrusRuntimeSetOninitPolicy(IntPtr runtime, PapyrusOninitPolicy policy);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_set_max_parks")]
+    public static extern Status PapyrusRuntimeSetMaxParks(IntPtr runtime, int parks);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_has_script")]
+    public static extern int PapyrusRuntimeHasScript(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_instance_declares")]
+    public static extern int PapyrusRuntimeInstanceDeclares(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_instance_script")]
+    public static extern IntPtr PapyrusRuntimeInstanceScript(IntPtr runtime, ulong instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_list_instances")]
+    public static extern Status PapyrusRuntimeListInstances(IntPtr runtime, ulong* out_ids, nuint capacity, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_get_stats")]
+    public static extern Status PapyrusRuntimeGetStats(IntPtr runtime, PapyrusRuntimeStats* @out);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_step")]
     public static extern Status PapyrusRuntimeStep(IntPtr runtime, int budget, PapyrusStepResult* out_result);
 
@@ -4668,6 +5391,48 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_advance_clock")]
     public static extern Status PapyrusRuntimeAdvanceClock(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? owner, double delta_seconds, PapyrusClock clock, int* out_fired);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_attach_with_properties")]
+    public static extern Status PapyrusRuntimeAttachWithProperties(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script, PapyrusOwnerKind owner_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? discriminator, IntPtr* names, IntPtr* values, nuint count, ulong* out_instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_get_property")]
+    public static extern Status PapyrusRuntimeGetProperty(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, IntPtr* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_register_remote_event")]
+    public static extern Status PapyrusRuntimeRegisterRemoteEvent(IntPtr runtime, ulong instance, PapyrusOwnerKind source_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source_base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source_discriminator, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? event_name, long* out_handle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_match_remote_event")]
+    public static extern Status PapyrusRuntimeMatchRemoteEvent(IntPtr runtime, PapyrusOwnerKind source_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source_base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source_discriminator, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? event_name, long* out_handles, ulong* out_instances, nuint capacity, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_set_engine_callbacks")]
+    public static extern Status PapyrusRuntimeSetEngineCallbacks(IntPtr runtime, PapyrusEngineCallbacks* callbacks);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_register_native_ex")]
+    public static extern Status PapyrusRuntimeRegisterNativeEx(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function, PapyrusNativeKind kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? required_script, uint flags);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_native_call_self")]
+    public static extern IntPtr PapyrusNativeCallSelf(IntPtr call);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_native_call_script")]
+    public static extern IntPtr PapyrusNativeCallScript(IntPtr call);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_native_call_function")]
+    public static extern IntPtr PapyrusNativeCallFunction(IntPtr call);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_native_call_arg_count")]
+    public static extern nuint PapyrusNativeCallArgCount(IntPtr call);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_native_call_arg")]
+    public static extern IntPtr PapyrusNativeCallArg(IntPtr call, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_native_call_set_result")]
+    public static extern Status PapyrusNativeCallSetResult(IntPtr call, IntPtr value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_native_call_begin_wait")]
+    public static extern Status PapyrusNativeCallBeginWait(IntPtr call, ulong* out_token);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_native_call_fail")]
+    public static extern Status PapyrusNativeCallFail(IntPtr call, PapyrusStatus status);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_string_free")]
     public static extern void PapyrusStringFree(IntPtr text);
 
@@ -4697,6 +5462,75 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_alias_report_destroy")]
     public static extern void PapyrusAliasReportDestroy(PapyrusAliasReport* report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_create")]
+    public static extern Status PapyrusLifecycleCreate(IntPtr runtime, IntPtr* out_lifecycle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_destroy")]
+    public static extern void PapyrusLifecycleDestroy(IntPtr lifecycle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_preflight")]
+    public static extern Status PapyrusLifecyclePreflight(IntPtr lifecycle, PapyrusQuestStartupInput* inputs, nuint count, PapyrusQuestStartupPlan* out_plan);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_quest_startup_plan_destroy")]
+    public static extern void PapyrusQuestStartupPlanDestroy(PapyrusQuestStartupPlan* plan);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_start")]
+    public static extern Status PapyrusLifecycleStart(IntPtr lifecycle, PapyrusQuestStartupInput* inputs, nuint count, PapyrusQuestStartupResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_quest_startup_result_destroy")]
+    public static extern void PapyrusQuestStartupResultDestroy(PapyrusQuestStartupResult* result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_stop")]
+    public static extern Status PapyrusLifecycleStop(IntPtr lifecycle, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? quest, int* out_was_started);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_is_started")]
+    public static extern int PapyrusLifecycleIsStarted(IntPtr lifecycle, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? quest);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_instance_count")]
+    public static extern nuint PapyrusLifecycleInstanceCount(IntPtr lifecycle, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? quest);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_instance_at")]
+    public static extern int PapyrusLifecycleInstanceAt(IntPtr lifecycle, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? quest, nuint index, ulong* out_instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_get_counters")]
+    public static extern Status PapyrusLifecycleGetCounters(IntPtr lifecycle, PapyrusLifecycleCounters* out_counters);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_attach_aliases")]
+    public static extern Status PapyrusLifecycleAttachAliases(IntPtr lifecycle, PapyrusAliasScriptInput* aliases, nuint count, PapyrusAliasAttachReport* out_report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_alias_attach_report_destroy")]
+    public static extern void PapyrusAliasAttachReportDestroy(PapyrusAliasAttachReport* report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_bind_actors")]
+    public static extern Status PapyrusLifecycleBindActors(IntPtr lifecycle, PapyrusActorAliasInput* aliases, nuint count, PapyrusActorBindReport* out_report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_actor_bind_report_destroy")]
+    public static extern void PapyrusActorBindReportDestroy(PapyrusActorBindReport* report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_clear_alias")]
+    public static extern Status PapyrusLifecycleClearAlias(IntPtr lifecycle, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? quest, int alias_id, int* out_cleared);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_clear_quest_aliases")]
+    public static extern Status PapyrusLifecycleClearQuestAliases(IntPtr lifecycle, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? quest, int* out_cleared);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_alias_instance")]
+    public static extern int PapyrusLifecycleAliasInstance(IntPtr lifecycle, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? quest, int alias_id, ulong* out_instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_lifecycle_objective")]
+    public static extern int PapyrusLifecycleObjective(IntPtr lifecycle, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? quest, int alias_id, int index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_fan_out_event")]
+    public static extern Status PapyrusRuntimeFanOutEvent(IntPtr runtime, PapyrusOwnerKind owner_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? discriminator, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? event_name, IntPtr* args, nuint arg_count, PapyrusFanoutReport* out_report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_broadcast_event")]
+    public static extern Status PapyrusRuntimeBroadcastEvent(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? event_name, IntPtr* args, nuint arg_count, PapyrusFanoutReport* out_report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_fanout_report_destroy")]
+    public static extern void PapyrusFanoutReportDestroy(PapyrusFanoutReport* report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_park_owner")]
+    public static extern Status PapyrusRuntimeParkOwner(IntPtr runtime, PapyrusOwnerKind owner_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? discriminator, int parked);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_source_summary")]
     public static extern Status PapyrusSourceSummary(byte* source, nuint size, IntPtr** out_rows, nuint* out_count);
@@ -4739,6 +5573,24 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_symbol_at_json")]
     public static extern Status PapyrusSymbolAtJson(byte* text, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_path, int offset, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_completion_json")]
+    public static extern Status PapyrusCompletionJson(byte* text, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_path, int offset, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_signature_help_json")]
+    public static extern Status PapyrusSignatureHelpJson(byte* text, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_path, int offset, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_check_text_json")]
+    public static extern Status PapyrusCheckTextJson(byte* text, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_path, int revision, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_references_json")]
+    public static extern Status PapyrusReferencesJson(byte* text, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_path, int offset, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_rename_json")]
+    public static extern Status PapyrusRenameJson(byte* text, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_path, int offset, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? new_name, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_workspace_symbols_json")]
+    public static extern Status PapyrusWorkspaceSymbolsJson([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? query, int limit, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_compile_path")]
     public static extern Status PapyrusCompilePath([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, int release, int no_debug_info, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? flag_file, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);

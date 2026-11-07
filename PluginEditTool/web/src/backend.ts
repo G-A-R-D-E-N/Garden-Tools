@@ -20,6 +20,37 @@ export interface Backend {
   SetComponents(plugin: string, record: string, componentsJson: string): Promise<string>;
   SetQuestAliases(plugin: string, record: string, aliasesJson: string): Promise<string>;
   SetQuestStages(plugin: string, record: string, stagesJson: string): Promise<string>;
+  GetQuestStages(plugin: string, formKey: string, context?: object): Promise<string | object>;
+  GetQuestObjectives(plugin: string, formKey: string, context?: object): Promise<string | object>;
+  GetQuestAliases(plugin: string, formKey: string): Promise<string | object>;
+  SetQuestObjectives(plugin: string, record: string, objectivesJson: string): Promise<string>;
+  SetQuestFragment(plugin: string, record: string, stage: number, logEntryIndex: number, scriptName: string,
+                   outputDirectory: string, importsDirectory: string, actionsJson: string):
+    Promise<string | { script: string; function: string; source: string; pex: string }>;
+  GetQuestFragments(plugin: string, formKey: string): Promise<string | object>;
+  GetQuestScript(scriptName: string, importsDirectory?: string): Promise<string | object>;
+  GetDialogue(plugin: string, questFormKey: string): Promise<string | object>;
+  CreateDialogueBranch(plugin: string, questFormKey: string, spec: Record<string, unknown>): Promise<string | { formKey: string }>;
+  CreateDialogueTopic(plugin: string, questFormKey: string, spec: Record<string, unknown>): Promise<string | { formKey: string }>;
+  CreateDialogueTopicBulk(plugin: string, questFormKey: string, spec: Record<string, unknown>): Promise<string | object>;
+  SetDialogueBranchStart(plugin: string, branchFormKey: string, topicFormKey: string): Promise<string>;
+  CreateInfo(plugin: string, topicFormKey: string, spec: Record<string, unknown>): Promise<string | { formKey: string }>;
+  SetInfo(plugin: string, infoFormKey: string, spec: Record<string, unknown>): Promise<string>;
+  RemoveInfo(plugin: string, infoFormKey: string): Promise<string>;
+  GetScene(plugin: string, sceneFormKey: string): Promise<string | object>;
+  CreateScene(plugin: string, questFormKey: string, spec?: Record<string, unknown>): Promise<string | { formKey: string }>;
+  SetScene(plugin: string, sceneFormKey: string, spec: Record<string, unknown>): Promise<string>;
+  AddScenePhase(plugin: string, sceneFormKey: string, index: number, spec?: Record<string, unknown>): Promise<string>;
+  SetScenePhase(plugin: string, sceneFormKey: string, phaseIndex: number, spec: Record<string, unknown>): Promise<string>;
+  MoveScenePhase(plugin: string, sceneFormKey: string, fromIndex: number, toIndex: number): Promise<string>;
+  RemoveScenePhase(plugin: string, sceneFormKey: string, phaseIndex: number): Promise<string>;
+  AddSceneActor(plugin: string, sceneFormKey: string, index: number): Promise<string>;
+  SetSceneActor(plugin: string, sceneFormKey: string, actorIndex: number, spec: Record<string, unknown>): Promise<string>;
+  RemoveSceneActor(plugin: string, sceneFormKey: string, actorIndex: number): Promise<string>;
+  AddSceneAction(plugin: string, sceneFormKey: string, index: number, type: number): Promise<string>;
+  SetSceneAction(plugin: string, sceneFormKey: string, actionIndex: number, spec: Record<string, unknown>): Promise<string>;
+  MoveSceneAction(plugin: string, sceneFormKey: string, fromIndex: number, toIndex: number): Promise<string>;
+  RemoveSceneAction(plugin: string, sceneFormKey: string, actionIndex: number): Promise<string>;
   SetConditions(plugin: string, record: string, conditionsJson: string): Promise<string>;
   AddListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
   RemoveListItem(plugin: string, record: string, field: string, value: string): Promise<string>;
@@ -32,7 +63,8 @@ export interface Backend {
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
   CleanUnusedMasters(plugin: string, apply: boolean): Promise<string>;
-  CheckForErrors(plugin: string, limit: number): Promise<string>;
+  CheckForErrors(plugin: string, limit?: number): Promise<string>;
+  CheckQuest(plugin: string, formKey: string, limit?: number): Promise<string>;
   FindUnreachable(plugin: string, limit: number): Promise<string>;
   LootCleaningReport(plugin: string): Promise<string>;
   UpdateOnam(plugin: string): Promise<string>;
@@ -103,7 +135,7 @@ export interface Backend {
 export type PluginKind = 'master' | 'plugin' | 'light';
 
 export interface ActivePlugin {
-  Name: string; Kind: PluginKind; LoadOrder: number; Editable: boolean; Size: number;
+  Name: string; Kind: PluginKind; LoadOrder: number; Editable: boolean; Localized: boolean; Size: number;
 }
 export interface RecordTypeEntry { Type: string; FriendlyName: string; Count: number; }
 export interface BreadcrumbNode { Kind: string; Label: string; FormKey: string; }
@@ -298,6 +330,18 @@ export interface PapyrusHost {
 
   SymbolAt(text: string, path: string, offset: number, imports: string): Promise<string>;
 
+  Complete(text: string, path: string, offset: number, imports: string): Promise<string>;
+
+  SignatureHelp(text: string, path: string, offset: number, imports: string): Promise<string>;
+
+  CheckText(text: string, path: string, revision: number, imports: string): Promise<string>;
+
+  References(text: string, path: string, offset: number, imports: string): Promise<string>;
+
+  Rename(text: string, path: string, offset: number, newName: string, imports: string): Promise<string>;
+
+  WorkspaceSymbols(query: string, limit: number, imports: string): Promise<string>;
+
   ReadScript(path: string): Promise<string>;
 
   WriteScript(path: string, text: string): Promise<string>;
@@ -354,6 +398,112 @@ export interface PapyrusSymbolResult {
   column?: number;
   start?: number;
   length?: number;
+  error?: string;
+}
+
+
+export interface PapyrusCompletionItem {
+  label: string;
+  kind: string;
+  detail: string;
+  insertText: string;
+  documentation: string | null;
+}
+
+export interface PapyrusCompletionResult {
+  context?: string;
+  replaceStart?: number;
+  replaceLength?: number;
+  items?: PapyrusCompletionItem[];
+  error?: string;
+}
+
+export interface PapyrusSignatureParameter {
+  label: string;
+  documentation: string | null;
+}
+
+export interface PapyrusSignature {
+  label: string;
+  documentation: string | null;
+  parameters: PapyrusSignatureParameter[];
+}
+
+export interface PapyrusSignatureResult {
+  active: boolean;
+  signatures?: PapyrusSignature[];
+  activeSignature?: number;
+  activeParameter?: number;
+  error?: string;
+}
+
+export interface PapyrusHint {
+  code: string;
+  severity: 'hint';
+  unnecessary: boolean;
+  message: string;
+  line: number;
+  column: number;
+  start: number;
+  length: number;
+}
+
+export interface PapyrusCheckResult {
+  revision?: number;
+  complete?: boolean;
+  errorCount?: number;
+  diagnostics?: PapyrusDiagnostic[];
+  hints?: PapyrusHint[];
+  error?: string;
+}
+
+export interface PapyrusReferenceHit {
+  file: string | null;
+  line: number;
+  column: number;
+  start: number;
+  length: number;
+  isDeclaration: boolean;
+}
+
+export interface PapyrusReferencesResult {
+  resolved?: boolean;
+  reason?: string;
+  declaration?: { name: string; kind: string; signature: string; file: string | null; line: number; column: number; start: number; length: number };
+  references?: PapyrusReferenceHit[];
+  error?: string;
+}
+
+export interface PapyrusRenameEdit {
+  file: string | null;
+  start: number;
+  length: number;
+  newText: string;
+}
+
+export interface PapyrusRenameResult {
+  ok?: boolean;
+  reason?: string;
+  edits?: PapyrusRenameEdit[];
+  fileRename?: { from: string; to: string } | null;
+  error?: string;
+}
+
+export interface PapyrusWorkspaceSymbol {
+  name: string;
+  kind: string;
+  signature: string;
+  container: string | null;
+  file: string | null;
+  line: number;
+  column: number;
+  start: number;
+  length: number;
+}
+
+export interface PapyrusWorkspaceResult {
+  truncated?: boolean;
+  results?: PapyrusWorkspaceSymbol[];
   error?: string;
 }
 
@@ -423,6 +573,43 @@ export interface StringsHost {
   ExportStrings(plugin: string, language: string, table: string): Promise<string>;
   SaveStringTables(plugin: string, language: string): Promise<string>;
   DiscardStringEdits(plugin: string, language: string): Promise<string>;
+}
+
+export interface SwfHost {
+  Open(path: string): Promise<string>;
+  Characters(): Promise<string>;
+  FrameLabels(timeline: number): Promise<string>;
+  Frame(timeline: number, frame: number): Promise<string>;
+  Timeline(index: number): Promise<string>;
+  RenameLabel(timeline: number, labelIndex: number, name: string): Promise<string>;
+  Undo(): Promise<string>;
+  Redo(): Promise<string>;
+  State(): Promise<string>;
+  Save(): Promise<string>;
+  AddLabel(frame: number, name: string, timeline: number): Promise<string>;
+  RemoveLabel(timeline: number, labelIndex: number): Promise<string>;
+  Placements(): Promise<string>;
+  SetDepth(tagIndex: number, depth: number): Promise<string>;
+  PlacementMatrix(tagIndex: number): Promise<string>;
+  SetTransform(tagIndex: number, x: number, y: number, scaleX: number, scaleY: number, rotate0: number, rotate1: number): Promise<string>;
+  InsertKeyframe(tagIndex: number, frame: number): Promise<string>;
+  ReadEditText(tagIndex: number): Promise<string>;
+  EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
+  AbcBlocks(): Promise<string>;
+  Disassemble(abc: number, methodIndex: number): Promise<string>;
+  ShapeSvg(characterId: number): Promise<string>;
+  FrameSvg(frame: number): Promise<string>;
+  BitmapPng(tagIndex: number): Promise<string>;
+  BitmapJpeg(tagIndex: number): Promise<string>;
+  InspectText(): Promise<string>;
+  ActionTags(): Promise<string>;
+  Avm1Disassemble(tagIndex: number): Promise<string>;
+  BrowseForFile(title: string, filter: string): Promise<string>;
+  ArchiveSwfs(): Promise<string>;
+  OpenArchived(name: string): Promise<string>;
+  SaveAs(title: string, filter: string): Promise<string>;
+  AbcText(abc: number): Promise<string>;
+  ApplyAbcText(abc: number, text: string): Promise<string>;
 }
 
 
@@ -593,6 +780,33 @@ export interface CellPlacedReference {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: number;
+  isMarker?: boolean;
+}
+export interface CellTransform {
+  x: number; y: number; z: number; rx: number; ry: number; rz: number;
+}
+export interface CellEditChanges {
+  transform?: CellTransform;
+  scale?: number | null;
+  editorId?: string;
+}
+export type CellPropertyKind = 'scalar' | 'link' | 'colour' | 'flags';
+export type CellPropertyValue = number | string | number[] | string[] | null;
+export interface CellPropertyDescriptor {
+  name: string;
+  label: string;
+  kind: CellPropertyKind;
+  minimum: number;
+  maximum: number;
+  multiple: boolean;
+  targets: string[];
+}
+export type CellPropertyChanges = Record<string, CellPropertyValue>;
+export interface CellPropertiesResult {
+  cellFormKey: string;
+  cellEditorId: string;
+  values: Record<string, CellPropertyValue>;
+  descriptors: CellPropertyDescriptor[];
 }
 export interface CellReferencesResult {
   cellFormKey?: string;
@@ -625,6 +839,8 @@ export interface CellHost {
 
   GetPlacedReferencesAtGrid(worldspace: string, gridX: number, gridY: number): Promise<string>;
   SearchWorldspaces(query: string, limit: number): Promise<string>;
+  ResolveWorldspace(cellId: string): Promise<string>;
+  ResolveWorldspaceId(worldspace: string): Promise<string>;
 
   GetGeometryBatch(relModelPathsJson: string): Promise<string>;
   GetPlugins(): Promise<string>;
@@ -639,6 +855,15 @@ export interface CellHost {
 
   SetPlacedReferenceTransform(formKey: string, patchPlugin: string,
     x: number, y: number, z: number, rx: number, ry: number, rz: number): Promise<string>;
+
+  EditPlacedReference(formKey: string, patchPlugin: string, changes: CellEditChanges): Promise<string>;
+  DeletePlacedReference(formKey: string, patchPlugin: string): Promise<string>;
+  DuplicatePlacedReference(formKey: string, patchPlugin: string, offset: CellTransform | null): Promise<string>;
+  UndoCellEdit(patchPlugin: string): Promise<string>;
+  RedoCellEdit(patchPlugin: string): Promise<string>;
+  GetCellEditHistory(patchPlugin: string): Promise<string>;
+  GetCellProperties(cellFormKey: string): Promise<string>;
+  SetCellProperties(cellFormKey: string, patchPlugin: string, changes: CellPropertyChanges): Promise<string>;
 }
 
 
@@ -684,6 +909,7 @@ declare global {
           graph?: GraphHost;
           previs?: PrevisHost;
           strings?: StringsHost;
+          swf?: SwfHost;
         };
         addEventListener(type: string, listener: (event: MessageEvent) => void): void;
         removeEventListener(type: string, listener: (event: MessageEvent) => void): void;
@@ -727,3 +953,6 @@ export const getGraph = (): GraphHost | undefined =>
 
 export const getPrevis = (): PrevisHost | undefined =>
   window.chrome?.webview?.hostObjects?.previs;
+
+export const getSwf = (): SwfHost | undefined =>
+  window.chrome?.webview?.hostObjects?.swf;

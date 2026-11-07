@@ -127,12 +127,17 @@ jobs:
             '^Radicle/(src|include/fo4)/forms/proj_expl_hazd\.'
           )
           $coreRegex = $core -join '|'
-          git fetch --no-tags --depth=1 origin "$env:GITHUB_BASE_REF"
+          $base = 'HEAD^1'
+          git rev-parse -q --verify 'HEAD^2' | Out-Null
           if ($LASTEXITCODE -ne 0) {
-            Write-Output "::warning::could not fetch base branch $env:GITHUB_BASE_REF; running all real-data tests."
-            exit 0
+            git fetch --no-tags --depth=1 origin "$env:GITHUB_BASE_REF"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Output "::warning::could not fetch base branch $env:GITHUB_BASE_REF; running all real-data tests."
+              exit 0
+            }
+            $base = 'FETCH_HEAD'
           }
-          $changed = @(git diff --name-only --no-renames FETCH_HEAD HEAD)
+          $changed = @(git diff --name-only --no-renames $base HEAD)
           if ($LASTEXITCODE -ne 0 -or -not $changed) {
             Write-Output '::warning::could not determine the changed files; running all real-data tests.'
             exit 0
@@ -143,6 +148,9 @@ jobs:
             @{ Test = 'RowRoundtripReal\.CellRowsSurviveWriteAndReread'; Trigger = 'row_roundtrip|/forms/cell|schema/(scalar|field_address)' }
             @{ Test = 'WritebackRealData\.CopiedDlcReferencesKeepEveryLinkWhenMastersMove'; Trigger = 'writeback|plugin/writer|remap|master' }
             @{ Test = 'CApiRuntimeReal\.ReplaysTheSevenProgramsDeterministically'; Trigger = '/avm2/|/swf/|c_api_runtime|c_api_swf' }
+            @{ Test = 'AnimTextDataRealData\.EveryShippedTextTableRebuildsByteForByte'; Trigger = 'anim_text_data|/archive/ba2' }
+            @{ Test = 'CheckErrorsReal\.VanillaLoadOrderBaselineIsPinned'; Trigger = '/graph/|check_errors|plugin/reader\.' }
+            @{ Test = 'NifCorpus\.'; Trigger = '/nif/|/archive/|nif_corpus' }
           )
           $excluded = @()
           foreach ($test in $slow) {
@@ -277,7 +285,8 @@ jobs:
           # The CK differential must import from Base only; Scripts\Source\User holds F4SE and mod edits.
           $env:FO4RE_PEX_IMPORT_ROOTS = Join-Path $env:FO4_DATA_DIR 'Scripts\Source\Base'
           # FO4RE_PEX_CORPUS, FO4RE_PEX_RELEASE and FO4RE_PEX_REQUIRE come from the staging step.
-          $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '6', '--no-tests=error', '-R', $env:REAL_DATA_TEST_REGEX)
+          $parallel = if ($env:CTEST_PARALLEL_LEVEL) { $env:CTEST_PARALLEL_LEVEL } else { '6' }
+          $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', $parallel, '--no-tests=error', '-R', $env:REAL_DATA_TEST_REGEX)
           if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
           ctest @ctestArgs
           exit $LASTEXITCODE

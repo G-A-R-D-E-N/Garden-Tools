@@ -1,6 +1,7 @@
 #include "fo4/papyrus/interpreter.hpp"
 
 #include "fo4/papyrus/array_ops.hpp"
+#include "fo4/papyrus/runtime.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,11 @@ namespace fo4::papyrus {
 namespace {
 
 constexpr int kMaxInheritanceHops = 64;
+
+bool isUntypedEngineHandle(const Value& value) {
+    return value.object != nullptr && value.object->type.empty() &&
+           (value.object->handle & kEngineHandleBit) != 0;
+}
 
 const pex::PexFunction* findInState(const pex::PexState& state, const std::string& name) {
     for (const pex::PexFunction& function : state.functions) {
@@ -155,13 +161,16 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
             nativeResult.status = Status::FunctionNotFound;
             return nativeResult;
         }
-        Value out;
-        Status status = Status::Ok;
-        if (!host_.callNative(object->name, function.name, args, out, status)) {
-            nativeResult.status = status == Status::Ok ? Status::FunctionNotFound : status;
+        NativeResult native;
+        if (!host_.callNativeEx(NativeCall{self, object->name, function.name, args, false}, native)) {
+            nativeResult.status = native.status == Status::Ok ? Status::FunctionNotFound : native.status;
             return nativeResult;
         }
-        const Status coerced = coerce(out, function.returnType, nativeResult.value);
+        if (native.latentToken != 0) {
+            nativeResult.status = Status::HostError;
+            return nativeResult;
+        }
+        const Status coerced = coerce(native.value, function.returnType, nativeResult.value);
         if (coerced != Status::Ok) nativeResult.status = coerced;
         return nativeResult;
     }
@@ -240,19 +249,13 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     std::string target = nativeScript;
     if (target.empty() && script != nullptr) target = script->name;
 
-    std::uint64_t latentToken = 0;
-    Status latentStatus = Status::Ok;
-    if (host_.callLatent(target, functionName, args, latentStatus, latentToken)) {
-        return suspendLatent(destination, latentToken, functionName);
-    }
-
-    Value out;
-    Status status = Status::Ok;
-    if (host_.callNative(target, functionName, args, out, status)) {
-        return storeResult(frame, destination, out);
+    NativeResult native;
+    if (host_.callNativeEx(NativeCall{self, target, functionName, args, true}, native)) {
+        if (native.latentToken != 0) return suspendLatent(destination, native.latentToken, functionName);
+        return storeResult(frame, destination, native.value);
     }
     if (function != nullptr) return Status::FunctionNotFound;
-    return status == Status::Ok ? Status::FunctionNotFound : status;
+    return native.status == Status::Ok ? Status::FunctionNotFound : native.status;
 }
 
 Status Interpreter::gotoState(Frame& frame, const Value& receiver, const std::vector<Value>& args,
@@ -480,7 +483,8 @@ Status Interpreter::coerce(const Value& value, const std::string& declaredType, 
             return Status::Ok;
         case ValueType::Object:
             if (value.type != ValueType::Object) return Status::TypeMismatch;
-            if (!sameName(declaredType, "ScriptObject") && !isObjectOfType(value, declaredType)) {
+            if (!sameName(declaredType, "ScriptObject") && !isUntypedEngineHandle(value) &&
+                !isObjectOfType(value, declaredType)) {
                 return Status::TypeMismatch;
             }
             out = value;
@@ -535,7 +539,8 @@ Status Interpreter::castTo(const Value& source, const std::string& sourceType,
             return Status::Ok;
         case ValueType::Object:
             if (source.type != ValueType::Object) return Status::TypeMismatch;
-            if (!sameName(targetType, "ScriptObject") && !isObjectOfType(source, targetType)) {
+            if (!sameName(targetType, "ScriptObject") && !isUntypedEngineHandle(source) &&
+                !isObjectOfType(source, targetType)) {
                 out = noneValue();
                 return Status::Ok;
             }

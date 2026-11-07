@@ -665,10 +665,12 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
       result.fragments.push_back(std::move(fragment));
     }
 
+    result.aliases_count_offset = slice.position();
     const auto alias_count = slice.u16();
     result.aliases.reserve(alias_count);
     for (std::uint16_t i = 0; i < alias_count; ++i) {
       QuestVmadAliasScripts alias;
+      alias.offset = slice.position();
       if (object_format == 2) {
         require_zero_unused_word(slice);
         alias.alias_id = slice.i16();
@@ -680,19 +682,23 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
       } else {
         throw parse_error(slice.position(), "unknown VMAD object format");
       }
-      slice.i16();
+      alias.version = slice.i16();
       alias.script_format = slice.i16();
+      alias.script_count_offset = slice.position();
       const auto scripts = slice.u16();
       for (std::uint16_t s = 0; s < scripts; ++s) {
         VmadScript script;
+        script.offset = slice.position();
         script.name = slice.wstring();
         script.flags = slice.u8();
+        script.property_count_offset = slice.position();
         const auto properties = slice.u16();
         for (std::uint16_t p = 0; p < properties; ++p) {
           script.properties.push_back(read_property(slice, alias.script_format));
         }
         alias.scripts.push_back(std::move(script));
       }
+      alias.end = slice.position();
       result.aliases.push_back(std::move(alias));
     }
     result.fully_consumed = slice.at_end();
@@ -738,6 +744,38 @@ SceneVmadExtras read_scene_vmad_extras(std::span<const std::byte> data,
   } catch (const UnsupportedVmadProperty&) {
     result.unsupported = true;
     result.unsupported_reason = "a VMAD property in the scene extras is unsupported";
+  } catch (const parse_error& error) {
+    result.unsupported = true;
+    result.unsupported_reason = error.what();
+  }
+  return result;
+}
+
+InfoVmadExtras read_info_vmad_extras(std::span<const std::byte> data,
+                                     std::int16_t object_format) {
+  InfoVmadExtras result;
+  try {
+    Slice slice(data);
+    result.version = static_cast<std::int8_t>(slice.u8());
+    result.flags = slice.u8();
+    std::vector<std::size_t> ignored;
+    walk_script_entry(slice, object_format, ignored);
+    // Constraint: INFO stores no fragment count; the OnBegin/OnEnd flag bits are the count.
+    const unsigned count = (result.flags & 1u) + ((result.flags >> 1) & 1u);
+    result.fragments.reserve(count);
+    for (unsigned i = 0; i < count; ++i) {
+      InfoVmadFragment fragment;
+      fragment.offset = slice.position();
+      fragment.unknown = slice.u8();
+      fragment.script = slice.wstring();
+      fragment.function = slice.wstring();
+      fragment.end = slice.position();
+      result.fragments.push_back(std::move(fragment));
+    }
+    result.fully_consumed = slice.at_end();
+  } catch (const UnsupportedVmadProperty&) {
+    result.unsupported = true;
+    result.unsupported_reason = "a VMAD property in the info extras is unsupported";
   } catch (const parse_error& error) {
     result.unsupported = true;
     result.unsupported_reason = error.what();

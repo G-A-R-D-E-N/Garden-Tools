@@ -166,7 +166,7 @@ bool timeline_tags(const SwfFile& file, std::uint16_t timeline_id, const std::ve
       base = flat + 1;
       return true;
     }
-    flat += 1 + radicle_swf_detail::subtree_size(tag.children);
+    flat += 1 + fo4::swf::subtree_size(tag.children);
   }
   message = "timeline " + std::to_string(timeline_id) + " is not a DefineSprite in this movie";
   return false;
@@ -263,7 +263,7 @@ std::string placement_json(const std::vector<SwfTag>& tags, std::size_t base) {
   std::size_t flat = base;
   for (std::size_t index = 0; index < tags.size(); ++index) {
     const std::size_t row = flat;
-    flat += 1 + radicle_swf_detail::subtree_size(tags[index].children);
+    flat += 1 + fo4::swf::subtree_size(tags[index].children);
     const auto& placement = tags[index].placement;
     if (!placement) continue;
     comma(out);
@@ -538,6 +538,203 @@ radicle_status radicle_swf_insert_instance_transform_keyframe(radicle_swf_histor
                                                              to_transform(*transform), result);
       message = result.message;
       return applied;
+    });
+  });
+}
+
+// Invariant: the walk counts the tag then its subtree, so the offsets must match radicle_swf_tag_at.
+bool append_flat_placements(std::string& out, const std::vector<SwfTag>& tags, std::size_t& flat,
+                            bool inside, std::string& message) {
+  for (const auto& tag : tags) {
+    const std::size_t row = flat;
+    flat += 1;
+    if (tag.code == fo4::swf::tag::kPlaceObject || tag.code == fo4::swf::tag::kPlaceObject2 ||
+        tag.code == fo4::swf::tag::kPlaceObject3) {
+      if (!tag.placement) {
+        message = "a placement tag did not decode";
+        return false;
+      }
+      comma(out);
+      out += '{';
+      field(out, "tag_index", row);
+      field(out, "depth", tag.placement->depth);
+      member(out, "character_id");
+      if (tag.placement->character_id) {
+        value(out, *tag.placement->character_id);
+      } else {
+        out += "null";
+      }
+      field(out, "inside_sprite", inside);
+      out += '}';
+    }
+    if (!append_flat_placements(out, tag.children, flat, true, message)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+radicle_status radicle_swf_placements_json(const radicle_swf_history* history, uint8_t** out_text,
+                                           size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (history == nullptr || out_text == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history, out_text and out_size are required");
+  }
+  return guarded("unknown exception while listing document placements", [&] {
+    std::string out = "[";
+    std::size_t flat = 0;
+    std::string message;
+    if (!append_flat_placements(out, history->history.file().tags, flat, false, message)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, message.c_str());
+    }
+    out += ']';
+    *out_text = radicle_swf_detail::copy_text(out, out_size);
+    if (*out_text == nullptr) {
+      return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the placement list");
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
+// Requires the flat walk to visit the tag before its subtree, so rows match radicle_swf_tag_at order.
+void append_action_tags(std::string& out, const std::vector<SwfTag>& tags, std::size_t& flat,
+                        bool inside) {
+  for (const auto& tag : tags) {
+    const std::size_t row = flat;
+    flat += 1;
+    if (tag.code == fo4::swf::tag::kDoAction || tag.code == fo4::swf::tag::kDoInitAction) {
+      comma(out);
+      out += '{';
+      field(out, "tag_index", row);
+      field(out, "code", tag.code);
+      field(out, "inside_sprite", inside);
+      out += '}';
+    }
+    append_action_tags(out, tag.children, flat, true);
+  }
+}
+
+radicle_status radicle_swf_action_tags_json(const radicle_swf_history* history, uint8_t** out_text,
+                                            size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (history == nullptr || out_text == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history, out_text and out_size are required");
+  }
+  return guarded("unknown exception while listing action tags", [&] {
+    std::string out = "[";
+    std::size_t flat = 0;
+    append_action_tags(out, history->history.file().tags, flat, false);
+    out += ']';
+    *out_text = radicle_swf_detail::copy_text(out, out_size);
+    if (*out_text == nullptr) {
+      return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the action tag list");
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_swf_placement_matrix_at(const radicle_swf_history* history, size_t tag_index,
+                                               radicle_swf_placement_matrix_fields* out_matrix) {
+  clear_error();
+  if (out_matrix) *out_matrix = radicle_swf_placement_matrix_fields{};
+  if (history == nullptr || out_matrix == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history and out_matrix are required");
+  }
+  return guarded("unknown exception while reading a placement matrix", [&] {
+    fo4::swf::SwfFlatTag addr;
+    if (!fo4::swf::resolve_flat_tag(history->history.file(), tag_index, addr)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag index is out of range");
+    }
+    const SwfFile& file = history->history.file();
+    const SwfTag& tag =
+        addr.inside ? file.tags[addr.top].children[addr.child] : file.tags[addr.top];
+    if (tag.code != fo4::swf::tag::kPlaceObject && tag.code != fo4::swf::tag::kPlaceObject2 &&
+        tag.code != fo4::swf::tag::kPlaceObject3) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag is not a placement");
+    }
+    // Constraint: a missing scale reads 0x10000, and the flags come from the decoded values.
+    if (tag.placement && tag.placement->matrix) {
+      const fo4::swf::SwfMatrix& matrix = *tag.placement->matrix;
+      out_matrix->has_scale =
+          static_cast<uint8_t>(matrix.scale_x != 0x10000 || matrix.scale_y != 0x10000);
+      out_matrix->scale_x = out_matrix->has_scale != 0 ? matrix.scale_x : 0x10000;
+      out_matrix->scale_y = out_matrix->has_scale != 0 ? matrix.scale_y : 0x10000;
+      out_matrix->has_rotate =
+          static_cast<uint8_t>(matrix.rotate_skew0 != 0 || matrix.rotate_skew1 != 0);
+      out_matrix->rotate0 = matrix.rotate_skew0;
+      out_matrix->rotate1 = matrix.rotate_skew1;
+      out_matrix->translate_x = matrix.translate_x;
+      out_matrix->translate_y = matrix.translate_y;
+    } else {
+      out_matrix->scale_x = 0x10000;
+      out_matrix->scale_y = 0x10000;
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_swf_set_placement_depth(radicle_swf_history* history, size_t tag_index,
+                                               uint16_t depth, radicle_swf_plan_result* out_result) {
+  clear_error();
+  if (out_result) {
+    out_result->changed = 0;
+    out_result->revision = history == nullptr ? 0 : history->history.revision();
+  }
+  if (history == nullptr || out_result == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history and out_result are required");
+  }
+  return guarded("unknown exception while setting a placement depth", [&] {
+    return commit_edit(*history, *out_result, [&](SwfFile& file, std::string& message) {
+      return fo4::swf::set_placement_depth_flat(file, tag_index, depth, message);
+    });
+  });
+}
+
+radicle_status radicle_swf_set_placement_transform(radicle_swf_history* history, size_t tag_index,
+                                                   int32_t x, int32_t y, int32_t scale_x,
+                                                   int32_t scale_y, int32_t rotate0, int32_t rotate1,
+                                                   radicle_swf_plan_result* out_result) {
+  clear_error();
+  if (out_result) {
+    out_result->changed = 0;
+    out_result->revision = history == nullptr ? 0 : history->history.revision();
+  }
+  if (history == nullptr || out_result == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history and out_result are required");
+  }
+  return guarded("unknown exception while setting a placement transform", [&] {
+    // Constraint: the doubles must mirror ToVerbTransform, so translate is points and scale is unit-one.
+    fo4::swf::SwfTransform transform;
+    transform.scale_x = static_cast<double>(scale_x) / 65536.0;
+    transform.scale_y = static_cast<double>(scale_y) / 65536.0;
+    transform.rotate_skew0 = static_cast<double>(rotate0) / 65536.0;
+    transform.rotate_skew1 = static_cast<double>(rotate1) / 65536.0;
+    transform.translate_x = static_cast<double>(x) / 20.0;
+    transform.translate_y = static_cast<double>(y) / 20.0;
+    return commit_edit(*history, *out_result, [&](SwfFile& file, std::string& message) {
+      return fo4::swf::set_placement_transform_flat(file, tag_index, transform, message);
+    });
+  });
+}
+
+radicle_status radicle_swf_insert_placement_keyframe(radicle_swf_history* history, size_t tag_index,
+                                                     uint32_t frame,
+                                                     radicle_swf_plan_result* out_result) {
+  clear_error();
+  if (out_result) {
+    out_result->changed = 0;
+    out_result->revision = history == nullptr ? 0 : history->history.revision();
+  }
+  if (history == nullptr || out_result == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history and out_result are required");
+  }
+  return guarded("unknown exception while inserting a placement keyframe", [&] {
+    return commit_edit(*history, *out_result, [&](SwfFile& file, std::string& message) {
+      return fo4::swf::insert_placement_keyframe_flat(file, tag_index, frame, message);
     });
   });
 }

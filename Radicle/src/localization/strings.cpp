@@ -83,10 +83,11 @@ std::vector<std::byte> encode_text(std::string_view text) {
 }
 
 std::vector<std::size_t> record_starts(std::span<const std::byte> data,
-                                       StringTableKind kind) {
+                                       StringTableKind kind, std::size_t max_records) {
   std::vector<std::size_t> starts;
   std::size_t position = 0;
   while (position < data.size()) {
+    if (starts.size() == max_records) throw StringTableError("localized string record limit exceeded");
     starts.push_back(position);
     if (!length_prefixed(kind)) {
       const auto nul = std::find(data.begin() + static_cast<std::ptrdiff_t>(position),
@@ -139,11 +140,12 @@ std::vector<std::byte> extract_text(std::span<const std::byte> data,
 
 }  // namespace
 
-LocalizedStringTable read_string_table(std::span<const std::byte> bytes,
-                                       StringTableKind kind) {
+LocalizedStringTable read_string_table_bounded(std::span<const std::byte> bytes,
+                                               StringTableKind kind, StringTableLimits limits) {
   if (bytes.size() < 8) throw StringTableError("localized string file is smaller than its header");
 
   const auto count = read_u32(bytes, 0);
+  if (count > limits.max_rows) throw StringTableError("localized string row limit exceeded");
   const auto data_size = read_u32(bytes, 4);
   // Widen before comparing so the check is meaningful (and warning-clean)
   // on 64-bit hosts where the constant exceeds the u32 operand's range.
@@ -181,7 +183,7 @@ LocalizedStringTable read_string_table(std::span<const std::byte> bytes,
   }
 
   const auto data = bytes.subspan(data_offset, data_size);
-  const auto starts = record_starts(data, kind);
+  const auto starts = record_starts(data, kind, limits.max_records);
   for (const auto& row : rows) {
     if (!std::binary_search(starts.begin(), starts.end(), static_cast<std::size_t>(row.offset))) {
       throw StringTableError("localized string table offset does not point to a record boundary");
@@ -192,9 +194,22 @@ LocalizedStringTable read_string_table(std::span<const std::byte> bytes,
   table.kind = kind;
   table.entries.reserve(rows.size());
   for (const auto& row : rows) {
+    std::size_t length;
+    if (length_prefixed(kind)) length = static_cast<std::size_t>(read_u32(data, row.offset)) - 1;
+    else {
+      const auto begin = data.begin() + static_cast<std::ptrdiff_t>(row.offset);
+      length = static_cast<std::size_t>(std::distance(begin, std::find(begin, data.end(), std::byte{0})));
+    }
+    if (length > limits.max_text_bytes) throw StringTableError("localized string text limit exceeded");
+    limits.max_text_bytes -= length;
     table.entries.push_back({row.id, extract_text(data, row.offset, kind)});
   }
   return table;
+}
+
+LocalizedStringTable read_string_table(std::span<const std::byte> bytes, StringTableKind kind) {
+  constexpr auto unlimited = std::numeric_limits<std::size_t>::max();
+  return read_string_table_bounded(bytes, kind, {unlimited, unlimited, unlimited});
 }
 
 LocalizedStringTable read_string_table_file(const std::filesystem::path& path,

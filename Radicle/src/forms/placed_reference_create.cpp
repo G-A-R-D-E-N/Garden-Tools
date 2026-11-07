@@ -146,6 +146,7 @@ FormKey create_placed_reference(Plugin& plugin, const PlacedReferenceCreation& c
   }
 
   next.original_range.clear();
+  next.original_structure_fingerprint = 0;
   plugin = std::move(next);
   return key;
 }

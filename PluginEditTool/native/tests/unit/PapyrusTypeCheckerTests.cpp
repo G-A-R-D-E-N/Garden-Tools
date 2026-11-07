@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -25,7 +26,7 @@ using fo4ide::papyrus::TypeChecker;
 std::string uniqueRoot() {
     const auto base = std::filesystem::temp_directory_path() / "fo4re-typecheck";
     std::filesystem::create_directories(base);
-    return (base / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
+    return (base / fo4ide_test::uniqueTempName())
         .string();
 }
 
@@ -286,6 +287,23 @@ TEST_CASE("TypeChecker a call does not bind to a same named local") {
 TEST_CASE("TypeChecker a var accepts anything and is accepted anywhere") {
     Fixture f;
     f.writeWithHierarchy("\n    var slot = 1\n    slot = \"text\"\n    int n = 0\n    n = slot as int");
+
+    CHECK(f.check("A").empty());
+}
+
+TEST_CASE("TypeChecker a literal array length above 128 is a warning") {
+    Fixture f;
+    f.writeWithHierarchy("\n    int[] items = new int[129]");
+
+    const auto diagnostics = f.check("A");
+    REQUIRE(diagnostics.size() == 1u);
+    CHECK(diagnostics[0].code == DiagnosticCode::ArrayLengthLimit);
+    CHECK(diagnostics[0].severity == fo4ide::papyrus::Severity::Warning);
+}
+
+TEST_CASE("TypeChecker a literal array length of 128 is accepted") {
+    Fixture f;
+    f.writeWithHierarchy("\n    int[] items = new int[128]");
 
     CHECK(f.check("A").empty());
 }

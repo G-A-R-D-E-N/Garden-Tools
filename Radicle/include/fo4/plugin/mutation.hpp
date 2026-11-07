@@ -214,13 +214,15 @@ ScalarMutationStatus set_record_scalar(Plugin& plugin,
                                        const FormKey& record_key,
                                        const schema::ScalarFieldDescriptor& field,
                                        std::size_t index,
-                                       std::string_view value);
+                                       std::string_view value,
+                                       bool create_missing = false);
 
 ScalarMutationStatus set_record_string(Plugin& plugin,
                                        const FormKey& record_key,
                                        const schema::ScalarFieldDescriptor& field,
                                        std::size_t index,
-                                       std::string_view value);
+                                       std::string_view value,
+                                       bool create_missing = false);
 
 ScalarMutationStatus set_record_string(Plugin& plugin,
                                        const FormKey& record_key,

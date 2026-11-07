@@ -4,6 +4,7 @@
 #include "fo4/schema/record_constraints.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string_view>
 
@@ -64,5 +65,21 @@ RecordCreateResult create_record(Plugin& plugin,
                                  Signature record,
                                  std::string_view editor_id,
                                  std::span<const schema::SubrecordAuthoringConstraint> rules);
+
+struct LocalizedRowId {
+  Signature subrecord{};
+  std::uint32_t id{0};
+};
+
+RecordCreateResult create_record_with_localized_rows(Plugin& plugin,
+                                                     Signature record,
+                                                     std::string_view editor_id,
+                                                     std::span<const LocalizedRowId> localized_ids);
+
+RecordCreateResult create_record_with_localized_rows(Plugin& plugin,
+                                                     Signature record,
+                                                     std::string_view editor_id,
+                                                     std::span<const LocalizedRowId> localized_ids,
+                                                     std::span<const schema::SubrecordAuthoringConstraint> rules);
 
 }  // namespace fo4

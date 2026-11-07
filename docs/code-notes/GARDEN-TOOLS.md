@@ -2810,6 +2810,8 @@ On 2026-10-31 a full run took 46 minutes of test time on 12 threads: `CheckError
 
 `CApiRuntimeReal.ReplaysTheSevenProgramsDeterministically` joined that list on 2026-10-31 for a different reason. It is the #807 Pip-Boy acceptance test and it fails on `nomad/dev` until #807 lands, so it turned the real-data check red on every PR, whatever the PR changed. A PR now runs it only when a changed path matches `/avm2/`, `/swf/`, `c_api_runtime` or `c_api_swf`. Pushes to `main` and `nomad/dev` still run it, so those runs stay red until #807 is fixed. Once #807 lands, take it off the list if it should gate every PR again.
 
+On 2026-11-06 three more long tests were path-gated, because they run on every PR: `AnimTextDataRealData.EveryShippedTextTableRebuildsByteForByte` (730-1022 s) on a change to `anim_text_data` (its test file and `Radicle/src/anim/anim_text_data.cpp`) or `/archive/ba2`, which it reads through; `CheckErrorsReal.VanillaLoadOrderBaselineIsPinned` (360-990 s) on `/graph/`, `check_errors` (its test file) or `plugin/reader.`, which loads the seven masters; and `NifCorpus.` (two tests, 230-360 s each) on `/nif/`, `/archive/` or `nif_corpus`. Pushes to `main` and `nomad/dev` still run all of them. The step's ctest `--parallel` is `CTEST_PARALLEL_LEVEL` when set (the VM's `worker.env` sets it) and 6 otherwise. Note that a core path still writes `CTEST_EXCLUDE_REGEX` for the slow tests it does not name, so the core paragraph above does not hold for them; a change to `Radicle/src/plugin/reader.cpp` skips `NifCorpus.` and `AnimTextDataRealData.` on a PR.
+
 ## Radicle/src/avm2/interpreter_dispatch_b.inc:k_newclass
 
 `newclass` now pops its base class value, as the AVM2 spec requires. It used to leave that value on the stack, so an interface's null base became the target of the following `initproperty`: `cannot write bhvr.interfaces::IExternalCommunication on null`. `Radicle/tests/test_c_api_runtime_real.cpp:ReplaysTheSevenProgramsDeterministically` reached this on real Programs. That test is still failing: it is the #807 R8 acceptance gate and the next stop is `aze.motion.specials::PropertyTint.register`.
@@ -2895,6 +2897,40 @@ The destructor removes the shared parent when it looks empty, so a test creating
 - Error semantics: the service targets (`archive`, `graph`, `papyrus`, `nif`, `material`, `audio`, `app`, `settings`) report some failures as ordinary strings beginning `Error:` or `ERR:` rather than RPC errors. `PluginEditTool/native/apps/fo4ide/McpCatalog.cpp:addCatalogTool` checks every string result, backend results included, for a leading `Error:` or `ERR:` and marks it `isError: true`; otherwise a missing archive/NIF/script looked like a success to MCP clients. Non-string results are never marked as errors.
 - Independent verification also reported two pre-existing limitations that are not MCP-only: the first `get_referenced_by`/`get_dependencies` call on the 482 MB order pays the lazy reference-index build in `Radicle/src/graph/conflict_graph.cpp:ensure_references` (about 113 s; later calls cached), and `set_conditions` rewrites three opaque CTDA bytes (`60 72 73 41` → `60 00 00 00`) that vanilla conditions carry in most sampled cases. `PluginEditTool/native/src/plugin/RadiclePluginMemory.cpp:releaseMemory` and `RadiclePluginGraphCache.cpp:reapIdleConflictGraph` call `HeapCompact` after `_heapmin`, but committed memory after a graph drop is still retained by the allocator, so only the working set visibly falls.
 
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:gameArchives (game archive source for the SWF browse)
+
+`gameArchives` builds a read-only `fo4::archive::AssetResolver` over the game's BA2 archives, so the SWF panel can list and open archive entries. The Data folder is `roots[0]` of the `SwfRootsProvider`, because `swfRootsFor` puts `settings.dataFolder` first, and only that folder is read. The plugin names are the `.esm`, `.esp` and `.esl` files in it, sorted by name, passed to `fo4::archive::archive_load_order` with an empty INI list. This is the call `PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::stringAssets` makes. `archive_load_order` then mounts `<plugin>.ba2` and `<plugin> - *.ba2` for each plugin, so `Fallout4 - Interface.ba2` is found through `Fallout4.esm`. The resolver is opened with no loose roots, so `AssetResolver::list` and `locate_in_archives` see archive entries only.
+
+Limits, each taken on purpose for this slice:
+- The order is not the game's `plugins.txt`, because the SWF target has no plugin list. When two archives hold the same SWF path, the winner follows the sorted plugin order, which can differ from the game. Vanilla archives hold distinct SWF paths.
+- MO2 mod archives are not searched, and the game install is searched only through `DataFolder`; `Fallout4Path` is not used. The C# host's `PluginEditTool/FO4RecordEditor.Core/Services/AssetResolver.cs:AssetResolver.ArchiveIndexFor` indexes every `*.ba2` under the data root instead.
+- Every call opens every archive index again (`Radicle/src/archive/ba2_reader.cpp:Ba2Reader::open` reads the header, entry and name tables), with no cache. One malformed archive fails the whole call with its message. `RadiclePluginStrings.cpp` skips such an archive instead.
+
+Test: `PluginEditTool/native/tests/unit/SwfTargetTests.cpp:SwfTarget lists game archive SWFs and opens one read-only by its resolved name`.
+
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::openArchived (read-only archive open)
+
+`OpenArchived` takes one data-relative name, normalizes it with `fo4::archive::normalize_asset_path` (which refuses `..` and drive names), and resolves it with `AssetResolver::locate_in_archives`, which returns the highest-priority archive that holds the path. An entry whose unpacked size is over `core::kMaxSwfFileBytes` is refused before any read. The bytes then go through `SwfTarget::adopt`, the same decode as a loose `Open`, with `archived_` set and the label `<archive path>/<entry path>` that `InspectText` shows. Nothing on disk is written by this path.
+
+Test: `PluginEditTool/native/tests/unit/SwfTargetTests.cpp:SwfTarget lists game archive SWFs and opens one read-only by its resolved name`, which also pins the refused missing name and the refused in-place `Save`.
+
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::writeTo (Save and Save As share one write)
+
+`Save` and `SaveAs` both call `writeTo`. It re-decodes the history bytes before writing, makes the first-save `.bak` of the destination when none exists, and writes with `fo4::io::write_file_atomic`, as before. `Save` writes `*path_`. `SaveAs` writes to the destination the native dialog returned, after `weakly_canonical`, the same canonical rule `Open` uses. On success `path_` becomes that destination and `archived_` becomes false, so later Saves write there in place. An existing file at the destination gets a `.bak` first, so a Save As over a game file keeps its original bytes.
+
+`Save` on an archive-opened document refuses before any write, because a BA2 entry cannot be written in place. The panel sends such a document to `SaveAs` instead.
+
+Tests: `PluginEditTool/native/tests/unit/SwfTargetTests.cpp:SwfTarget saves a game archive SWF only through Save As` (in-place refusal, a cancelled dialog answering `{"saved": ""}`, Save As to a chosen path, and a reopen with the edit present).
+
+## PluginEditTool/native/src/app/SwfTarget.cpp:SwfTarget::invoke (SaveAs, OpenArchived and ArchiveSwfs dispatch)
+
+`SaveAs` shows the modal `pickSavePath` dialog before `mutex_` is taken, as `BrowseForFile` does, so the modal loop never holds the mutex. The destination comes only from the dialog, so the page cannot name a write path. The no-document refusal runs after the dialog returns, so a Save As with no movie open shows the dialog first. `OpenArchived` is in `expectedArguments` as `s`. `ArchiveSwfs` is not in that table, so it runs with no open document, as `Open` does. `SwfTarget::snapshot` in `PluginEditTool/native/src/app/SwfTargetFile.cpp` adds the `archived` flag that the panel reads.
+
+## web/src/SwfPanel.tsx:SwfPanel.openWith (one open path for files and archive entries)
+
+`open` (the typed path or Browse) and `openArchived` (a pick from the game archive list) share `openWith`. Both ask before discarding unsaved edits, reset the same state and load the same panels. `browseArchives` calls `ArchiveSwfs` and shows the `Game archive SWFs` select. A pick clears the select and calls `OpenArchived` with the listed path. While the open document is archive-backed (`State.archived`), the Save button is titled `Save As` and calls `saveAs`, which shows the native save dialog and refreshes on a non-empty `saved` reply. The panel never calls `Save` for such a document.
+
+Tests: `web/src/SwfPanel.archive.test.tsx` (`SwfPanel game archives`). It is a new file because `web/src/SwfPanel.test.tsx` is already at the 750-line limit.
 ## .github/workflows/native-real-data.yml:on
 
 The job runs only for changes to what it builds: `Radicle/`, `PluginEditTool/native/`, `cmake/`, the root `CMakeLists.txt`, `.github/scripts/` and this workflow. A PR touching only BGS, the web panels or docs does not queue on the single `fo4-data` runner, and shows no real-data check. `workflow_dispatch` still runs it on demand.
@@ -2952,7 +2988,7 @@ The row maps the `previs_scan` MCP tool to the existing `previs` target's `Scan`
 The panel shows a warning above the summary whenever `pendingPlugins` is non-empty, naming those plugins, because a scan with unsaved edits reports the saved files. `PluginEditTool/web/src/PrevisPanel.test.tsx` pins the banner text.
 ## ci/real-data-service/real_data_service.py:open_targets — which heads are checked, and in what order
 
-The service lists open PRs with `gh pr list` (number, head sha, base, `updatedAt`, `isDraft`) and adds the `nomad/dev` head as a push-style target. `order` puts `nomad/dev` first, then PRs by newest `updatedAt`, so active work gets a result soonest. Draft PRs are skipped before any API call and never get a status. Changed paths for a PR come from its files list; for `nomad/dev` they are the diff against its first parent, which matches a push. The Radicle, PluginEditTool, cmake, root CMakeLists, `.github/scripts` and workflow paths are checked against the list in `TOUCHES`, which mirrors the `pull_request` paths of `.github/workflows/native-real-data.yml`. The list is hand-kept: when that workflow's paths change, change `TOUCHES` in the same commit.
+The service lists open PRs with `gh pr list` (number, head sha, base, `updatedAt`, `isDraft`) and adds the `nomad/dev` head as a push-style target. `order` puts `nomad/dev` first, then non-draft PRs whose base is `nomad/dev`, then every other PR (stacked on another branch, or a draft), each group by newest `updatedAt`. A PR into `nomad/dev` therefore is not held behind a stack of child PRs that were pushed more recently. Draft PRs are skipped before any API call and never get a status. Changed paths for a PR come from its files list; for `nomad/dev` they are the diff against its first parent, which matches a push. The Radicle, PluginEditTool, cmake, root CMakeLists, `.github/scripts` and workflow paths are checked against the list in `TOUCHES`, which mirrors the `pull_request` paths of `.github/workflows/native-real-data.yml`. The list is hand-kept: when that workflow's paths change, change `TOUCHES` in the same commit.
 
 ## ci/real-data-service/real_data_service.py:prepare_checkout — merge ref and clean tree
 
@@ -2988,7 +3024,7 @@ The task `GardenRealDataService` runs `python -I -B <copy>\real_data_service.py 
 
 ## ci/real-data-service/test_real_data_service.py:DueDecisionTest — due and not-affected decisions
 
-`test_scope_path_without_status_is_due` detects a PR touching `Radicle/` with no status being skipped. `test_posted_status_is_done_without_listing_files` detects a head with a result being rebuilt on every two-minute pass. `test_pending_status_left_by_a_dead_run_is_due_again` detects a crashed run's `pending` status blocking its head forever. `test_untouched_paths_are_not_affected` detects a prefix match such as `Radiclexx/` counting as `Radicle/`. `test_root_cmakelists_matches_exactly_and_workflow_file_is_in_scope` detects a nested `CMakeLists.txt` triggering a build, or the workflow file itself being left out.
+`test_scope_path_without_status_is_due` detects a PR touching `Radicle/` with no status being skipped. `test_posted_status_is_done_without_listing_files` detects a head with a result being rebuilt on every two-minute pass. `test_pending_status_left_by_a_dead_run_is_due_again` detects a crashed run's `pending` status blocking its head forever. `test_untouched_paths_are_not_affected` detects a prefix match such as `Radiclexx/` counting as `Radicle/`. `test_root_cmakelists_matches_exactly_and_workflow_file_is_in_scope` detects a nested `CMakeLists.txt` triggering a build, or the workflow file itself being left out. `test_queued_status_does_not_count_as_done` detects a queued status posted at the start of a pass making its own head look finished and never run.
 
 ## ci/real-data-service/test_real_data_service.py:NotAffectedTest — out-of-scope PRs
 
@@ -3016,7 +3052,7 @@ The task `GardenRealDataService` runs `python -I -B <copy>\real_data_service.py 
 
 ## ci/real-data-service/real_data_service.py:plan — decision order per target
 
-Draft first (no API call), then done (any `real-data` status except `pending`), then earlier (a successful check-run named after `CHECK_RUN`: that job already passed on the earlier runner, so `run_pass` posts `success` "passed on the earlier runner" and no build runs), then run or not affected from the changed paths. Failed, cancelled and missing check-runs do not count as passed. `passed_earlier` reads all check-runs of the head through the commits API.
+Draft first (no API call), then done (any `real-data` status except `pending`; a `pending` "queued (position N of M)" from `post_queue` is still due), then earlier (a successful check-run named after `CHECK_RUN`: that job already passed on the earlier runner, so `run_pass` posts `success` "passed on the earlier runner" and no build runs), then run or not affected from the changed paths. Failed, cancelled and missing check-runs do not count as passed. `passed_earlier` reads all check-runs of the head through the commits API.
 
 ## ci/real-data-service/real_data_service.py:in_scope — what counts as touching
 
@@ -3046,9 +3082,9 @@ Failed names come only from the `The following tests FAILED:` section, not from 
 
 `test_draft_is_skipped_without_any_github_call` detects drafts costing API calls or builds. `test_run_pass_leaves_drafts_unstatused` detects a draft getting a status, which would block or mislead a merge decision.
 
-## ci/real-data-service/test_real_data_service.py:OrderTest — dev head first, then newest updated
+## ci/real-data-service/test_real_data_service.py:OrderTest — dev head, PRs into dev, stacked, drafts
 
-`test_dev_head_first_then_newest_updated_pr` detects active PRs queued behind old ones, and the dev head missing its place at the front.
+`test_dev_head_then_prs_into_dev_then_stacked_then_drafts_each_newest_first` detects a stacked child PR, pushed after a PR into `nomad/dev`, being run first and holding up the direct PR, and the dev head missing its place at the front.
 
 ## ci/real-data-service/test_real_data_service.py:WorkflowFileTest — which workflow runs
 
@@ -3078,6 +3114,115 @@ GitHub delays cron heavily on the public repo: the 30-minute `Delete finished CI
 
 One number must name one surface, so siblings on a stack that each edit the C API under the same number still collide (`.github/scripts/test_check_abi_version_collision.py:test_sibling_pulls_on_one_stack_parent_collide`). A stacked pull request whose own diff never edits a `Radicle/include/fo4/c_api*.h` header adds no surface: it only carries the number it got from its parent, so it holds no claim. Before this, six children of #1049 that touch no header failed #1049's gate. `.github/scripts/check_abi_version_collision.py:pull_touches_header` reads the pull request's file list, and a list it cannot read exits 2 instead of passing.
 
+## PluginEditTool/native/src/app/SwfTargetFile.cpp:SwfTarget::writeTo — backups when Save As replaces another file
+
+Save keeps one `.bak` per movie and never overwrites it. Save As can target any file, so when the destination is not the open movie itself (or the movie came from a game archive), an existing file there is always backed up, to the first free name among `.bak`, `.bak1`, `.bak2` and so on. Before this, a leftover `.bak` from an earlier session meant the replaced file was lost. Test: `PluginEditTool/native/tests/unit/SwfTargetSaveAsTests.cpp`.
 ## ci/real-data-service/install_task.ps1 — the task restarts a stopped service
 
 On 2026-11-02 the service process ended after a run without logging why, and the logon-only trigger never started it again, so real-data and the public CI sync stopped for hours. The task now also fires every 15 minutes; `-MultipleInstances IgnoreNew` and the run lock keep a running service from being doubled. `ci/real-data-service/real_data_service.py` logs any fatal exception as "service stopped" before exiting, so the next stop leaves a reason.
+
+## ci/real-data-service/real_data_service.py:run_pass — plan the whole pass, then run due heads
+
+`run_pass` plans every target first. Earlier and not-affected heads get their `success` at once, and the due ones are collected in `order`. `clear_stale_queue` then clears queued labels on heads that are no longer due, and `post_queue` marks each waiting head `pending` "queued (position N of M)", so a head shows its place from the start of the pass instead of nothing until its turn. Local jobs run one at a time, and `post_queue` is called after each pop of the shared list (see `run_due`), so the heads still waiting count down. A head that moved during the pass is skipped by `prepare_checkout`, because the merge ref or `nomad/dev` head no longer matches; it stays due and is planned again on a later pass.
+
+## ci/real-data-service/real_data_service.py:post_queue — queued position text
+
+`post_queue` posts `pending` only when the newest `real-data` status of the head is not already that exact text, so an unchanged queue makes no writes. Every head it is given is added to the set of heads the service queued, which is saved to `C:\ci\real-data\queued.json` (`QUEUED`) so a restart keeps it. A failed read or post is logged and does not stop the pass.
+
+## ci/real-data-service/real_data_service.py:clear_stale_queue — queued labels that no longer apply
+
+`clear_stale_queue` runs at the start of a real pass, after planning and before the queue is posted. For each head the service queued earlier (`queued` from `load_queued`) that is not a non-draft open PR head or the `nomad/dev` head of this pass (the `live` set in `run_pass`), it reads the newest `real-data` status. If that status is `pending` with text starting "queued", the head gets `error` "superseded". This covers a PR that got a new commit, was closed or merged, or became a draft. The head is then forgotten. A current non-draft head is never touched, even when it is not due this pass, for example after a transient `plan` failure; otherwise a superseded label would make it `done` and it would never run. `plan` treats an `error` "superseded" status as due again, so a draft that is marked ready again on the same commit runs. A head whose status moved on (a result, or a running job) is forgotten without a write. Only heads in the queued set are read, so no history is scanned and labels the service did not post are never changed. A failed read keeps the head in the set for the next pass. Dry runs skip this step, so they neither post nor rewrite `queued.json`.
+
+## ci/real-data-service/real_data_service.py:load_queued — the queued set survives a restart
+
+`load_queued` reads the JSON list in `queued.json`. A missing or unreadable file gives an empty set, so the worst case after damage is labels that are not cleared, never a failed pass. `save_queued` writes the sorted list after each queue post and each clear. Heads queued by a service process before this file existed are not in the set and are cleared by hand.
+
+## ci/real-data-service/real_data_service.py:run_command — retries of reads and status posts
+
+`run_command` runs `gh` or `git` and retries a failed call with `RETRY_DELAYS` (5 seconds, then 15) between tries. `gh` reads use `READ_ATTEMPTS` (3), and so do the two `git fetch` calls in `prepare_checkout` and `workflow_file`. Every failed attempt is logged with the command's subcommand and the scrubbed stderr, so a transient failure leaves a reason in `service.log`. Status posts use 2 attempts, because a status with the same state and description is idempotent. The public CI dispatch uses 1 attempt: a dispatch that went through but whose reply was lost would start a second sync. Other `git` calls (clone, clean, checkout, show) run once.
+
+## ci/real-data-service/real_data_service.py:failure_text — scrubbed stderr for logs
+
+`failure_text` takes the captured stderr of a failed call, or the exception text when there is none, joins it onto one line and passes it through `clean`. That removes the Windows user name, paths and URLs before the text reaches a log line. The 140-character cap of `clean` applies to log lines too.
+
+## ci/real-data-service/real_data_service.py:main — a clean exit is not a stopped service
+
+The `__main__` block logs "service stopped" only for exceptions. `SystemExit` is re-raised first, because `main` ends with `sys.exit` when a dry run or `--once` finishes normally. Before this, every such exit logged an ERROR traceback.
+
+## ci/real-data-service/real_data_service.py:request_public_sync — stderr in the warning
+
+The "public CI sync not started" warning carries gh's reason through `failure_text`. The dispatch is not retried, so each failed 5-minute attempt logs one `attempt 1 of 1` line from `run_command` and then this warning.
+
+## ci/real-data-service/test_real_data_service.py:QueueTest — queued positions
+
+`test_queued_status_is_posted_only_when_the_position_changes` detects a queued status posted again on every pass, which is write churn, or a position that never updates. `test_run_pass_queues_every_due_head_and_refreshes_positions_after_each_job` detects a waiting head showing no status until its turn, and waiting heads keeping their pass-start numbers while earlier jobs finish.
+
+## ci/real-data-service/test_real_data_service.py:MainExitTest — a clean dry-run exit
+
+`test_a_clean_dry_run_exit_is_not_logged_as_a_stopped_service` runs the real `__main__` block with `--dry-run` and a fake `gh`, and fails if any ERROR is logged or the exit code is not 0. It detects a normal exit logged as "service stopped" with a traceback. Writes are made to fail during the run, so a dry run that writes to the live folder fails the test instead.
+
+## ci/real-data-service/test_real_data_service.py:QueueTest — stale queued labels and the queue file
+
+`test_queued_head_that_is_no_longer_due_is_marked_superseded` detects a PR that got a new commit, was closed, or became a draft keeping its "queued" label on the old commit. `test_a_current_non_draft_head_is_never_marked_superseded` detects a live head that is not due this pass (for example after a transient `plan` failure) being marked superseded and never run. `test_superseded_head_that_is_back_in_the_pr_is_due_again` detects a draft marked ready again on the same commit never running. `test_a_status_the_service_did_not_queue_is_never_touched` detects the service clearing a label it did not post, or scanning history for one. `test_a_tracked_head_whose_status_moved_on_is_forgotten_without_a_write` detects a head whose job already ran being overwritten. `test_tracked_heads_are_written_to_the_queue_file` detects a restart losing the set of queued heads. `test_run_pass_clears_a_stale_queued_head_before_queueing_the_current_one` detects the clear step missing from the pass. `test_dry_run_neither_posts_nor_rewrites_the_queue_file` detects a dry run changing the live service's labels or file.
+
+## ci/real-data-service/test_real_data_service.py:RetryTest — retries and scrubbed stderr
+
+`test_a_failed_read_is_retried_and_its_stderr_is_logged` detects one transient `gh api` failure ending a target's pass with no status and no reason logged. `test_a_read_gives_up_after_three_attempts` detects an unbounded retry loop. `test_a_status_post_is_tried_at_most_twice` detects a status POST retried without a limit. `test_public_sync_is_tried_once_and_its_warning_has_scrubbed_stderr` detects a dispatch retried, which could start a second sync, and a sync warning that drops gh's reason or leaks the user name or a URL.
+
+## ci/real-data-service/real_data_service.py:run_due — one queue, one thread per worker
+
+`run_pass` builds `due` as before and posts the queue, then `run_due` starts a thread for each worker: `Worker("local")` and every entry of `workers.json`. A thread pops the first due head it has not declined, under one lock, and re-posts `queued (position N of M)` for the heads still waiting, in the same critical section, so positions never repeat. The list stays newest-first. A VM worker that declines a head (`run_target_remote` returns `False`) puts it back at its original rank, and that worker skips it for the rest of the pass. If the local thread has already finished, a declined head waits for the next pass (about two minutes); the pool does not wait for it. `prune_logs` runs once after the pool, so two threads never prune at the same time.
+
+## ci/real-data-service/real_data_service.py:load_workers — the optional workers.json
+
+`ROOT\workers.json` lists `{name, ssh, root}` objects. `ssh` is the argv that runs one remote command; for the VM it is the PC's ssh to garden-ci-1 followed by garden-ci-1's ssh to the VM, and the service appends the remote words. `~` in each argv item is expanded once, at load time. `root` is stored with forward slashes and no trailing slash, because the VM command passes through two ssh shells and backslashes do not survive them. No file means the local worker alone, the same as before. The file is read on every pass.
+
+## ci/real-data-service/real_data_service.py:git — one lock for git on REPO_DIR
+
+`GIT_LOCK` is an `RLock`, so `fetch_candidate` can hold it across its fetch and its merge-ref check, while `git()` takes it for every call. That covers the local checkout, `workflow_file`, the VM bundle and the sent ref. The local job's own git calls (its `fetch --depth=1` of the base branch, and the `git diff FETCH_HEAD HEAD` that picks the changed paths) run in the child process outside the lock. The VM fetch passes `--no-write-fetch-head`, so it cannot overwrite `FETCH_HEAD` between those two commands.
+
+## ci/real-data-service/real_data_service.py:fetch_candidate — merge-ref check per candidate ref
+
+`fetch_candidate(t, ref_name)` fetches the PR merge ref (or the `nomad/dev` head) into `ref_name` and reports whether the merge's second parent, or the dev head, is still the head that was listed. `prepare_checkout` uses `refs/real-data/candidate`; a VM worker uses `refs/real-data/candidate-<name>`, so a VM fetch never moves the candidate the local worktree is built from.
+
+## ci/real-data-service/real_data_service.py:run_target_remote — VM runs: decline, unreachable, retry
+
+The checks run in this order. The base name must match `SAFE_BASE` (letters, digits, `._/-`), because it goes on a command line that two shells parse; any other name is declined. The merge ref must be current, as for the local worker. `git ls-tree` must find the workflow file in the candidate; a missing file is declined, so the local worker runs it with its `nomad/dev` fallback. A declined head gets no status. Otherwise the head gets `pending` "running on the vm data runner".
+
+An ssh exit of 255 (connection lost, or the transfer failed to connect) posts `error` "vm data runner unreachable", and the worker sleeps `POLL * 5` before taking more work. An exit of 97 means `run_remote.ps1` could not fetch the bundle: the sent ref is deleted and the whole history is sent once more. A second 97 posts `error` "vm data runner fetch failed". Both error texts are in `RETRY_ERRORS`, so `plan` treats such a head as due again. Other transfer failures raise and are logged; the head keeps its `pending` status until the next pass plans it again.
+
+## ci/real-data-service/real_data_service.py:REMOTE_DIR — a full clone for VM bundles
+
+`ROOT/repo` is shallow, because the Select step's `git fetch --depth=1` in older workflows leaves boundary commits in `.git/shallow`. A bundle cut from it fails on the VM with "did not send all necessary objects" (checked against the live repo on 2026-11-06). So remote workers fetch, check, bundle and record `sent-<name>` in `ROOT/remote.git`, a bare clone that nothing fetches with `--depth`. `test_remote_git_runs_in_the_full_history_repo` pins that every remote git call uses it.
+
+## ci/real-data-service/real_data_service.py:EXIT_MARK — exit codes from the VM
+
+The VM's OpenSSH default shell is Windows PowerShell, and `powershell -Command` returns 1 for any failing native command. So an `exit 97` from `run_remote.ps1` arrived as 1 (checked 2026-11-06 with `cmd /c exit 97` over the host-to-VM ssh). `run_remote.ps1` prints `REAL_DATA_EXIT=<code>` before every exit, and `run_remote` takes the last such line over the ssh exit code. An ssh exit of 255 comes from the local client and is still checked first. `test_exit_code_comes_from_the_marker_when_the_shell_flattens_it` pins it.
+
+## .github/workflows/native-real-data.yml:Select real-data tests — base from the merge commit
+
+The service checks out `refs/pull/<n>/merge`, whose first parent is the base tip. When `HEAD^2` exists, the step diffs against `HEAD^1` and fetches nothing. That works on the VM, which has no `origin`, and it stops shallowing the PC repo. A commit that is not a merge falls back to fetching the base, as before.
+
+## ci/real-data-service/real_data_service.py:run_remote — what is bundled, and when sent moves
+
+The bundle holds `refs/real-data/candidate-<name>`. It is incremental, `^refs/real-data/sent-<name>`, when that ref exists and names a different commit, because git refuses an empty bundle. A commit the VM already has gets a full bundle. The sent ref moves to the candidate only after `run_remote.ps1` printed `REAL_DATA_FETCHED`, which means the VM has the objects. The check runs after the job exits, including after a superseded or timed-out job, since the VM fetched in each case. The transfer is `tar cf -` piped into `tar xf -` on the VM, which does not translate line endings.
+
+## ci/real-data-service/real_data_service.py:stop_remote — superseded or timed-out VM runs
+
+Killing the local ssh client does not stop the VM job. `stop_remote` also runs `powershell -EncodedCommand`: the script reads `run.pid` and kills that process tree only when its command line contains `run_remote`. The script goes over the wire as base64 of UTF-16LE, so no quoting has to survive the two shells. `run_remote.ps1` applies the same check before it cleans the repo, so a job orphaned by a lost connection is stopped before the next run starts.
+
+## ci/real-data-service/real_data_service.py:start_remote — the VM command line
+
+The command is `run_remote.ps1` with forward-slash paths under `<root>`: `-Bundle <root>/incoming/<name>.bundle`, `-Ref`, `-Event` (`pull_request` or `push`), and `-BaseRef` only when the base is not empty, because an empty argument disappears in the nested shells. Its output goes to `LOG_DIR\<sha>.log`, as the local job's does.
+
+## ci/real-data-service/run_remote.ps1:param — the VM script
+
+It runs on the VM with `-Root` defaulting to `C:/ci/real-data`. It first stops a run whose pid in `run.pid` is still a `run_remote` process. It fetches the bundle into `repo` (created with `git init` if missing) as `refs/real-data/candidate`; if git cannot, it exits 97, the code the service retries on. It prints `REAL_DATA_FETCHED`, cleans like the local worker (`clean -ffdx -e /build/`, remove `build/zlib-src`), checks out the candidate detached and writes `run.pid`. It loads `worker.env` and exits 1 when `FO4_DATA_DIR` is unset, because the real-data tests would skip and pass. It runs `run_real_data.ps1` on the repo's workflow file with `$ErrorActionPreference = 'Continue'`, so native stderr does not stop it.
+
+## ci/real-data-service/real_data_service.py:plan — error statuses that are due again
+
+Before, only `error` "superseded" was due again. `error` "vm data runner unreachable" and `error` "vm data runner fetch failed" are due too, so a lost VM connection never leaves a head failed for good.
+
+## ci/real-data-service/test_real_data_service.py:RemoteTest — VM tests with fakes
+
+`RemoteTest` replaces git, `fetch_candidate`, `current_head`, `send_bundle` and `subprocess.run`, so no test reaches ssh or taskkill. `WorkerPoolTest` runs a local and a VM job that both wait on one barrier, so a serial pool times out the barrier and fails the test.

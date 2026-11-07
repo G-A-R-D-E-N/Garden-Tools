@@ -186,16 +186,22 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
   src/forms/cell_create.cpp
+  src/forms/cell_override.cpp
+  src/forms/cell_properties.cpp
+  src/forms/cell_cleanup.cpp
   src/forms/components.cpp
   src/forms/effects.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
+  src/forms/dialogue_authoring.cpp
+  src/forms/scene_authoring.cpp
   src/forms/copy_as_new.cpp
   src/forms/copy_as_wrapper.cpp
   src/forms/placed_reference_edit.cpp
   src/forms/placed_reference_create.cpp
   src/forms/placed_reference_move.cpp
+  src/forms/placed_reference_ops.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/weather.cpp
@@ -237,6 +243,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin/destructible_stage.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/subrecord_copy.cpp
+  src/plugin/info_responses.cpp
   src/plugin/scene_writer.cpp
   src/plugin/sound_writer.cpp
   src/plugin/scene_index.cpp
@@ -247,6 +254,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin/writer.cpp
   src/schema/condition_functions.cpp
   src/schema/condition_scope_path.cpp
+  src/plugin/edit_history.cpp
   src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
@@ -271,9 +279,13 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/graph/conflict_kind.cpp
   src/graph/check_errors.cpp
   src/graph/check_errors_records.cpp
+  src/graph/check_dialogue.cpp
+  src/graph/check_quest.cpp
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
+  src/environment/cell_view.cpp
+  src/environment/cell_references.cpp
   src/environment/world.cpp
   src/previs/cdx.cpp
   src/previs/csg.cpp
@@ -288,6 +300,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/environment/vegetation.cpp
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
+  src/environment/package_create.cpp
   src/environment/package_procedure.cpp
   src/environment/package_procedure_tree.cpp
   src/environment/dialogue.cpp
@@ -308,10 +321,16 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/papyrus/sha256.cpp
   src/papyrus/save_state.cpp
   src/papyrus/quest_rules.cpp
+  src/papyrus/quest_lifecycle.cpp
+  src/papyrus/quest_alias_lifecycle.cpp
+  src/papyrus/event_fanout.cpp
   src/papyrus/runtime.cpp
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
+  src/papyrus/decompile_service.cpp
+  src/papyrus/compile_staging.cpp
   src/papyrus/decompiler.cpp
+  src/papyrus/script_names.cpp
   src/papyrus/decompiler_expr.cpp
   src/papyrus/decompiler_stmt.cpp
   src/papyrus/lexer.cpp
@@ -334,6 +353,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/papyrus/creation_kit_fidelity.cpp
   src/papyrus/compile_script.cpp
   src/papyrus/analysis_service.cpp
+  src/papyrus/completion.cpp
+  src/papyrus/references.cpp
+  src/papyrus/workspace_symbols.cpp
   src/f4se/binding_validator.cpp
   src/f4se/cpp_emitter.cpp
   src/f4se/cpp_scanner.cpp
@@ -375,6 +397,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/swf/swf_display.cpp
   src/swf/swf_frame_control.cpp
   src/swf/swf_edit.cpp
+  src/swf/swf_placement_edit.cpp
   src/swf/swf_depth.cpp
   src/swf/swf_keyframe.cpp
   src/swf/swf_characters.cpp
@@ -399,6 +422,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/pex_analysis/script_set.cpp
+  src/pex_analysis/script_library.cpp
   src/abc/abc_file.cpp
   src/abc/abc_write.cpp
   src/abc/byte_reader.cpp
@@ -531,15 +555,16 @@ set(RADICLE_C_SOURCES
   src/c_api_version.cpp src/c_api_previs.cpp
   src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp
   src/c_api_conditions.cpp
-  src/c_api_dialogue.cpp
+  src/c_api_dialogue.cpp src/c_api_dialogue_author.cpp
+  src/c_api_scene_author.cpp
   src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp
-  src/c_api_cell.cpp
+  src/c_api_cell.cpp src/c_api_cell_view.cpp src/c_api_cell_edit.cpp src/c_api_edit_history.cpp
   src/c_api_patch.cpp
   src/c_api_conflict.cpp
   src/c_api_nif.cpp src/c_api_dds.cpp
   src/c_api_graph.cpp src/c_api_papyrus_source.cpp
   src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp
-  src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp
+  src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp src/c_api_papyrus_lifecycle.cpp
   src/c_api_papyrus_compiler.cpp src/c_api_papyrus_analysis.cpp
   src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp
   src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_verbs.cpp src/c_api_swf_abc_write.cpp
@@ -669,6 +694,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_undecodable_record.cpp
     tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
+    tests/test_hedr_count_real.cpp
     tests/test_row_roundtrip_real.cpp
     tests/test_actor_value_perk_real.cpp
     tests/test_perk_effects_real.cpp
@@ -749,11 +775,16 @@ if(RADICLE_BUILD_TESTS)
     tests/test_copy_as_new.cpp
     tests/test_copy_as_wrapper.cpp
     tests/test_info_copy_new.cpp
+    tests/test_dialogue_authoring.cpp
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
     tests/test_placed_reference_move.cpp
     tests/test_placed_reference_move_exterior.cpp
+    tests/test_cell_edit.cpp
+    tests/test_cell_cleanup.cpp
+    tests/test_edit_history.cpp
+    tests/test_cell_cleanup.cpp
     tests/test_record_flags.cpp
     tests/test_record_flags_deleted.cpp
     tests/test_extension_light_kinds.cpp
@@ -931,6 +962,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_scene_actor_action_edit.cpp
     tests/test_environment_world.cpp
     tests/test_environment_region.cpp
+    tests/test_cell_view.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
     tests/test_environment_script_elements.cpp
@@ -956,6 +988,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_characters.cpp
     tests/test_c_api_swf_history.cpp
     tests/test_c_api_swf_edit.cpp
+    tests/test_c_api_swf_verbs.cpp
     tests/test_c_api_swf_abc_sprite.cpp
     tests/test_c_api_swf_glyph.cpp
     tests/test_c_api_swf_sound.cpp
@@ -1013,10 +1046,15 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_structs.cpp
     tests/test_papyrus_runtime.cpp
     tests/test_papyrus_save_state.cpp
+    tests/test_papyrus_attach_remote.cpp
     tests/test_papyrus_quest_rules.cpp
+    tests/test_papyrus_quest_lifecycle.cpp
+    tests/test_papyrus_event_fanout.cpp
+    tests/test_c_api_papyrus_lifecycle.cpp
     tests/test_c_api_papyrus.cpp
     tests/test_c_api_papyrus_save_quest.cpp
     tests/test_c_api_papyrus_runtime.cpp
+    tests/test_c_api_papyrus_attach_remote.cpp
     tests/test_c_api_script_set.cpp
     tests/test_pex_analysis.cpp
     tests/test_pex_analysis_c_api.cpp
@@ -1028,6 +1066,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_source_real.cpp
     tests/test_papyrus_decompiler.cpp
     tests/test_papyrus_decompiler_real.cpp
+    tests/test_papyrus_decompiler_sample.cpp
+    tests/test_papyrus_compile_staging.cpp
     tests/test_papyrus_lexer.cpp
     tests/test_papyrus_parser.cpp
     tests/test_papyrus_parse_real.cpp

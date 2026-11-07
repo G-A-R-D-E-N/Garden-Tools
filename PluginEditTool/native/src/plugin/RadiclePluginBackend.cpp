@@ -1,4 +1,5 @@
 #include "RadiclePluginSupport.hpp"
+#include "RadiclePluginJournalSession.hpp"
 
 #include <algorithm>
 #include <array>
@@ -14,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/io/path_text.hpp>
 #include <fo4/plugin/reader.hpp>
 
 namespace fo4ide::plugin {
@@ -32,6 +34,7 @@ void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook) {
 void setLoadReadWindowHook(LoadReadWindowHook hook) {
     loadReadWindowHook = hook;
 }
+
 #endif
 
 Result<void> requirePluginUnchangedSince(const std::filesystem::path& path,
@@ -96,6 +99,8 @@ bool RadiclePluginBackend::fileUnchangedSinceLoad(const LoadedPlugin& loaded) co
 }
 
 std::optional<Error> RadiclePluginBackend::writeGuard(const LoadedPlugin& loaded) const {
+    if (!recoveryPlugin_.empty() && fo4::PluginKey::from_filename(recoveryPlugin_) == loaded.plugin.key)
+        return Error{"JournalRecoveryRequired", "Plugin journal recovery is required"};
     if (!isEditable(loaded)) {
         return Error{
             "PluginReadOnly",
@@ -156,10 +161,14 @@ std::optional<std::filesystem::path> RadiclePluginBackend::allowedSavePath(
 }
 
 std::optional<std::filesystem::path> RadiclePluginBackend::allowedLocalizationDirectory(
-    const std::filesystem::path& path) const {
+    const std::filesystem::path& path, bool allowAbsent) const {
     std::error_code targetEc;
     const auto target = std::filesystem::weakly_canonical(path, targetEc);
-    if (targetEc || target.empty() || !std::filesystem::is_directory(target)) {
+    if (targetEc || target.empty()) return std::nullopt;
+    std::error_code statusEc;
+    const bool absent = allowAbsent &&
+        std::filesystem::status(target, statusEc).type() == std::filesystem::file_type::not_found;
+    if (!absent && !std::filesystem::is_directory(target)) {
         return std::nullopt;
     }
 
@@ -182,6 +191,7 @@ std::optional<std::filesystem::path> RadiclePluginBackend::allowedLocalizationDi
 
 Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
                                                      const nlohmann::json& arguments) {
+    if (const auto error = testRecoveryGate(operation, arguments)) return std::unexpected(*error);
     if (operation == "environment.LoadMo2") return loadEnvironment(arguments);
     if (operation == "strings.ListStringTables") return listStringTables(arguments);
     if (operation == "strings.GetStrings") return getStrings(arguments);
@@ -200,6 +210,7 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "appInterop.ScanBrokenRefs") return scanBrokenRefs();
     if (operation == "backend.OpenPlugin") return openPlugin(arguments);
     if (operation == "backend.SavePlugin") return savePlugin(arguments);
+    if (operation == "backend.RepairHedrCount") return repairHedrCount(arguments);
     if (operation == "backend.DiscardPlugin") return discardPlugin(arguments);
     // Scalar-schema aware on every entry path; setFieldValue falls back to
     // setField for non-schema fields.
@@ -244,16 +255,6 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     });
 }
 
-std::string RadiclePluginBackend::dirtyPluginListLocked() const {
-    std::string pendingList;
-    for (const auto& item : plugins_) {
-        if (!item.dirty && !hasStagedStringTables(item.name)) continue;
-        if (!pendingList.empty()) pendingList += ", ";
-        pendingList += item.name;
-    }
-    return pendingList;
-}
-
 Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::json& arguments) {
     if (!arguments.is_object() || !arguments.contains("plugins") || !arguments["plugins"].is_array()) {
         return std::unexpected(Error{"InvalidEnvironment", "MO2 environment is missing its plugin list"});
@@ -267,7 +268,6 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             });
         }
     }
-
     const bool discardPending = arguments.contains("discardPending") &&
                                 arguments["discardPending"].is_boolean() &&
                                 arguments["discardPending"].get<bool>();
@@ -289,10 +289,99 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 #ifdef FO4IDE_TEST_HOOKS
     if (loadMo2AfterPendingCheckHook) loadMo2AfterPendingCheckHook();
 #endif
-
+    std::unique_ptr<OpLock> recoveryState;
+    std::unique_ptr<detail::JournalSession> recoverySession;
+    std::filesystem::path configuredJournalRoot;
+    nlohmann::json warnings = nlohmann::json::array();
+    bool recoveryFailed = false;
+    const auto gateRecovery = [&](const std::string& owner) {
+        if (!recoveryFailed) recoveryPlugin_ = owner;
+        recoveryFailed = true;
+    };
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+    TestReadRoots candidateReadRoots;
+#endif
+    try {
+        { OpLock lock(*this, OpLock::Mode::Read); configuredJournalRoot = testJournalRoot_; }
+        if (!configuredJournalRoot.empty()) {
+            recoveryState = std::make_unique<OpLock>(*this, OpLock::Mode::Lifecycle);
+            if (testJournalRoot_ != configuredJournalRoot) throw std::runtime_error("journal root changed");
+            if (!detail::journalHasRecoveryFiles(configuredJournalRoot)) recoveryState.reset();
+        }
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+        if (!configuredJournalRoot.empty()) {
+            for (const auto& entry : arguments["plugins"]) {
+                if (!entry.is_object()) continue;
+                const auto name = entry.value("name", std::string{});
+                try {
+                    testAuthorizeProfileReadRoots(nlohmann::json{{"plugins", nlohmann::json::array({entry})}}, candidateReadRoots);
+                } catch (const std::exception& error) {
+                    if (recoveryState) gateRecovery(name);
+                    warnings.push_back(nlohmann::json{{"plugin", name}, {"warning", error.what()}});
+                }
+            }
+        }
+#endif
+        if (recoveryState) {
+            const auto pending = dirtyPluginListLocked();
+            if (mutationEpoch_ != consentEpoch || (!discardPending && !pending.empty()))
+                return std::unexpected(Error{"PluginHasPendingChanges", "Pending changes prevent journal recovery: " + pending});
+            recoverySession = std::make_unique<detail::JournalSession>(configuredJournalRoot);
+            std::vector<detail::JournalRoots> approved;
+            std::vector<detail::JournalApprovedRoot> directories;
+            for (const auto& entry : arguments["plugins"]) {
+                if (!entry.is_object() || !entry.value("resolved", false)) continue;
+                try {
+                    LoadedPlugin candidate;
+                    candidate.name = entry.value("name", std::string{});
+                    candidate.source = entry.value("source", std::string{});
+                    const auto path = entry.value("path", std::string{});
+                    if (candidate.name.empty() || path.empty()) continue;
+                    candidate.path = utf8Path(path);
+                    if (!isEditable(candidate)) continue;
+                    std::error_code ec;
+                    const auto canonical = std::filesystem::absolute(candidate.path, ec).lexically_normal();
+                    if (ec || canonical.empty() || asciiLower(canonical.filename().string()) != asciiLower(candidate.name))
+                        throw std::runtime_error("cannot authorize journal plugin identity");
+                    const auto status = std::filesystem::symlink_status(canonical, ec);
+                    if (ec || !std::filesystem::is_regular_file(status)) throw std::runtime_error("unsafe journal plugin");
+                    auto identity = detail::JournalDestination::captureRoot(canonical.parent_path());
+                    const auto root = canonical.parent_path();
+                    if (std::none_of(directories.begin(), directories.end(), [&](const auto& item) { return item.path == root; }))
+                        directories.push_back({root, identity});
+                    detail::JournalRoots item;
+                    item.plugin = canonical; item.pluginDirectoryIdentity = std::move(identity);
+                    approved.push_back(std::move(item));
+                } catch (const std::exception& error) {
+                    gateRecovery(entry.value("name", std::string{}));
+                    warnings.push_back(nlohmann::json{{"plugin", entry.value("name", std::string{})}, {"warning", error.what()}});
+                }
+            }
+            for (auto& item : approved) item.approvedRoots = directories;
+            bool recovered = false;
+            for (const auto& item : approved) {
+                const std::vector<detail::JournalRoots> owner{item};
+                const auto name = fo4::io::utf8(item.plugin.filename());
+                try {
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+                    if (testRecoverJournal(*recoverySession, owner, arguments, candidateReadRoots)) recovered = true;
+#else
+                    if (recoverySession->recover(owner)) recovered = true;
+#endif
+                } catch (const std::exception& error) {
+                    gateRecovery(name);
+                    warnings.push_back(nlohmann::json{{"plugin", name}, {"warning", error.what()}});
+                }
+            }
+            if (!recovered) recoverySession.reset();
+        }
+    } catch (const std::exception& error) {
+        recoverySession.reset();
+        if (recoveryState) gateRecovery(fo4::io::utf8(configuredJournalRoot));
+        warnings.push_back(nlohmann::json{{"warning", error.what()}});
+    }
     std::vector<LoadedPlugin> loaded;
     nlohmann::json errors = nlohmann::json::array();
-
     for (const auto& entry : arguments["plugins"]) {
         if (!entry.is_object() || !entry.value("resolved", false)) continue;
         const auto name = entry.value("name", std::string{});
@@ -320,12 +409,22 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                 .plugin = std::move(plugin),
                 .dirty = false,
                 .stagedLocalization = std::nullopt,
+                .stagedAllocation = nullptr,
+                .stagedPluginLanguages = {},
+                .stagedPluginStringIds = {},
+                .stagedQuestFragments = std::nullopt,
             });
         } catch (const std::exception& error) {
             errors.push_back({{"plugin", name}, {"path", path}, {"error", error.what()}});
         }
     }
 
+    recoveryState.reset();
+#if defined(FO4IDE_TEST_HOOKS) && defined(__linux__)
+    if (!configuredJournalRoot.empty() && !errors.empty()) return std::unexpected(Error{"JournalRecoveryProfileInvalid", "a profile plugin could not be loaded: " + errors.front().at("plugin").get<std::string>()});
+    try { if (!configuredJournalRoot.empty()) candidateReadRoots = testFilterReadRoots(candidateReadRoots, loaded); }
+    catch (const std::exception& error) { return std::unexpected(Error{"JournalRecoveryProfileInvalid", error.what()}); }
+#endif
     std::vector<fo4::MasterDescriptor> knownKinds;
     knownKinds.reserve(loaded.size());
     for (const auto& item : loaded) {
@@ -337,7 +436,6 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
     for (auto& item : loaded) {
         fo4::apply_master_kinds(item.plugin, knownKinds);
     }
-
     const auto loadedCount = loaded.size();
     {
         OpLock lock(*this, OpLock::Mode::Lifecycle);
@@ -368,6 +466,12 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             });
         }
         plugins_ = std::move(loaded);
+        ++mutationEpoch_;
+        dropBorrowedEnvironmentLocked();
+#if (defined(FO4IDE_TEST_HOOKS) && defined(__linux__)) || defined(_WIN32)
+        testReadRoots_ = std::move(candidateReadRoots);
+#endif
+        if (!recoveryFailed) recoveryPlugin_.clear();
         {
             std::scoped_lock staged(stagedStringsMutex_);
             stagedStrings_.clear();
@@ -375,29 +479,13 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
         trustedSaveRoots_ = std::move(roots);
         markGraphDirtyLocked();
     }
-
     return nlohmann::json{
         {"ok", true},
         {"loadedPlugins", loadedCount},
         {"failedPlugins", errors.size()},
-        {"errors", std::move(errors)}
+        {"errors", std::move(errors)},
+        {"warnings", std::move(warnings)}
     };
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getPlugins() const {
-    nlohmann::json rows = nlohmann::json::array();
-    OpLock lock(*this, OpLock::Mode::Read);
-    for (const auto& loaded : plugins_) {
-        rows.push_back({
-            {"Key", loaded.name},
-            {"ConflictStatus", 0},
-            {"IsRecordNode", false},
-            {"HasChildren", !loaded.plugin.groups.empty()},
-            {"FilePath", loaded.path.string()},
-            {"Pending", loaded.dirty || hasStagedStringTables(loaded.name)}
-        });
-    }
-    return nlohmann::json(rows.dump());
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getChildren(const nlohmann::json& arguments) const {
@@ -524,14 +612,27 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
             // Same canonical path: refresh the cached contents in place.
             // Trust and save roots are untouched by ad hoc loads.
             existing->loadedTime = readTime;
-            existing->plugin = std::move(plugin);
-            existing->stagedLocalization.reset();
+            existing->plugin = std::move(plugin); existing->diskBaseline = existing->plugin.original_data;
+            existing->stagedLocalization.reset(); existing->stagedAllocation.reset(); existing->stagedPluginLanguages.clear(); existing->stagedPluginStringIds.clear();
+            existing->stagedQuestFragments.reset();
             existing->dirty = false;
         } else {
             plugins_.push_back({
-                name, filePath, {}, readTime, false, std::move(plugin), false, std::nullopt
+                .name = name,
+                .path = filePath,
+                .source = {},
+                .loadedTime = readTime,
+                .trusted = false,
+                .plugin = std::move(plugin),
+                .dirty = false,
+                .stagedLocalization = std::nullopt,
+                .stagedAllocation = nullptr,
+                .stagedPluginLanguages = {},
+                .stagedPluginStringIds = {},
+                .stagedQuestFragments = std::nullopt,
             });
         }
+        dropBorrowedEnvironmentLocked();
 
         std::vector<fo4::MasterDescriptor> knownKinds;
         knownKinds.reserve(plugins_.size());
@@ -625,10 +726,13 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
         return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();
     }
     if (const auto error = writeGuard(*loaded)) return std::unexpected(*error);
+    if (!diskMatchesBaseline(*loaded)) return std::unexpected(Error{"PluginChangedOnDisk", "Plugin bytes changed after loading: " + loaded->name});
     try {
         std::error_code statEc;
         const auto readTime = std::filesystem::last_write_time(loaded->path, statEc);
         auto reloaded = fo4::read_plugin_file(loaded->path);
+        if (!reloaded.original_data || *reloaded.original_data != *loaded->diskBaseline)
+            return std::unexpected(Error{"PluginChangedOnDisk", "Plugin bytes changed while reloading: " + loaded->name});
 #ifdef FO4IDE_TEST_HOOKS
         if (loadReadWindowHook != nullptr) loadReadWindowHook();
 #endif
@@ -645,9 +749,12 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
         }
         fo4::apply_master_kinds(reloaded, knownKinds);
         CommitScope commit;
-        loaded->plugin = std::move(reloaded);
+        loaded->plugin = std::move(reloaded); loaded->diskBaseline = loaded->plugin.original_data;
+        dropBorrowedEnvironmentOnlyLocked();
+        cellEditHistories_.erase(loaded->name);
         loaded->loadedTime = readTime;
-        loaded->stagedLocalization.reset();
+        loaded->stagedLocalization.reset(); loaded->stagedAllocation.reset(); loaded->stagedPluginLanguages.clear(); loaded->stagedPluginStringIds.clear();
+        loaded->stagedQuestFragments.reset();
         discardStagedStringTables(loaded->name);
         loaded->dirty = false;
         markGraphDirtyLocked();

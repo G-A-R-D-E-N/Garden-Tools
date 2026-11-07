@@ -11,6 +11,22 @@ add_library(
     plugin/RadiclePluginQueries.cpp
     plugin/RadiclePluginConditions.cpp
     plugin/RadiclePluginPending.cpp
+    plugin/RadiclePluginJournalLock.cpp
+    plugin/RadiclePluginJournalRoot.cpp
+    plugin/RadiclePluginJournalFiles.cpp
+    plugin/RadiclePluginJournalManifest.cpp
+    plugin/RadiclePluginJournalDestination.cpp
+    plugin/RadiclePluginJournalSession.cpp
+    plugin/RadiclePluginJournalArchiveOrder.cpp
+    plugin/RadiclePluginJournalPeers.cpp
+    plugin/RadiclePluginJournalProfile.cpp
+    plugin/RadiclePluginJournalReadStrings.cpp
+    plugin/RadiclePluginHeldArchives.cpp
+    plugin/RadiclePluginHeldStrings.cpp
+    plugin/RadiclePluginHeldLocalization.cpp
+    plugin/RadiclePluginHeldBackend.cpp
+    plugin/RadiclePluginJournalBackend.cpp
+    plugin/RadiclePluginBa2Source.cpp
     plugin/RadiclePluginAnalysis.cpp
     plugin/RadiclePluginMasters.cpp
     plugin/RadiclePluginMutation.cpp
@@ -30,11 +46,26 @@ add_library(
     plugin/RadiclePluginQuestCondition.cpp
     plugin/RadiclePluginQuestAliasFill.cpp
     plugin/RadiclePluginQuestAliases.cpp
+    plugin/RadiclePluginQuestAliasJson.cpp
     plugin/RadiclePluginQuestExisting.cpp
     plugin/RadiclePluginQuestExistingExtras.cpp
     plugin/RadiclePluginQuestLocalized.cpp
+    plugin/RadiclePluginQuestObjectives.cpp
+    plugin/RadiclePluginQuestFragments.cpp
+    plugin/RadiclePluginQuestScriptEdit.cpp
+    plugin/RadiclePluginQuestReads.cpp
+    plugin/RadiclePluginQuestStageSetters.cpp
+    plugin/RadiclePluginDialogue.cpp
+    plugin/RadiclePluginDialogueRead.cpp
+    plugin/RadiclePluginScene.cpp
+    plugin/RadiclePluginSceneRead.cpp
+    plugin/RadiclePluginFragments.cpp
+    plugin/RadiclePluginDialogueBulk.cpp
     plugin/RadiclePluginStrings.cpp
+    plugin/RadiclePluginStringLanguages.cpp
+    plugin/RadiclePluginPathIdentity.cpp
     plugin/RadiclePluginStringsEdit.cpp
+    plugin/RadiclePluginStringsOverlay.cpp
     plugin/RadiclePluginElement.cpp
     plugin/RadiclePluginMaintenance.cpp
     plugin/RadiclePluginCompact.cpp
@@ -45,6 +76,9 @@ add_library(
     plugin/RadiclePluginOverridePatch.cpp
     plugin/RadiclePluginLeveled.cpp
     plugin/RadiclePluginPerk.cpp
+    plugin/RadiclePluginPerkCreate.cpp
+    plugin/RadiclePluginPerkEpfd.cpp
+    plugin/RadiclePluginPerkLinks.cpp
     plugin/RadiclePluginSeq.cpp
     plugin/RadiclePluginCompare.cpp
     plugin/RadiclePluginDisabledOverride.cpp
@@ -56,19 +90,26 @@ add_library(
     plugin/RadiclePluginReadApi.cpp
     plugin/RadiclePluginEsl.cpp
     plugin/RadiclePluginCell.cpp
+    plugin/RadiclePluginCellProperties.cpp
+    plugin/RadiclePluginCellCleanup.cpp
     plugin/RadiclePluginTypedRecords.cpp
     plugin/RadiclePluginSound.cpp
     plugin/RadiclePluginPackage.cpp
     plugin/RadiclePluginScripts.cpp
+    plugin/RadiclePluginQuestAliasScripts.cpp
     plugin/RadiclePluginMemory.cpp
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )
-target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4 PRIVATE ZLIB::ZLIB)
+target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4 fo4ide_archive PRIVATE ZLIB::ZLIB)
+if(WIN32)
+    target_sources(fo4ide_plugin PRIVATE plugin/RadiclePluginWindowsJournalDirectory.cpp plugin/RadiclePluginWindowsJournalIntent.cpp plugin/RadiclePluginWindowsJournalDestination.cpp plugin/RadiclePluginWindowsJournalSession.cpp)
+    target_link_libraries(fo4ide_plugin PRIVATE advapi32 ntdll)
+endif()
 fo4ide_enable_warnings(fo4ide_plugin)
 fo4ide_enable_sanitizers(fo4ide_plugin)
 if(FO4IDE_BUILD_TESTS)
-    target_compile_definitions(fo4ide_plugin PRIVATE FO4IDE_TEST_HOOKS)
+    target_compile_definitions(fo4ide_plugin PUBLIC FO4IDE_TEST_HOOKS)
 endif()
 
 add_library(fo4ide_logging logging/Logger.cpp)
@@ -188,19 +229,30 @@ add_library(
     fo4ide_papyrus
     papyrus/Lexer.cpp
     papyrus/Parser.cpp
+    papyrus/ParserBoundedFile.cpp
     papyrus/Type.cpp
     papyrus/Binding.cpp
     papyrus/ScriptIndex.cpp
     papyrus/Resolver.cpp
     papyrus/TypeChecker.cpp
     papyrus/CodeGenerator.cpp
-    papyrus/Decompiler.cpp
     papyrus/Symbols.cpp
     papyrus/CreationKitFidelity.cpp
     papyrus/AnalysisService.cpp
+    papyrus/QuestFragmentSource.cpp
+    papyrus/SecureSourceSnapshot.cpp
+    papyrus/SecureSourceSnapshotWindows.cpp
     papyrus/CompileScript.cpp
+    papyrus/VanillaScriptSources.cpp
 )
-target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4)
+target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4 PRIVATE ZLIB::ZLIB)
+if(WIN32)
+    target_link_libraries(fo4ide_papyrus PRIVATE ntdll)
+endif()
+if(FO4IDE_BUILD_TESTS)
+    target_compile_definitions(fo4ide_papyrus PRIVATE FO4IDE_TEST_HOOKS)
+endif()
+target_link_libraries(fo4ide_plugin PRIVATE fo4ide_papyrus)
 fo4ide_enable_warnings(fo4ide_papyrus)
 fo4ide_enable_sanitizers(fo4ide_papyrus)
 
@@ -224,19 +276,21 @@ add_library(
     fo4ide_app
     app/ServiceTargets.cpp
     app/PapyrusTarget.cpp
-    app/PapyrusStaging.cpp
     app/GraphTarget.cpp
     app/AppInteropTarget.cpp
     app/AudioTarget.cpp
     app/MaterialTarget.cpp
     app/ArchiveTarget.cpp
     app/PluginBackendTarget.cpp
+    app/SwfTarget.cpp
+    app/SwfTargetFile.cpp
     app/WikiService.cpp
     rpc/PrevisTarget.cpp
 )
 target_link_libraries(
     fo4ide_app
     PUBLIC
+        fo4
         fo4ide_core
         fo4ide_rpc
         fo4ide_settings
@@ -254,6 +308,10 @@ target_link_libraries(
         fo4
         Threads::Threads
 )
+# Constraint: the SWF target calls the C ABI, so a static Radicle build must link radicle_c too.
+if(TARGET radicle_c)
+    target_link_libraries(fo4ide_app PUBLIC radicle_c)
+endif()
 fo4ide_enable_warnings(fo4ide_app)
 fo4ide_enable_sanitizers(fo4ide_app)
 

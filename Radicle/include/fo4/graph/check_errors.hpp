@@ -30,6 +30,16 @@ enum class CheckCode {
   injected_record,
   unsupported_vmad_property,
   results_truncated,
+  dialogue_info_count_mismatch,
+  dialogue_previous_info_cycle,
+  dialogue_previous_info_topic_mismatch,
+  dialogue_branch_quest_mismatch,
+  dialogue_branch_category_invalid,
+  scene_parent_quest_missing,
+  scene_action_topic_not_dial,
+  scene_action_phase_out_of_range,
+  scene_action_alias_unknown,
+  scene_action_index_order,
 };
 
 enum class CheckSeverity {
@@ -58,6 +68,12 @@ struct CheckRunSummary {
   bool truncated{false};
 };
 
+struct QuestCheckRequest {
+  PluginKey plugin;
+  FormKey quest;
+  std::size_t limit{0};
+};
+
 std::string_view check_code_name(CheckCode code) noexcept;
 std::string_view check_severity_name(CheckSeverity severity) noexcept;
 
@@ -67,5 +83,9 @@ std::vector<std::vector<FormKey>> find_leveled_list_cycles(
 std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_order,
                                            const CheckOptions& options = {},
                                            CheckRunSummary* summary = nullptr);
+
+std::vector<CheckFinding> check_quest(std::span<const Plugin* const> load_order,
+                                      const QuestCheckRequest& request,
+                                      CheckRunSummary* summary = nullptr);
 
 }  // namespace fo4

@@ -22,10 +22,6 @@ using fo4::papyrus::Value;
 using fo4::papyrus::ValueType;
 
 
-struct radicle_papyrus_object {
-  ObjectRef ref;
-};
-
 namespace {
 
 constexpr std::size_t kMaxValueArray = 1u << 20;
@@ -208,6 +204,13 @@ radicle_status make_value(Value value, radicle_papyrus_value** out) {
 }
 
 radicle_papyrus_status to_c_status(Status status) { return toCStatus(status); }
+
+Status from_c_status(radicle_papyrus_status status) {
+  if (static_cast<int>(status) < 0 || static_cast<int>(status) > static_cast<int>(RADICLE_PAPYRUS_STATUS_LATENT)) {
+    return Status::InternalError;
+  }
+  return static_cast<Status>(static_cast<std::uint8_t>(status));
+}
 
 }  // namespace radicle_c_papyrus_detail
 

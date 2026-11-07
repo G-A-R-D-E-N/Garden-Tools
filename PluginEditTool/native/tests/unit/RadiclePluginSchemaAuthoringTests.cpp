@@ -1,4 +1,5 @@
 #include <chrono>
+#include "../helpers/TempRoot.hpp"
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -6,6 +7,7 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <fo4/environment/package_procedure.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/subrecord_authoring.hpp>
@@ -16,7 +18,7 @@ namespace {
 
 struct Fixture {
     std::filesystem::path root = std::filesystem::temp_directory_path() /
-        ("fo4ide_authoring_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("fo4ide_authoring_" + fo4ide_test::uniqueTempName());
     std::filesystem::path path = root / "Authoring.esp";
     fo4::FormKey key;
     fo4ide::plugin::RadiclePluginBackend backend;
@@ -135,6 +137,41 @@ TEST_CASE("Schema creation refuses an EditorID that Windows-1252 cannot store wi
         "Authoring.esp", "ARMO", {{"schema", true}, {"editorId", "\xe6\x97\xa5"}}}));
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error().type == "InvalidEditorId");
+    const auto pending = fixture.backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(pending.has_value());
+    CHECK(nlohmann::json::parse(pending->get<std::string>())[0].at("Pending") == false);
+    CHECK(readBytes(fixture.path) == before);
+}
+
+TEST_CASE("Schema authoring creates a travel PACK that decodes with its Travel leaf", "[w0][authoring]") {
+    Fixture fixture;
+    const auto created = fixture.backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Authoring.esp", "PACK", {
+            {"editorId", "TravelToArmor"},
+            {"location", {{"type", "reference"}, {"form", fixture.key.to_string()}, {"radius", 300}}},
+            {"speed", "walk"},
+            {"preferPreferredPath", true}}}));
+    REQUIRE(created.has_value());
+    const auto result = nlohmann::json::parse(created->get<std::string>());
+    CHECK(result.at("signature") == "PACK");
+    REQUIRE(fixture.backend.invokeBackend("SavePlugin", nlohmann::json::array({"Authoring.esp"})).has_value());
+    const auto saved = fo4::read_plugin_file(fixture.path);
+    const auto* record = fo4::find_record(saved, fo4::FormKey::parse(result.at("formKey").get<std::string>()));
+    REQUIRE(record != nullptr);
+    const auto tree = fo4::env::decode_package_procedure(*record);
+    REQUIRE(tree.decoded);
+    REQUIRE(tree.inputs.size() == 4);
+    REQUIRE(tree.nodes.size() == 2);
+    CHECK(tree.nodes[1].name == "Travel");
+}
+
+TEST_CASE("Schema authoring refuses a travel PACK reference location without a form without staging", "[w0][authoring]") {
+    Fixture fixture;
+    const auto before = readBytes(fixture.path);
+    const auto refused = fixture.backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Authoring.esp", "PACK", {{"editorId", "NoForm"}, {"location", {{"type", "reference"}}}}}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "InvalidRecordCreationPayload");
     const auto pending = fixture.backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
     REQUIRE(pending.has_value());
     CHECK(nlohmann::json::parse(pending->get<std::string>())[0].at("Pending") == false);

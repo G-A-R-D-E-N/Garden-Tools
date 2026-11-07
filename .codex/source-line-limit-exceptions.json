@@ -1,0 +1,7 @@
+{
+  "files": {
+    "PluginEditTool/native/tests/unit/RadiclePluginQuestAuthoringTests.cpp": {
+      "reason": "One cohesive gtest translation unit for the QUST authoring backend, already over the 1000-line limit before this change. Nomad's decision is not to split it, so its growth is carried here rather than by breaking the suite into arbitrary line-count chunks. The file is hand-written tests only: each TEST_CASE exercises one authoring path (aliases, stages, objectives, conditions, VMAD rewrite) and shares the fixtures at the top, so a split would need a shared test-support header first; that split is a follow-up, not a blocker for adding a case."
+    }
+  }
+}

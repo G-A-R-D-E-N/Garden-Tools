@@ -125,4 +125,26 @@ bool insert_instance_transform_keyframe(SwfFile& file, std::uint32_t root_frame,
                                         std::uint32_t instance_id, const SwfTransform& transform,
                                         SwfKeyframeInsertResult& out);
 
+/* Flat tag address: top names the top-level tag, and child names the sprite child when inside is set. */
+struct SwfFlatTag {
+  std::size_t top{0};
+  std::size_t child{0};
+  bool inside{false};
+};
+
+/* Requires flat to be the pre-order index radicle_swf_tag_at reports; nesting below a sprite child must be refused. */
+bool resolve_flat_tag(const SwfFile& file, std::size_t flat, SwfFlatTag& out);
+
+/* Requires flat_tag to name a flat placement index. */
+bool set_placement_depth_flat(SwfFile& file, std::size_t flat_tag, std::uint16_t depth,
+                              std::string& message);
+
+/* Requires flat_tag to name a flat placement index and the transform to fit 31 bits. */
+bool set_placement_transform_flat(SwfFile& file, std::size_t flat_tag, const SwfTransform& transform,
+                                  std::string& message);
+
+/* Requires flat_tag to name a flat PlaceObject2 index and frame to name a reached frame. */
+bool insert_placement_keyframe_flat(SwfFile& file, std::size_t flat_tag, std::uint32_t frame,
+                                    std::string& message);
+
 }  // namespace fo4::swf

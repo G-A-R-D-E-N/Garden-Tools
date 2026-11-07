@@ -1,5 +1,6 @@
 #include "fo4/binary/cursor.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
 #include "real_data_build.hpp"
@@ -13,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -28,14 +30,19 @@ std::vector<std::byte> make_short_hedr_plugin() {
   return out.bytes;
 }
 
-std::vector<std::byte> make_nested_plugin(std::uint32_t stored_count) {
+std::vector<std::byte> make_nested_plugin(std::uint32_t stored_count, bool stale_onam = false) {
   fo4::test::ByteWriter out;
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  const auto tes4 = fo4::test::begin_record(out, "TES4", stale_onam ? fo4::RecordFlags::master : 0, 0);
   fo4::test::ByteWriter hedr;
   hedr.f32(1.0f);
   hedr.u32(stored_count);
   hedr.u32(0x802);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  if (stale_onam) {
+    fo4::test::ByteWriter onam;
+    onam.u32(0x1234);
+    fo4::test::write_subrecord(out, "ONAM", onam.bytes);
+  }
   fo4::test::end_record(out, tes4);
 
   const auto top = fo4::test::begin_group(out, "MISC", 0);
@@ -61,8 +68,7 @@ std::uint64_t recursive_hedr_count(const fo4::Plugin& plugin) {
 }
 
 std::uint32_t rebuilt_hedr_count(fo4::Plugin& plugin) {
-  plugin.original_range.clear();
-  plugin.tes4.original_range.clear();
+  fo4::repair_hedr_record_count(plugin);
   const auto written = fo4::write_plugin(plugin);
   fo4::binary::Cursor cursor{written};
   cursor.read_signature();
@@ -118,21 +124,154 @@ TEST(HedrCount, MixedPathPreservesNoncanonicalCountWhenStructureIsUnchanged) {
   EXPECT_EQ(fo4::write_plugin(plugin), bytes);
 }
 
+// Detects: editing a record must not silently normalize an unrelated HEDR count.
+TEST(HedrCount, ContentEditPreservesNoncanonicalCount) {
+  auto plugin = fo4::read_plugin(make_nested_plugin(999), "ContentEdit.esp");
+  auto& record = std::get<fo4::Record>(plugin.groups[0].children[0]);
+  record.subrecords[0].data[0] = std::byte{'X'};
+  record.original_range.clear();
+  plugin.original_range.clear();
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "ContentEdit.esp");
+  EXPECT_EQ(reread.header.record_count, 999u);
+  EXPECT_EQ(std::get<fo4::Record>(reread.groups[0].children[0]).subrecords[0].data[0], std::byte{'X'});
+}
+
+// Detects: explicit count repair must survive a save and leave other HEDR bytes intact.
+TEST(HedrCount, ExplicitRepairUpdatesCountAndPreservesOtherFields) {
+  auto plugin = fo4::read_plugin(make_nested_plugin(999), "Repair.esp");
+  fo4::repair_hedr_record_count(plugin);
+  EXPECT_EQ(plugin.header.record_count, 4u);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Repair.esp");
+  EXPECT_EQ(reread.header.record_count, 4u);
+  EXPECT_EQ(reread.header.next_form_id, 0x802u);
+}
+
+// Detects: explicit HEDR repair must not rewrite unrelated stale ONAM metadata.
+TEST(HedrCount, ExplicitRepairPreservesNoncanonicalOnam) {
+  const auto bytes = make_nested_plugin(999, true);
+  auto plugin = fo4::read_plugin(bytes, "Repair.esm");
+  fo4::repair_hedr_record_count(plugin);
+  EXPECT_TRUE(fo4::record_original_bytes(plugin, plugin.tes4).empty());
+  const auto copied_tes4 = plugin.tes4;
+  EXPECT_TRUE(fo4::record_original_bytes(plugin, copied_tes4).empty());
+  auto expected = bytes;
+  expected[34] = std::byte{4};
+  expected[35] = expected[36] = expected[37] = std::byte{0};
+  EXPECT_EQ(fo4::write_plugin(plugin), expected);
+}
+
+// Detects: repairing an extended HEDR must preserve its nonzero stored short size and all other bytes.
+TEST(HedrCount, ExplicitRepairPreservesExtendedSubrecordEncoding) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  out.sig("XXXX");
+  out.u16(4);
+  out.u32(12);
+  out.sig("HEDR");
+  out.u16(7);
+  out.f32(1.0f);
+  out.u32(999);
+  out.u32(0x800);
+  fo4::test::end_record(out, tes4);
+  auto plugin = fo4::read_plugin(out.bytes, "Extended.esp");
+  fo4::repair_hedr_record_count(plugin);
+  auto expected = out.bytes;
+  std::fill(expected.begin() + 44, expected.begin() + 48, std::byte{0});
+  EXPECT_EQ(fo4::write_plugin(plugin), expected);
+}
+
+// Detects: repairing a compressed TES4 must retain unrelated decoded subrecords after recompression.
+TEST(HedrCount, ExplicitRepairPreservesCompressedHeaderContent) {
+  fo4::test::ByteWriter payload;
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(999);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(payload, "HEDR", hedr.bytes);
+  fo4::test::write_subrecord(payload, "CNAM", std::string_view{"Author\0", 7});
+  const std::vector<std::byte> description{std::byte{0x41}, std::byte{0x42}, std::byte{0}};
+  fo4::test::write_xxxx_subrecord(payload, "SNAM", description);
+
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::compressed, 0);
+  out.u32(static_cast<std::uint32_t>(payload.bytes.size()));
+  out.raw(fo4::test::zlib_compress(payload.bytes));
+  fo4::test::end_record(out, tes4);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Compressed.esp");
+  fo4::repair_hedr_record_count(plugin);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Compressed.esp");
+  EXPECT_TRUE(reread.tes4.compressed);
+  EXPECT_EQ(reread.header.record_count, 0u);
+  EXPECT_EQ(reread.header.next_form_id, 0x800u);
+  EXPECT_EQ(reread.header.author, "Author");
+  const auto snam = std::find_if(reread.tes4.subrecords.begin(), reread.tes4.subrecords.end(),
+                                 [](const auto& sub) { return sub.signature == fo4::sig_snam; });
+  ASSERT_NE(snam, reread.tes4.subrecords.end());
+  EXPECT_TRUE(snam->extended_size);
+  EXPECT_EQ(snam->data, description);
+}
+
+// Detects: editing TES4 after a repair must still trigger the normal ONAM rebuild.
+TEST(HedrCount, HeaderEditAfterRepairRebuildsOnam) {
+  auto plugin = fo4::read_plugin(make_nested_plugin(999, true), "Repair.esm");
+  fo4::repair_hedr_record_count(plugin);
+  plugin = fo4::set_plugin_author(std::move(plugin), "New author");
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Repair.esm");
+  EXPECT_EQ(reread.header.author, "New author");
+  EXPECT_TRUE(reread.header.overrides.empty());
+  EXPECT_EQ(std::count_if(reread.tes4.subrecords.begin(), reread.tes4.subrecords.end(),
+                          [](const auto& sub) { return sub.signature == fo4::sig_onam; }), 0);
+}
+
+// Detects: adding and deleting a record across saves must not restore the original stale count.
+TEST(HedrCount, StructuralEditsReturningToOriginalTotalsRebuildCount) {
+  auto plugin = fo4::read_plugin(make_nested_plugin(999), "Structural.esp");
+  const auto added = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
+  EXPECT_EQ(fo4::read_plugin(fo4::write_plugin(plugin), "Structural.esp").header.record_count, 5u);
+  ASSERT_EQ(fo4::delete_local_record(plugin, added), fo4::RecordDeleteStatus::deleted);
+  EXPECT_EQ(fo4::read_plugin(fo4::write_plugin(plugin), "Structural.esp").header.record_count, 4u);
+}
+
+// Detects: replacing one local record with another must not retain a stale count.
+TEST(HedrCount, EqualCountStructuralReplacementRebuildsCount) {
+  auto plugin = fo4::read_plugin(make_nested_plugin(999), "Structural.esp");
+  const auto original = fo4::FormKey::parse("000800:Structural.esp");
+  ASSERT_EQ(fo4::delete_local_record(plugin, original), fo4::RecordDeleteStatus::deleted);
+  fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
+  EXPECT_EQ(fo4::read_plugin(fo4::write_plugin(plugin), "Structural.esp").header.record_count, 4u);
+}
+
+// Detects: content-only saves must preserve a malformed header that repair must reject.
+TEST(HedrCount, ShortHedrSurvivesContentOnlySave) {
+  const auto bytes = make_short_hedr_plugin();
+  auto plugin = fo4::read_plugin(bytes, "ShortHedr.esp");
+  plugin.original_range.clear();
+  EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+  EXPECT_THROW(fo4::repair_hedr_record_count(plugin), std::runtime_error);
+}
+
+// Detects: explicit repair must reject ambiguous duplicate HEDR subrecords without changing the plugin.
+TEST(HedrCount, ExplicitRepairRejectsDuplicateHedr) {
+  auto plugin = fo4::read_plugin(make_nested_plugin(999), "Duplicate.esp");
+  plugin.tes4.subrecords.push_back(plugin.tes4.subrecords.front());
+  plugin.original_range.clear();
+  plugin.tes4.original_range.clear();
+  EXPECT_THROW(fo4::repair_hedr_record_count(plugin), std::runtime_error);
+  EXPECT_EQ(plugin.header.record_count, 999u);
+}
+
 TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
   auto plugin = fo4::read_plugin(make_nested_plugin(999), "Rebuilt.esp");
 
-  // xEdit's writer counts every major record as 1 and each GRUP as
-  // 1 + its recursive children, then subtracts one for TES4 itself.
-  // This fixture therefore has: top GRUP + first record + nested GRUP +
-  // second record = 4.
   plugin.original_range.clear();
-  plugin.tes4.original_range.clear();
+  plugin.groups[0].children.pop_back();
 
   const auto written = fo4::write_plugin(plugin);
   const auto reread = fo4::read_plugin(written, "Rebuilt.esp");
-  EXPECT_EQ(reread.header.record_count, 4u);
-  EXPECT_EQ(fo4::collect_records(reread).size(), 3u);  // TES4 + two MISC
-  EXPECT_EQ(fo4::collect_groups(reread).size(), 2u);
+  EXPECT_EQ(reread.header.record_count, 2u);
+  EXPECT_EQ(fo4::collect_records(reread).size(), 2u);
+  EXPECT_EQ(fo4::collect_groups(reread).size(), 1u);
 }
 
 TEST(HedrCount, ShortHedrIsRefusedWhenRebuilt) {
@@ -140,8 +279,8 @@ TEST(HedrCount, ShortHedrIsRefusedWhenRebuilt) {
   plugin.original_range.clear();
   plugin.tes4.original_range.clear();
   try {
-    static_cast<void>(fo4::write_plugin(plugin));
-    ADD_FAILURE() << "write_plugin accepted a TES4 HEDR shorter than 12 bytes";
+    fo4::repair_hedr_record_count(plugin);
+    ADD_FAILURE() << "repair_hedr_record_count accepted a TES4 HEDR shorter than 12 bytes";
   } catch (const std::runtime_error& error) {
     EXPECT_EQ(dynamic_cast<const fo4::FormIdError*>(&error), nullptr);
     EXPECT_STREQ(error.what(), "TES4 HEDR must be at least 12 bytes on rebuild");

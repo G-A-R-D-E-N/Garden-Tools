@@ -44,12 +44,25 @@ struct PluginArgument {
 };
 
 constexpr const char* k_perk_effect_items =
-    R"({"type":"object","properties":{"type":{"type":"string","enum":["quest_stage","ability","entry_point"]},)"
-    R"("rank":{"type":"integer"},"priority":{"type":"integer"},"quest":{"type":"string"},"questStage":{"type":"integer"},)"
-    R"("ability":{"type":"string"},"entryPoint":{"type":"integer"},"function":{"type":"integer"},)"
-    R"("tabs":{"type":"array","items":{"type":"object","properties":{"runOn":{"type":"integer"},"conditions":{"type":"array"}}}},)"
-    R"("parameters":{"type":"object","properties":{"type":{"type":"integer"},"entryId":{"type":"integer"},)"
-    R"("scriptFlags":{"type":"integer"},"data":{"type":"string"},"buttonLabel":{"type":"string"},"buttonLabelId":{"type":"integer"}}}},)"
+    R"({"type":"object","properties":{"type":{"type":"string","enum":["quest_stage","ability","entry_point"],)"
+    R"("description":"Effect kind; quest_stage uses quest and questStage, ability uses ability, entry_point uses entryPoint and function"},)"
+    R"("rank":{"type":"integer","minimum":0,"maximum":255},"priority":{"type":"integer","minimum":0,"maximum":255},)"
+    R"("quest":{"type":"string","description":"quest_stage only: a loaded QUST FormKey"},)"
+    R"("questStage":{"type":"integer","minimum":0,"maximum":65535},)"
+    R"("ability":{"type":"string","description":"ability only: a loaded SPEL FormKey"},)"
+    R"("entryPoint":{"type":"integer","minimum":0,"maximum":255},"function":{"type":"integer","minimum":0,"maximum":255},)"
+    R"("tabs":{"type":"array","description":"Condition tabs; an effect without tabs clears them","items":{"type":"object",)"
+    R"("properties":{"runOn":{"type":"integer"},"conditions":{"type":"array","items":{"type":"object","properties":{)"
+    R"("function":{"type":"string"},"operator":{"type":"string"},"value":{"type":"number"},"compareGlobal":{"type":"string"},)"
+    R"("param1":{"type":["integer","string"]},"param2":{"type":["integer","string"]},"runOn":{"type":["string","integer"]},)"
+    R"("reference":{"type":"string"},"flags":{"type":"string"},"cis1":{"type":"string"},"cis2":{"type":"string"}}}}}}},)"
+    R"("parameters":{"type":"object","description":"Use data (hex) or the typed fields for parameters.type, not both. value: EPFT 1, 2 (float pair) and 8; value2: EPFT 2 float pair; form: EPFT 3, 4, 5; actorValue: EPFT 8 or EPFT 2 with an actor-value function; text: EPFT 6",)"
+    R"("properties":{"type":{"type":"integer","minimum":0,"maximum":255},"entryId":{"type":"integer","minimum":0,"maximum":65535},)"
+    R"("scriptFlags":{"type":"integer","minimum":0,"maximum":65535},"data":{"type":"string","description":"EPFD bytes as hex"},)"
+    R"("buttonLabel":{"type":"string"},"buttonLabelId":{"type":"integer","minimum":0},)"
+    R"("value":{"type":"number"},"value2":{"type":"number"},)"
+    R"("form":{"type":"string","description":"FormKey or editor ID of a loaded LVLI for EPFT 3, or SPEL for EPFT 4 and 5"},)"
+    R"("actorValue":{"type":"string","description":"FormKey or editor ID of a loaded AVIF"},"text":{"type":"string"}}}},)"
     R"("required":["type"]})";
 
 bool registerPluginTools(fo4ide::mcp::Registry& registry,
@@ -87,7 +100,7 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"path", "string"}})) return false;
     if (!add("create_plugin", "Create an empty ESP in the trusted MO2 overwrite folder; later edits require save_plugin", "backend", "CreatePlugin",
              {{"plugin", "string"}})) return false;
-    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PERK, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults. PERK takes an editorId and optional full, desc, trait, level, ranks, playable and effects (the set_perk_effects array)", "backend", "CreateRecord",
+    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PACK, PERK, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. PACK takes an editorId, a location object (type reference, cell, near_package_start, near_editor_location or near_self; form, a FormKey required for reference and cell; radius, default 0), speed (walk, jog, run or fast_walk, default jog) and the booleans preferPreferredPath, useSoftRadius and ignoreMarkerOrientation, and builds one Travel procedure with its four data inputs. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults. QUST also takes optional name (inline text in a non-localized plugin; in a localized plugin it becomes a new string ID in the staged string tables, so call strings_save to persist it, and language picks the table language, default en), flags, priority and type. PERK takes an editorId and optional full, desc, trait, level, ranks, playable, effects (the set_perk_effects array), conditions (the array shape set_conditions takes), nextPerk (a PERK FormKey), sound (an SNDR FormKey), swf (text) and language (localized plugins: the table language, default en). In a localized plugin full and desc are written as new string IDs in the staged string tables; call strings_save to persist them", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
     if (!add("release_memory", "Page the process working set out to the OS after a large load, save or reload. Plugin data stays loaded; the next access pages it back in. drop_conflict_graph also drops the cached conflict/reference graph (the largest optional allocation; it rebuilds on the next conflict or reference query). Use when the editor is idle and memory use matters", "backend", "ReleaseMemory",
              {{"drop_conflict_graph", "boolean", true}})) return false;
@@ -194,12 +207,44 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
               {"alias", "integer", true}, {"element", "integer", true}})) return false;
     if (!add("remove_script_property", "Remove one property from a script in memory by property index. Call save_plugin to persist", "backend", "RemoveScriptProperty",
              {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}, {"property_index", "integer"}})) return false;
+    if (!add("set_info_fragment", "Bind or replace one INFO script fragment in memory. index is 0 OnBegin or 1 OnEnd; the VMAD and its fragment section are created when absent. Call save_plugin to persist", "backend", "SetInfoFragment",
+             {{"plugin", "string"}, {"info_form_key", "string"}, {"index", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
+    if (!add("add_info_fragment", "Add one INFO script fragment at index in memory; refuses when that index is already bound and when the record has no fragment section yet (use set_info_fragment to create it). index is 0 OnBegin or 1 OnEnd. Call save_plugin to persist", "backend", "AddInfoFragment",
+             {{"plugin", "string"}, {"info_form_key", "string"}, {"index", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
+    if (!add("remove_info_fragment", "Remove the INFO script fragment at index in memory and clear its flag bit. Call save_plugin to persist", "backend", "RemoveInfoFragment",
+             {{"plugin", "string"}, {"info_form_key", "string"}, {"index", "integer"}})) return false;
+    if (!add("set_scene_phase_fragment", "Bind or replace a scene phase script fragment in memory. phase_flag is 1 for start and 2 for completion. Call save_plugin to persist", "backend", "SetScenePhaseFragment",
+             {{"plugin", "string"}, {"scene_form_key", "string"}, {"phase_index", "integer"}, {"phase_flag", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
+    if (!add("add_scene_phase_fragment", "Add a scene phase script fragment in memory at phase_index and phase_flag; refuses when that pair is already bound and when the scene has no fragment section yet (use set_scene_phase_fragment to create it). phase_flag is 1 for start and 2 for completion. Call save_plugin to persist", "backend", "AddScenePhaseFragment",
+             {{"plugin", "string"}, {"scene_form_key", "string"}, {"phase_index", "integer"}, {"phase_flag", "integer"}, {"script_name", "string"}, {"function_name", "string"}})) return false;
+    if (!add("remove_scene_phase_fragment", "Remove a scene phase script fragment in memory by phase_index and phase_flag (1 start, 2 completion). Call save_plugin to persist", "backend", "RemoveScenePhaseFragment",
+             {{"plugin", "string"}, {"scene_form_key", "string"}, {"phase_index", "integer"}, {"phase_flag", "integer"}})) return false;
+    if (!add("add_alias_script", "Add a script to a QUST quest alias in memory, creating the alias entry (at its ascending alias_id position, with one script) when the quest has none for alias_id. script is the Papyrus script name; flags is the optional script flags byte and index the optional script-list position within the alias. Call save_plugin to persist", "backend", "AddAliasScript",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script", "string"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
+    if (!add("remove_alias_script", "Remove one script from a QUST quest alias in memory by script index. Removing the alias's last script removes the whole alias entry. Call save_plugin to persist", "backend", "RemoveAliasScript",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script_index", "integer"}})) return false;
+    if (!add("add_alias_script_property", "Add a property to a script of a QUST quest alias in memory. type is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); flags is the optional property flags byte and index the optional property-list position. Set its value afterwards with set_alias_script_value. Call save_plugin to persist", "backend", "AddAliasScriptProperty",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script_index", "integer"}, {"name", "string"}, {"type", "integer"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
+    if (!add("remove_alias_script_property", "Remove one property from a script of a QUST quest alias in memory by property index. Call save_plugin to persist", "backend", "RemoveAliasScriptProperty",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script_index", "integer"}, {"property_index", "integer"}})) return false;
+    if (!add("set_alias_script_value", "Set one VMAD script property value of a QUST quest alias in memory. kind selects the typed setter: object (value is a FormKey, alias optional), string, int, float or bool (value is text for int/float/bool). element selects an element of an array property and defaults to 0. Call save_plugin to persist", "backend", "SetAliasScriptValue",
+             {{"plugin", "string"}, {"form_key", "string"}, {"alias_id", "integer"}, {"script_index", "integer"},
+              {"property_index", "integer"}, {"kind", "string"}, {"value", "string", true},
+              {"alias", "integer", true}, {"element", "integer", true}})) return false;
     if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
              {{"form_key", "string"}})) return false;
     if (!add("get_perk_effects", "Get a PERK record's effects by FormKey from plugin's version (read-only). Each effect has type, rank, priority, quest and questStage, ability, or entryPoint and function, condition tabs and parameters (data is hex)", "backend", "GetPerkEffects",
              {{"plugin", "string"}, {"form_key", "string"}})) return false;
     if (!add("set_perk_effects", "Replace a PERK record's whole effect list in memory with the effects array (see get_perk_effects for the item shape; an effect without tabs clears its condition tabs). Call save_plugin to persist", "backend", "SetPerkEffects",
              {{"plugin", "string"}, {"form_key", "string"}, {"effects", "array", false, k_perk_effect_items}})) return false;
+    if (!add("get_perk_links", "Get a PERK record's links from plugin's version (read-only): nextPerk (NNAM, a PERK FormKey or null), sound (SNAM, an SNDR FormKey or null), swf (FNAM, the SWF text or null) and conditions (the root condition list that gates the perk, in the get_conditions shape)", "backend", "GetPerkLinks",
+             {{"plugin", "string"}, {"form_key", "string"}})) return false;
+    if (!add("set_perk_next", "Set a PERK record's next-perk link (NNAM) in memory. next must be a PERK FormKey; a record without NNAM gets one inserted before its FNAM or effects. Call save_plugin to persist. Sound and swf are set with set_perk_sound and set_perk_swf", "backend", "SetPerkNext",
+             {{"plugin", "string"}, {"form_key", "string"}, {"next", "string"}})) return false;
+    if (!add("set_perk_sound", "Set a PERK record's sound (SNAM) in memory to an SNDR FormKey. The SNAM is inserted after DATA when absent and rewritten in place otherwise; an empty sound removes it. Call save_plugin to persist", "backend", "SetPerkSound",
+             {{"plugin", "string"}, {"form_key", "string"}, {"sound", "string"}})) return false;
+    if (!add("set_perk_swf", "Set a PERK record's SWF text (FNAM) in memory from UTF-8 text that must be representable in Windows-1252. The FNAM is inserted before the effects when absent and rewritten in place otherwise; an empty swf removes it. Call save_plugin to persist", "backend", "SetPerkSwf",
+             {{"plugin", "string"}, {"form_key", "string"}, {"swf", "string"}})) return false;
     return true;
 }
 

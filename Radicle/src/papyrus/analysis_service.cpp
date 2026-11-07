@@ -9,6 +9,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <fstream>
@@ -139,6 +140,93 @@ PapyrusCompileResult compileFile(ScriptIndex& index, const std::filesystem::path
     }
 
     return compileScript(index, script, fullPath(path), options);
+}
+
+nlohmann::json diagnosticJson(const Diagnostic& d) {
+    return {
+        {"code", std::string(codeString(d.code))},
+        {"severity", d.severity == Severity::Error ? "error" : "warning"},
+        {"message", d.message},
+        {"line", d.span.line},
+        {"column", d.span.column},
+        {"start", d.span.start},
+        {"length", d.span.length},
+    };
+}
+
+struct Hint {
+    std::string code;
+    std::string message;
+    Span span;
+};
+
+nlohmann::json hintJson(const Hint& hint) {
+    return {
+        {"code", hint.code},
+        {"severity", "hint"},
+        {"message", hint.message},
+        {"unnecessary", true},
+        {"line", hint.span.line},
+        {"column", hint.span.column},
+        {"start", hint.span.start},
+        {"length", hint.span.length},
+    };
+}
+
+std::vector<Hint> unusedHints(ScriptIndex& index, const Script& script,
+                              const Resolution& resolution) {
+    std::vector<Hint> hints;
+    for (const auto& import : script.imports) {
+        const Script* imported = index.resolve(import.name);
+        if (!imported) continue;
+        const auto chain = index.baseChain(imported);
+        const bool used = std::any_of(resolution.bindings.begin(), resolution.bindings.end(),
+                                      [&chain](const auto& entry) {
+                                          return std::find(chain.begin(), chain.end(),
+                                                           entry.second.owner) != chain.end();
+                                      });
+        if (!used) {
+            hints.push_back({"PAPH001", "Import '" + import.name + "' is never used.", import.nameSpan});
+        }
+    }
+
+    for (const auto& [node, binding] : resolution.bindings) {
+        if (binding.kind != BindingKind::Local || node->nodeKind() != NodeKind::DefineStatement) {
+            continue;
+        }
+        const auto& define = *static_cast<const DefineStatement*>(node);
+        const bool used = std::any_of(
+            resolution.bindings.begin(), resolution.bindings.end(), [&define](const auto& entry) {
+                return entry.first->nodeKind() == NodeKind::IdentifierExpression &&
+                       entry.first->span.start > define.span.end() &&
+                       entry.second.kind == BindingKind::Local &&
+                       iequals(entry.second.name, define.name);
+            });
+        if (!used) {
+            hints.push_back({"PAPH002", "Local '" + define.name + "' is never used.", define.nameSpan});
+        }
+    }
+
+    std::sort(hints.begin(), hints.end(),
+              [](const Hint& a, const Hint& b) { return a.span.start < b.span.start; });
+    return hints;
+}
+
+std::string checkReply(int revision, bool complete, const std::vector<Diagnostic>& diagnostics,
+                       const std::vector<Hint>& hints) {
+    nlohmann::json list = nlohmann::json::array();
+    for (const auto& d : diagnostics) list.push_back(diagnosticJson(d));
+
+    nlohmann::json hintList = nlohmann::json::array();
+    for (const auto& hint : hints) hintList.push_back(hintJson(hint));
+
+    nlohmann::json payload;
+    payload["revision"] = revision;
+    payload["complete"] = complete;
+    payload["errorCount"] = diagnostics.size();
+    payload["diagnostics"] = std::move(list);
+    payload["hints"] = std::move(hintList);
+    return payload.dump();
 }
 
 }  // namespace
@@ -399,17 +487,7 @@ std::string AnalysisService::analyzeJson(const std::string& text, const std::str
     payload["errorCount"] = errorCount;
 
     nlohmann::json diagnostics = nlohmann::json::array();
-    for (const auto& d : script.diagnostics) {
-        diagnostics.push_back({
-            {"code", std::string(codeString(d.code))},
-            {"severity", d.severity == Severity::Error ? "error" : "warning"},
-            {"message", d.message},
-            {"line", d.span.line},
-            {"column", d.span.column},
-            {"start", d.span.start},
-            {"length", d.span.length},
-        });
-    }
+    for (const auto& d : script.diagnostics) diagnostics.push_back(diagnosticJson(d));
     payload["diagnostics"] = std::move(diagnostics);
 
     nlohmann::json symbols = nlohmann::json::array();
@@ -476,11 +554,39 @@ std::string AnalysisService::symbolAtJson(const std::string& text, const std::st
     return payload.dump();
 }
 
+std::string AnalysisService::checkTextJson(const std::string& text, const std::string* filePath,
+                                           int revision, const std::string* imports,
+                                           const std::vector<std::filesystem::path>& baseImports) {
+    const auto script =
+        Parser::parse(text, filePath ? std::optional<std::string>(*filePath) : std::nullopt);
+
+    std::vector<Diagnostic> syntax;
+    for (const auto& d : script.diagnostics) {
+        if (d.severity == Severity::Error) syntax.push_back(d);
+    }
+    if (!syntax.empty()) return checkReply(revision, false, syntax, {});
+
+    auto index = buildIndex(filePath ? *filePath : std::string(), imports, baseImports);
+    const auto resolution = Resolver(index).resolve(&script);
+    if (!resolution.baseChainComplete) return checkReply(revision, false, {}, {});
+
+    std::vector<Diagnostic> found;
+    for (const auto& d : resolution.diagnostics) {
+        if (d.severity == Severity::Error) found.push_back(d);
+    }
+    for (const auto& d : TypeChecker(index).check(resolution)) {
+        if (d.severity == Severity::Error) found.push_back(d);
+    }
+    return checkReply(revision, true, found, unusedHints(index, script, resolution));
+}
+
 ScriptIndex AnalysisService::buildIndex(const std::string& sourceFile, const std::string* imports,
                                         const std::vector<std::filesystem::path>& baseImports) {
     ScriptIndex index;
-    const auto folder = std::filesystem::path(fullPath(sourceFile)).parent_path();
-    if (!folder.empty()) index.addRoot(folder);
+    if (!isWhitespace(sourceFile)) {
+        const auto folder = std::filesystem::path(fullPath(sourceFile)).parent_path();
+        if (!folder.empty()) index.addRoot(folder);
+    }
     if (imports && !isWhitespace(*imports)) {
         for (const auto& root : splitSemicolons(*imports)) {
             const auto cleaned = stripQuotes(root);

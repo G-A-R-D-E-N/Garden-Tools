@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <cctype>
 #include <chrono>
 #include <cstddef>
@@ -22,9 +23,9 @@
 namespace {
 
 std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_exterior_cell_" + std::to_string(id));
+           ("fo4ide_exterior_cell_" + id);
 }
 
 struct Cleanup {
@@ -202,6 +203,57 @@ TEST_CASE("PluginEditTool creates a new exterior CELL in the WRLD hierarchy") {
     const auto* cell = fo4::forms::find_exterior_cell(disk, world, -33, 32);
     REQUIRE(cell != nullptr);
     CHECK(cell->form_key == fo4::FormKey::parse("000900:Patch.esp"));
+}
+
+TEST_CASE("Native resolveWorldspace names the worldspace that owns an exterior CELL") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "mods" / "CellMod" / "Patch.esp";
+    writeBytes(path, worldspacePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const nlohmann::json payload{
+        {"worldspace", "000800:Patch.esp"},
+        {"x", -33},
+        {"y", 32},
+        {"editorId", "CreatedExterior"}
+    };
+    REQUIRE(backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "CELL", payload})).has_value());
+
+    const auto resolved = parseStringResult(backend.resolveWorldspace(
+        nlohmann::json::array({"000900:Patch.esp"})));
+    CHECK(resolved.at("cellFormKey") == "000900:Patch.esp");
+    CHECK(resolved.at("worldspaceFormKey") == "000800:Patch.esp");
+
+    const auto missing = parseStringResult(backend.resolveWorldspace(
+        nlohmann::json::array({"000999:Patch.esp"})));
+    CHECK(missing.at("error") == "Cell not found: 000999:Patch.esp");
+}
+
+TEST_CASE("Native resolveWorldspaceId maps a worldspace EditorID or FormKey to its FormKey") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "mods" / "CellMod" / "Patch.esp";
+    writeBytes(path, worldspacePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto byEditorId = parseStringResult(backend.resolveWorldspaceId(
+        nlohmann::json::array({"TestWorld"})));
+    CHECK(byEditorId.at("worldspaceFormKey") == "000800:Patch.esp");
+
+    const auto byFormKey = parseStringResult(backend.resolveWorldspaceId(
+        nlohmann::json::array({"000800:Patch.esp"})));
+    CHECK(byFormKey.at("worldspaceFormKey") == "000800:Patch.esp");
+
+    const auto missing = parseStringResult(backend.resolveWorldspaceId(
+        nlohmann::json::array({"NoSuchWorld"})));
+    CHECK(missing.at("error") == "Worldspace not found: NoSuchWorld");
 }
 
 TEST_CASE("PluginEditTool refuses an occupied exterior CELL coordinate transactionally") {

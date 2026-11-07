@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../helpers/TempRoot.hpp"
 #include <chrono>
 #include <filesystem>
 #include <string>
@@ -11,9 +12,9 @@
 namespace {
 
 std::filesystem::path createTempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto id = fo4ide_test::uniqueTempName();
     return std::filesystem::temp_directory_path() /
-           ("fo4ide_create_plugin_" + std::to_string(id));
+           ("fo4ide_create_plugin_" + id);
 }
 
 struct CreateCleanup {

@@ -100,14 +100,6 @@ void fill_result(const radicle_swf_history& history, bool changed, radicle_swf_p
 
 namespace radicle_swf_detail {
 
-std::size_t subtree_size(const std::vector<fo4::swf::SwfTag>& tags) {
-  std::size_t total = 0;
-  for (const auto& tag : tags) {
-    total += 1 + subtree_size(tag.children);
-  }
-  return total;
-}
-
 bool top_level_position(const fo4::swf::SwfFile& file, std::size_t flat, std::size_t& out) {
   std::size_t start = 0;
   for (std::size_t index = 0; index < file.tags.size(); ++index) {
@@ -115,7 +107,7 @@ bool top_level_position(const fo4::swf::SwfFile& file, std::size_t flat, std::si
       out = index;
       return true;
     }
-    start += 1 + subtree_size(file.tags[index].children);
+    start += 1 + fo4::swf::subtree_size(file.tags[index].children);
   }
   return false;
 }
@@ -132,7 +124,7 @@ bool timeline_flat_indices(const fo4::swf::SwfFile& file, std::uint16_t timeline
         sprite = &tag;
         break;
       }
-      flat += 1 + subtree_size(tag.children);
+      flat += 1 + fo4::swf::subtree_size(tag.children);
     }
     if (sprite == nullptr) return false;
     tags = &sprite->children;
@@ -140,7 +132,7 @@ bool timeline_flat_indices(const fo4::swf::SwfFile& file, std::uint16_t timeline
   }
   for (const auto& tag : *tags) {
     out.push_back(flat);
-    flat += 1 + subtree_size(tag.children);
+    flat += 1 + fo4::swf::subtree_size(tag.children);
   }
   return true;
 }

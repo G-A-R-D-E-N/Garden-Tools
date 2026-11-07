@@ -20,6 +20,9 @@
 
 namespace fo4ide::plugin::questinternal {
 
+std::optional<std::filesystem::path> allowedVanillaFragmentImports(
+    const std::filesystem::path& candidate, const std::filesystem::path& dataDirectory);
+
 #ifdef FO4IDE_TEST_HOOKS
 inline LocalizedQuestBeforeCommitHook localizedQuestBeforeCommitHook = nullptr;
 inline LocalizedQuestAfterTableParseHook localizedQuestAfterTableParseHook = nullptr;
@@ -31,6 +34,7 @@ struct PendingQuestCondition {
     std::optional<fo4::FormKey> param2;
     std::optional<fo4::FormKey> reference;
     std::optional<fo4::FormKey> compareGlobal;
+    bool preserved{false};
 };
 
 struct LocalizedQuestTables {
@@ -41,6 +45,9 @@ struct LocalizedQuestTables {
     std::vector<std::byte> originalStringsBytes;
     std::vector<std::byte> originalDlstringsBytes;
     std::vector<std::byte> originalIlstringsBytes;
+    bool stringsExist{false};
+    bool dlstringsExist{false};
+    bool ilstringsExist{false};
     fo4::localization::LocalizedStringTable strings;
     fo4::localization::LocalizedStringTable dlstrings;
     fo4::localization::LocalizedStringTable ilstrings;
@@ -107,6 +114,31 @@ std::optional<Error> parseQuestCondition(
     std::string_view surface = "quest log entries");
 void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
                            std::vector<fo4::CtdaCondition>& conditions);
+bool aliasConditionRun(const fo4::forms::QuestAlias& alias,
+                       std::vector<fo4::CtdaCondition>& conditions);
+nlohmann::json questAliasJson(const fo4::Plugin& plugin,
+                              const fo4::forms::QuestAlias& alias,
+                              const fo4::FormLinkTypeLookup& ownerTypes);
+std::optional<Error> nonFiniteConditionError(const fo4::CtdaCondition& condition);
+std::optional<Error> parseQuestStageCondition(const nlohmann::json& row,
+                                              const fo4::Plugin& plugin,
+                                              const fo4::ConflictGraph& graph,
+                                              PendingQuestCondition& out,
+                                              std::vector<fo4::FormKey>& conditionKeys);
+std::optional<Error> refuseOwnerMasterShift(const fo4::Plugin& plugin,
+                                            const std::vector<fo4::FormKey>& conditionKeys,
+                                            bool rawConditionsPresent);
+std::vector<fo4::CtdaCondition> previousConditionsNotPreserved(
+    const std::vector<fo4::CtdaCondition>& previous,
+    const std::vector<PendingQuestCondition>& pending);
+std::optional<Error> checkOmittedStageConditions(const fo4::forms::QuestStages& previous,
+                                                 std::uint16_t index,
+                                                 std::size_t entryCount,
+                                                 const std::vector<bool>& omitted);
+std::vector<fo4::Subrecord> carriedStageConditionRun(const fo4::forms::QuestStages& previous,
+                                                     std::uint16_t index,
+                                                     std::size_t ordinal,
+                                                     std::size_t entryCount);
 std::optional<Error> adapterConditionUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::ConflictGraph& graph,
@@ -115,6 +147,9 @@ std::optional<Error> adapterConditionUnrepresentable(
 std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
                                                       bool aliases,
                                                       bool stages);
+fo4::FormLinkTypeLookup questOwnerTypes(const fo4::Plugin& plugin,
+                                        const fo4::ConflictGraph& graph,
+                                        bool refuseUnresolved = true);
 std::optional<Error> existingAliasesUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::FormKey& quest,
@@ -130,6 +165,7 @@ std::optional<Error> encodeLocalizedText(std::string_view language,
 std::optional<Error> loadLocalizedQuestTables(const nlohmann::json& arguments,
                                               const std::filesystem::path& pluginPath,
                                               const std::filesystem::path& directory,
-                                              LocalizedQuestTables& result);
+                                              LocalizedQuestTables& result,
+                                              bool allowAbsent = false);
 
 }
