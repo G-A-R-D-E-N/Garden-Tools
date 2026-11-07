@@ -118,7 +118,7 @@ RADICLE_API const char* radicle_papyrus_native_call_function(const radicle_papyr
 RADICLE_API size_t radicle_papyrus_native_call_arg_count(const radicle_papyrus_native_call* call);
 RADICLE_API const radicle_papyrus_value* radicle_papyrus_native_call_arg(const radicle_papyrus_native_call* call, size_t index);
 RADICLE_API radicle_status radicle_papyrus_native_call_set_result(radicle_papyrus_native_call* call, const radicle_papyrus_value* value);
-/* Requires: after a successful begin_wait the callback returns 1, never 0, because the issued token then stays until detach. */
+/* Requires: after a successful begin_wait the callback returns 1, never 0: a token from a begin_wait followed by 0 stays in the runtime for its whole life, and a later complete_latent on it is stored, not refused. */
 /* Invariant: when a token and a result are both set, the token wins and the result is ignored. */
 RADICLE_API radicle_status radicle_papyrus_native_call_begin_wait(radicle_papyrus_native_call* call, uint64_t* out_token);
 /* Invariant: a failure takes effect only when the callback returns 0; the status is then the call's failure. */
