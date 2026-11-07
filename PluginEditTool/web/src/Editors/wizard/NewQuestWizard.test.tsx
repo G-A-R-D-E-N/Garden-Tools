@@ -42,16 +42,23 @@ function sceneStubs() {
   };
 }
 
-function wizardBackend(overrides: Record<string, unknown> = {}) {
+type WizardBackend = ReturnType<typeof stubBackend> & {
+  CreateRecord: ReturnType<typeof vi.fn>;
+  SetField: ReturnType<typeof vi.fn>;
+  CreateSeqFile: ReturnType<typeof vi.fn>;
+};
+
+function wizardBackend(overrides: Record<string, unknown> = {}): WizardBackend {
   return stubBackend({
     GetActivePlugins: vi.fn(async () => JSON.stringify(PLUGINS)),
     SearchRecords: vi.fn(async (_query: string, typeFilter: string) => JSON.stringify([HITS[typeFilter]])),
     ResolveFormKeyLabels: vi.fn(async (csv: string) => JSON.stringify(Object.fromEntries(csv.split(',').map(key => [key, LABELS[key]])))),
     CreateRecord: vi.fn(async () => JSON.stringify({ formKey: CREATED })),
     SetField: vi.fn(async () => 'ok'),
+    CreateSeqFile: vi.fn(async () => 'Wrote Patch.esp.seq.'),
     ...sceneStubs(),
     ...overrides,
-  });
+  }) as WizardBackend;
 }
 
 async function pickRecord(row: string, label: string) {
@@ -88,36 +95,96 @@ async function answerTalkSteps() {
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 }
 
-it('Detects: finishing the wizard sends CreateRecord, then stages, aliases and objectives in that order, then opens the new quest', async () => {
+it('Detects: finishing the wizard sends CreateRecord, stages, aliases and objectives, then the start-game flag, then the SEQ file, then opens the new quest', async () => {
   const createRecord = vi.fn(async () => JSON.stringify({ formKey: CREATED }));
   const setField = vi.fn(async () => 'ok');
   const backend = wizardBackend({ CreateRecord: createRecord, SetField: setField });
   const onCreated = vi.fn();
   render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
   await answerEveryStep();
-  expect(screen.getByText(/start by itself with the game/)).toBeTruthy();
-  expect(screen.getByText(/places each item you picked at the location as a new copy/)).toBeTruthy();
+  expect(screen.getByText(/sets the quest to start with the game/)).toBeTruthy();
+  expect(screen.getByText(/writes the plugin's SEQ file/)).toBeTruthy();
+  expect(screen.getByText(/will be duplicated/)).toBeTruthy();
+  expect(screen.getByText(/Nothing moves the player past the first stage yet/)).toBeTruthy();
   expect(screen.queryByText(/\(not linked:/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
   expect(createRecord).toHaveBeenCalledWith('Patch.esp', 'QUST', { schema: true, editorId: 'The_Lost_Locket' });
   expect(setField).toHaveBeenCalledWith('Patch.esp', CREATED, 'QUST\\Flags', '1');
+  expect(backend.CreateSeqFile).toHaveBeenCalledWith('Patch.esp', '');
   expect(backend.SetQuestStages).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('Go to Abandoned Mill and find Rusty Locket.'));
   expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"uniqueActor":"000900:Patch.esp"'));
   expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"specificLocation":"000A00:Patch.esp"'));
   expect(backend.SetQuestAliases).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"createReference":{"object":"000B00:Patch.esp","alias":2,"create":"At"}'));
-  const [create, flags, stages, aliases, objectives] = [
+  const [create, stages, aliases, objectives, flags, seq] = [
     createRecord.mock.invocationCallOrder[0],
-    setField.mock.invocationCallOrder[0],
     backend.SetQuestStages.mock.invocationCallOrder[0],
     backend.SetQuestAliases.mock.invocationCallOrder[0],
     backend.SetQuestObjectives.mock.invocationCallOrder[0],
+    setField.mock.invocationCallOrder[0],
+    backend.CreateSeqFile.mock.invocationCallOrder[0],
   ];
-  expect(create).toBeLessThan(flags);
-  expect(flags).toBeLessThan(stages);
+  expect(create).toBeLessThan(stages);
   expect(stages).toBeLessThan(aliases);
   expect(aliases).toBeLessThan(objectives);
+  expect(objectives).toBeLessThan(flags);
+  expect(flags).toBeLessThan(seq);
 });
+
+it('Detects: when the SEQ file cannot be written after the quest is made, the wizard says so and keeps the made quest, instead of opening it silently', async () => {
+  const backend = wizardBackend({
+    CreateSeqFile: vi.fn(async () => { throw new Error('Plugin folder is read-only.'); }),
+  });
+  const onCreated = vi.fn();
+  render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
+  await answerEveryStep();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toContain('The quest was made, but its SEQ file was not written.');
+  expect(alert.textContent).toContain('Create SEQ file');
+  expect(onCreated).not.toHaveBeenCalled();
+  expect(backend.SetField).toHaveBeenCalledWith('Patch.esp', CREATED, 'QUST\\Flags', '1');
+  fireEvent.click(screen.getByRole('button', { name: 'Open the quest anyway' }));
+  expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' });
+});
+
+it('Detects: a quest name that would give an editor ID starting with a digit cannot pass the name step, so the error shows before any call is made', async () => {
+  const backend = wizardBackend();
+  render(<NewQuestWizard onBack={() => {}} onCreated={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /Fetch an item/ }));
+  await screen.findByRole('option', { name: 'Patch.esp' });
+  fireEvent.change(screen.getByLabelText('Which plugin should the quest go in?'), { target: { value: 'Patch.esp' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.change(screen.getByLabelText(NAME_LABEL), { target: { value: '2 Lost Locket' } });
+  expect(screen.getByText('The quest name cannot start with a number.')).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText(NAME_LABEL), { target: { value: '!!!' } });
+  expect(screen.getByText('The quest name needs at least one letter or number.')).toBeTruthy();
+  expect(backend.CreateRecord).not.toHaveBeenCalled();
+});
+
+it.each(['CreateDialogueTopic', 'CreateInfo', 'CreateScene'] as const)(
+  'Detects: when %s fails after the quest was made, the wizard shows the game message, says part of the quest was made, keeps the made key out of the text, and never sets the start-game flag',
+  async (method) => {
+    const backend = wizardBackend({
+      [method]: vi.fn(async () => { throw new Error('Localized plugin refuses this record.'); }),
+    });
+    const onCreated = vi.fn();
+    render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
+    await answerTalkSteps();
+    fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Localized plugin refuses this record.');
+    expect(alert.textContent).toContain('Part of the quest was made');
+    expect(alert.textContent).not.toContain(CREATED);
+    expect(backend.SetQuestObjectives).toHaveBeenCalled();
+    expect(backend.SetField).not.toHaveBeenCalled();
+    expect(backend.CreateSeqFile).not.toHaveBeenCalled();
+    expect(onCreated).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open the quest anyway' }));
+    expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' });
+  },
+);
 
 it('Detects: when the objectives call fails, the wizard stops, says part of the quest was made, and does not show the form key', async () => {
   wizardBackend({

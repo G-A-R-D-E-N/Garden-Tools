@@ -16,7 +16,7 @@ export const WIZARD_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'wizard-quest-giver',
     title: 'Quest giver',
-    body: 'The character who gives the player the quest and who the item goes back to. Pick an NPC from the list.',
+    body: 'The character who gives the player the quest. Pick an NPC from the list. The journal lines and objectives name this character where the player goes back to them.',
     related: ['alias'],
   },
   {
@@ -28,8 +28,14 @@ export const WIZARD_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'wizard-item',
     title: 'Item',
-    body: 'The item the player must bring back. Pick an item from the list.',
+    body: 'The item the player must bring back. Pick an item from the list. The wizard makes a new copy of the item at the location. If you already placed this item in the world with the mapper, the item will be duplicated, because the wizard\'s copy is added at the location too.',
     related: ['alias'],
+  },
+  {
+    id: 'wizard-stage-advance',
+    title: 'What advances each stage',
+    body: 'The wizard makes every stage, but it does not make the player move from one stage to the next. The player stays at the first stage until a fragment, a dialogue result or a script sets the next stage. Add those in the Fragments section of the quest editor after you create the quest.',
+    related: ['quest-stage'],
   },
   {
     id: 'wizard-reward',
@@ -64,7 +70,7 @@ export const WIZARD_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'wizard-escortee',
     title: 'Escortee',
-    body: 'The character who walks with the player to the destination. If this character dies, the quest fails. Pick an NPC from the list.',
+    body: 'The character who walks with the player to the destination. Pick an NPC from the list. The wizard makes a failure stage for a dead escortee, but nothing triggers it yet. Trigger it with a script in the Creation Kit.',
     related: ['alias'],
   },
   {
