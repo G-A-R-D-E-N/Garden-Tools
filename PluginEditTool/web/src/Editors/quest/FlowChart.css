@@ -1,3 +1,19 @@
+.quest-flow-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quest-pane .quest-flow-header h4 {
+  flex: none;
+}
+
+.quest-flow-header .quest-note {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
 .quest-flow-body {
   display: flex;
   flex-wrap: wrap;
@@ -9,7 +25,8 @@
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
-  overflow-x: auto;
+  max-height: 260px;
+  overflow: auto;
 }
 
 .quest-flow-canvas {
@@ -71,11 +88,11 @@
   min-height: 0;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 3px;
   padding: 6px 8px;
   overflow: hidden;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
   color: var(--text-primary);
   background: none;
@@ -91,20 +108,26 @@
   box-shadow: inset 0 0 0 2px var(--accent-color);
 }
 
+.quest-flow-title {
+  align-self: stretch;
+  padding-right: 96px;
+}
+
 .quest-flow-add {
-  flex: none;
-  align-self: flex-start;
-  margin: 0 6px 6px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  margin: 0;
+  padding: 1px 6px;
   font-size: 11px;
-  padding: 2px 6px;
 }
 
 .quest-flow-end {
   display: flex;
   align-items: center;
-  padding: 4px 6px;
+  padding: 3px 6px;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.3;
   color: var(--text-secondary);
   background: var(--bg-primary);
   border: 1px dashed var(--border-strong);
@@ -115,7 +138,7 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .quest-flow-badges {
@@ -132,6 +155,10 @@
   border-radius: var(--radius-sm);
 }
 
+.quest-flow-legend {
+  margin-top: 2px;
+}
+
 .quest-flow-legend-problem {
   color: var(--text-highlight);
 }
@@ -146,7 +173,7 @@
 
 .quest-flow-panel {
   display: flex;
-  flex: 0 0 260px;
+  flex: 0 0 280px;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
@@ -160,7 +187,7 @@
   min-height: 64px;
   resize: vertical;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   background: var(--bg-primary);
   border: 1px solid var(--border-strong);

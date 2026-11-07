@@ -2,10 +2,10 @@ import { LOG_ENTRY_FLAG_OPTIONS, type QuestObjective, type QuestStage, type Stag
 
 const PAD = 12;
 const BOX_WIDTH = 220;
-const STAGE_HEIGHT = 200;
-const COLUMN_GAP = 56;
-const END_GAP_Y = 28;
-const END_HEIGHT = 46;
+const STAGE_HEIGHT = 124;
+const COLUMN_GAP = 48;
+const END_GAP_Y = 20;
+const END_HEIGHT = 42;
 const END_GAP_X = 8;
 const JUMP_LANE = 40;
 const ARC_BOW = 12;

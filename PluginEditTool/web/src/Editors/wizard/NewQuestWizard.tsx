@@ -118,115 +118,117 @@ export default function NewQuestWizard({ onBack, onCreated }: {
 
   return (
     <section className="editor-screen" aria-labelledby="new-quest-title">
-      <header className="editor-screen-header">
-        <button type="button" className="sidebar-action-btn" onClick={onBack}><ChevronLeft size={14} /> Back</button>
-        <h3 id="new-quest-title">New quest from template</h3>
-        <button type="button" className="sidebar-action-btn" aria-expanded={helpOpen}
-          onClick={() => setHelpOpen(open => !open)}>Help</button>
-      </header>
-      <p className="editor-purpose">
-        Answer a few plain questions. The wizard builds a quest draft from your answers, then opens it in the Quest
-        editor.
-      </p>
-      {error && <ErrorNote error={error} />}
+      <div className="editor-screen-body">
+        <header className="editor-screen-header">
+          <button type="button" className="sidebar-action-btn" onClick={onBack}><ChevronLeft size={14} /> Back</button>
+          <h3 id="new-quest-title">New quest from template</h3>
+          <button type="button" className="sidebar-action-btn" aria-expanded={helpOpen}
+            onClick={() => setHelpOpen(open => !open)}>Help</button>
+        </header>
+        <p className="editor-purpose">
+          Answer a few plain questions. The wizard builds a quest draft from your answers, then opens it in the Quest
+          editor.
+        </p>
+        {error && <ErrorNote error={error} />}
 
-      {template === null && (
-        <div className="editors-cards">
-          {QUEST_TEMPLATES.map(item => (
-            <button key={item.id} type="button" className="editors-card" onClick={() => choose(item)}>
-              <span className="editors-card-title">{item.title}</span>
-              <span className="editors-card-text">{item.summary}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {template !== null && current && (
-        <div className="wizard-body">
-          <p className="wizard-count">Question {step + 1} of {flow.length}</p>
-          <p className="wizard-question">{current.label} <HelpTip topicId={current.help} /></p>
-          {current.kind === 'text' && (
-            <input className="wizard-input" aria-label={current.label} placeholder={current.placeholder}
-              value={answers[current.id] ?? ''} onChange={e => setAnswer(current.id, e.target.value)} />
-          )}
-          {current.kind === 'plugin' && (
-            <select aria-label={current.label} value={answers[current.id] ?? ''}
-              onChange={e => setAnswer(current.id, e.target.value)}>
-              <option value="">Choose a plugin</option>
-              {plugins.map(plugin => <option key={plugin.Name} value={plugin.Name}>{plugin.Name}</option>)}
-            </select>
-          )}
-          {current.kind === 'record' && (
-            <div className="wizard-answer-row">
-              <span>{answers[current.id] || 'Nothing chosen yet.'}</span>
-              <button type="button" className="sidebar-action-btn" onClick={() => setPicking(current)}>
-                {answers[current.id] ? 'Change' : 'Choose'}
+        {template === null && (
+          <div className="editors-cards">
+            {QUEST_TEMPLATES.map(item => (
+              <button key={item.id} type="button" className="editors-card" onClick={() => choose(item)}>
+                <span className="editors-card-title">{item.title}</span>
+                <span className="editors-card-text">{item.summary}</span>
               </button>
-            </div>
-          )}
-          {answered(current) && problem && <p className="editor-purpose" role="note">{problem}</p>}
-          <div className="wizard-nav">
-            <button type="button" className="sidebar-action-btn"
-              onClick={() => (step === 0 ? setTemplate(null) : setStep(step - 1))}>Previous</button>
-            <button type="button" className="sidebar-action-btn" disabled={!answered(current) || problem !== null}
-              onClick={() => setStep(step + 1)}>Next</button>
-          </div>
-        </div>
-      )}
-
-      {template !== null && step === flow.length && (
-        <div className="wizard-body">
-          <p className="editor-purpose">
-            Check the answers. The wizard writes the internal name, the journal lines, the objectives and the alias
-            names. It sets the quest to start with the game and marks the first stage as the start-up stage. When the
-            quest is made, it also writes the plugin&apos;s SEQ file, the same as the record menu&apos;s Create SEQ file,
-            so the game starts the quest. It links each NPC and location you picked to its alias.
-            {placesItems && ' It places each item you picked at the location as a new copy, so an item you already placed in the world with the mapper will be duplicated.'}
-            {' '}A record marked not linked still has to be set in the Creation Kit.
-          </p>
-          <p className="editor-purpose" role="note">
-            {advanceNote} <HelpTip topicId="wizard-stage-advance" />
-          </p>
-          <dl className="wizard-review">
-            {flow.map(question => (
-              <div key={question.id}>
-                <dt>{question.label}</dt>
-                <dd>
-                  {answers[question.id]}
-                  {question.kind === 'record' && !isLinked(template, question.id) && ' (not linked: set it in the Creation Kit)'}
-                </dd>
-              </div>
             ))}
-          </dl>
-          {(template.scene || template.dialogue || template.choices) && (
-            <div className="wizard-extras">
-              <h4>Scene and starter dialogue <HelpTip topicId={template.choices ? 'wizard-choices' : 'wizard-scene'} /></h4>
-              <ul>
-                {describeSceneAndDialogue(template, answers).map(line => <li key={line}>{line}</li>)}
-              </ul>
-              <p className="editor-purpose">
-                {template.choices
-                  ? `Each choice is offered only by ${answers[template.choices.speaker]}, and only while the quest is at a stage from ${template.choices.fromStage} to ${template.choices.toStage}. Nothing shows the objectives to the player yet.`
-                  : 'The scene does not start by itself, and the dialogue is not linked to a character.'}
-              </p>
-            </div>
-          )}
-          <div className="wizard-nav">
-            <button type="button" className="sidebar-action-btn" disabled={busy}
-              onClick={() => setStep(step - 1)}>Previous</button>
-            {madeKey === null
-              ? <button type="button" className="sidebar-action-btn" disabled={busy} onClick={create}>Create quest</button>
-              : <button type="button" className="sidebar-action-btn"
-                  onClick={() => onCreated({ formKey: madeKey, plugin: answers.plugin })}>Open the quest anyway</button>}
           </div>
-        </div>
-      )}
+        )}
 
-      {picking && (
-        <RecordPicker title={picking.label} refType={picking.recordType} refTypes={picking.recordType}
-          onPick={formKey => { void chooseRecord(picking, formKey); }}
-          onClose={() => setPicking(null)} />
-      )}
+        {template !== null && current && (
+          <div className="wizard-body">
+            <p className="wizard-count">Question {step + 1} of {flow.length}</p>
+            <p className="wizard-question">{current.label} <HelpTip topicId={current.help} /></p>
+            {current.kind === 'text' && (
+              <input className="wizard-input" aria-label={current.label} placeholder={current.placeholder}
+                value={answers[current.id] ?? ''} onChange={e => setAnswer(current.id, e.target.value)} />
+            )}
+            {current.kind === 'plugin' && (
+              <select aria-label={current.label} value={answers[current.id] ?? ''}
+                onChange={e => setAnswer(current.id, e.target.value)}>
+                <option value="">Choose a plugin</option>
+                {plugins.map(plugin => <option key={plugin.Name} value={plugin.Name}>{plugin.Name}</option>)}
+              </select>
+            )}
+            {current.kind === 'record' && (
+              <div className="wizard-answer-row">
+                <span>{answers[current.id] || 'Nothing chosen yet.'}</span>
+                <button type="button" className="sidebar-action-btn" onClick={() => setPicking(current)}>
+                  {answers[current.id] ? 'Change' : 'Choose'}
+                </button>
+              </div>
+            )}
+            {answered(current) && problem && <p className="editor-purpose" role="note">{problem}</p>}
+            <div className="wizard-nav">
+              <button type="button" className="sidebar-action-btn"
+                onClick={() => (step === 0 ? setTemplate(null) : setStep(step - 1))}>Previous</button>
+              <button type="button" className="sidebar-action-btn" disabled={!answered(current) || problem !== null}
+                onClick={() => setStep(step + 1)}>Next</button>
+            </div>
+          </div>
+        )}
+
+        {template !== null && step === flow.length && (
+          <div className="wizard-body">
+            <p className="editor-purpose">
+              Check the answers. The wizard writes the internal name, the journal lines, the objectives and the alias
+              names. It sets the quest to start with the game and marks the first stage as the start-up stage. When the
+              quest is made, it also writes the plugin&apos;s SEQ file, the same as the record menu&apos;s Create SEQ file,
+              so the game starts the quest. It links each NPC and location you picked to its alias.
+              {placesItems && ' It places each item you picked at the location as a new copy, so an item you already placed in the world with the mapper will be duplicated.'}
+              {' '}A record marked not linked still has to be set in the Creation Kit.
+            </p>
+            <p className="editor-purpose" role="note">
+              {advanceNote} <HelpTip topicId="wizard-stage-advance" />
+            </p>
+            <dl className="wizard-review">
+              {flow.map(question => (
+                <div key={question.id}>
+                  <dt>{question.label}</dt>
+                  <dd>
+                    {answers[question.id]}
+                    {question.kind === 'record' && !isLinked(template, question.id) && ' (not linked: set it in the Creation Kit)'}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {(template.scene || template.dialogue || template.choices) && (
+              <div className="wizard-extras">
+                <h4>Scene and starter dialogue <HelpTip topicId={template.choices ? 'wizard-choices' : 'wizard-scene'} /></h4>
+                <ul>
+                  {describeSceneAndDialogue(template, answers).map(line => <li key={line}>{line}</li>)}
+                </ul>
+                <p className="editor-purpose">
+                  {template.choices
+                    ? `Each choice is offered only by ${answers[template.choices.speaker]}, and only while the quest is at a stage from ${template.choices.fromStage} to ${template.choices.toStage}. Nothing shows the objectives to the player yet.`
+                    : 'The scene does not start by itself, and the dialogue is not linked to a character.'}
+                </p>
+              </div>
+            )}
+            <div className="wizard-nav">
+              <button type="button" className="sidebar-action-btn" disabled={busy}
+                onClick={() => setStep(step - 1)}>Previous</button>
+              {madeKey === null
+                ? <button type="button" className="sidebar-action-btn" disabled={busy} onClick={create}>Create quest</button>
+                : <button type="button" className="sidebar-action-btn"
+                    onClick={() => onCreated({ formKey: madeKey, plugin: answers.plugin })}>Open the quest anyway</button>}
+            </div>
+          </div>
+        )}
+
+        {picking && (
+          <RecordPicker title={picking.label} refType={picking.recordType} refTypes={picking.recordType}
+            onPick={formKey => { void chooseRecord(picking, formKey); }}
+            onClose={() => setPicking(null)} />
+        )}
+      </div>
       {helpOpen && <HelpDrawer topicIds={SCREEN_TOPICS.wizard} onClose={() => setHelpOpen(false)} />}
     </section>
   );

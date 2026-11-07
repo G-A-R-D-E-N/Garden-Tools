@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process';
 
 const OUT = process.env.SHOT_DIR ?? 'screenshots/out';
 const PORT = 4173;
+const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
+const FULL_VIEWPORT = { width: 1240, height: 1230 };
 const fixtures = JSON.parse(readFileSync(new URL('./fixtures.json', import.meta.url), 'utf8'));
 
 const transforms = {
@@ -120,6 +122,18 @@ const FLOWS = [
       await page.locator('.quest-flow-arrow-jump').waitFor();
     },
   },
+  {
+    name: 'quest-editor-full',
+    label: 'Quest',
+    viewport: FULL_VIEWPORT,
+    async pick(page) {
+      await page.getByRole('button', { name: 'Choose quest' }).click();
+      await page.getByText('MissingCourier', { exact: true }).click();
+      await page.getByLabel('Stage 10 log entry 1 text').waitFor();
+      await page.locator('.quest-flow-box').first().waitFor();
+      await page.locator('.quest-panes').waitFor();
+    },
+  },
 ];
 
 async function main() {
@@ -139,6 +153,7 @@ async function main() {
       await page.getByTitle(/^Editors/).click();
       await page.screenshot({ path: `${OUT}/${theme}-0-editors-home.png` });
       for (const [i, flow] of FLOWS.entries()) {
+        await page.setViewportSize(flow.viewport ?? DEFAULT_VIEWPORT);
         await page.getByRole('button', { name: new RegExp(`^${flow.label}`) }).first().click();
         await flow.pick(page);
         await page.screenshot({ path: `${OUT}/${theme}-${i + 1}-${flow.name}.png` });

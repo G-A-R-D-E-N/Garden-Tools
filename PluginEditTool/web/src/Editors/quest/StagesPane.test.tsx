@@ -171,3 +171,34 @@ it('Detects: an edited stage log entry is written, and Undo writes the old text 
   await waitFor(() => expect((screen.getByLabelText('Stage 10 log entry 1 text') as HTMLInputElement).value)
     .toBe('Find the courier'));
 });
+
+it('Detects: Hide chart collapses the flow chart, keeps the selected stage and the stage list, and Show chart brings the boxes back', async () => {
+  stubBackend();
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  fireEvent.click(await screen.findByRole('button', { name: /^Stage 10/ }));
+  const hide = screen.getByRole('button', { name: 'Hide chart' });
+  expect(hide.getAttribute('aria-expanded')).toBe('true');
+  fireEvent.click(hide);
+  expect(screen.queryByRole('button', { name: /^Stage 10/ })).toBeNull();
+  expect(screen.getByLabelText('Stage 10 log entry 1 text')).toBeTruthy();
+  const show = screen.getByRole('button', { name: 'Show chart' });
+  expect(show.getAttribute('aria-expanded')).toBe('false');
+  fireEvent.click(show);
+  expect(screen.getByRole('button', { name: /^Stage 10/ }).getAttribute('aria-pressed')).toBe('true');
+  expect(screen.getByRole('button', { name: 'Hide chart' }).getAttribute('aria-expanded')).toBe('true');
+});
+
+it('Detects: a long log entry shows its whole text in a multi-line textarea instead of cutting it off', async () => {
+  const long = "Diamond City is the largest settlement in the Commonwealth. It's the place to find the courier before the market closes.";
+  stubBackend({
+    GetQuestStages: vi.fn(async () => JSON.stringify({ stages: [
+      { index: 10, flags: 0, logEntries: [{ logText: long, note: '', flags: 0 }] },
+    ] })),
+  });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  const logText = await screen.findByLabelText('Stage 10 log entry 1 text');
+  expect(logText.tagName).toBe('TEXTAREA');
+  expect((logText as HTMLTextAreaElement).value).toBe(long);
+});
