@@ -2016,6 +2016,12 @@ int main() {
   printf("PapyrusRuntimeCallbacks.CallNative %zu\n", offsetof(radicle_papyrus_runtime_callbacks, call_native));
   printf("PapyrusRuntimeCallbacks.OverrideFunction %zu\n", offsetof(radicle_papyrus_runtime_callbacks, override_function));
   printf("PapyrusRuntimeCallbacks.BeginLatent %zu\n", offsetof(radicle_papyrus_runtime_callbacks, begin_latent));
+  printf("PapyrusEngineCallbacks %zu\n", sizeof(radicle_papyrus_engine_callbacks));
+  printf("PapyrusEngineCallbacks.StructSize %zu\n", offsetof(radicle_papyrus_engine_callbacks, struct_size));
+  printf("PapyrusEngineCallbacks.User %zu\n", offsetof(radicle_papyrus_engine_callbacks, user));
+  printf("PapyrusEngineCallbacks.CallNativeEx %zu\n", offsetof(radicle_papyrus_engine_callbacks, call_native_ex));
+  printf("PapyrusEngineCallbacks.GetProperty %zu\n", offsetof(radicle_papyrus_engine_callbacks, get_property));
+  printf("PapyrusEngineCallbacks.SetProperty %zu\n", offsetof(radicle_papyrus_engine_callbacks, set_property));
   printf("PapyrusStageInput %zu\n", sizeof(radicle_papyrus_stage_input));
   printf("PapyrusStageInput.Index %zu\n", offsetof(radicle_papyrus_stage_input, index));
   printf("PapyrusStageInput.StartupStage %zu\n", offsetof(radicle_papyrus_stage_input, startup_stage));

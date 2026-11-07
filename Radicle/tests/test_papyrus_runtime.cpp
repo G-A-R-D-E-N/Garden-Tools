@@ -15,7 +15,12 @@ namespace {
 using fo4::papyrus::ClockSource;
 using fo4::papyrus::InstanceId;
 using fo4::papyrus::Lifecycle;
+using fo4::papyrus::EngineObjectHooks;
+using fo4::papyrus::NativeCall;
 using fo4::papyrus::NativeRegistration;
+using fo4::papyrus::NativeResult;
+using fo4::papyrus::ObjectRef;
+using fo4::papyrus::kEngineHandleBit;
 using fo4::papyrus::NativeTargetKind;
 using fo4::papyrus::OnInitArrivalPolicy;
 using fo4::papyrus::OwnerId;
@@ -130,7 +135,7 @@ TEST_F(RuntimeTest, AttachInitializesOnceAndRunsAnEvent) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const OwnerId owner = OwnerId::forForm("000800:Actor.esp");
   const auto instance = runtime().attach("Actor", owner);
   ASSERT_TRUE(instance.has_value());
@@ -177,7 +182,7 @@ TEST_F(RuntimeTest, AnEventDuringOnInitIsRefusedOrQueuedByPolicy) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000802:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   InstanceId id = *instance;
@@ -192,7 +197,7 @@ TEST_F(RuntimeTest, AnEventDuringOnInitIsRefusedOrQueuedByPolicy) {
                            return true;
                          },
                          false,
-                         {}});
+                         {}, {}});
   EXPECT_EQ(runtime().initialize(id), Status::Ok);
   EXPECT_EQ(observed, Status::GateRefused);
   EXPECT_GT(runtime().refusedEvents(), 0);
@@ -238,7 +243,7 @@ TEST_F(RuntimeTest, ALatentNativeSuspendsAndResumesExactlyOnce) {
       "Waiter", "Wait",
       NativeRegistration{NativeTargetKind::Static, "", {},
                          true,
-                         [](const std::vector<Value>&, Status&) { return std::uint64_t{7}; }});
+                         [](const std::vector<Value>&, Status&) { return std::uint64_t{7}; }, {}});
   runtime().registerNative(
       "Hook", "Hit",
       NativeRegistration{NativeTargetKind::Static, "",
@@ -250,7 +255,7 @@ TEST_F(RuntimeTest, ALatentNativeSuspendsAndResumesExactlyOnce) {
                            return true;
                          },
                          false,
-                         {}});
+                         {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000805:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -283,7 +288,7 @@ TEST_F(RuntimeTest, NativeRegistryRefusesAnUnknownNativeAndEnforcesRequiredScrip
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000806:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -309,7 +314,7 @@ TEST_F(RuntimeTest, OverridesHandleDeclineAndRefuseBeforeBytecode) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000807:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -360,7 +365,7 @@ TEST_F(RuntimeTest, GotoStateChangesTheStateTheNextEventDispatchesIn) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000808:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -406,6 +411,215 @@ TEST(RuntimeRegistryTest, CustomEventsMatchWithoutCaseAndTimersAdvance) {
   ASSERT_NE(gameTimer, nullptr);
   EXPECT_EQ(registry.advance("GameSession", 5.0, ClockSource::GameTime), 0);
   EXPECT_EQ(registry.unboundGameTime(), 1);
+}
+
+TEST_F(RuntimeTest, ScriptInstanceNativeReceivesSelf) {
+  addScript(script("Actor", {state("", {method("Run", "None", {},
+                                              {ins("callmethod", {literal("Touch"), id("self"), id("::nonevar")}),
+                                               ins("return", {id("::NoneVar")})})})}));
+  buildRuntime();
+  std::uint64_t seen = 0;
+  runtime().registerNative("Actor", "Touch",
+                           NativeRegistration{NativeTargetKind::ScriptInstance, "", {}, false, {},
+                                              [&seen](const NativeCall& call, NativeResult& result) {
+                                                seen = call.self.object == nullptr ? 0 : call.self.object->handle;
+                                                result.value = fo4::papyrus::noneValue();
+                                                return true;
+                                              }});
+  const auto instance = runtime().attach("Actor", OwnerId::forForm("000810:Actor.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  EXPECT_EQ(runtime().sendEvent(*instance, "Run"), Status::Ok);
+  EXPECT_EQ(runtime().runStep(512).completed, 1);
+  EXPECT_EQ(seen, *instance);
+}
+
+TEST_F(RuntimeTest, RequiredScriptWalksParentChain) {
+  PexObject base = script("Base", {});
+  PexObject actor = script("Actor", {state("", {method("Run", "None", {},
+                                                       {ins("callmethod", {literal("Touch"), id("self"), id("::nonevar")}),
+                                                        ins("callmethod", {literal("Guarded"), id("self"), id("::nonevar")}),
+                                                        ins("return", {id("::NoneVar")})})})});
+  actor.parentClassName = "Base";
+  addScript(base);
+  addScript(actor);
+  buildRuntime();
+  int touched = 0;
+  int guarded = 0;
+  runtime().registerNative("Base", "Touch",
+                           NativeRegistration{NativeTargetKind::ScriptInstance, "Base", {}, false, {},
+                                              [&touched](const NativeCall&, NativeResult& result) {
+                                                touched += 1;
+                                                result.value = fo4::papyrus::noneValue();
+                                                return true;
+                                              }});
+  runtime().registerNative("Base", "Guarded",
+                           NativeRegistration{NativeTargetKind::ScriptInstance, "Elsewhere", {}, false, {},
+                                              [&guarded](const NativeCall&, NativeResult& result) {
+                                                guarded += 1;
+                                                result.value = fo4::papyrus::noneValue();
+                                                return true;
+                                              }});
+  const auto instance = runtime().attach("Actor", OwnerId::forForm("000811:Actor.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  EXPECT_EQ(runtime().sendEvent(*instance, "Run"), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(touched, 1);
+  EXPECT_EQ(guarded, 0);
+  EXPECT_EQ(runtime().nativeTargetRefusals(), 1);
+}
+
+TEST_F(RuntimeTest, EngineObjectNativeNeedsBit63) {
+  addScript(script("Mod", {state("", {method("Poke", "None", {PexTypedName{"target", "Var"}},
+                                              {ins("callmethod", {literal("Touch"), id("target"), id("::nonevar")}),
+                                               ins("return", {id("::NoneVar")})})})}));
+  buildRuntime();
+  int accepted = 0;
+  runtime().registerNative("Widget", "Touch",
+                           NativeRegistration{NativeTargetKind::EngineObject, "", {}, false, {},
+                                              [&accepted](const NativeCall&, NativeResult& result) {
+                                                accepted += 1;
+                                                result.value = fo4::papyrus::noneValue();
+                                                return true;
+                                              }});
+  const auto instance = runtime().attach("Mod", OwnerId::forForm("000812:Mod.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  EXPECT_EQ(runtime().sendEvent(*instance, "Poke",
+                                {fo4::papyrus::objectValue(fo4::papyrus::kEngineHandleBit | 5, "Widget", "")}),
+            Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(accepted, 1);
+  EXPECT_EQ(runtime().sendEvent(*instance, "Poke", {fo4::papyrus::objectValue(5, "Widget", "")}), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(accepted, 1);
+  EXPECT_GT(runtime().nativeTargetRefusals(), 0);
+}
+
+TEST_F(RuntimeTest, NativeStartsWaitAtCallTime) {
+  addScript(script("Actor", {state("", {method("Early", "None", {},
+                                               {ins("callstatic", {literal("Waiter"), literal("Wait"), id("result"), number(1)}),
+                                                ins("callstatic", {literal("Hook"), literal("Hit"), id("::nonevar"), id("result")}),
+                                                ins("return", {id("::NoneVar")})}),
+                                       method("Late", "None", {},
+                                              {ins("callstatic", {literal("Waiter"), literal("Wait"), id("result"), number(0)}),
+                                               ins("callstatic", {literal("Hook"), literal("Hit"), id("::nonevar"), id("result")}),
+                                               ins("return", {id("::NoneVar")})})})}));
+  buildRuntime();
+  int received = 0;
+  std::uint64_t lateToken = 0;
+  runtime().registerNative("Waiter", "Wait",
+                           NativeRegistration{NativeTargetKind::Static, "", {}, false, {},
+                                              [this, &lateToken](const NativeCall& call, NativeResult& result) {
+                                                const std::uint64_t token = runtime().beginWait();
+                                                if (!call.args.empty() && call.args[0].integer == 1) {
+                                                  runtime().completeLatent(token, fo4::papyrus::integerValue(42));
+                                                } else {
+                                                  lateToken = token;
+                                                }
+                                                result.latentToken = token;
+                                                return true;
+                                              }});
+  runtime().registerNative("Hook", "Hit",
+                           NativeRegistration{NativeTargetKind::Static, "",
+                                              [&received](const Value&, const std::vector<Value>& args, Value& out,
+                                                          Status&) {
+                                                if (!args.empty() && args[0].type == fo4::papyrus::ValueType::Integer) {
+                                                  received = args[0].integer;
+                                                }
+                                                out = fo4::papyrus::noneValue();
+                                                return true;
+                                              },
+                                              false,
+                                              {}, {}});
+  const auto instance = runtime().attach("Actor", OwnerId::forForm("000813:Actor.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+
+  EXPECT_EQ(runtime().sendEvent(*instance, "Early"), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(runtime().waitingCount(), 1u);
+  runtime().runStep(512);
+  EXPECT_EQ(runtime().waitingCount(), 0u);
+  EXPECT_EQ(received, 42);
+
+  received = 0;
+  EXPECT_EQ(runtime().sendEvent(*instance, "Late"), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(runtime().waitingCount(), 1u);
+  EXPECT_EQ(received, 0);
+  EXPECT_TRUE(runtime().completeLatent(lateToken, fo4::papyrus::integerValue(7)));
+  runtime().runStep(512);
+  EXPECT_EQ(runtime().waitingCount(), 0u);
+  EXPECT_EQ(received, 7);
+}
+
+TEST_F(RuntimeTest, EngineObjectPropertyGetSet) {
+  addScript(script("Mod", {state("", {method("Read", "None", {PexTypedName{"target", "Var"}},
+                                              {ins("propget", {literal("Health"), id("target"), id("result")}),
+                                               ins("callstatic", {literal("Hook"), literal("Hit"), id("::nonevar"), id("result")}),
+                                               ins("return", {id("::NoneVar")})}),
+                                       method("Write", "None", {PexTypedName{"target", "Var"}},
+                                              {ins("propset", {literal("Health"), id("target"), number(9)}),
+                                               ins("return", {id("::NoneVar")})})})}));
+  buildRuntime();
+  int received = 0;
+  std::uint64_t getHandle = 0;
+  std::int32_t stored = 0;
+  runtime().registerNative("Hook", "Hit",
+                           NativeRegistration{NativeTargetKind::Static, "",
+                                              [&received](const Value&, const std::vector<Value>& args, Value& out,
+                                                          Status&) {
+                                                if (!args.empty() && args[0].type == fo4::papyrus::ValueType::Integer) {
+                                                  received = args[0].integer;
+                                                }
+                                                out = fo4::papyrus::noneValue();
+                                                return true;
+                                              },
+                                              false,
+                                              {}, {}});
+  EngineObjectHooks hooks;
+  hooks.get = [&getHandle](const ObjectRef& object, const std::string&, Value& out, Status&) {
+    getHandle = object.handle;
+    out = fo4::papyrus::integerValue(77);
+    return true;
+  };
+  hooks.set = [&stored](const ObjectRef&, const std::string&, const Value& value, Status&) {
+    stored = value.integer;
+    return true;
+  };
+  runtime().setEngineObjectHooks(hooks);
+  const auto instance = runtime().attach("Mod", OwnerId::forForm("000814:Mod.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  const Value engine = fo4::papyrus::objectValue(kEngineHandleBit | 9, "Widget", "");
+
+  EXPECT_EQ(runtime().sendEvent(*instance, "Read", {engine}), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(getHandle, kEngineHandleBit | 9);
+  EXPECT_EQ(received, 77);
+
+  EXPECT_EQ(runtime().sendEvent(*instance, "Write", {engine}), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(stored, 9);
+}
+
+TEST_F(RuntimeTest, HandleCollisionDoesNotReadAnInstance) {
+  addScript(script("Actor", {}));
+  addScript(script("Probe", {state("", {method("Poke", "None", {PexTypedName{"target", "Var"}},
+                                               {ins("callmethod", {literal("GotoState"), id("target"), id("::nonevar"), literal("Alert")}),
+                                                ins("return", {id("::NoneVar")})})})}));
+  buildRuntime();
+  const auto actor = runtime().attach("Actor", OwnerId::forForm("000815:Actor.esp"));
+  const auto probe = runtime().attach("Probe", OwnerId::forForm("000816:Probe.esp"));
+  ASSERT_TRUE(actor.has_value());
+  ASSERT_TRUE(probe.has_value());
+  ASSERT_EQ(runtime().initialize(*actor), Status::Ok);
+  ASSERT_EQ(runtime().initialize(*probe), Status::Ok);
+  EXPECT_EQ(runtime().sendEvent(*probe, "Poke", {fo4::papyrus::objectValue(*actor, "Probe", "")}), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(runtime().instanceState(*actor), "");
 }
 
 }  // namespace

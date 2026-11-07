@@ -68,6 +68,11 @@ struct CallbackState {
   int overrides{0};
   bool allow{true};
   std::int64_t latentToken{9};
+  int engineCalls{0};
+  std::uint64_t selfHandle{0};
+  std::uint64_t waitToken{0};
+  std::uint64_t propertyHandle{0};
+  std::int32_t stored{0};
 };
 
 int32_t gateCallback(void* user, const char*) {
@@ -92,6 +97,83 @@ int32_t overrideCallback(void* user, uint64_t, const char*, const radicle_papyru
 
 int64_t beginLatentCallback(void* user, const char*, const char*, const radicle_papyrus_value* const*, size_t) {
   return static_cast<CallbackState*>(user)->latentToken;
+}
+
+PexValue number(std::int32_t amount) {
+  PexValue value;
+  value.type = PexValueType::Integer;
+  value.int_ = amount;
+  return value;
+}
+
+PexFunction withTarget(PexFunction function) {
+  function.params.push_back(PexTypedName{"target", "Var"});
+  return function;
+}
+
+PexFile modModel() {
+  PexFile model;
+  model.majorVersion = 3;
+  model.minorVersion = 9;
+  model.gameId = 2;
+  model.sourceFileName = "Mod.psc";
+  PexObject mod;
+  mod.name = "Mod";
+  mod.autoStateName = "";
+  PexState entry;
+  entry.name = "";
+  entry.functions.push_back(withTarget(method("Poke", "None",
+                                              {ins("callmethod", {literal("Touch"), id("target"), id("::nonevar")}),
+                                               ins("return", {id("::NoneVar")})})));
+  entry.functions.push_back(withTarget(method("PokePlain", "None",
+                                              {ins("callmethod", {literal("Plain"), id("target"), id("::nonevar")}),
+                                               ins("return", {id("::NoneVar")})})));
+  entry.functions.push_back(withTarget(method("Read", "None",
+                                              {ins("propget", {literal("Health"), id("target"), id("result")}),
+                                               ins("return", {id("::NoneVar")})})));
+  entry.functions.push_back(withTarget(method("Write", "None",
+                                              {ins("propset", {literal("Health"), id("target"), number(9)}),
+                                               ins("return", {id("::NoneVar")})})));
+  mod.states.push_back(std::move(entry));
+  model.objects.push_back(std::move(mod));
+  model.rebuildStringTable();
+  return model;
+}
+
+int32_t engineCallNative(void* user, radicle_papyrus_native_call* call) {
+  auto* state = static_cast<CallbackState*>(user);
+  state->engineCalls += 1;
+  if (std::strcmp(radicle_papyrus_native_call_function(call), "Wait") == 0) {
+    uint64_t token = 0;
+    if (radicle_papyrus_native_call_begin_wait(call, &token) != RADICLE_STATUS_OK) return 0;
+    state->waitToken = token;
+    return 1;
+  }
+  const radicle_papyrus_object* self = radicle_papyrus_native_call_self(call);
+  state->selfHandle = self == nullptr ? 0 : radicle_papyrus_object_handle(self);
+  return 1;
+}
+
+int32_t engineGetProperty(void* user, const radicle_papyrus_object* object, const char* name,
+                          radicle_papyrus_value** out_value) {
+  auto* state = static_cast<CallbackState*>(user);
+  state->propertyHandle = radicle_papyrus_object_handle(object);
+  if (std::strcmp(name, "Health") != 0) return 0;
+  return radicle_papyrus_value_int(77, out_value) == RADICLE_STATUS_OK ? 1 : 0;
+}
+
+int32_t engineSetProperty(void* user, const radicle_papyrus_object*, const char* name,
+                          const radicle_papyrus_value* value) {
+  auto* state = static_cast<CallbackState*>(user);
+  if (std::strcmp(name, "Health") != 0) return 0;
+  state->stored = radicle_papyrus_value_int_of(value);
+  return 1;
+}
+
+radicle_papyrus_value* engineValue(uint64_t handle, const char* type) {
+  radicle_papyrus_value* value = nullptr;
+  EXPECT_EQ(radicle_papyrus_value_object(handle, type, "", &value), RADICLE_STATUS_OK);
+  return value;
 }
 
 class CApiPapyrusRuntimeTest : public ::testing::Test {
@@ -295,6 +377,139 @@ TEST_F(CApiPapyrusRuntimeTest, FailedInitializeReportsItsStatusAsTheFailureText)
   EXPECT_STREQ(radicle_papyrus_runtime_failure(runtime_, instance), radicle_papyrus_status_name(status));
   EXPECT_STREQ(radicle_papyrus_runtime_failure(runtime_, instance + 100), "no such instance");
   EXPECT_EQ(radicle_papyrus_runtime_failure(nullptr, instance), nullptr);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, EngineNativeGetsSelfAndRequiredScript) {
+  load(modModel());
+  radicle_papyrus_engine_callbacks engine{};
+  engine.struct_size = sizeof(engine);
+  engine.user = &state_;
+  engine.call_native_ex = engineCallNative;
+  ASSERT_EQ(radicle_papyrus_runtime_set_engine_callbacks(runtime_, &engine), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_register_native_ex(runtime_, "Widget", "Touch",
+                                                       RADICLE_PAPYRUS_NATIVE_ENGINE_OBJECT, "", 0),
+            RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_register_native_ex(runtime_, "Gadget", "Touch",
+                                                       RADICLE_PAPYRUS_NATIVE_ENGINE_OBJECT, "Widget", 0),
+            RADICLE_STATUS_OK);
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Mod", RADICLE_PAPYRUS_OWNER_FORM, "000820:Mod.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+
+  radicle_papyrus_value* widget = engineValue(RADICLE_PAPYRUS_ENGINE_HANDLE_BIT | 5, "Widget");
+  ASSERT_NE(widget, nullptr);
+  const radicle_papyrus_value* widgetArgs[] = {widget};
+  ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Poke", widgetArgs, 1, &status),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(state_.engineCalls, 1);
+  EXPECT_EQ(state_.selfHandle, RADICLE_PAPYRUS_ENGINE_HANDLE_BIT | 5);
+
+  radicle_papyrus_value* gadget = engineValue(RADICLE_PAPYRUS_ENGINE_HANDLE_BIT | 6, "Gadget");
+  ASSERT_NE(gadget, nullptr);
+  const radicle_papyrus_value* gadgetArgs[] = {gadget};
+  ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Poke", gadgetArgs, 1, &status),
+            RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(state_.engineCalls, 1);
+  EXPECT_GT(step.refused, 0);
+  radicle_papyrus_value_destroy(widget);
+  radicle_papyrus_value_destroy(gadget);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, NativeStartsWaitFromCallAndCompleteResumes) {
+  load(actorModel());
+  radicle_papyrus_engine_callbacks engine{};
+  engine.struct_size = sizeof(engine);
+  engine.user = &state_;
+  engine.call_native_ex = engineCallNative;
+  ASSERT_EQ(radicle_papyrus_runtime_set_engine_callbacks(runtime_, &engine), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_register_native_ex(runtime_, "Waiter", "Wait",
+                                                       RADICLE_PAPYRUS_NATIVE_STATIC, "",
+                                                       RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT),
+            RADICLE_STATUS_OK);
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM, "000821:Actor.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Run", nullptr, 0, &status),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(step.waiting, 1);
+  EXPECT_NE(state_.waitToken, 0u);
+
+  int32_t accepted = 0;
+  radicle_papyrus_value* value = nullptr;
+  ASSERT_EQ(radicle_papyrus_value_int(3, &value), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_complete_latent(runtime_, state_.waitToken, value, &accepted),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(accepted, 1);
+  radicle_papyrus_value_destroy(value);
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(step.completed, 1);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, EnginePropertyGetSet) {
+  load(modModel());
+  radicle_papyrus_engine_callbacks engine{};
+  engine.struct_size = sizeof(engine);
+  engine.user = &state_;
+  engine.get_property = engineGetProperty;
+  engine.set_property = engineSetProperty;
+  ASSERT_EQ(radicle_papyrus_runtime_set_engine_callbacks(runtime_, &engine), RADICLE_STATUS_OK);
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Mod", RADICLE_PAPYRUS_OWNER_FORM, "000822:Mod.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+  radicle_papyrus_value* widget = engineValue(RADICLE_PAPYRUS_ENGINE_HANDLE_BIT | 9, "Widget");
+  ASSERT_NE(widget, nullptr);
+  const radicle_papyrus_value* args[] = {widget};
+
+  ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Read", args, 1, &status), RADICLE_STATUS_OK);
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(state_.propertyHandle, RADICLE_PAPYRUS_ENGINE_HANDLE_BIT | 9);
+  radicle_papyrus_value* read = nullptr;
+  ASSERT_EQ(radicle_papyrus_runtime_get_variable(runtime_, instance, "result", &read), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_papyrus_value_int_of(read), 77);
+  radicle_papyrus_value_destroy(read);
+
+  ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Write", args, 1, &status), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(state_.stored, 9);
+  radicle_papyrus_value_destroy(widget);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, V1RegistrationStillStaticOnly) {
+  load(modModel());
+  ASSERT_EQ(radicle_papyrus_runtime_register_native(runtime_, "Widget", "Plain",
+                                                    RADICLE_PAPYRUS_NATIVE_ENGINE_OBJECT, "", 0),
+            RADICLE_STATUS_OK);
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Mod", RADICLE_PAPYRUS_OWNER_FORM, "000823:Mod.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+  radicle_papyrus_value* widget = engineValue(RADICLE_PAPYRUS_ENGINE_HANDLE_BIT | 3, "Widget");
+  ASSERT_NE(widget, nullptr);
+  const radicle_papyrus_value* args[] = {widget};
+  ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "PokePlain", args, 1, &status),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(state_.hits, 0);
+  EXPECT_EQ(step.refused, 1);
+  radicle_papyrus_value_destroy(widget);
 }
 
 }  // namespace
