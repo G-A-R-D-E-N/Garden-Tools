@@ -43,7 +43,8 @@ typedef enum radicle_papyrus_native_kind {
 typedef struct radicle_papyrus_native_call radicle_papyrus_native_call;
 
 typedef enum radicle_papyrus_native_flags {
-  RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT = 1
+  RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT = 1,
+  RADICLE_PAPYRUS_NATIVE_FLAG_ACCEPT_SCRIPT_INSTANCE = 2
 } radicle_papyrus_native_flags;
 
 typedef enum radicle_papyrus_override_outcome {
@@ -165,7 +166,7 @@ RADICLE_API radicle_status radicle_papyrus_runtime_register_remote_event(radicle
 RADICLE_API radicle_status radicle_papyrus_runtime_match_remote_event(const radicle_papyrus_runtime* runtime, radicle_papyrus_owner_kind source_kind, const char* source_base_form_key, const char* source_discriminator, const char* event_name, int64_t* out_handles, uint64_t* out_instances, size_t capacity, size_t* out_count);
 /* Invariant: engine callbacks and runtime calls are single-threaded; a NULL callbacks pointer clears the engine hooks. */
 RADICLE_API radicle_status radicle_papyrus_runtime_set_engine_callbacks(radicle_papyrus_runtime* runtime, const radicle_papyrus_engine_callbacks* callbacks);
-/* Requires: flags is zero or RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT; begin_wait is refused on a direct entry, which cannot park, and without the flag. */
+/* Requires: flags is zero or a combination of RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT and RADICLE_PAPYRUS_NATIVE_FLAG_ACCEPT_SCRIPT_INSTANCE; begin_wait is refused on a direct entry, which cannot park, and without the flag; ACCEPT_SCRIPT_INSTANCE requires RADICLE_PAPYRUS_NATIVE_ENGINE_OBJECT. */
 RADICLE_API radicle_status radicle_papyrus_runtime_register_native_ex(radicle_papyrus_runtime* runtime, const char* script, const char* function, radicle_papyrus_native_kind kind, const char* required_script, uint32_t flags);
 /* Invariant: the call and every pointer returned by radicle_papyrus_native_call_* stay valid only inside the callback that receives the call. */
 RADICLE_API const radicle_papyrus_object* radicle_papyrus_native_call_self(const radicle_papyrus_native_call* call);

@@ -702,13 +702,20 @@ radicle_status radicle_papyrus_runtime_register_native_ex(radicle_papyrus_runtim
   if (runtime == nullptr || script == nullptr || function == nullptr) {
     return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime, script and function are required");
   }
-  if ((flags & ~static_cast<uint32_t>(RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT)) != 0) {
+  if ((flags & ~static_cast<uint32_t>(RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT |
+                                      RADICLE_PAPYRUS_NATIVE_FLAG_ACCEPT_SCRIPT_INSTANCE)) != 0) {
     return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the native flags are not valid");
+  }
+  const bool acceptScriptInstance = (flags & static_cast<uint32_t>(RADICLE_PAPYRUS_NATIVE_FLAG_ACCEPT_SCRIPT_INSTANCE)) != 0;
+  if (acceptScriptInstance && kind != RADICLE_PAPYRUS_NATIVE_ENGINE_OBJECT) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "ACCEPT_SCRIPT_INSTANCE needs an engine-object native");
   }
   return radicle_c_env_detail::guarded("unknown exception while registering a native", [&] {
     NativeRegistration registration;
     registration.kind = nativeKindFrom(kind);
     registration.requiredScript = required_script == nullptr ? std::string() : std::string(required_script);
+    registration.acceptScriptInstance = acceptScriptInstance;
     const NativeTargetKind targetKind = registration.kind;
     radicle_papyrus_runtime* raw = runtime;
     registration.invoke = [raw, flags, targetKind](const NativeCall& call, NativeResult& result) -> bool {
