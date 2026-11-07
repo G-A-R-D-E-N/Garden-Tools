@@ -234,6 +234,28 @@ TEST_CASE("Native resolveWorldspace names the worldspace that owns an exterior C
     CHECK(missing.at("error") == "Cell not found: 000999:Patch.esp");
 }
 
+TEST_CASE("Native resolveWorldspaceId maps a worldspace EditorID or FormKey to its FormKey") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "mods" / "CellMod" / "Patch.esp";
+    writeBytes(path, worldspacePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto byEditorId = parseStringResult(backend.resolveWorldspaceId(
+        nlohmann::json::array({"TestWorld"})));
+    CHECK(byEditorId.at("worldspaceFormKey") == "000800:Patch.esp");
+
+    const auto byFormKey = parseStringResult(backend.resolveWorldspaceId(
+        nlohmann::json::array({"000800:Patch.esp"})));
+    CHECK(byFormKey.at("worldspaceFormKey") == "000800:Patch.esp");
+
+    const auto missing = parseStringResult(backend.resolveWorldspaceId(
+        nlohmann::json::array({"NoSuchWorld"})));
+    CHECK(missing.at("error") == "Worldspace not found: NoSuchWorld");
+}
+
 TEST_CASE("PluginEditTool refuses an occupied exterior CELL coordinate transactionally") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
