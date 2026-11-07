@@ -735,6 +735,29 @@ TEST_F(RuntimeTest, NonEngineObjectOfUnrelatedTypeStillMismatchesDeclaredType) {
   EXPECT_EQ(record.status, Status::TypeMismatch);
 }
 
+TEST_F(RuntimeTest, UntypedEngineHandleIsOperatorStaysStrict) {
+  PexFunction probe = method("Probe", "Bool", {PexTypedName{"target", "Var"}},
+                             {ins("is", {id("temp0"), id("target"), literal("Form")}),
+                              ins("return", {id("temp0")})});
+  probe.locals = {PexTypedName{"temp0", "Bool"}};
+  addScript(script("Mod", {state("", {probe})}));
+  buildRuntime();
+  const auto instance = runtime().attach("Mod", OwnerId::forForm("000822:Mod.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  Status status = Status::HostError;
+  const std::uint64_t ticket =
+      runtime().submitCall(*instance, "Probe", {fo4::papyrus::objectValue(kEngineHandleBit | 5, "", "")}, status);
+  ASSERT_EQ(status, Status::Ok);
+  runtime().runStep(512);
+  CallRecord record;
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Done);
+  EXPECT_EQ(record.status, Status::Ok);
+  ASSERT_EQ(record.value.type, fo4::papyrus::ValueType::Bool);
+  EXPECT_FALSE(record.value.boolean);
+}
+
 TEST_F(RuntimeTest, NativeStartsWaitAtCallTime) {
   addScript(script("Actor", {state("", {method("Early", "None", {},
                                                {ins("callstatic", {literal("Waiter"), literal("Wait"), id("result"), number(1)}),

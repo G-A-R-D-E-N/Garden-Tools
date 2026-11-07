@@ -15,6 +15,11 @@ namespace {
 
 constexpr int kMaxInheritanceHops = 64;
 
+bool isUntypedEngineHandle(const Value& value) {
+    return value.object != nullptr && value.object->type.empty() &&
+           (value.object->handle & kEngineHandleBit) != 0;
+}
+
 const pex::PexFunction* findInState(const pex::PexState& state, const std::string& name) {
     for (const pex::PexFunction& function : state.functions) {
         if (sameName(function.name, name)) return &function;
@@ -446,7 +451,6 @@ Status Interpreter::storeResult(Frame& frame, const pex::PexValue& destination,
 
 bool Interpreter::isObjectOfType(const Value& value, const std::string& typeName) const {
     if (value.type != ValueType::Object || value.object == nullptr) return false;
-    if (value.object->type.empty() && (value.object->handle & kEngineHandleBit) != 0) return true;
     const pex::PexObject* current = host_.findObject(value.object->type);
     if (current == nullptr) return sameName(value.object->type, typeName);
     for (int hop = 0; current != nullptr && hop < kMaxInheritanceHops; ++hop) {
@@ -479,7 +483,8 @@ Status Interpreter::coerce(const Value& value, const std::string& declaredType, 
             return Status::Ok;
         case ValueType::Object:
             if (value.type != ValueType::Object) return Status::TypeMismatch;
-            if (!sameName(declaredType, "ScriptObject") && !isObjectOfType(value, declaredType)) {
+            if (!sameName(declaredType, "ScriptObject") && !isUntypedEngineHandle(value) &&
+                !isObjectOfType(value, declaredType)) {
                 return Status::TypeMismatch;
             }
             out = value;
@@ -534,7 +539,8 @@ Status Interpreter::castTo(const Value& source, const std::string& sourceType,
             return Status::Ok;
         case ValueType::Object:
             if (source.type != ValueType::Object) return Status::TypeMismatch;
-            if (!sameName(targetType, "ScriptObject") && !isObjectOfType(source, targetType)) {
+            if (!sameName(targetType, "ScriptObject") && !isUntypedEngineHandle(source) &&
+                !isObjectOfType(source, targetType)) {
                 out = noneValue();
                 return Status::Ok;
             }
