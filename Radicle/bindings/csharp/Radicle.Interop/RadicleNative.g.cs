@@ -84,6 +84,14 @@ public unsafe struct FormKey
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct StaticPlacement
+{
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public float Scale;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct EnvPluginInfo
 {
     public IntPtr Filename;
@@ -608,14 +616,6 @@ public unsafe struct WeatherInfo
     public int HasParameters;
     public WeatherParameters Parameters;
     public IntPtr Internal;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct StaticPlacement
-{
-    public fixed float Position[3];
-    public fixed float Rotation[3];
-    public float Scale;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2188,6 +2188,241 @@ public unsafe struct CellChild
 {
     public IntPtr Record;
     public int Persistent;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellSummary
+{
+    public FormKey Key;
+    public IntPtr EditorId;
+    public NameKind NameKind;
+    public IntPtr NameText;
+    public uint NameStringId;
+    public int Interior;
+    public int HasGrid;
+    public int GridX;
+    public int GridY;
+    public int HasWorldspace;
+    public FormKey Worldspace;
+    public nuint WinningPlugin;
+    public int Localized;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScolPart
+{
+    public IntPtr ModelPath;
+    public IntPtr Placements;
+    public nuint PlacementCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct BaseObjectInfo
+{
+    public FormKey Key;
+    public fixed byte Signature[5];
+    public IntPtr EditorId;
+    public IntPtr TypeName;
+    public IntPtr ModelPath;
+    public int EditorMarker;
+    public int HasDecal;
+    public IntPtr DecalDiffuse;
+    public int HasDecalWidth;
+    public float DecalWidth;
+    public int HasDecalHeight;
+    public float DecalHeight;
+    public IntPtr ScolParts;
+    public nuint ScolPartCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellReference
+{
+    public FormKey Key;
+    public IntPtr RecordType;
+    public IntPtr EditorId;
+    public int HasBase;
+    public FormKey Base;
+    public IntPtr BaseInfo;
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public float Scale;
+    public int Persistent;
+    public int InitiallyDisabled;
+    public nuint WinningPlugin;
+}
+
+public enum PlacedEditStatus : int
+{
+    Edited = 0,
+    ReferenceMissing = 1,
+    ReferenceDeleted = 2,
+    TargetCellMissing = 3,
+    FieldAbsent = 4,
+}
+
+public enum DuplicateStatus : int
+{
+    Duplicated = 0,
+    ReferenceMissing = 1,
+    ReferenceDeleted = 2,
+    ParentCellMissing = 3,
+    UnsupportedSignature = 4,
+}
+
+public enum DeleteStatus : int
+{
+    Deleted = 0,
+    MarkedDeleted = 1,
+    Referenced = 2,
+    ReferenceMissing = 3,
+    AlreadyDeleted = 4,
+}
+
+public enum CellOverrideStatus : int
+{
+    Inserted = 0,
+    AlreadyExists = 1,
+    SourceMissing = 2,
+    NotACell = 3,
+}
+
+public enum CellEditStatus : int
+{
+    Edited = 0,
+    CellMissing = 1,
+    CellDeleted = 2,
+    NotACell = 3,
+    TargetMissing = 4,
+    TargetTypeNotAllowed = 5,
+    TargetNotMaster = 6,
+    InteriorFlagLocked = 7,
+    InvalidValue = 8,
+    Malformed = 9,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct LinkedReferenceEdit
+{
+    public FormKey Keyword;
+    public FormKey Reference;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlacedEdit
+{
+    public int HasTransform;
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public int HasScale;
+    public int HasScaleValue;
+    public float Scale;
+    public int HasEditorId;
+    public IntPtr EditorId;
+    public int HasRecordFlags;
+    public uint RecordFlags;
+    public int HasComments;
+    public IntPtr Comments;
+    public int HasLocationReference;
+    public FormKey LocationReference;
+    public int HasOwnership;
+    public FormKey Owner;
+    public int NoCrime;
+    public int HasFactionRank;
+    public int FactionRank;
+    public int HasEnableParent;
+    public FormKey EnableParent;
+    public byte EnableParentFlags;
+    public int HasLinkedReferences;
+    public IntPtr LinkedReferences;
+    public nuint LinkedReferenceCount;
+    public int HasTeleport;
+    public FormKey TeleportDoor;
+    public fixed float TeleportPosition[3];
+    public fixed float TeleportRotation[3];
+    public int HasPrimitive;
+    public fixed float PrimitiveBounds[3];
+    public uint PrimitiveType;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlacedEditResult
+{
+    public PlacedEditStatus Status;
+    public IntPtr CopiedFrom;
+    public int Relocated;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DuplicateOptions
+{
+    public fixed float OffsetPosition[3];
+    public fixed float OffsetRotation[3];
+    public int KeepEditorId;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellLightingEdit
+{
+    public int HasAmbient;
+    public ByteColor Ambient;
+    public int HasDirectional;
+    public ByteColor Directional;
+    public int HasFogNearColor;
+    public ByteColor FogNearColor;
+    public int HasFogNear;
+    public float FogNear;
+    public int HasFogFar;
+    public float FogFar;
+    public int HasDirectionalRotationXy;
+    public int DirectionalRotationXy;
+    public int HasDirectionalRotationZ;
+    public int DirectionalRotationZ;
+    public int HasDirectionalFade;
+    public float DirectionalFade;
+    public int HasFogClipDistance;
+    public float FogClipDistance;
+    public int HasFogPower;
+    public float FogPower;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellEdit
+{
+    public int HasFlags;
+    public ushort Flags;
+    public int HasLighting;
+    public CellLightingEdit Lighting;
+    public int HasLightingTemplate;
+    public FormKey LightingTemplate;
+    public int HasWaterHeight;
+    public float WaterHeight;
+    public int HasWater;
+    public FormKey Water;
+    public int HasImageSpace;
+    public FormKey ImageSpace;
+    public int HasEncounterZone;
+    public FormKey EncounterZone;
+    public int HasLocation;
+    public FormKey Location;
+    public int HasAcousticSpace;
+    public FormKey AcousticSpace;
+    public int HasMusicType;
+    public FormKey MusicType;
+    public int HasSkyWeatherRegion;
+    public FormKey SkyWeatherRegion;
+    public int HasGodRays;
+    public FormKey GodRays;
+    public int HasLockList;
+    public FormKey LockList;
+    public int HasOwner;
+    public FormKey Owner;
+    public int HasOwnerRank;
+    public int OwnerRank;
+    public int HasRegions;
+    public IntPtr Regions;
+    public nuint RegionCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -4240,6 +4475,78 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_landscape")]
     public static extern Status EnvCellLandscape(IntPtr env, FormKey cell, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_resolve_cell")]
+    public static extern Status EnvResolveCell(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_resolve_worldspace")]
+    public static extern Status EnvResolveWorldspace(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_cell_at_grid")]
+    public static extern Status EnvFindCellAtGrid(IntPtr env, FormKey world, int x, int y, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_view")]
+    public static extern Status EnvCellView(IntPtr env, FormKey cell, IntPtr* out_view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_summary")]
+    public static extern Status CellViewSummary(IntPtr view, CellSummary* out_summary);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_reference_count")]
+    public static extern nuint CellViewReferenceCount(IntPtr view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_reference")]
+    public static extern Status CellViewReference(IntPtr view, nuint index, CellReference* out_reference);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_scol_part")]
+    public static extern Status CellViewScolPart(IntPtr view, nuint reference_index, nuint part_index, ScolPart* out_part);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_free")]
+    public static extern void CellViewFree(IntPtr view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_base_object_info")]
+    public static extern Status EnvBaseObjectInfo(IntPtr env, FormKey @base, BaseObjectInfo** out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_base_object_info_free")]
+    public static extern void BaseObjectInfoFree(BaseObjectInfo* info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_edit_placed_reference")]
+    public static extern Status PluginEditPlacedReference(IntPtr patch, IntPtr env, FormKey reference, PlacedEdit* edit, PlacedEditResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_duplicate_placed_reference")]
+    public static extern Status PluginDuplicatePlacedReference(IntPtr patch, IntPtr env, FormKey reference, DuplicateOptions* options, DuplicateStatus* out_status, FormKey* out_new);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_delete_placed_reference")]
+    public static extern Status PluginDeletePlacedReference(IntPtr patch, IntPtr env, FormKey reference, DeleteStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_cell_override")]
+    public static extern Status PluginCopyCellOverride(IntPtr patch, IntPtr source, FormKey cell, CellOverrideStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_edit_cell")]
+    public static extern Status PluginEditCell(IntPtr patch, IntPtr env, FormKey cell, CellEdit* edit, CellEditStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_create")]
+    public static extern Status PluginHistoryCreate(IntPtr* out_history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_destroy")]
+    public static extern void PluginHistoryDestroy(IntPtr history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_record")]
+    public static extern Status PluginHistoryRecord(IntPtr history, IntPtr before);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_undo")]
+    public static extern Status PluginHistoryUndo(IntPtr history, IntPtr patch);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_redo")]
+    public static extern Status PluginHistoryRedo(IntPtr history, IntPtr patch);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_undo_count")]
+    public static extern Status PluginHistoryUndoCount(IntPtr history, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_redo_count")]
+    public static extern Status PluginHistoryRedoCount(IntPtr history, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_history_revision")]
+    public static extern Status PluginHistoryRevision(IntPtr history, ulong* out_revision);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_delta_patch")]
     public static extern Status EnvBuildDeltaPatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? older_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? newer_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, DeltaPatchCounts* out_counts);
