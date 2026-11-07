@@ -46,6 +46,7 @@ add_library(
     plugin/RadiclePluginQuestCondition.cpp
     plugin/RadiclePluginQuestAliasFill.cpp
     plugin/RadiclePluginQuestAliases.cpp
+    plugin/RadiclePluginQuestAliasJson.cpp
     plugin/RadiclePluginQuestExisting.cpp
     plugin/RadiclePluginQuestExistingExtras.cpp
     plugin/RadiclePluginQuestLocalized.cpp

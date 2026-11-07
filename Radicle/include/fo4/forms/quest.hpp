@@ -4,6 +4,7 @@
 #include "fo4/plugin/container.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/ctda.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "fo4/schema/localized_fields.hpp"
 
 #include <cstdint>
@@ -355,6 +356,10 @@ QuestAlias encode_quest_alias(const Plugin& plugin,
                               const QuestAliasCreation& creation);
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key);
 QuestAliases decode_quest_aliases(const RecordIndex& index, const FormKey& key);
+// The lookup must type every COED owner it is given; it may throw QuestError to refuse one.
+QuestAliases decode_quest_aliases(const Plugin& plugin,
+                                  const FormKey& key,
+                                  const FormLinkTypeLookup& owner_types);
 
 void sync_quest_vmad_aliases(Record& record,
                              const QuestAliases& previous,

@@ -82,18 +82,6 @@ Result<std::string> resolveQuestText(const std::vector<fo4::env::PluginStringTab
     return support::displayText(language, entry->text);
 }
 
-const char* aliasKindName(fo4::forms::QuestAliasKind kind) {
-    switch (kind) {
-        case fo4::forms::QuestAliasKind::location:
-            return "location";
-        case fo4::forms::QuestAliasKind::collection:
-            return "collection";
-        case fo4::forms::QuestAliasKind::reference:
-            break;
-    }
-    return "reference";
-}
-
 nlohmann::json logTextJson(const std::optional<fo4::schema::LocalizedString>& text) {
     nlohmann::json out = nlohmann::json::object();
     if (!text.has_value()) return out;
@@ -358,24 +346,11 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestAliases(const nlohmann::jso
     }
 
     try {
-        const auto aliases = fo4::forms::decode_quest_aliases(loaded->plugin, questKey);
+        const auto aliases = fo4::forms::decode_quest_aliases(
+            loaded->plugin, questKey, questOwnerTypes(loaded->plugin, *graph_));
         nlohmann::json out = nlohmann::json::array();
         for (const auto& alias : aliases.aliases) {
-            nlohmann::json row{{"kind", aliasKindName(alias.kind)}, {"id", alias.id}};
-            if (alias.name.has_value()) row["name"] = *alias.name;
-            if (alias.flags.has_value()) row["flags"] = *alias.flags;
-            if (alias.kind == fo4::forms::QuestAliasKind::collection) {
-                nlohmann::json entries = nlohmann::json::array();
-                for (const auto& entry : alias.collection_entries) {
-                    nlohmann::json item{{"id", entry.id}};
-                    if (entry.max_initial_fill_count.has_value()) {
-                        item["maxInitialFillCount"] = *entry.max_initial_fill_count;
-                    }
-                    entries.push_back(std::move(item));
-                }
-                row["collectionEntries"] = entries;
-            }
-            out.push_back(std::move(row));
+            out.push_back(questAliasJson(loaded->plugin, alias));
         }
         return nlohmann::json{{"nextAliasId", aliases.next_alias_id}, {"aliases", out}};
     } catch (const fo4::forms::QuestError& error) {

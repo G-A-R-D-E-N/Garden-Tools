@@ -1,6 +1,7 @@
 #include "RadiclePluginQuestInternal.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <exception>
 #include <limits>
@@ -10,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <fo4/plugin/reader.hpp>
@@ -22,30 +24,103 @@ using namespace questinternal;
 
 namespace {
 
+const fo4::forms::QuestAlias* previousAliasWithId(const fo4::forms::QuestAliases& previous,
+                                                  std::uint32_t id) {
+    const auto found = std::find_if(
+        previous.aliases.begin(), previous.aliases.end(), [id](const fo4::forms::QuestAlias& alias) {
+            return alias.kind != fo4::forms::QuestAliasKind::collection && alias.id == id;
+        });
+    return found == previous.aliases.end() ? nullptr : &*found;
+}
+
 std::vector<fo4::CtdaCondition> previousAliasConditions(const fo4::forms::QuestAliases& previous,
                                                         std::uint32_t id) {
-    const auto sameId = [id](const fo4::forms::QuestAlias& alias) { return alias.id == id; };
     std::vector<fo4::CtdaCondition> conditions;
-    if (std::count_if(previous.aliases.begin(), previous.aliases.end(), sameId) != 1) {
-        return conditions;
-    }
-    const auto& members =
-        std::find_if(previous.aliases.begin(), previous.aliases.end(), sameId)->subrecords;
-    const auto isCondition = [](const fo4::Subrecord& member) {
-        return member.signature == fo4::sig_ctda ||
-               member.signature == fo4::Signature::from_string("CIS1") ||
-               member.signature == fo4::Signature::from_string("CIS2");
-    };
-    const auto first = std::find_if(members.begin(), members.end(), isCondition);
-    const auto last = std::find_if_not(first, members.end(), isCondition);
-    const std::span<const fo4::Subrecord> run{
-        members.data() + (first - members.begin()), static_cast<std::size_t>(last - first)};
-    std::size_t consumed = 0;
-    if (!fo4::forms::lossless_quest_log_entry_conditions(run, conditions, consumed) ||
-        consumed != run.size()) {
-        conditions.clear();
+    if (const auto* alias = previousAliasWithId(previous, id)) {
+        aliasConditionRun(*alias, conditions);
     }
     return conditions;
+}
+
+bool fillFitsKind(const fo4::forms::QuestAliasFill& fill, fo4::forms::QuestAliasKind kind) {
+    if (std::holds_alternative<std::monostate>(fill)) return true;
+    const bool referenceFill =
+        std::holds_alternative<fo4::forms::QuestSpecificReferenceFill>(fill) ||
+        std::holds_alternative<fo4::forms::QuestUniqueActorFill>(fill) ||
+        std::holds_alternative<fo4::forms::QuestLocationAliasReferenceFill>(fill) ||
+        std::holds_alternative<fo4::forms::QuestExternalAliasReferenceFill>(fill) ||
+        std::holds_alternative<fo4::forms::QuestCreateReferenceFill>(fill) ||
+        std::holds_alternative<fo4::forms::QuestFindMatchingReferenceFill>(fill);
+    if (kind == fo4::forms::QuestAliasKind::reference) return referenceFill;
+    if (kind == fo4::forms::QuestAliasKind::location) return !referenceFill;
+    return false;
+}
+
+bool anyFillKeyPresent(const nlohmann::json& element) {
+    constexpr std::array<const char*, 12> keys{
+        "forcedReference", "uniqueActor", "specificLocation", "createReference",
+        "locationAliasReference", "externalAlias", "findMatchingNearAlias",
+        "findMatchingFromEvent", "findMatchingClosest", "referenceAliasLocation",
+        "externalAliasLocation", "findMatchingLocation"};
+    return std::any_of(keys.begin(), keys.end(), [&element](const char* key) {
+        return element.contains(key);
+    });
+}
+
+template <typename Alias>
+bool aliasHasExtras(const Alias& alias) {
+    return !alias.keywords.empty() || !alias.items.empty() || !alias.linked_aliases.empty() ||
+           !alias.spells.empty() || !alias.factions.empty() || !alias.packages.empty() ||
+           alias.spectator_override.has_value() || alias.observe_dead_body_override.has_value() ||
+           alias.guard_warn_override.has_value() || alias.combat_override.has_value() ||
+           alias.display_name.has_value() || alias.forced_voice.has_value() ||
+           alias.death_item.has_value() || alias.voice_types.has_value();
+}
+
+void carryOmittedExtras(const nlohmann::json& element,
+                        const fo4::forms::QuestAlias& previous,
+                        fo4::forms::QuestAliasCreation& creation) {
+    const auto omitted = [&element](const char* key) { return !element.contains(key); };
+    if (omitted("keywords")) creation.keywords = previous.keywords;
+    if (omitted("items")) creation.items = previous.items;
+    if (omitted("linkedAliases")) creation.linked_aliases = previous.linked_aliases;
+    if (omitted("spells")) creation.spells = previous.spells;
+    if (omitted("factions")) creation.factions = previous.factions;
+    if (omitted("packages")) creation.packages = previous.packages;
+    if (omitted("spectatorOverridePackageList")) {
+        creation.spectator_override = previous.spectator_override;
+    }
+    if (omitted("observeDeadBodyOverridePackageList")) {
+        creation.observe_dead_body_override = previous.observe_dead_body_override;
+    }
+    if (omitted("guardWarnOverridePackageList")) {
+        creation.guard_warn_override = previous.guard_warn_override;
+    }
+    if (omitted("combatOverridePackageList")) creation.combat_override = previous.combat_override;
+    if (omitted("displayName")) creation.display_name = previous.display_name;
+    if (omitted("forcedVoice")) creation.forced_voice = previous.forced_voice;
+    if (omitted("deathItem")) creation.death_item = previous.death_item;
+    if (omitted("voiceTypes")) creation.voice_types = previous.voice_types;
+}
+
+std::optional<Error> collectionReplacementLoses(const fo4::forms::QuestAliases& previous,
+                                                std::uint32_t id) {
+    const auto* alias = previousAliasWithId(previous, id);
+    if (alias == nullptr) return std::nullopt;
+    std::vector<fo4::CtdaCondition> conditions;
+    const bool conditionsRun = aliasConditionRun(*alias, conditions);
+    if (!std::holds_alternative<std::monostate>(alias->fill) || aliasHasExtras(*alias) ||
+        !conditions.empty() || !conditionsRun || alias->force_into_alias.has_value() ||
+        alias->closest_to_alias.has_value()) {
+        return Error{
+            "InvalidQuestAliasPayload",
+            "collection entry id " + std::to_string(id) +
+                " is the id of an existing reference or location alias that has a fill, "
+                "extras, conditions, forceIntoAlias, or closestToAlias; remove those from "
+                "that alias before converting it to a collection"
+        };
+    }
+    return std::nullopt;
 }
 
 bool knownCollectionEntryKey(std::string_view key) {
@@ -139,7 +214,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 existingAliasesUnrepresentable(loaded->plugin, questKey, graph_)) {
             return std::unexpected(*error);
         }
-        previousAliases = fo4::forms::decode_quest_aliases(loaded->plugin, questKey);
+        previousAliases = fo4::forms::decode_quest_aliases(
+            loaded->plugin, questKey, questOwnerTypes(loaded->plugin, *graph_));
     } catch (const fo4::forms::QuestError& error) {
         return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
     }
@@ -151,6 +227,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
     std::uint32_t autoId = 0;
     std::vector<fo4::FormKey> fillKeys;
     std::vector<std::vector<PendingQuestCondition>> pendingConditions;
+    std::vector<bool> carryConditionRuns;
     bool previousCollection = false;
 
     for (const auto& element : *aliasesJson) {
@@ -276,12 +353,30 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
             }
         }
 
+        if (isCollection) {
+            std::vector<std::uint32_t> collectionIds;
+            if (creation.collection_entries.empty()) collectionIds.push_back(creation.id);
+            for (const auto& entry : creation.collection_entries) {
+                collectionIds.push_back(entry.id);
+            }
+            for (const auto id : collectionIds) {
+                if (const auto error = collectionReplacementLoses(previousAliases, id)) {
+                    return std::unexpected(*error);
+                }
+            }
+        }
+        const fo4::forms::QuestAlias* previous =
+            isCollection ? nullptr : previousAliasWithId(previousAliases, creation.id);
+
         std::optional<std::string> name;
         if (!questOptionalString(element, "name", name)) {
             return std::unexpected(Error{
                 "InvalidQuestAliasPayload",
                 "name must be a string or null"
             });
+        }
+        if (!element.contains("name") && previous != nullptr) {
+            name = previous->name;
         }
         if (creation.kind == fo4::forms::QuestAliasKind::reference && !name.has_value()) {
             name = "Alias" + std::to_string(creation.id);
@@ -322,21 +417,20 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
             return std::unexpected(*error);
         }
 
+        const auto extraPresent = [&element](const char* key) {
+            if (!element.contains(key) || element[key].is_null()) return false;
+            return !element[key].is_array() || !element[key].empty();
+        };
         const bool hasExtras =
-            (element.contains("keywords") && !element["keywords"].is_null()) ||
-            (element.contains("items") && !element["items"].is_null()) ||
-            (element.contains("linkedAliases") && !element["linkedAliases"].is_null()) ||
-            (element.contains("spells") && !element["spells"].is_null()) ||
-            (element.contains("factions") && !element["factions"].is_null()) ||
-            (element.contains("packages") && !element["packages"].is_null()) ||
-            jsonObjectPresent(element, "spectatorOverridePackageList") ||
-            jsonObjectPresent(element, "observeDeadBodyOverridePackageList") ||
-            jsonObjectPresent(element, "guardWarnOverridePackageList") ||
-            jsonObjectPresent(element, "combatOverridePackageList") ||
-            jsonObjectPresent(element, "displayName") ||
-            jsonObjectPresent(element, "forcedVoice") ||
-            jsonObjectPresent(element, "deathItem") ||
-            jsonObjectPresent(element, "voiceTypes");
+            extraPresent("keywords") || extraPresent("items") ||
+            extraPresent("linkedAliases") || extraPresent("spells") ||
+            extraPresent("factions") || extraPresent("packages") ||
+            extraPresent("spectatorOverridePackageList") ||
+            extraPresent("observeDeadBodyOverridePackageList") ||
+            extraPresent("guardWarnOverridePackageList") ||
+            extraPresent("combatOverridePackageList") || extraPresent("displayName") ||
+            extraPresent("forcedVoice") || extraPresent("deathItem") ||
+            extraPresent("voiceTypes");
         if (hasExtras && creation.kind != fo4::forms::QuestAliasKind::reference) {
             return std::unexpected(Error{
                 "InvalidQuestAliasPayload",
@@ -606,6 +700,53 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 parsedConditions.push_back(std::move(pending));
             }
         }
+
+        if (previous != nullptr) {
+            if (!element.contains("flags") && previous->flags.has_value()) {
+                creation.flags = previous->flags;
+            }
+            if (!element.contains("forceIntoAlias")) {
+                creation.force_into_alias = previous->force_into_alias;
+            }
+            if (!element.contains("closestToAlias")) {
+                if (creation.kind == fo4::forms::QuestAliasKind::location) {
+                    creation.closest_to_alias = previous->closest_to_alias;
+                } else if (previous->closest_to_alias.has_value()) {
+                    return std::unexpected(Error{
+                        "InvalidQuestAliasPayload",
+                        "closestToAlias of the previous location alias cannot carry to a "
+                        "reference alias; send closestToAlias explicitly"
+                    });
+                }
+            }
+            if (!anyFillKeyPresent(element)) {
+                if (!fillFitsKind(previous->fill, creation.kind)) {
+                    return std::unexpected(Error{
+                        "InvalidQuestAliasPayload",
+                        "the previous Fill Type cannot carry to this alias kind; send the "
+                        "fill explicitly"
+                    });
+                }
+                creation.fill = previous->fill;
+            }
+            if (creation.kind == fo4::forms::QuestAliasKind::reference) {
+                carryOmittedExtras(element, *previous, creation);
+            } else {
+                fo4::forms::QuestAliasCreation omittedExtras;
+                carryOmittedExtras(element, *previous, omittedExtras);
+                if (aliasHasExtras(omittedExtras)) {
+                    return std::unexpected(Error{
+                        "InvalidQuestAliasPayload",
+                        "the previous reference alias has reference-only data (keywords, items, "
+                        "linkedAliases, spells, factions, packages, package-list overrides, "
+                        "displayName, forcedVoice, deathItem, voiceTypes) that cannot carry to a "
+                        "location alias; remove that data from the alias before changing its kind"
+                    });
+                }
+            }
+        }
+        carryConditionRuns.push_back(previous != nullptr && !element.contains("conditions"));
+
         pendingConditions.push_back(std::move(parsedConditions));
         creations.push_back(std::move(creation));
     }
@@ -613,6 +754,19 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
     try {
         auto mutated = loaded->plugin;
         for (const auto& key : fillKeys) ensureOwnerMaster(mutated, key.owner());
+        const auto remappedAliases = fo4::forms::decode_quest_aliases(
+            mutated, questKey, questOwnerTypes(mutated, *graph_));
+        for (std::size_t i = 0; i < creations.size(); ++i) {
+            if (!carryConditionRuns[i]) continue;
+            const auto* carriedFrom = previousAliasWithId(remappedAliases, creations[i].id);
+            if (carriedFrom == nullptr ||
+                !aliasConditionRun(*carriedFrom, creations[i].conditions)) {
+                return std::unexpected(Error{
+                    "QuestAuthoringCoverageIncomplete",
+                    "existing QUST alias has a CTDA/CIS run this adapter cannot reconstruct"
+                });
+            }
+        }
         const auto context = fo4::plugin_form_id_context(mutated);
         const auto encodeKey = [&](const std::optional<fo4::FormKey>& key) -> std::uint32_t {
             if (!key.has_value()) return 0;
@@ -639,7 +793,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 }
                 creations[i].conditions.push_back(std::move(condition.condition));
             }
-            carryConditionPadding(previousAliasConditions(previousAliases, creations[i].id),
+            carryConditionPadding(previousAliasConditions(remappedAliases, creations[i].id),
                                   creations[i].conditions);
         }
         fo4::forms::write_quest_aliases(mutated, questKey, creations);

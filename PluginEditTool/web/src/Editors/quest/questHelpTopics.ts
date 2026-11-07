@@ -64,7 +64,7 @@ export const QUEST_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'quest-alias-fill',
     title: 'Fill rule',
-    body: 'A fill rule tells the game which actor, object or place to put in an alias when the quest starts. This editor does not read fill rules, keywords or items yet. Saving the aliases rewrites the whole list, so saving can remove them. Check each alias in the Creation Kit after you save.',
+    body: 'A fill rule tells the game which actor, object or place to put in an alias when the quest starts. This editor cannot show or edit fill rules, keywords, items or conditions. Saving keeps them as they are.',
     related: ['alias'],
   },
   {

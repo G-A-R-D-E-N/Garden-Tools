@@ -58,7 +58,7 @@ it('Detects: a template edit silently changing the quest it creates, because fet
     },
     {
       method: 'SetQuestAliases',
-      args: ['Patch.esp', NEW_RECORD, '[{"kind":"reference","id":0,"name":"QuestGiver","uniqueActor":"000900:Patch.esp"},{"kind":"reference","id":1,"name":"Item","createReference":{"object":"000B00:Patch.esp","alias":2,"create":"At"}},{"kind":"location","id":2,"name":"Location","specificLocation":"000A00:Patch.esp"}]'],
+      args: ['Patch.esp', NEW_RECORD, '[{"kind":"reference","id":0,"flags":null,"name":"QuestGiver","uniqueActor":"000900:Patch.esp"},{"kind":"reference","id":1,"flags":null,"name":"Item","createReference":{"object":"000B00:Patch.esp","alias":2,"create":"At"}},{"kind":"location","id":2,"flags":null,"name":"Location","specificLocation":"000A00:Patch.esp"}]'],
     },
     {
       method: 'SetQuestObjectives',
@@ -143,7 +143,7 @@ it('Detects: the kill-a-target quest calls changing from what the wizard made be
     },
     {
       method: 'SetQuestAliases',
-      args: ['Patch.esp', NEW_RECORD, '[{"kind":"reference","id":0,"name":"QuestGiver","uniqueActor":"000900:Patch.esp"},{"kind":"reference","id":1,"name":"Target","uniqueActor":"000E00:Patch.esp"},{"kind":"location","id":2,"name":"Location","specificLocation":"000A00:Patch.esp"}]'],
+      args: ['Patch.esp', NEW_RECORD, '[{"kind":"reference","id":0,"flags":null,"name":"QuestGiver","uniqueActor":"000900:Patch.esp"},{"kind":"reference","id":1,"flags":null,"name":"Target","uniqueActor":"000E00:Patch.esp"},{"kind":"location","id":2,"flags":null,"name":"Location","specificLocation":"000A00:Patch.esp"}]'],
     },
     {
       method: 'SetQuestObjectives',

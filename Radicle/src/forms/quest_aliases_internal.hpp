@@ -282,11 +282,13 @@ inline void insert_before_aled(QuestAlias& alias, std::vector<Subrecord> members
 void decode_alias_semantics(QuestAlias& alias,
                             const PluginFormIdContext* context,
                             const Plugin* plugin,
-                            const RecordIndex* index);
+                            const RecordIndex* index,
+                            const FormLinkTypeLookup* owner_types = nullptr);
 void decode_alias_extras(QuestAlias& alias,
                          const PluginFormIdContext& context,
                          const Plugin* plugin,
-                         const RecordIndex* index);
+                         const RecordIndex* index,
+                         const FormLinkTypeLookup* owner_types = nullptr);
 bool has_reference_extras(const QuestAliasCreation& creation);
 void insert_alias_extras(QuestAlias& alias,
                          const QuestAliasCreation& creation,
