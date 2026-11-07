@@ -30,7 +30,7 @@ bool Host::callNativeEx(const NativeCall& call, NativeResult& result) {
     result = NativeResult{};
     std::uint64_t token = 0;
     Status latentStatus = Status::Ok;
-    if (callLatent(call.script, call.function, call.args, latentStatus, token)) {
+    if (call.mayPark && callLatent(call.script, call.function, call.args, latentStatus, token)) {
         result.latentToken = token;
         return true;
     }

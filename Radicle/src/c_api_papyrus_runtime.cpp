@@ -77,18 +77,6 @@ NativeTargetKind nativeKindFrom(radicle_papyrus_native_kind kind) {
   return NativeTargetKind::Static;
 }
 
-struct radicle_papyrus_native_call {
-  radicle_papyrus_runtime* runtime{nullptr};
-  uint32_t flags{0};
-  std::string script;
-  std::string function;
-  std::vector<radicle_papyrus_value> arguments;
-  std::optional<radicle_papyrus_object> self;
-  std::optional<uint64_t> token;
-  std::optional<radicle_papyrus_value> result;
-  radicle_papyrus_status failure{RADICLE_PAPYRUS_STATUS_OK};
-};
-
 }  // namespace
 
 extern "C" {
@@ -585,7 +573,12 @@ radicle_status radicle_papyrus_runtime_set_engine_callbacks(radicle_papyrus_runt
     return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the engine callbacks struct is too small");
   }
   return radicle_c_env_detail::guarded("unknown exception while installing engine callbacks", [&] {
-    runtime->engine = callbacks == nullptr ? radicle_papyrus_engine_callbacks{} : *callbacks;
+    if (callbacks == nullptr) {
+      runtime->engine = radicle_papyrus_engine_callbacks{};
+      runtime->runtime.setEngineObjectHooks(fo4::papyrus::EngineObjectHooks{});
+      return RADICLE_STATUS_OK;
+    }
+    runtime->engine = *callbacks;
     radicle_papyrus_runtime* raw = runtime;
     EngineObjectHooks hooks;
     hooks.get = [raw](const ObjectRef& object, const std::string& name, Value& out, Status& status) {
@@ -648,7 +641,7 @@ radicle_status radicle_papyrus_runtime_register_native_ex(radicle_papyrus_runtim
       }
       radicle_papyrus_native_call native;
       native.runtime = raw;
-      native.flags = flags;
+      native.flags = call.mayPark ? flags : (flags & ~static_cast<uint32_t>(RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT));
       native.script = call.script;
       native.function = call.function;
       native.arguments.reserve(call.args.size());
@@ -709,8 +702,10 @@ radicle_status radicle_papyrus_native_call_set_result(radicle_papyrus_native_cal
   if (call == nullptr || value == nullptr) {
     return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "call and value are required");
   }
-  call->result = radicle_papyrus_value{value->value};
-  return RADICLE_STATUS_OK;
+  return radicle_c_env_detail::guarded("unknown exception while setting a native result", [&] {
+    call->result = radicle_papyrus_value{value->value};
+    return RADICLE_STATUS_OK;
+  });
 }
 
 radicle_status radicle_papyrus_native_call_begin_wait(radicle_papyrus_native_call* call, uint64_t* out_token) {
@@ -725,9 +720,11 @@ radicle_status radicle_papyrus_native_call_begin_wait(radicle_papyrus_native_cal
   if (call->token.has_value()) {
     return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the call already began a wait");
   }
-  call->token = call->runtime->runtime.beginWait();
-  *out_token = *call->token;
-  return RADICLE_STATUS_OK;
+  return radicle_c_env_detail::guarded("unknown exception while beginning a native wait", [&] {
+    call->token = call->runtime->runtime.beginWait();
+    *out_token = *call->token;
+    return RADICLE_STATUS_OK;
+  });
 }
 
 radicle_status radicle_papyrus_native_call_fail(radicle_papyrus_native_call* call, radicle_papyrus_status status) {

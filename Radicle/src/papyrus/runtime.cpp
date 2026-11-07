@@ -462,7 +462,7 @@ bool Runtime::callLatent(const std::string& script, const std::string& function,
                          const std::vector<Value>& args, Status& status, std::uint64_t& token) {
     const Value none = noneValue();
     NativeResult native;
-    if (!callNativeEx(NativeCall{none, script, function, args}, native)) {
+    if (!callNativeEx(NativeCall{none, script, function, args, true}, native)) {
         status = native.status;
         token = 0;
         return false;
@@ -479,14 +479,7 @@ bool Runtime::callNativeEx(const NativeCall& call, NativeResult& result) {
         result.status = Status::FunctionNotFound;
         return false;
     }
-    const bool accepted = registration->invoke ? nativeTargetAccepted(*registration, call.self)
-                                              : registration->kind == NativeTargetKind::Static;
-    if (!accepted) {
-        nativeTargetRefusals_ += 1;
-        result.status = Status::HostError;
-        return false;
-    }
-    if (registration->latent && registration->begin) {
+    if (call.mayPark && registration->latent && !registration->invoke && registration->begin) {
         Status beginStatus = Status::Ok;
         const std::uint64_t token = registration->begin(call.args, beginStatus);
         if (token != 0) {
@@ -494,6 +487,13 @@ bool Runtime::callNativeEx(const NativeCall& call, NativeResult& result) {
             result.latentToken = token;
             return true;
         }
+    }
+    const bool accepted = registration->invoke ? nativeTargetAccepted(*registration, call.self)
+                                              : registration->kind == NativeTargetKind::Static;
+    if (!accepted) {
+        nativeTargetRefusals_ += 1;
+        result.status = Status::HostError;
+        return false;
     }
     if (registration->invoke) return registration->invoke(call, result);
     if (!registration->body) {

@@ -107,18 +107,21 @@ RADICLE_API radicle_status radicle_papyrus_runtime_get_property(const radicle_pa
 RADICLE_API radicle_status radicle_papyrus_runtime_register_remote_event(radicle_papyrus_runtime* runtime, uint64_t instance, radicle_papyrus_owner_kind source_kind, const char* source_base_form_key, const char* source_discriminator, const char* event_name, int64_t* out_handle);
 /* Requires: capacity entries in out_handles and out_instances (either may be null with capacity 0); out_count is the full match count, an owner with no instance reports instance 0. */
 RADICLE_API radicle_status radicle_papyrus_runtime_match_remote_event(const radicle_papyrus_runtime* runtime, radicle_papyrus_owner_kind source_kind, const char* source_base_form_key, const char* source_discriminator, const char* event_name, int64_t* out_handles, uint64_t* out_instances, size_t capacity, size_t* out_count);
+/* Invariant: engine callbacks and runtime calls are single-threaded; a NULL callbacks pointer clears the engine hooks. */
 RADICLE_API radicle_status radicle_papyrus_runtime_set_engine_callbacks(radicle_papyrus_runtime* runtime, const radicle_papyrus_engine_callbacks* callbacks);
-/* Requires: flags is zero or RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT; a native registered without MAY_WAIT cannot begin a wait. */
+/* Requires: flags is zero or RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT; begin_wait is refused on a direct entry, which cannot park, and without the flag. */
 RADICLE_API radicle_status radicle_papyrus_runtime_register_native_ex(radicle_papyrus_runtime* runtime, const char* script, const char* function, radicle_papyrus_native_kind kind, const char* required_script, uint32_t flags);
-/* Invariant: the call and every pointer read from it stay valid only for the callback that receives the call. */
+/* Invariant: the call and every pointer returned by radicle_papyrus_native_call_* stay valid only inside the callback that receives the call. */
 RADICLE_API const radicle_papyrus_object* radicle_papyrus_native_call_self(const radicle_papyrus_native_call* call);
 RADICLE_API const char* radicle_papyrus_native_call_script(const radicle_papyrus_native_call* call);
 RADICLE_API const char* radicle_papyrus_native_call_function(const radicle_papyrus_native_call* call);
 RADICLE_API size_t radicle_papyrus_native_call_arg_count(const radicle_papyrus_native_call* call);
 RADICLE_API const radicle_papyrus_value* radicle_papyrus_native_call_arg(const radicle_papyrus_native_call* call, size_t index);
 RADICLE_API radicle_status radicle_papyrus_native_call_set_result(radicle_papyrus_native_call* call, const radicle_papyrus_value* value);
-/* Requires: the callback returns 1 after a successful begin_wait and the runtime parks the call on the returned token. */
+/* Requires: after a successful begin_wait the callback returns 1, never 0, because the issued token then stays until detach. */
+/* Invariant: when a token and a result are both set, the token wins and the result is ignored. */
 RADICLE_API radicle_status radicle_papyrus_native_call_begin_wait(radicle_papyrus_native_call* call, uint64_t* out_token);
+/* Invariant: a failure takes effect only when the callback returns 0; the status is then the call's failure. */
 RADICLE_API radicle_status radicle_papyrus_native_call_fail(radicle_papyrus_native_call* call, radicle_papyrus_status status);
 
 #ifdef __cplusplus

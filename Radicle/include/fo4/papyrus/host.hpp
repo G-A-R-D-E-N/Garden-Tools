@@ -16,6 +16,7 @@ struct NativeCall {
     const std::string& script;
     const std::string& function;
     const std::vector<Value>& args;
+    bool mayPark{false};
 };
 
 struct NativeResult {

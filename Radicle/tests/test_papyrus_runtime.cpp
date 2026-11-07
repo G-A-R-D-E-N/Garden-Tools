@@ -21,7 +21,6 @@ using fo4::papyrus::NativeRegistration;
 using fo4::papyrus::NativeResult;
 using fo4::papyrus::ObjectRef;
 using fo4::papyrus::kEngineHandleBit;
-using fo4::papyrus::sameName;
 using fo4::papyrus::NativeTargetKind;
 using fo4::papyrus::OnInitArrivalPolicy;
 using fo4::papyrus::OwnerId;
@@ -136,7 +135,7 @@ TEST_F(RuntimeTest, AttachInitializesOnceAndRunsAnEvent) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const OwnerId owner = OwnerId::forForm("000800:Actor.esp");
   const auto instance = runtime().attach("Actor", owner);
   ASSERT_TRUE(instance.has_value());
@@ -183,7 +182,7 @@ TEST_F(RuntimeTest, AnEventDuringOnInitIsRefusedOrQueuedByPolicy) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000802:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   InstanceId id = *instance;
@@ -198,7 +197,7 @@ TEST_F(RuntimeTest, AnEventDuringOnInitIsRefusedOrQueuedByPolicy) {
                            return true;
                          },
                          false,
-                         {}});
+                         {}, {}});
   EXPECT_EQ(runtime().initialize(id), Status::Ok);
   EXPECT_EQ(observed, Status::GateRefused);
   EXPECT_GT(runtime().refusedEvents(), 0);
@@ -244,7 +243,7 @@ TEST_F(RuntimeTest, ALatentNativeSuspendsAndResumesExactlyOnce) {
       "Waiter", "Wait",
       NativeRegistration{NativeTargetKind::Static, "", {},
                          true,
-                         [](const std::vector<Value>&, Status&) { return std::uint64_t{7}; }});
+                         [](const std::vector<Value>&, Status&) { return std::uint64_t{7}; }, {}});
   runtime().registerNative(
       "Hook", "Hit",
       NativeRegistration{NativeTargetKind::Static, "",
@@ -256,7 +255,7 @@ TEST_F(RuntimeTest, ALatentNativeSuspendsAndResumesExactlyOnce) {
                            return true;
                          },
                          false,
-                         {}});
+                         {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000805:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -289,7 +288,7 @@ TEST_F(RuntimeTest, NativeRegistryRefusesAnUnknownNativeAndEnforcesRequiredScrip
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000806:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -315,7 +314,7 @@ TEST_F(RuntimeTest, OverridesHandleDeclineAndRefuseBeforeBytecode) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000807:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -366,7 +365,7 @@ TEST_F(RuntimeTest, GotoStateChangesTheStateTheNextEventDispatchesIn) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000808:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -533,7 +532,7 @@ TEST_F(RuntimeTest, NativeStartsWaitAtCallTime) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   const auto instance = runtime().attach("Actor", OwnerId::forForm("000813:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
@@ -579,7 +578,7 @@ TEST_F(RuntimeTest, EngineObjectPropertyGetSet) {
                                                 return true;
                                               },
                                               false,
-                                              {}});
+                                              {}, {}});
   EngineObjectHooks hooks;
   hooks.get = [&getHandle](const ObjectRef& object, const std::string&, Value& out, Status&) {
     getHandle = object.handle;

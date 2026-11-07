@@ -244,7 +244,7 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     if (target.empty() && script != nullptr) target = script->name;
 
     NativeResult native;
-    if (host_.callNativeEx(NativeCall{self, target, functionName, args}, native)) {
+    if (host_.callNativeEx(NativeCall{self, target, functionName, args, true}, native)) {
         if (native.latentToken != 0) return suspendLatent(destination, native.latentToken, functionName);
         return storeResult(frame, destination, native.value);
     }
