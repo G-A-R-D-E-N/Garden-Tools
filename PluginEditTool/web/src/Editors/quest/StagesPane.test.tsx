@@ -16,11 +16,11 @@ it('Detects: a log entry offers no Conditions editor, because native rejects Sta
   expect(screen.queryByRole('button', { name: /Conditions/ })).toBeNull();
 });
 
-it('Detects: the Stages pane warns that saving can remove log-entry conditions this screen cannot show', async () => {
+it('Detects: the Stages pane says log-entry conditions are kept when you save and that this screen cannot edit them', async () => {
   stubBackend();
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
-  expect(await screen.findByText(/cannot show log-entry conditions yet/)).toBeTruthy();
+  expect(await screen.findByText(/Log-entry conditions are kept when you save/)).toBeTruthy();
 });
 
 it('Detects: clicking a flow chart box highlights that stage card, so the chart and the stage list stay in step', async () => {
