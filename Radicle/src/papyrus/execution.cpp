@@ -38,7 +38,7 @@ Result Interpreter::startFunction(const std::string& scriptName, const std::stri
     if (function->isNative) {
         const Value none = noneValue();
         NativeResult native;
-        if (!host_.callNativeEx(NativeCall{none, object->name, function->name, args}, native)) {
+        if (!host_.callNativeEx(NativeCall{none, object->name, function->name, args, false}, native)) {
             failed.status = native.status == Status::Ok ? Status::FunctionNotFound : native.status;
             return failed;
         }
@@ -92,7 +92,7 @@ Result Interpreter::startFunction(const Value& self, const std::string& function
     }
     if (function->isNative) {
         NativeResult native;
-        if (!host_.callNativeEx(NativeCall{self, object->name, function->name, args}, native)) {
+        if (!host_.callNativeEx(NativeCall{self, object->name, function->name, args, false}, native)) {
             failed.status = native.status == Status::Ok ? Status::FunctionNotFound : native.status;
             return failed;
         }

@@ -446,7 +446,7 @@ bool Runtime::callNative(const std::string& script, const std::string& function,
                          const std::vector<Value>& args, Value& out, Status& status) {
     const Value none = noneValue();
     NativeResult native;
-    if (!callNativeEx(NativeCall{none, script, function, args}, native)) {
+    if (!callNativeEx(NativeCall{none, script, function, args, false}, native)) {
         status = native.status;
         return false;
     }

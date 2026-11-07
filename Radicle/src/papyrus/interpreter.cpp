@@ -156,7 +156,7 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
             return nativeResult;
         }
         NativeResult native;
-        if (!host_.callNativeEx(NativeCall{self, object->name, function.name, args}, native)) {
+        if (!host_.callNativeEx(NativeCall{self, object->name, function.name, args, false}, native)) {
             nativeResult.status = native.status == Status::Ok ? Status::FunctionNotFound : native.status;
             return nativeResult;
         }
