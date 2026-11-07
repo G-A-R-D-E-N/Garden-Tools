@@ -2810,6 +2810,8 @@ On 2026-10-31 a full run took 46 minutes of test time on 12 threads: `CheckError
 
 `CApiRuntimeReal.ReplaysTheSevenProgramsDeterministically` joined that list on 2026-10-31 for a different reason. It is the #807 Pip-Boy acceptance test and it fails on `nomad/dev` until #807 lands, so it turned the real-data check red on every PR, whatever the PR changed. A PR now runs it only when a changed path matches `/avm2/`, `/swf/`, `c_api_runtime` or `c_api_swf`. Pushes to `main` and `nomad/dev` still run it, so those runs stay red until #807 is fixed. Once #807 lands, take it off the list if it should gate every PR again.
 
+On 2026-11-06 three more long tests were path-gated, because they run on every PR: `AnimTextDataRealData.EveryShippedTextTableRebuildsByteForByte` (730-1022 s) on a change to `anim_text_data` (its test file and `Radicle/src/anim/anim_text_data.cpp`) or `/archive/ba2`, which it reads through; `CheckErrorsReal.VanillaLoadOrderBaselineIsPinned` (360-990 s) on `/graph/`, `check_errors` (its test file) or `plugin/reader.`, which loads the seven masters; and `NifCorpus.` (two tests, 230-360 s each) on `/nif/`, `/archive/` or `nif_corpus`. Pushes to `main` and `nomad/dev` still run all of them. The step's ctest `--parallel` is `CTEST_PARALLEL_LEVEL` when set (the VM's `worker.env` sets it) and 6 otherwise. Note that a core path still writes `CTEST_EXCLUDE_REGEX` for the slow tests it does not name, so the core paragraph above does not hold for them; a change to `Radicle/src/plugin/reader.cpp` skips `NifCorpus.` and `AnimTextDataRealData.` on a PR.
+
 ## Radicle/src/avm2/interpreter_dispatch_b.inc:k_newclass
 
 `newclass` now pops its base class value, as the AVM2 spec requires. It used to leave that value on the stack, so an interface's null base became the target of the following `initproperty`: `cannot write bhvr.interfaces::IExternalCommunication on null`. `Radicle/tests/test_c_api_runtime_real.cpp:ReplaysTheSevenProgramsDeterministically` reached this on real Programs. That test is still failing: it is the #807 R8 acceptance gate and the next stop is `aze.motion.specials::PropertyTint.register`.
@@ -3074,7 +3076,7 @@ On 2026-11-02 the service process ended after a run without logging why, and the
 
 ## ci/real-data-service/real_data_service.py:run_pass — plan the whole pass, then run due heads
 
-`run_pass` plans every target first. Earlier and not-affected heads get their `success` at once, and the due ones are collected in `order`. `clear_stale_queue` then clears queued labels on heads that are no longer due, and `post_queue` marks each waiting head `pending` "queued (position N of M)", so a head shows its place from the start of the pass instead of nothing until its turn. Jobs run one at a time. After each job, `post_queue` is called for the heads still waiting, so their numbers count down. A head that moved during the pass is skipped by `prepare_checkout`, because the merge ref or `nomad/dev` head no longer matches; it stays due and is planned again on a later pass.
+`run_pass` plans every target first. Earlier and not-affected heads get their `success` at once, and the due ones are collected in `order`. `clear_stale_queue` then clears queued labels on heads that are no longer due, and `post_queue` marks each waiting head `pending` "queued (position N of M)", so a head shows its place from the start of the pass instead of nothing until its turn. Local jobs run one at a time, and `post_queue` is called after each pop of the shared list (see `run_due`), so the heads still waiting count down. A head that moved during the pass is skipped by `prepare_checkout`, because the merge ref or `nomad/dev` head no longer matches; it stays due and is planned again on a later pass.
 
 ## ci/real-data-service/real_data_service.py:post_queue — queued position text
 
@@ -3119,3 +3121,61 @@ The "public CI sync not started" warning carries gh's reason through `failure_te
 ## ci/real-data-service/test_real_data_service.py:RetryTest — retries and scrubbed stderr
 
 `test_a_failed_read_is_retried_and_its_stderr_is_logged` detects one transient `gh api` failure ending a target's pass with no status and no reason logged. `test_a_read_gives_up_after_three_attempts` detects an unbounded retry loop. `test_a_status_post_is_tried_at_most_twice` detects a status POST retried without a limit. `test_public_sync_is_tried_once_and_its_warning_has_scrubbed_stderr` detects a dispatch retried, which could start a second sync, and a sync warning that drops gh's reason or leaks the user name or a URL.
+
+## ci/real-data-service/real_data_service.py:run_due — one queue, one thread per worker
+
+`run_pass` builds `due` as before and posts the queue, then `run_due` starts a thread for each worker: `Worker("local")` and every entry of `workers.json`. A thread pops the first due head it has not declined, under one lock, and re-posts `queued (position N of M)` for the heads still waiting, in the same critical section, so positions never repeat. The list stays newest-first. A VM worker that declines a head (`run_target_remote` returns `False`) puts it back at its original rank, and that worker skips it for the rest of the pass. If the local thread has already finished, a declined head waits for the next pass (about two minutes); the pool does not wait for it. `prune_logs` runs once after the pool, so two threads never prune at the same time.
+
+## ci/real-data-service/real_data_service.py:load_workers — the optional workers.json
+
+`ROOT\workers.json` lists `{name, ssh, root}` objects. `ssh` is the argv that runs one remote command; for the VM it is the PC's ssh to garden-ci-1 followed by garden-ci-1's ssh to the VM, and the service appends the remote words. `~` in each argv item is expanded once, at load time. `root` is stored with forward slashes and no trailing slash, because the VM command passes through two ssh shells and backslashes do not survive them. No file means the local worker alone, the same as before. The file is read on every pass.
+
+## ci/real-data-service/real_data_service.py:git — one lock for git on REPO_DIR
+
+`GIT_LOCK` is an `RLock`, so `fetch_candidate` can hold it across its fetch and its merge-ref check, while `git()` takes it for every call. That covers the local checkout, `workflow_file`, the VM bundle and the sent ref. The local job's own git calls (its `fetch --depth=1` of the base branch, and the `git diff FETCH_HEAD HEAD` that picks the changed paths) run in the child process outside the lock. The VM fetch passes `--no-write-fetch-head`, so it cannot overwrite `FETCH_HEAD` between those two commands.
+
+## ci/real-data-service/real_data_service.py:fetch_candidate — merge-ref check per candidate ref
+
+`fetch_candidate(t, ref_name)` fetches the PR merge ref (or the `nomad/dev` head) into `ref_name` and reports whether the merge's second parent, or the dev head, is still the head that was listed. `prepare_checkout` uses `refs/real-data/candidate`; a VM worker uses `refs/real-data/candidate-<name>`, so a VM fetch never moves the candidate the local worktree is built from.
+
+## ci/real-data-service/real_data_service.py:run_target_remote — VM runs: decline, unreachable, retry
+
+The checks run in this order. The base name must match `SAFE_BASE` (letters, digits, `._/-`), because it goes on a command line that two shells parse; any other name is declined. The merge ref must be current, as for the local worker. `git ls-tree` must find the workflow file in the candidate; a missing file is declined, so the local worker runs it with its `nomad/dev` fallback. A declined head gets no status. Otherwise the head gets `pending` "running on the vm data runner".
+
+An ssh exit of 255 (connection lost, or the transfer failed to connect) posts `error` "vm data runner unreachable", and the worker sleeps `POLL * 5` before taking more work. An exit of 97 means `run_remote.ps1` could not fetch the bundle: the sent ref is deleted and the whole history is sent once more. A second 97 posts `error` "vm data runner fetch failed". Both error texts are in `RETRY_ERRORS`, so `plan` treats such a head as due again. Other transfer failures raise and are logged; the head keeps its `pending` status until the next pass plans it again.
+
+## ci/real-data-service/real_data_service.py:REMOTE_DIR — a full clone for VM bundles
+
+`ROOT/repo` is shallow, because the Select step's `git fetch --depth=1` in older workflows leaves boundary commits in `.git/shallow`. A bundle cut from it fails on the VM with "did not send all necessary objects" (checked against the live repo on 2026-11-06). So remote workers fetch, check, bundle and record `sent-<name>` in `ROOT/remote.git`, a bare clone that nothing fetches with `--depth`. `test_remote_git_runs_in_the_full_history_repo` pins that every remote git call uses it.
+
+## ci/real-data-service/real_data_service.py:EXIT_MARK — exit codes from the VM
+
+The VM's OpenSSH default shell is Windows PowerShell, and `powershell -Command` returns 1 for any failing native command. So an `exit 97` from `run_remote.ps1` arrived as 1 (checked 2026-11-06 with `cmd /c exit 97` over the host-to-VM ssh). `run_remote.ps1` prints `REAL_DATA_EXIT=<code>` before every exit, and `run_remote` takes the last such line over the ssh exit code. An ssh exit of 255 comes from the local client and is still checked first. `test_exit_code_comes_from_the_marker_when_the_shell_flattens_it` pins it.
+
+## .github/workflows/native-real-data.yml:Select real-data tests — base from the merge commit
+
+The service checks out `refs/pull/<n>/merge`, whose first parent is the base tip. When `HEAD^2` exists, the step diffs against `HEAD^1` and fetches nothing. That works on the VM, which has no `origin`, and it stops shallowing the PC repo. A commit that is not a merge falls back to fetching the base, as before.
+
+## ci/real-data-service/real_data_service.py:run_remote — what is bundled, and when sent moves
+
+The bundle holds `refs/real-data/candidate-<name>`. It is incremental, `^refs/real-data/sent-<name>`, when that ref exists and names a different commit, because git refuses an empty bundle. A commit the VM already has gets a full bundle. The sent ref moves to the candidate only after `run_remote.ps1` printed `REAL_DATA_FETCHED`, which means the VM has the objects. The check runs after the job exits, including after a superseded or timed-out job, since the VM fetched in each case. The transfer is `tar cf -` piped into `tar xf -` on the VM, which does not translate line endings.
+
+## ci/real-data-service/real_data_service.py:stop_remote — superseded or timed-out VM runs
+
+Killing the local ssh client does not stop the VM job. `stop_remote` also runs `powershell -EncodedCommand`: the script reads `run.pid` and kills that process tree only when its command line contains `run_remote`. The script goes over the wire as base64 of UTF-16LE, so no quoting has to survive the two shells. `run_remote.ps1` applies the same check before it cleans the repo, so a job orphaned by a lost connection is stopped before the next run starts.
+
+## ci/real-data-service/real_data_service.py:start_remote — the VM command line
+
+The command is `run_remote.ps1` with forward-slash paths under `<root>`: `-Bundle <root>/incoming/<name>.bundle`, `-Ref`, `-Event` (`pull_request` or `push`), and `-BaseRef` only when the base is not empty, because an empty argument disappears in the nested shells. Its output goes to `LOG_DIR\<sha>.log`, as the local job's does.
+
+## ci/real-data-service/run_remote.ps1:param — the VM script
+
+It runs on the VM with `-Root` defaulting to `C:/ci/real-data`. It first stops a run whose pid in `run.pid` is still a `run_remote` process. It fetches the bundle into `repo` (created with `git init` if missing) as `refs/real-data/candidate`; if git cannot, it exits 97, the code the service retries on. It prints `REAL_DATA_FETCHED`, cleans like the local worker (`clean -ffdx -e /build/`, remove `build/zlib-src`), checks out the candidate detached and writes `run.pid`. It loads `worker.env` and exits 1 when `FO4_DATA_DIR` is unset, because the real-data tests would skip and pass. It runs `run_real_data.ps1` on the repo's workflow file with `$ErrorActionPreference = 'Continue'`, so native stderr does not stop it.
+
+## ci/real-data-service/real_data_service.py:plan — error statuses that are due again
+
+Before, only `error` "superseded" was due again. `error` "vm data runner unreachable" and `error` "vm data runner fetch failed" are due too, so a lost VM connection never leaves a head failed for good.
+
+## ci/real-data-service/test_real_data_service.py:RemoteTest — VM tests with fakes
+
+`RemoteTest` replaces git, `fetch_candidate`, `current_head`, `send_bundle` and `subprocess.run`, so no test reaches ssh or taskkill. `WorkerPoolTest` runs a local and a VM job that both wait on one barrier, so a serial pool times out the barrier and fails the test.

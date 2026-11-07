@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import ctypes
 import json
 import logging
@@ -30,11 +31,12 @@ EXCLUDED_PREFIXES = ("Radicle/docs/",)
 EXCLUDED_SUFFIXES = (".md",)
 ROOT = Path(r"C:\ci\real-data")
 REPO_DIR = ROOT / "repo"
+REMOTE_DIR = ROOT / "remote.git"  # full history: bundles from the shallow REPO_DIR are incomplete
 LOG_DIR = ROOT / "logs"
 LOCK = ROOT / "run.lock"
 QUEUED = ROOT / "queued.json"
 RUNNER_ENV = Path(r"C:\tools\github-runner\fo4-data\.env")
-RUNNER_KEYS = ("FO4_DATA_DIR", "CMAKE_BUILD_PARALLEL_LEVEL", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA",
+RUNNER_KEYS = ("FO4_DATA_DIR", "CMAKE_BUILD_PARALLEL_LEVEL", "CTEST_PARALLEL_LEVEL", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA",
                "TEMP", "TMP")
 RUN_SCRIPT = Path(__file__).resolve().with_name("run_real_data.ps1")
 TIMEOUT = 3 * 3600
@@ -52,6 +54,16 @@ GH = "gh"
 SUMMARY = re.compile(r"(\d+) tests? failed out of (\d+)")
 FAILED_SECTION = "The following tests FAILED:"
 FAILED = re.compile(r"(\d+) - (.+?) \(([A-Za-z][A-Za-z ]*)\)[ \t\r]*$", re.M)
+CANDIDATE = "refs/real-data/candidate"
+FETCHED = "REAL_DATA_FETCHED"
+EXIT_MARK = re.compile(r"^REAL_DATA_EXIT=(\d+)\s*$", re.M)  # the VM shell turns every failing exit code into 1
+FETCH_FAILED = 97
+UNREACHABLE = 255
+UNREACHABLE_TEXT = "vm data runner unreachable"
+FETCH_FAILED_TEXT = "vm data runner fetch failed"
+RETRY_ERRORS = ("superseded", UNREACHABLE_TEXT, FETCH_FAILED_TEXT)
+SAFE_BASE = re.compile(r"[A-Za-z0-9._/-]*")
+GIT_LOCK = threading.RLock()  # every service git call takes this; the local job's own git does not
 
 
 @dataclass(frozen=True)
@@ -63,6 +75,17 @@ class Target:
     number: int | None = None
     parent: str = ""
     draft: bool = False
+
+
+@dataclass(frozen=True)
+class Worker:
+    name: str
+    ssh: tuple | None = None
+    root: str = ""
+
+
+class Unreachable(Exception):
+    pass
 
 
 def run_command(cmd, attempts, cwd=None):
@@ -82,7 +105,8 @@ def gh(*args, attempts=READ_ATTEMPTS):
 
 
 def git(*args, cwd=None, attempts=1):
-    return run_command(["git", *args], attempts, cwd or REPO_DIR)
+    with GIT_LOCK:
+        return run_command(["git", *args], attempts, cwd or REPO_DIR)
 
 
 def runner_env():
@@ -164,7 +188,7 @@ def plan(t):
     if t.draft:
         return "draft"
     state, description = latest_status(t.sha)
-    if state not in (None, "pending") and (state, description) != ("error", "superseded"):
+    if state not in (None, "pending") and not (state == "error" and description in RETRY_ERRORS):
         return "done"
     if passed_earlier(t.sha):
         return "earlier"
@@ -249,19 +273,25 @@ def remove_tree(path):
         shutil.rmtree(path, onexc=retry_writable)
 
 
-def prepare_checkout(t):
-    if not (REPO_DIR / ".git").exists():
-        ROOT.mkdir(parents=True, exist_ok=True)
-        git("clone", "--no-checkout", REPO_URL, str(REPO_DIR), cwd=ROOT)
+def fetch_candidate(t, ref_name, repo=None):
     ref = f"refs/pull/{t.number}/merge" if t.number else f"refs/heads/{DEV_BRANCH}"
-    git("fetch", "--no-tags", "origin", f"+{ref}:refs/real-data/candidate", attempts=READ_ATTEMPTS)
-    commit, *parents = git("rev-list", "--parents", "-n", "1", "refs/real-data/candidate").split()
-    current = parents[1:] == [t.sha] if t.number else commit == t.sha
-    if not current:
+    repo = repo or REPO_DIR
+    with GIT_LOCK:
+        if not (repo / ("HEAD" if repo == REMOTE_DIR else ".git")).exists():
+            ROOT.mkdir(parents=True, exist_ok=True)
+            git("clone", "--bare" if repo == REMOTE_DIR else "--no-checkout", REPO_URL, str(repo), cwd=ROOT)
+        git("fetch", "--no-tags", "--no-write-fetch-head", "origin", f"+{ref}:{ref_name}", cwd=repo,
+            attempts=READ_ATTEMPTS)
+        commit, *parents = git("rev-list", "--parents", "-n", "1", ref_name, cwd=repo).split()
+        return parents[1:] == [t.sha] if t.number else commit == t.sha
+
+
+def prepare_checkout(t):
+    if not fetch_candidate(t, CANDIDATE):
         return False
     git("clean", "-ffdx", "-e", "/build/")
     remove_tree(REPO_DIR / "build" / "zlib-src")
-    git("checkout", "-f", "--detach", "refs/real-data/candidate")
+    git("checkout", "-f", "--detach", CANDIDATE)
     return True
 
 
@@ -291,20 +321,37 @@ def kill_tree(proc):
     proc.wait()
 
 
-def wait_job(t, proc):
+def wait_job(t, proc, stop):
     deadline = time.monotonic() + TIMEOUT
     while True:
         try:
             return proc.wait(timeout=POLL)
         except subprocess.TimeoutExpired:
             if head_moved(t):
-                kill_tree(proc)
+                stop(proc)
                 post(t.sha, "error", "superseded")
                 return None
             if time.monotonic() > deadline:
-                kill_tree(proc)
+                stop(proc)
                 post(t.sha, "error", "timed out")
                 return None
+
+
+def finish_job(t, proc, stop):
+    try:
+        return wait_job(t, proc, stop)
+    finally:
+        if proc.poll() is None:
+            stop(proc)
+
+
+def report(t, log_path, rc):
+    if current_head(t) != t.sha:
+        post(t.sha, "error", "superseded")
+        return
+    state, text = outcome(log_path.read_text(encoding="utf-8", errors="replace"), rc)
+    logging.info("%s %s: %s", t.name, t.sha[:12], text)
+    post(t.sha, state, text)
 
 
 def run_target(t):
@@ -315,21 +362,141 @@ def run_target(t):
     post(t.sha, "pending", "running on the local data runner")
     log_path = LOG_DIR / f"{t.sha}.log"
     logging.info("%s %s: running", t.name, t.sha[:12])
-    proc = start_job(t, log_path, workflow)
+    rc = finish_job(t, start_job(t, log_path, workflow), kill_tree)
+    if rc is not None:
+        report(t, log_path, rc)
+
+
+def send_bundle(worker, bundle):
+    tar = subprocess.Popen(["tar", "cf", "-", "-C", str(bundle.parent), bundle.name], stdout=subprocess.PIPE)
     try:
-        rc = wait_job(t, proc)
+        sent = subprocess.run([*worker.ssh, "tar", "xf", "-", "-C", f"{worker.root}/incoming"], stdin=tar.stdout,
+                              capture_output=True)
     finally:
-        if proc.poll() is None:
-            kill_tree(proc)
-    prune_logs()
-    if rc is None:
-        return
-    if current_head(t) != t.sha:
-        post(t.sha, "error", "superseded")
-        return
-    state, text = outcome(log_path.read_text(encoding="utf-8", errors="replace"), rc)
-    logging.info("%s %s: %s", t.name, t.sha[:12], text)
-    post(t.sha, state, text)
+        tar.stdout.close()
+        tar_code = tar.wait()
+    if sent.returncode == UNREACHABLE:
+        raise Unreachable()
+    if sent.returncode or tar_code:
+        raise RuntimeError(f"bundle transfer failed (ssh {sent.returncode}, tar {tar_code})")
+
+
+def start_remote(worker, t, log_path, bundle_name):
+    args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", f"{worker.root}/service/run_remote.ps1",
+            "-Bundle", f"{worker.root}/incoming/{bundle_name}", "-Ref", f"refs/real-data/candidate-{worker.name}",
+            "-Event", "pull_request" if t.number else "push", "-Root", worker.root]
+    if t.base:
+        args += ["-BaseRef", t.base]
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8", errors="replace") as log:
+        return subprocess.Popen([*worker.ssh, *args], stdout=log, stderr=subprocess.STDOUT)
+
+
+def stop_remote(worker, proc):
+    kill_tree(proc)
+    pid = f"$(Get-Content -LiteralPath {worker.root}/run.pid)"
+    script = (f'$p = Get-CimInstance Win32_Process -Filter "ProcessId={pid}"; '
+              "if ($p.CommandLine -match 'run_remote') { taskkill /T /F /PID $p.ProcessId }")
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    subprocess.run([*worker.ssh, "powershell", "-NoProfile", "-EncodedCommand", encoded], capture_output=True)
+
+
+def run_remote(t, worker, log_path):
+    ref = f"refs/real-data/candidate-{worker.name}"
+    sent_ref = f"refs/real-data/sent-{worker.name}"
+    candidate = git("rev-parse", ref, cwd=REMOTE_DIR).strip()
+    sent = git("for-each-ref", "--format=%(objectname)", sent_ref, cwd=REMOTE_DIR).strip()
+    bundle = ROOT / "bundles" / f"{worker.name}.bundle"
+    bundle.parent.mkdir(parents=True, exist_ok=True)
+    git("bundle", "create", str(bundle), ref, *([f"^{sent}"] if sent and sent != candidate else []), cwd=REMOTE_DIR)
+    send_bundle(worker, bundle)
+    rc = finish_job(t, start_remote(worker, t, log_path, bundle.name), lambda proc: stop_remote(worker, proc))
+    text = log_path.read_text(encoding="utf-8", errors="replace")
+    if FETCHED in text:
+        git("update-ref", sent_ref, candidate, cwd=REMOTE_DIR)
+    if rc == UNREACHABLE:
+        raise Unreachable()
+    marks = EXIT_MARK.findall(text)
+    return int(marks[-1]) if rc is not None and marks else rc
+
+
+def run_target_remote(t, worker):
+    ref = f"refs/real-data/candidate-{worker.name}"
+    if not SAFE_BASE.fullmatch(t.base):
+        logging.info("%s %s: base %s needs the local runner", t.name, t.sha[:12], t.base)
+        return False
+    if not fetch_candidate(t, ref, REMOTE_DIR):
+        logging.info("%s %s: merge ref not current; left due", t.name, t.sha[:12])
+        return None
+    if not git("ls-tree", "--name-only", ref, "--", WORKFLOW, cwd=REMOTE_DIR).strip():
+        logging.info("%s %s: no workflow in the commit; left for the local runner", t.name, t.sha[:12])
+        return False
+    post(t.sha, "pending", f"running on the {worker.name} data runner")
+    log_path = LOG_DIR / f"{t.sha}.log"
+    logging.info("%s %s: running on %s", t.name, t.sha[:12], worker.name)
+    try:
+        rc = run_remote(t, worker, log_path)
+        if rc == FETCH_FAILED:
+            logging.warning("%s %s: %s lacks the previous commit; sending full history", t.name, t.sha[:12],
+                            worker.name)
+            git("update-ref", "-d", f"refs/real-data/sent-{worker.name}", cwd=REMOTE_DIR)
+            rc = run_remote(t, worker, log_path)
+    except Unreachable:
+        logging.warning("%s %s: %s unreachable", t.name, t.sha[:12], worker.name)
+        post(t.sha, "error", UNREACHABLE_TEXT)
+        time.sleep(POLL * 5)
+        return None
+    if rc == FETCH_FAILED:
+        post(t.sha, "error", FETCH_FAILED_TEXT)
+    elif rc is not None:
+        report(t, log_path, rc)
+    return None
+
+
+def load_workers():
+    path = ROOT / "workers.json"
+    if not path.exists():
+        return []
+    return [Worker(item["name"], tuple(os.path.expanduser(arg) for arg in item["ssh"]),
+                   item["root"].replace("\\", "/").rstrip("/"))
+            for item in json.loads(path.read_text(encoding="utf-8"))]
+
+
+def run_one(worker, t):
+    if worker.ssh is None:
+        return run_target(t)
+    return run_target_remote(t, worker)
+
+
+def run_due(due, queued, workers):
+    pending = list(due)
+    rank = {t.name: index for index, t in enumerate(due)}
+    lock = threading.Lock()
+
+    def work(worker):
+        declined = set()
+        while True:
+            with lock:
+                t = next((item for item in pending if item.name not in declined), None)
+                if t is None:
+                    return
+                pending.remove(t)
+                post_queue(pending, queued)
+            try:
+                if run_one(worker, t) is False:
+                    declined.add(t.name)
+                    with lock:
+                        pending.append(t)
+                        pending.sort(key=lambda item: rank[item.name])
+                        post_queue(pending, queued)
+            except Exception:
+                logging.exception("%s: failed for this target", t.name)
+
+    threads = [threading.Thread(target=work, args=(worker,)) for worker in workers]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
 
 
 def pid_alive(pid):
@@ -406,12 +573,8 @@ def run_pass(dry_run=False):
         if not dry_run:
             clear_stale_queue({t.sha for t in targets if not t.draft}, queued)
             post_queue(due, queued)
-        for index, t in enumerate(due):
-            try:
-                run_target(t)
-            except Exception:
-                logging.exception("%s: failed for this target", t.name)
-            post_queue(due[index + 1:], queued)
+            run_due(due, queued, [Worker("local"), *load_workers()])
+            prune_logs()
     finally:
         if not dry_run:
             release_lock()
