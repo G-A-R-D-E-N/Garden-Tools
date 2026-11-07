@@ -68,6 +68,14 @@ struct NativeRegistration {
     // Invariant: a latent registration returns a token above zero from begin; completeLatent resumes it.
     bool latent{false};
     std::function<std::uint64_t(const std::vector<Value>& args, Status& status)> begin;
+    std::function<bool(const NativeCall& call, NativeResult& result)> invoke;
+};
+
+inline constexpr std::uint64_t kEngineHandleBit = std::uint64_t{1} << 63;
+
+struct EngineObjectHooks {
+    std::function<bool(const ObjectRef& object, const std::string& name, Value& out, Status& status)> get;
+    std::function<bool(const ObjectRef& object, const std::string& name, const Value& value, Status& status)> set;
 };
 
 using InstanceId = std::uint64_t;
@@ -105,6 +113,7 @@ public:
 
     void setGate(std::function<bool(std::string_view)> gate);
     void setOnInitArrivalPolicy(OnInitArrivalPolicy policy);
+    void setEngineObjectHooks(EngineObjectHooks hooks);
     void setMaxParksPerEvent(std::int32_t parks) { maxParksPerEvent_ = parks; }
     void addScript(const pex::PexObject* object);
 
@@ -140,6 +149,7 @@ public:
     Status sendEvent(InstanceId instance, const std::string& function, std::vector<Value> args = {});
     SchedulerStepResult runStep(std::int32_t budget);
     bool completeLatent(std::uint64_t token, const Value& value);
+    std::uint64_t beginWait();
 
     void registerNative(std::string script, std::string function, NativeRegistration registration);
     bool tryRegisterNative(std::string script, std::string function, NativeRegistration registration);
@@ -210,12 +220,15 @@ private:
                     const std::vector<Value>& args, Value& out, Status& status) override;
     bool callLatent(const std::string& script, const std::string& function,
                     const std::vector<Value>& args, Status& status, std::uint64_t& token) override;
+    bool callNativeEx(const NativeCall& call, NativeResult& result) override;
     bool setState(ObjectRef& object, const std::string& state, Status& status) override;
     bool gate(std::string_view key) override;
 
     Instance* findInstance(InstanceId instance);
     const Instance* findInstance(InstanceId instance) const;
     Instance* instanceFor(const ObjectRef& object);
+    bool nativeTargetAccepted(const NativeRegistration& registration, const Value& self) const;
+    bool scriptInherits(const std::string& script, const std::string& ancestor) const;
     OverrideResult tryOverride(const Instance& instance, const std::string& function,
                                const std::vector<Value>& args);
     const NativeRegistration* findNative(const std::string& script, const std::string& function,
@@ -239,6 +252,10 @@ private:
     std::vector<Execution> ready_;
     std::map<std::uint64_t, Waiting> waiting_;
     std::map<std::uint64_t, bool> usedTokens_;
+    std::uint64_t nextToken_{1};
+    std::set<std::uint64_t> issued_;
+    std::map<std::uint64_t, Value> early_;
+    EngineObjectHooks engineHooks_;
     RegistrationRegistry registrations_;
     OwnerRegistry owners_;
     std::int32_t completedEvents_{0};

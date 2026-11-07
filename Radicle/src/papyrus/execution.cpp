@@ -36,13 +36,17 @@ Result Interpreter::startFunction(const std::string& scriptName, const std::stri
         return failed;
     }
     if (function->isNative) {
-        Value out;
-        Status status = Status::Ok;
-        if (!host_.callNative(object->name, function->name, args, out, status)) {
-            failed.status = status == Status::Ok ? Status::FunctionNotFound : status;
+        const Value none = noneValue();
+        NativeResult native;
+        if (!host_.callNativeEx(NativeCall{none, object->name, function->name, args}, native)) {
+            failed.status = native.status == Status::Ok ? Status::FunctionNotFound : native.status;
             return failed;
         }
-        failed.status = coerce(out, function->returnType, failed.value);
+        if (native.latentToken != 0) {
+            failed.status = Status::HostError;
+            return failed;
+        }
+        failed.status = coerce(native.value, function->returnType, failed.value);
         return failed;
     }
     const Value self = objectValue(0, object->name, state);
@@ -87,13 +91,16 @@ Result Interpreter::startFunction(const Value& self, const std::string& function
         return failed;
     }
     if (function->isNative) {
-        Value out;
-        Status status = Status::Ok;
-        if (!host_.callNative(object->name, function->name, args, out, status)) {
-            failed.status = status == Status::Ok ? Status::FunctionNotFound : status;
+        NativeResult native;
+        if (!host_.callNativeEx(NativeCall{self, object->name, function->name, args}, native)) {
+            failed.status = native.status == Status::Ok ? Status::FunctionNotFound : native.status;
             return failed;
         }
-        failed.status = coerce(out, function->returnType, failed.value);
+        if (native.latentToken != 0) {
+            failed.status = Status::HostError;
+            return failed;
+        }
+        failed.status = coerce(native.value, function->returnType, failed.value);
         return failed;
     }
     const Status pushed = pushFrame(owner, *function, state, self, pex::PexValue{}, args);

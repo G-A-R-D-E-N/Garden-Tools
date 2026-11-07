@@ -193,8 +193,10 @@ const Runtime::Instance* Runtime::findInstance(InstanceId instance) const {
 }
 
 Runtime::Instance* Runtime::instanceFor(const ObjectRef& object) {
+    if ((object.handle & kEngineHandleBit) != 0) return nullptr;
     const auto found = instances_.find(object.handle);
-    return found == instances_.end() ? nullptr : &found->second;
+    if (found == instances_.end() || !sameName(found->second.script, object.type)) return nullptr;
+    return &found->second;
 }
 
 Status Runtime::initialize(InstanceId instance) {
@@ -409,6 +411,13 @@ bool Runtime::setVariable(const ObjectRef& object, const std::string& name, cons
 
 bool Runtime::getProperty(const ObjectRef& object, const std::string& name, Value& out,
                           Status& status) {
+    if ((object.handle & kEngineHandleBit) != 0) {
+        if (!engineHooks_.get) {
+            status = Status::UnknownIdentifier;
+            return false;
+        }
+        return engineHooks_.get(object, name, out, status);
+    }
     Instance* instance = instanceFor(object);
     if (instance == nullptr) {
         status = Status::UnknownIdentifier;
@@ -425,9 +434,9 @@ bool Runtime::getProperty(const ObjectRef& object, const std::string& name, Valu
 
 bool Runtime::setProperty(const ObjectRef& object, const std::string& name, const Value& value,
                           Status& status) {
-    (void)object;
-    (void)name;
-    (void)value;
+    if ((object.handle & kEngineHandleBit) != 0 && engineHooks_.set) {
+        return engineHooks_.set(object, name, value, status);
+    }
     nativeTargetRefusals_ += 1;
     status = Status::HostError;
     return false;
@@ -435,28 +444,108 @@ bool Runtime::setProperty(const ObjectRef& object, const std::string& name, cons
 
 bool Runtime::callNative(const std::string& script, const std::string& function,
                          const std::vector<Value>& args, Value& out, Status& status) {
-    std::string owner;
-    const NativeRegistration* registration = findNative(script, function, owner);
-    if (registration == nullptr || !registration->body) {
-        status = Status::FunctionNotFound;
+    const Value none = noneValue();
+    NativeResult native;
+    if (!callNativeEx(NativeCall{none, script, function, args}, native)) {
+        status = native.status;
         return false;
     }
-    if (registration->kind != NativeTargetKind::Static) {
-        nativeTargetRefusals_ += 1;
+    if (native.latentToken != 0) {
         status = Status::HostError;
         return false;
     }
-    return registration->body(noneValue(), args, out, status);
+    out = std::move(native.value);
+    return true;
 }
 
 bool Runtime::callLatent(const std::string& script, const std::string& function,
                          const std::vector<Value>& args, Status& status, std::uint64_t& token) {
-    std::string owner;
-    const NativeRegistration* registration = findNative(script, function, owner);
-    if (registration == nullptr || !registration->latent || !registration->begin) return false;
-    token = registration->begin(args, status);
+    const Value none = noneValue();
+    NativeResult native;
+    if (!callNativeEx(NativeCall{none, script, function, args}, native)) {
+        status = native.status;
+        token = 0;
+        return false;
+    }
+    status = native.status;
+    token = native.latentToken;
     return token != 0;
 }
+
+bool Runtime::callNativeEx(const NativeCall& call, NativeResult& result) {
+    std::string owner;
+    const NativeRegistration* registration = findNative(call.script, call.function, owner);
+    if (registration == nullptr) {
+        result.status = Status::FunctionNotFound;
+        return false;
+    }
+    const bool accepted = registration->invoke ? nativeTargetAccepted(*registration, call.self)
+                                              : registration->kind == NativeTargetKind::Static;
+    if (!accepted) {
+        nativeTargetRefusals_ += 1;
+        result.status = Status::HostError;
+        return false;
+    }
+    if (registration->latent && registration->begin) {
+        Status beginStatus = Status::Ok;
+        const std::uint64_t token = registration->begin(call.args, beginStatus);
+        if (token != 0) {
+            result = NativeResult{};
+            result.latentToken = token;
+            return true;
+        }
+    }
+    if (registration->invoke) return registration->invoke(call, result);
+    if (!registration->body) {
+        result.status = Status::FunctionNotFound;
+        return false;
+    }
+    const Value none = noneValue();
+    Value out;
+    Status status = Status::Ok;
+    if (!registration->body(none, call.args, out, status)) {
+        result.status = status;
+        return false;
+    }
+    result = NativeResult{};
+    result.value = std::move(out);
+    return true;
+}
+
+bool Runtime::nativeTargetAccepted(const NativeRegistration& registration, const Value& self) const {
+    if (registration.kind == NativeTargetKind::Static) return true;
+    if (self.type != ValueType::Object || self.object == nullptr || self.object->handle == 0) return false;
+    const std::uint64_t handle = self.object->handle;
+    if (registration.kind == NativeTargetKind::EngineObject) {
+        if ((handle & kEngineHandleBit) == 0) return false;
+        return registration.requiredScript.empty() || scriptInherits(self.object->type, registration.requiredScript);
+    }
+    if ((handle & kEngineHandleBit) != 0) return false;
+    const Instance* instance = findInstance(handle);
+    if (instance == nullptr || instance->detached || !sameName(instance->script, self.object->type)) return false;
+    return registration.requiredScript.empty() || scriptInherits(instance->script, registration.requiredScript);
+}
+
+bool Runtime::scriptInherits(const std::string& script, const std::string& ancestor) const {
+    std::string current = script;
+    for (int hop = 0; hop <= kMaxInheritanceHops && !current.empty(); ++hop) {
+        if (sameName(current, ancestor)) return true;
+        const pex::PexObject* object = findObject(current);
+        if (object == nullptr) return false;
+        current = object->parentClassName;
+    }
+    return false;
+}
+
+std::uint64_t Runtime::beginWait() {
+    while (usedTokens_.count(nextToken_) != 0) nextToken_ += 1;
+    const std::uint64_t token = nextToken_;
+    nextToken_ += 1;
+    issued_.insert(token);
+    return token;
+}
+
+void Runtime::setEngineObjectHooks(EngineObjectHooks hooks) { engineHooks_ = std::move(hooks); }
 
 bool Runtime::setState(ObjectRef& object, const std::string& state, Status& status) {
     object.state = state;

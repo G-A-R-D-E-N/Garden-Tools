@@ -1,5 +1,8 @@
 #include "fo4/papyrus/host.hpp"
 
+#include <cstdint>
+#include <utility>
+
 namespace fo4::papyrus {
 
 bool Host::gate(std::string_view key) {
@@ -20,6 +23,24 @@ bool Host::callLatent(const std::string& script, const std::string& function,
     (void)args;
     status = Status::Ok;
     token = 0;
+    return false;
+}
+
+bool Host::callNativeEx(const NativeCall& call, NativeResult& result) {
+    result = NativeResult{};
+    std::uint64_t token = 0;
+    Status latentStatus = Status::Ok;
+    if (callLatent(call.script, call.function, call.args, latentStatus, token)) {
+        result.latentToken = token;
+        return true;
+    }
+    Value out;
+    Status status = Status::Ok;
+    if (callNative(call.script, call.function, call.args, out, status)) {
+        result.value = std::move(out);
+        return true;
+    }
+    result.status = status;
     return false;
 }
 

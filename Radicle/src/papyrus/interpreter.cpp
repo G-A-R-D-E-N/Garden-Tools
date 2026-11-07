@@ -155,13 +155,16 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
             nativeResult.status = Status::FunctionNotFound;
             return nativeResult;
         }
-        Value out;
-        Status status = Status::Ok;
-        if (!host_.callNative(object->name, function.name, args, out, status)) {
-            nativeResult.status = status == Status::Ok ? Status::FunctionNotFound : status;
+        NativeResult native;
+        if (!host_.callNativeEx(NativeCall{self, object->name, function.name, args}, native)) {
+            nativeResult.status = native.status == Status::Ok ? Status::FunctionNotFound : native.status;
             return nativeResult;
         }
-        const Status coerced = coerce(out, function.returnType, nativeResult.value);
+        if (native.latentToken != 0) {
+            nativeResult.status = Status::HostError;
+            return nativeResult;
+        }
+        const Status coerced = coerce(native.value, function.returnType, nativeResult.value);
         if (coerced != Status::Ok) nativeResult.status = coerced;
         return nativeResult;
     }
@@ -240,19 +243,13 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     std::string target = nativeScript;
     if (target.empty() && script != nullptr) target = script->name;
 
-    std::uint64_t latentToken = 0;
-    Status latentStatus = Status::Ok;
-    if (host_.callLatent(target, functionName, args, latentStatus, latentToken)) {
-        return suspendLatent(destination, latentToken, functionName);
-    }
-
-    Value out;
-    Status status = Status::Ok;
-    if (host_.callNative(target, functionName, args, out, status)) {
-        return storeResult(frame, destination, out);
+    NativeResult native;
+    if (host_.callNativeEx(NativeCall{self, target, functionName, args}, native)) {
+        if (native.latentToken != 0) return suspendLatent(destination, native.latentToken, functionName);
+        return storeResult(frame, destination, native.value);
     }
     if (function != nullptr) return Status::FunctionNotFound;
-    return status == Status::Ok ? Status::FunctionNotFound : status;
+    return native.status == Status::Ok ? Status::FunctionNotFound : native.status;
 }
 
 Status Interpreter::gotoState(Frame& frame, const Value& receiver, const std::vector<Value>& args,
