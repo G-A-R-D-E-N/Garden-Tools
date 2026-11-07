@@ -30,9 +30,22 @@ struct DialogueCheckContext {
   std::vector<InfoCycle> info_cycles;
 };
 
+using DialogueTopics = std::map<FormKey, std::optional<FormKey>>;
+
 DialogueCheckContext make_dialogue_check_context(std::span<const Plugin* const> load_order);
 
 std::vector<CheckFinding> check_dialogue(const Plugin& plugin,
                                          const DialogueCheckContext& context);
+
+std::vector<CheckFinding> check_dialogue_records(const Plugin& plugin,
+                                                 std::span<const Record* const> records,
+                                                 const DialogueTopics& topics,
+                                                 const DialogueCheckContext& context);
+
+std::optional<FormKey> first_link_target(const Record& record, Signature subrecord,
+                                         const PluginFormIdContext& context);
+
+bool scene_parent_is(const Record& record, const FormKey& quest,
+                     const PluginFormIdContext& context);
 
 }  // namespace fo4

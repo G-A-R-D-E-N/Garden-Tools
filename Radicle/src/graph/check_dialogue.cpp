@@ -468,21 +468,13 @@ DialogueCheckContext make_dialogue_check_context(std::span<const Plugin* const> 
   return context;
 }
 
-std::vector<CheckFinding> check_dialogue(const Plugin& plugin,
-                                         const DialogueCheckContext& context) {
+std::vector<CheckFinding> check_dialogue_records(const Plugin& plugin,
+                                                 std::span<const Record* const> records,
+                                                 const DialogueTopics& topics,
+                                                 const DialogueCheckContext& context) {
   const auto id_context = plugin_form_id_context(plugin);
-  const auto topics = plugin_topics(plugin);
-
   std::vector<CheckFinding> findings;
-  for (const auto& cycle : context.info_cycles) {
-    if (cycle.plugin != plugin.key) continue;
-    findings.push_back(make_finding(plugin.key, cycle.record,
-                                    CheckCode::dialogue_previous_info_cycle,
-                                    CheckSeverity::error, sig_pnam, FormKey{},
-                                    "INFO previous-info cycle: " + cycle.chain));
-  }
-
-  for (const auto* record : collect_first_records(plugin)) {
+  for (const auto* record : records) {
     const auto signature = record->header.signature;
     if (signature == sig_dial) {
       check_dial(plugin, *record, context, id_context, findings);
@@ -495,6 +487,42 @@ std::vector<CheckFinding> check_dialogue(const Plugin& plugin,
     }
   }
   return findings;
+}
+
+std::vector<CheckFinding> check_dialogue(const Plugin& plugin,
+                                         const DialogueCheckContext& context) {
+  std::vector<CheckFinding> findings;
+  for (const auto& cycle : context.info_cycles) {
+    if (cycle.plugin != plugin.key) continue;
+    findings.push_back(make_finding(plugin.key, cycle.record,
+                                    CheckCode::dialogue_previous_info_cycle,
+                                    CheckSeverity::error, sig_pnam, FormKey{},
+                                    "INFO previous-info cycle: " + cycle.chain));
+  }
+  auto rest = check_dialogue_records(plugin, collect_first_records(plugin), plugin_topics(plugin),
+                                     context);
+  findings.insert(findings.end(), std::make_move_iterator(rest.begin()),
+                  std::make_move_iterator(rest.end()));
+  return findings;
+}
+
+std::optional<FormKey> first_link_target(const Record& record, Signature subrecord,
+                                         const PluginFormIdContext& context) {
+  return first_stored_link(record, subrecord, context).key;
+}
+
+bool scene_parent_is(const Record& record, const FormKey& quest,
+                     const PluginFormIdContext& context) {
+  env::detail::SceneLayout layout;
+  try {
+    layout = env::detail::scene_layout(record.subrecords);
+  } catch (const env::detail::SceneLayoutError&) {
+    return false;
+  }
+  const auto* sub = first_subrecord_from(record, layout.tail, sig_pnam);
+  if (sub == nullptr || sub->data.size() != 4) return false;
+  const auto link = read_stored_link(*sub, context);
+  return link.key && *link.key == quest;
 }
 
 }  // namespace fo4

@@ -1,6 +1,7 @@
 #include "fo4/graph/check_errors.hpp"
 
 #include "check_dialogue.hpp"
+#include "check_errors_internal.hpp"
 #include "check_errors_records.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/condition_functions.hpp"
@@ -56,12 +57,6 @@ constexpr std::array<GameMasterLinkExemption, 7> k_game_master_link_exemptions{{
     {k_sig_achr, k_sig_xlcn},
     {k_sig_scco, k_sig_snam},
 }};
-
-struct WinnerInfo {
-  Signature signature{};
-  bool deleted{false};
-  PluginKey plugin;
-};
 
 bool is_leveled(Signature signature) noexcept {
   return signature == k_sig_lvli || signature == k_sig_lvln || signature == k_sig_lvsp;
@@ -159,33 +154,18 @@ std::string join_signatures(std::span<const Signature> signatures) {
   return out;
 }
 
-struct FindingSink {
-  std::size_t limit{0};
-  std::vector<CheckFinding> findings;
-  bool truncated{false};
-  PluginKey truncated_plugin;
-
-  [[nodiscard]] bool full() const noexcept { return limit != 0 && findings.size() >= limit; }
-  void add(CheckFinding finding) {
-    if (full()) {
-      truncated = true;
-      if (truncated_plugin.filename().empty()) truncated_plugin = finding.plugin;
-      return;
-    }
-    findings.push_back(std::move(finding));
-  }
-};
-
 constexpr std::uint32_t k_first_non_hardcoded_id = 0x800;
 constexpr std::string_view k_game_master = "Fallout4.esm";
 
+}  // namespace
+
 void check_links(const Plugin& plugin,
+                 const FormLinkCollection& detailed,
                  const std::map<FormKey, const Record*>& records,
-                 const std::map<FormKey, WinnerInfo>& winners,
+                 const WinnerMap& winners,
                  const PluginKey& game_master,
                  FindingSink& sink) {
   const auto context = plugin_form_id_context(plugin);
-  const auto detailed = collect_form_links_detailed(plugin);
   for (const auto& key : detailed.unsupported_vmad_records) {
     CheckFinding unsupported;
     unsupported.code = CheckCode::unsupported_vmad_property;
@@ -284,7 +264,7 @@ void check_links(const Plugin& plugin,
   }
 }
 
-void check_conditions(const Plugin& plugin, FindingSink& sink) {
+void check_conditions(const Plugin& plugin, std::span<const Record* const> records, FindingSink& sink) {
   const auto add = [&](const Record& record, std::size_t offset, std::string message) {
     CheckFinding finding;
     finding.code = CheckCode::invalid_condition;
@@ -296,7 +276,7 @@ void check_conditions(const Plugin& plugin, FindingSink& sink) {
     finding.message = std::move(message);
     sink.add(std::move(finding));
   };
-  for (const auto* record : collect_records(plugin)) {
+  for (const auto* record : records) {
     for (const auto& sub : record->subrecords) {
       if (sub.signature != sig_ctda || sub.data.size() < k_ctda_function + 2) continue;
       const auto function = read_payload<std::uint16_t>(sub, k_ctda_function);
@@ -318,19 +298,24 @@ void check_conditions(const Plugin& plugin, FindingSink& sink) {
   }
 }
 
-void check_preflight(const Plugin& plugin, FindingSink& sink) {
-  for (auto& issue : schema::preflight_plugin(plugin)) {
-    CheckFinding finding;
-    finding.code = CheckCode::schema_preflight;
-    finding.severity = issue.severity == schema::PreflightSeverity::error ? CheckSeverity::error
-                                                                          : CheckSeverity::warning;
-    finding.plugin = plugin.key;
-    finding.record = issue.record;
-    finding.message = issue.path + ": " + issue.message;
-    finding.detail = issue.code;
-    sink.add(std::move(finding));
+void check_preflight(const Plugin& plugin, std::span<const Record* const> records, FindingSink& sink) {
+  const bool localized = plugin.header.tes4_flags.is_localized();
+  for (const auto* record : records) {
+    for (auto& issue : schema::preflight_record(*record, localized)) {
+      CheckFinding finding;
+      finding.code = CheckCode::schema_preflight;
+      finding.severity = issue.severity == schema::PreflightSeverity::error ? CheckSeverity::error
+                                                                            : CheckSeverity::warning;
+      finding.plugin = plugin.key;
+      finding.record = issue.record;
+      finding.message = issue.path + ": " + issue.message;
+      finding.detail = issue.code;
+      sink.add(std::move(finding));
+    }
   }
 }
+
+namespace {
 
 using InfoTopics = std::map<FormKey, std::optional<FormKey>>;
 
@@ -432,11 +417,14 @@ void check_injected_records(std::span<const Plugin* const> load_order,
   }
 }
 
+}  // namespace
+
 void check_dialogue_links(const Plugin& plugin,
-                          const std::map<FormKey, WinnerInfo>& winners,
+                          std::span<const Record* const> records,
+                          const DialogueTopics& topics,
+                          const WinnerMap& winners,
                           FindingSink& sink) {
   const auto context = plugin_form_id_context(plugin);
-  const auto topics = info_topics(plugin);
   const auto is_loaded = [&](const FormKey& key, Signature signature) {
     const auto found = winners.find(key);
     return found != winners.end() && found->second.signature == signature;
@@ -454,7 +442,7 @@ void check_dialogue_links(const Plugin& plugin,
     sink.add(std::move(finding));
   };
 
-  for (const auto* record : collect_first_records(plugin)) {
+  for (const auto* record : records) {
     if (record->header.signature == k_sig_dlbr) {
       const auto start = stored_form_link(*record, k_sig_snam, context);
       // Requires: DLBR SNAM is required (xEdit SetRequired); a null link must report.
@@ -477,8 +465,6 @@ void check_dialogue_links(const Plugin& plugin,
     }
   }
 }
-
-}  // namespace
 
 std::string_view check_code_name(CheckCode code) noexcept {
   switch (code) {
@@ -608,12 +594,12 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
     for (const auto* record : collect_records(*plugin)) {
       records.try_emplace(record->form_key, record);
     }
-    check_links(*plugin, records, winners, game_master, sink);
-    check_dialogue_links(*plugin, winners, sink);
+    check_links(*plugin, collect_form_links_detailed(*plugin), records, winners, game_master, sink);
+    check_dialogue_links(*plugin, collect_first_records(*plugin), info_topics(*plugin), winners, sink);
     for (auto& finding : check_dialogue(*plugin, dialogue)) sink.add(std::move(finding));
-    check_preflight(*plugin, sink);
+    check_preflight(*plugin, collect_records(*plugin), sink);
     for (auto& finding : check_record_levels(*plugin)) sink.add(std::move(finding));
-    check_conditions(*plugin, sink);
+    check_conditions(*plugin, collect_records(*plugin), sink);
   }
 
   check_injected_records(load_order, options, sink);

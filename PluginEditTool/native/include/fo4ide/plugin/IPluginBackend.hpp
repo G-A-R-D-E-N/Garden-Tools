@@ -151,6 +151,12 @@ public:
             "Native check for errors is unavailable for this backend"
         });
     }
+    virtual Result<nlohmann::json> checkQuest(const nlohmann::json&) const {
+        return std::unexpected(Error{
+            "CheckQuestUnavailable",
+            "Native quest check is unavailable for this backend"
+        });
+    }
     virtual Result<nlohmann::json> findUnreachable(const nlohmann::json&) const {
         return std::unexpected(Error{
             "FindUnreachableUnavailable",

@@ -255,6 +255,7 @@ These map onto the same native RPC operations the desktop editor uses, so the MC
 | `compact_to_esl` | `plugin` | memory | Editor operation: compact to esl. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `clean_unused_masters` | `plugin`, `apply` | memory | Editor operation: clean unused masters. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |
 | `check_for_errors` | `plugin`, [`limit`] | no | Editor query: check for errors. Same RPC the desktop editor uses. |
+| `check_quest` | `plugin`, `form_key`, [`limit`] | no | Editor query: check one quest. Returns the `check_for_errors` rows restricted to the quest record, its dialogue branches, topics and INFO records, and its scene records. Skips the load-order passes (leveled-list cycles, injected records, cross-plugin dialogue cycles), so it runs in time proportional to the quest. Same RPC the desktop editor uses. |
 | `find_unreachable` | `plugin`, [`limit`] | no | Editor query: find unreachable. Same RPC the desktop editor uses. |
 | `loot_cleaning_report` | `plugin` | no | Editor query: loot cleaning report. Same RPC the desktop editor uses. |
 | `update_onam` | `plugin` | memory | Editor operation: update onam. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits. |

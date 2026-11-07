@@ -57,5 +57,8 @@ struct FormLinkCollection {
 
 std::vector<FormLinkHit> collect_form_links(const Plugin& plugin);
 FormLinkCollection collect_form_links_detailed(const Plugin& plugin);
+FormLinkCollection collect_record_form_links(const Record& record,
+                                             const PluginFormIdContext& context,
+                                             const FormLinkTypeLookup& type_lookup);
 
 }  // namespace fo4

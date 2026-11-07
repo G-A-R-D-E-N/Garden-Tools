@@ -31,6 +31,7 @@ export function stubBackend(overrides: Record<string, unknown> = {}) {
     GetQuestScript: vi.fn(async () => { throw new Error('QuestScriptNotFound'); }),
     GetDialogue: vi.fn(async () => '{"branches":[],"topics":[]}'),
     GetReferencedBy: vi.fn(async () => '[]'),
+    CheckQuest: vi.fn(async () => '[]'),
     CheckForErrors: vi.fn(async () => '[]'),
     ...overrides,
   };

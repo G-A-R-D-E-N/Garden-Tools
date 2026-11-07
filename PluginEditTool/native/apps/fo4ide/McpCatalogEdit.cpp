@@ -21,6 +21,7 @@ const CatalogTool kTools[] = {
     {"compact_to_esl", "backend", "CompactToEsl", "plugin:string", "Editor operation: compact to esl. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
     {"clean_unused_masters", "backend", "CleanUnusedMasters", "plugin:string,apply:boolean", "Editor operation: clean unused masters. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
     {"check_for_errors", "backend", "CheckForErrors", "plugin:string,limit:integer?", "Editor query: check for errors. Same RPC the desktop editor uses."},
+    {"check_quest", "backend", "CheckQuest", "plugin:string,form_key:string,limit:integer?", "Editor query: check one quest. Returns the check_for_errors rows restricted to the quest record, its dialogue branches, topics and INFO records, and its scene records. Skips the load-order passes (leveled-list cycles, injected records, cross-plugin dialogue cycles), so it runs in time proportional to the quest. Same RPC the desktop editor uses."},
     {"find_unreachable", "backend", "FindUnreachable", "plugin:string,limit:integer?", "Editor query: find unreachable. Same RPC the desktop editor uses."},
     {"loot_cleaning_report", "backend", "LootCleaningReport", "plugin:string", "Editor query: loot cleaning report. Same RPC the desktop editor uses."},
     {"update_onam", "backend", "UpdateOnam", "plugin:string", "Editor operation: update onam. Same RPC the desktop editor uses; call save_plugin to persist in-memory edits."},
