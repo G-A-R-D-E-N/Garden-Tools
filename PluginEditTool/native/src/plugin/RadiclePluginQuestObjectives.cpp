@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <exception>
 #include <limits>
 #include <map>
 #include <optional>
@@ -34,11 +35,13 @@ namespace {
 constexpr const char* kObjectiveError = "InvalidQuestObjectivePayload";
 
 bool knownObjectiveKey(std::string_view key) {
-    return key == "index" || key == "flags" || key == "displayText" || key == "targets";
+    return key == "index" || key == "flags" || key == "displayText" || key == "targets" ||
+           key == "displayTextId" || key == "flagNames" || key == "unknownFlagBits";
 }
 
 bool knownTargetKey(std::string_view key) {
-    return key == "alias" || key == "flags" || key == "conditions";
+    return key == "alias" || key == "flags" || key == "conditions" || key == "aliasName" ||
+           key == "keyword";
 }
 
 bool isConditionSubrecord(fo4::Signature signature) {
@@ -305,6 +308,22 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
                     }
                 }
                 if (before != nullptr) matchedAliases.push_back(*alias);
+                if (targetJson.contains("keyword") && !targetJson["keyword"].is_null()) {
+                    if (!targetJson["keyword"].is_string()) {
+                        return std::unexpected(Error{kObjectiveError, "objective target keyword must be a FormKey string"});
+                    }
+                    fo4::FormKey wanted;
+                    try {
+                        wanted = fo4::FormKey::parse(targetJson["keyword"].get<std::string>());
+                    } catch (const std::exception&) {
+                        return std::unexpected(Error{kObjectiveError, "objective target keyword must be a FormKey string"});
+                    }
+                    const bool same = before != nullptr && before->keyword.has_value() &&
+                                      *before->keyword == wanted;
+                    if (!same) {
+                        return std::unexpected(Error{kObjectiveError, "objective target keyword cannot be changed by SetQuestObjectives; it is kept from the existing target"});
+                    }
+                }
                 std::vector<PendingQuestCondition> parsed;
                 const bool conditionsGiven = targetJson.contains("conditions");
                 if (conditionsGiven) {
