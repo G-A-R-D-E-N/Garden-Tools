@@ -35,6 +35,7 @@ constexpr auto k_dnam = fo4::Signature::from_string("DNAM");
 constexpr auto k_enam = fo4::Signature::from_string("ENAM");
 constexpr auto k_nam1 = fo4::Signature::from_string("NAM1");
 constexpr auto k_nam2 = fo4::Signature::from_string("NAM2");
+constexpr auto k_tiqs = fo4::Signature::from_string("TIQS");
 
 using namespace readjson;
 
@@ -101,10 +102,20 @@ nlohmann::json fragmentsOf(const fo4::Record& info) {
     return fragments;
 }
 
+nlohmann::json parentStageJson(std::uint16_t stage) {
+    return stage == fo4::forms::k_info_no_parent_stage ? nlohmann::json(nullptr) : nlohmann::json(stage);
+}
+
+void putParentStages(nlohmann::json& row, const std::vector<std::byte>& tiqs) {
+    if (tiqs.size() != 4) return;
+    row["setStageOnBegin"] = parentStageJson(readAt<std::uint16_t>(tiqs, 0));
+    row["setStageOnEnd"] = parentStageJson(readAt<std::uint16_t>(tiqs, 2));
+}
+
 nlohmann::json infoJson(const fo4::Plugin& plugin, const fo4::Record& info) {
     const auto enam = payloadOf(info, k_enam);
     const auto resetEncoded = readAt<std::uint16_t>(enam, 2);
-    return nlohmann::json{
+    auto row = nlohmann::json{
         {"formKey", info.form_key.to_string()},
         {"flags", readAt<std::uint16_t>(enam, 0)},
         {"resetHours", static_cast<double>(resetEncoded) / fo4::forms::k_info_reset_units_per_hour},
@@ -114,6 +125,8 @@ nlohmann::json infoJson(const fo4::Plugin& plugin, const fo4::Record& info) {
         {"conditions", conditionsJson(plugin, fo4::read_ctda_conditions(info))},
         {"fragments", fragmentsOf(info)},
     };
+    putParentStages(row, payloadOf(info, k_tiqs));
+    return row;
 }
 
 nlohmann::json infosOf(const fo4::Plugin& plugin, const std::vector<fo4::GroupChild>& children,
