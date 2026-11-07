@@ -809,4 +809,102 @@ radicle_status radicle_papyrus_native_call_fail(radicle_papyrus_native_call* cal
   return RADICLE_STATUS_OK;
 }
 
+radicle_status radicle_papyrus_runtime_set_oninit_policy(radicle_papyrus_runtime* runtime,
+                                                         radicle_papyrus_oninit_policy policy) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime is required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while setting the OnInit policy", [&] {
+    switch (policy) {
+      case RADICLE_PAPYRUS_ONINIT_REFUSE:
+        runtime->runtime.setOnInitArrivalPolicy(OnInitArrivalPolicy::Refuse);
+        return RADICLE_STATUS_OK;
+      case RADICLE_PAPYRUS_ONINIT_QUEUE:
+        runtime->runtime.setOnInitArrivalPolicy(OnInitArrivalPolicy::QueueAsApproximation);
+        return RADICLE_STATUS_OK;
+    }
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the OnInit policy is not valid");
+  });
+}
+
+radicle_status radicle_papyrus_runtime_set_max_parks(radicle_papyrus_runtime* runtime, int32_t parks) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime is required");
+  }
+  if (parks < 1) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the park limit must be at least 1");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while setting the park limit", [&] {
+    runtime->runtime.setMaxParksPerEvent(parks);
+    return RADICLE_STATUS_OK;
+  });
+}
+
+int32_t radicle_papyrus_runtime_has_script(const radicle_papyrus_runtime* runtime, const char* name) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || name == nullptr) return 0;
+  return runtime->runtime.hasScript(name) ? 1 : 0;
+}
+
+int32_t radicle_papyrus_runtime_instance_declares(const radicle_papyrus_runtime* runtime, uint64_t instance,
+                                                  const char* function) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || function == nullptr) return 0;
+  return runtime->runtime.instanceDeclares(instance, function) ? 1 : 0;
+}
+
+const char* radicle_papyrus_runtime_instance_script(const radicle_papyrus_runtime* runtime, uint64_t instance) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || !runtime->runtime.instanceOwner(instance).has_value()) return nullptr;
+  return runtime->runtime.instanceScript(instance).c_str();
+}
+
+radicle_status radicle_papyrus_runtime_list_instances(const radicle_papyrus_runtime* runtime, uint64_t* out_ids,
+                                                      size_t capacity, size_t* out_count) {
+  radicle_c_detail::clear_error();
+  if (out_count != nullptr) *out_count = 0;
+  if (runtime == nullptr || out_count == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out_count are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while listing instances", [&] {
+    const std::vector<InstanceId> ids = runtime->runtime.instanceIds();
+    *out_count = ids.size();
+    if (out_ids != nullptr) {
+      for (size_t i = 0; i < ids.size() && i < capacity; ++i) out_ids[i] = ids[i];
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_get_stats(const radicle_papyrus_runtime* runtime,
+                                                 radicle_papyrus_runtime_stats* out) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || out == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out are required");
+  }
+  if (out->struct_size < sizeof(radicle_papyrus_runtime_stats)) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the stats struct is too small");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while reading the runtime statistics", [&] {
+    const Runtime& source = runtime->runtime;
+    out->ready = static_cast<int32_t>(source.readyCount());
+    out->waiting = static_cast<int32_t>(source.waitingCount());
+    out->completed = source.completedEvents();
+    out->parked = source.parkedEvents();
+    out->paused = source.pausedEvents();
+    out->refused = source.refusedEvents();
+    out->dropped = source.droppedEvents();
+    out->waiting_events = source.waitingEvents();
+    out->refused_completions = source.refusedCompletions();
+    out->queued_during_oninit = source.queuedDuringOnInit();
+    out->native_target_refusals = source.nativeTargetRefusals();
+    out->overrides_handled = source.overridesHandled();
+    out->overrides_declined = source.overridesDeclined();
+    out->overrides_refused = source.overridesRefused();
+    return RADICLE_STATUS_OK;
+  });
+}
+
 }  // extern "C"
