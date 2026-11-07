@@ -13,9 +13,10 @@
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
-#include "../helpers/RadicleCellFixtures.hpp"
+#include "plugin_bytes.hpp"
+#include "RadiclePluginCellFixture.hpp"
 
-using namespace fo4ide_test::cell;
+using namespace cell_fixture;
 
 TEST_CASE("Native cell transform creates a nested override before moving the reference") {
     const auto root = tempRoot();

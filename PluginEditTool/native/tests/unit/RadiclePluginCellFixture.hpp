@@ -8,18 +8,19 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <fo4/forms/placed_reference.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
-#include "TempRoot.hpp"
+#include "../helpers/TempRoot.hpp"
 #include "plugin_bytes.hpp"
 
-namespace fo4ide_test::cell {
+namespace cell_fixture {
+
 
 inline std::filesystem::path tempRoot() {
     const auto id = fo4ide_test::uniqueTempName();
@@ -323,6 +324,8 @@ inline nlohmann::json parseStringResult(const fo4ide::Result<nlohmann::json>& re
     return nlohmann::json::parse(result->get<std::string>());
 }
 
+
+
 inline nlohmann::json transformChange() {
     return {{"transform", {{"x", 100.0}, {"y", 200.0}, {"z", 300.0}, {"rx", 1.5}, {"ry", 2.5}, {"rz", 3.5}}}};
 }
@@ -334,4 +337,5 @@ inline nlohmann::json patchEnvironment(const std::filesystem::path& root, bool w
     return nlohmann::json{{"plugins", std::move(plugins)}};
 }
 
-}  // namespace fo4ide_test::cell
+
+}  // namespace cell_fixture

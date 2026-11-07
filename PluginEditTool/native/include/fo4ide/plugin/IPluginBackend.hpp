@@ -231,6 +231,18 @@ public:
     virtual Result<nlohmann::json> getCellEditHistory(const nlohmann::json&) const {
         return std::unexpected(Error{"CellBackendUnavailable", "Cell edit history is unavailable"});
     }
+    virtual Result<nlohmann::json> duplicatePlacedReference(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> deletePlacedReference(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> getCellProperties(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell properties are unavailable"});
+    }
+    virtual Result<nlohmann::json> setCellProperties(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell property writes are unavailable"});
+    }
     virtual Result<nlohmann::json> createPlacedObject(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference creation is unavailable"});
     }
