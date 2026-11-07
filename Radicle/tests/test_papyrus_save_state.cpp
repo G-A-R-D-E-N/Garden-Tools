@@ -161,7 +161,7 @@ TEST(PapyrusSaveState, RuntimeCapturesASuspendedLatentThread) {
   runtime.registerNative("Waiter", "Wait",
                          fo4::papyrus::NativeRegistration{fo4::papyrus::NativeTargetKind::Static, "", {}, true,
                                                           [](const std::vector<fo4::papyrus::Value>&,
-                                                             fo4::papyrus::Status&) { return std::uint64_t{5}; }});
+                                                             fo4::papyrus::Status&) { return std::uint64_t{5}; }, {}});
   const auto instance = runtime.attach("Actor", OwnerId::forForm("0001:Actor.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime.initialize(*instance), fo4::papyrus::Status::Ok);

@@ -58,12 +58,15 @@ struct DialogueResponseSpec {
 };
 
 inline constexpr double k_info_reset_units_per_hour = 2730.625;
+inline constexpr std::uint16_t k_info_no_parent_stage = 0xFFFFu;
 
 struct DialogueInfoSpec {
   std::uint16_t flags{0};
   std::uint16_t reset_hours{0};
   std::vector<DialogueResponseSpec> responses;
   std::vector<CtdaCondition> conditions;
+  std::optional<std::uint16_t> set_stage_on_begin;
+  std::optional<std::uint16_t> set_stage_on_end;
 };
 
 struct DialogueInfoPatch {
@@ -71,6 +74,8 @@ struct DialogueInfoPatch {
   std::optional<std::uint16_t> reset_hours;
   std::optional<std::vector<DialogueResponseSpec>> responses;
   std::optional<std::vector<CtdaCondition>> conditions;
+  std::optional<std::uint16_t> set_stage_on_begin;
+  std::optional<std::uint16_t> set_stage_on_end;
 };
 
 // Constraint: the quest must be local to the plugin.
@@ -92,12 +97,12 @@ DialogueCreateResult create_dialogue_info(Plugin& plugin,
                                           const FormKey& topic,
                                           const DialogueInfoSpec& spec);
 
-// Constraint: full replace of ENAM, the response run and the condition run; PNAM and the chain position are kept.
+// Constraint: full replace of ENAM, the response run and the condition run; an unset stage keeps the existing TIQS half; PNAM and the chain position are kept.
 DialogueAuthorStatus update_dialogue_info(Plugin& plugin,
                                           const FormKey& info,
                                           const DialogueInfoSpec& spec);
 
-// Constraint: an unset field keeps its subrecords, an empty list clears its run; PNAM and the chain position are kept.
+// Constraint: an unset field keeps its subrecords, an empty list clears its run, a null stage clears its TIQS half, and TIQS is removed when both halves are none; PNAM and the chain position are kept.
 DialogueAuthorStatus update_dialogue_info(Plugin& plugin,
                                           const FormKey& info,
                                           const DialogueInfoPatch& patch);

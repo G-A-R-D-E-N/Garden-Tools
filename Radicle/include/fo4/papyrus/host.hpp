@@ -11,6 +11,20 @@
 
 namespace fo4::papyrus {
 
+struct NativeCall {
+    const Value& self;
+    const std::string& script;
+    const std::string& function;
+    const std::vector<Value>& args;
+    bool mayPark{false};
+};
+
+struct NativeResult {
+    Value value;
+    Status status{Status::Ok};
+    std::uint64_t latentToken{0};
+};
+
 class Host {
 public:
     virtual ~Host() = default;
@@ -22,6 +36,7 @@ public:
                              Status& status) = 0;
     virtual bool callNative(const std::string& script, const std::string& function,
                             const std::vector<Value>& args, Value& out, Status& status) = 0;
+    virtual bool callNativeEx(const NativeCall& call, NativeResult& result);
 
     // Invariant: gate is default-allow; a Host may refuse a semantic key.
     virtual bool gate(std::string_view key);

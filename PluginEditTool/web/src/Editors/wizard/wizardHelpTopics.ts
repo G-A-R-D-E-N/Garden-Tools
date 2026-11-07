@@ -16,7 +16,7 @@ export const WIZARD_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'wizard-quest-giver',
     title: 'Quest giver',
-    body: 'The character who gives the player the quest. Pick an NPC from the list. The journal lines and objectives name this character where the player goes back to them.',
+    body: 'The character who gives or is tied to the quest. For the Choice template this character offers the two choices in conversation. Pick an NPC from the list.',
     related: ['alias'],
   },
   {
@@ -82,14 +82,20 @@ export const WIZARD_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'wizard-option-a',
     title: 'First choice',
-    body: 'The first decision the player can make, worded as the journal should show it, such as "Spare the raiders". The journal reads "You chose: Spare the raiders."',
-    related: ['quest-stage'],
+    body: 'The first line the player can pick when talking to the quest giver, worded as the player says it, such as "Spare the raiders". It also appears in the journal, which reads "You chose: Spare the raiders."',
+    related: ['quest-stage', 'dialogue-topic'],
   },
   {
     id: 'wizard-option-b',
     title: 'Second choice',
-    body: 'The second decision the player can make, worded the same way as the first choice, such as "Hand the raiders over".',
-    related: ['quest-stage'],
+    body: 'The second line the player can pick when talking to the quest giver, worded the same way as the first choice, such as "Hand the raiders over". It also appears in the journal.',
+    related: ['quest-stage', 'dialogue-topic'],
+  },
+  {
+    id: 'wizard-choices',
+    title: 'Dialogue choices',
+    body: 'The two lines the player can pick when talking to the quest giver. The quest giver offers them only while the quest is at a stage from the first stage up to stage 20. Picking one sets the quest to stage 30 or 40, which finishes the quest.',
+    related: ['quest-stage', 'dialogue-topic'],
   },
   {
     id: 'wizard-reward-b',

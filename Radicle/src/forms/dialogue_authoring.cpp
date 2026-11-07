@@ -455,6 +455,41 @@ void set_info_enam(Record& record, const DialogueInfoPatch& patch) {
   enam->data = packed(patch.flags.value_or(flags), patch.reset_hours.value_or(reset_hours));
 }
 
+bool is_info_stage_tail_signature(Signature signature) {
+  return signature == k_nam0 || signature == k_incc || signature == k_modq || signature == k_inam;
+}
+
+void set_info_tiqs(Record& record, const DialogueInfoPatch& patch) {
+  std::uint16_t begin = fo4::forms::k_info_no_parent_stage;
+  std::uint16_t end = fo4::forms::k_info_no_parent_stage;
+  auto* tiqs = unique_subrecord(record, k_tiqs);
+  if (tiqs != nullptr) {
+    if (tiqs->data.size() != 4) throw std::runtime_error("INFO TIQS must be exactly 4 bytes");
+    std::memcpy(&begin, tiqs->data.data(), sizeof(begin));
+    std::memcpy(&end, tiqs->data.data() + sizeof(begin), sizeof(end));
+  }
+  begin = patch.set_stage_on_begin.value_or(begin);
+  end = patch.set_stage_on_end.value_or(end);
+  auto& subrecords = record.subrecords;
+  if (begin == fo4::forms::k_info_no_parent_stage && end == fo4::forms::k_info_no_parent_stage) {
+    // Constraint: an INFO with neither parent stage must carry no TIQS subrecord.
+    if (tiqs != nullptr) {
+      subrecords.erase(std::find_if(subrecords.begin(), subrecords.end(), [tiqs](const Subrecord& subrecord) {
+        return &subrecord == tiqs;
+      }));
+    }
+    return;
+  }
+  if (tiqs != nullptr) {
+    tiqs->data = packed(begin, end);
+    return;
+  }
+  const auto position = std::find_if(subrecords.begin(), subrecords.end(), [](const Subrecord& subrecord) {
+    return is_info_stage_tail_signature(subrecord.signature);
+  });
+  subrecords.insert(position, Subrecord{k_tiqs, packed(begin, end), false});
+}
+
 void require_topic_info_path(const fo4::detail::MutableLocation& location) {
   if (location.path.size() != 3 ||
       location.path[2]->header.group_type != static_cast<std::int32_t>(GroupType::topic_children)) {
@@ -500,6 +535,11 @@ DialogueCreateResult info_impl(Plugin& plugin,
   for (auto& part : responses) subrecords.push_back(std::move(part));
   auto conditions = serialize_ctda_run(spec.conditions);
   for (auto& part : conditions) subrecords.push_back(std::move(part));
+  const auto stage_begin = spec.set_stage_on_begin.value_or(fo4::forms::k_info_no_parent_stage);
+  const auto stage_end = spec.set_stage_on_end.value_or(fo4::forms::k_info_no_parent_stage);
+  if (stage_begin != fo4::forms::k_info_no_parent_stage || stage_end != fo4::forms::k_info_no_parent_stage) {
+    subrecords.push_back(Subrecord{k_tiqs, packed(stage_begin, stage_end), false});
+  }
   subrecords.push_back(Subrecord{k_nam0, zstring_bytes(""), false});
   subrecords.push_back(Subrecord{k_inam, packed(std::uint32_t{1}), false});
 
@@ -535,6 +575,9 @@ DialogueAuthorStatus update_impl(Plugin& plugin,
   if (patch.conditions.has_value()) {
     splice_run(record, is_condition_signature, is_after_conditions_signature,
                serialize_ctda_run(*patch.conditions));
+  }
+  if (patch.set_stage_on_begin.has_value() || patch.set_stage_on_end.has_value()) {
+    set_info_tiqs(record, patch);
   }
   fo4::detail::mark_record_modified(next, record);
   commit(plugin, next);
@@ -653,8 +696,9 @@ DialogueAuthorStatus update_dialogue_info(Plugin& plugin,
 DialogueAuthorStatus update_dialogue_info(Plugin& plugin,
                                           const FormKey& info,
                                           const DialogueInfoSpec& spec) {
-  return update_dialogue_info(
-      plugin, info, DialogueInfoPatch{spec.flags, spec.reset_hours, spec.responses, spec.conditions});
+  return update_dialogue_info(plugin, info,
+                              DialogueInfoPatch{spec.flags, spec.reset_hours, spec.responses, spec.conditions,
+                                                spec.set_stage_on_begin, spec.set_stage_on_end});
 }
 
 DialogueAuthorStatus remove_dialogue_info(Plugin& plugin, const FormKey& info) {

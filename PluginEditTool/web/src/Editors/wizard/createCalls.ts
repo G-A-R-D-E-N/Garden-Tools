@@ -5,7 +5,7 @@ import type { QuestTemplate } from './templateTypes';
 export function buildCreateCalls(template: QuestTemplate, answers: Answers, formKeys: FormKeys): BackendCall[] {
   return [
     ...buildQuestCalls(template, answers, formKeys),
-    ...buildSceneCalls(template, answers),
+    ...buildSceneCalls(template, answers, formKeys),
     startGameCall(answers.plugin),
   ];
 }
