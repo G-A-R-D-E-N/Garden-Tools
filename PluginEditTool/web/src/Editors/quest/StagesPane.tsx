@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import HelpTip from '../help/HelpTip';
-import { CommitInput, FlagChecks } from './questControls';
+import { CommitInput, CommitTextarea, FlagChecks } from './questControls';
 import { LOG_ENTRY_FLAG_OPTIONS, STAGE_FLAG_OPTIONS, type QuestStage, type StageLogEntry, type StageSelection } from './questModel';
 
 interface Props {
@@ -66,7 +66,7 @@ export default function StagesPane({ stages, selected, onCommit }: Props) {
                 <span>Log entry {entryAt + 1}</span>
                 <HelpTip topicId="quest-stage-log" />
               </div>
-              <CommitInput type="text" aria-label={`Stage ${stage.index} log entry ${entryAt + 1} text`}
+              <CommitTextarea className="quest-text" rows={2} aria-label={`Stage ${stage.index} log entry ${entryAt + 1} text`}
                 value={entry.logText} placeholder="Journal text the player reads"
                 onCommit={logText => replaceStage(position, withEntry(stage, entryAt, { ...entry, logText }),
                   `Change stage ${stage.index} log text`)} />

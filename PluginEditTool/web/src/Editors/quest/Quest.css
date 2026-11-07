@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
   outline: none;
 }
 
@@ -10,18 +11,24 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
 }
 
 .quest-current {
-  flex: 1;
-  font-size: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 
 .quest-panes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  align-items: start;
   gap: 12px;
 }
 
@@ -39,7 +46,7 @@
 .quest-pane h4 {
   flex: 1;
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .quest-pane-header,
@@ -48,15 +55,18 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
 .quest-card {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
   padding: 8px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
+  overflow-wrap: anywhere;
 }
 
 .quest-card-selected {
@@ -68,6 +78,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
   padding: 6px 0;
   border-top: 1px dashed var(--border-color);
 }
@@ -77,38 +88,60 @@
 .quest-pane select {
   min-width: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   background: var(--bg-primary);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  padding: 3px 6px;
+  padding: 5px 8px;
 }
 
 .quest-pane input[type='text'] {
-  flex: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .quest-pane input[type='number'] {
-  width: 96px;
+  width: 110px;
+}
+
+.quest-text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.6em;
+  max-height: 12em;
+  field-sizing: content;
+  resize: vertical;
+  overflow-y: auto;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .quest-flags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: 4px 14px;
 }
 
 .quest-check {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .quest-note {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-secondary);
 }
@@ -116,7 +149,7 @@
 .quest-warning {
   margin: 0;
   padding: 6px 8px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-primary);
   border: 1px solid #c9a227;
@@ -125,7 +158,7 @@
 
 .quest-error {
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   border: 1px solid #c0392b;
   border-radius: var(--radius);
@@ -141,7 +174,7 @@
 }
 
 .quest-check-reason {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -157,7 +190,7 @@
 
 .quest-check-panel h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .quest-check-counts {
@@ -165,7 +198,7 @@
   flex-wrap: wrap;
   gap: 4px 12px;
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -174,7 +207,7 @@
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .quest-check-list {
@@ -192,7 +225,7 @@
   align-items: flex-start;
   gap: 4px;
   padding: 8px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   border: 1px solid var(--border-color);
   border-left-width: 4px;
@@ -236,7 +269,7 @@
 
 .quest-check-details pre {
   margin: 4px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

@@ -108,48 +108,50 @@ export default function DialogueEditor({ onBack }: { onBack: () => void }) {
 
   return (
     <section ref={scopeRef} tabIndex={-1} className="editor-screen" aria-labelledby="dialogue-editor-title" onKeyDown={onKeyDown}>
-      <header className="editor-screen-header">
-        <button type="button" className="sidebar-action-btn" onClick={onBack}><ChevronLeft size={14} /> Back</button>
-        <h3 id="dialogue-editor-title">Dialogue</h3>
-        <button type="button" className="sidebar-action-btn" aria-expanded={helpOpen}
-          onClick={() => setHelpOpen(open => !open)}>Help</button>
-      </header>
-      <p className="editor-purpose">
-        Dialogue is what characters say. Pick a quest, then a topic, to see the conversation and edit each NPC line.
-      </p>
-      <div className="dlg-row">
-        <span>Quest: {quest?.formKey ?? 'none picked yet'}</span>
-        <HelpTip topicId="dialogue-quest" />
-        <button type="button" onClick={() => setPickingQuest(true)}>{quest ? 'Change quest' : 'Pick a quest'}</button>
+      <div className="editor-screen-body">
+        <header className="editor-screen-header">
+          <button type="button" className="sidebar-action-btn" onClick={onBack}><ChevronLeft size={14} /> Back</button>
+          <h3 id="dialogue-editor-title">Dialogue</h3>
+          <button type="button" className="sidebar-action-btn" aria-expanded={helpOpen}
+            onClick={() => setHelpOpen(open => !open)}>Help</button>
+        </header>
+        <p className="editor-purpose">
+          Dialogue is what characters say. Pick a quest, then a topic, to see the conversation and edit each NPC line.
+        </p>
+        <div className="dlg-row">
+          <span>Quest: {quest?.formKey ?? 'none picked yet'}</span>
+          <HelpTip topicId="dialogue-quest" />
+          <button type="button" onClick={() => setPickingQuest(true)}>{quest ? 'Change quest' : 'Pick a quest'}</button>
+        </div>
+        {error && (
+          <div role="alert" className="dlg-problem">
+            <p>{error.text}</p>
+            {error.details && <details><summary>Details</summary><code>{error.details}</code></details>}
+          </div>
+        )}
+        {!backend && <div className="editor-empty">The backend is not connected, so dialogue cannot be read.</div>}
+        {backend && !quest && (
+          <div className="editor-empty">Pick a quest to see its dialogue. Each quest owns its own branches, topics and replies.</div>
+        )}
+        {quest && loading && <div className="editor-empty">Reading the quest's dialogue.</div>}
+        {quest && dialogue && actions && (
+          <div className="dlg-columns">
+            <DialogueTree dialogue={dialogue} selectedTopic={topicKey} actions={actions}
+              onSelectTopic={key => { setTopicKey(key); setLine(null); }} />
+            <DialogueChat topic={topic} line={line} labels={labels} actions={actions} onSelectLine={setLine} />
+            <DialogueDetails info={info} index={line?.index ?? 0} labels={labels} actions={actions}
+              onEditConditions={target => void openConditions(target)} />
+          </div>
+        )}
+        {pickingQuest && (
+          <RecordPicker title="Quest" refType="Quest" refTypes="QUST"
+            onPick={(formKey, plugin) => void pickQuest({ formKey, plugin })} onClose={() => setPickingQuest(false)} />
+        )}
+        {conditionsFor && quest && (
+          <ConditionsEditor plugin={quest.plugin} record={conditionsFor.info.formKey} path={CONDITIONS_PATH}
+            label="Reply conditions" onClose={() => setConditionsFor(null)} onSaved={() => void conditionsSaved()} />
+        )}
       </div>
-      {error && (
-        <div role="alert" className="dlg-problem">
-          <p>{error.text}</p>
-          {error.details && <details><summary>Details</summary><code>{error.details}</code></details>}
-        </div>
-      )}
-      {!backend && <div className="editor-empty">The backend is not connected, so dialogue cannot be read.</div>}
-      {backend && !quest && (
-        <div className="editor-empty">Pick a quest to see its dialogue. Each quest owns its own branches, topics and replies.</div>
-      )}
-      {quest && loading && <div className="editor-empty">Reading the quest's dialogue.</div>}
-      {quest && dialogue && actions && (
-        <div className="dlg-columns">
-          <DialogueTree dialogue={dialogue} selectedTopic={topicKey} actions={actions}
-            onSelectTopic={key => { setTopicKey(key); setLine(null); }} />
-          <DialogueChat topic={topic} line={line} labels={labels} actions={actions} onSelectLine={setLine} />
-          <DialogueDetails info={info} index={line?.index ?? 0} labels={labels} actions={actions}
-            onEditConditions={target => void openConditions(target)} />
-        </div>
-      )}
-      {pickingQuest && (
-        <RecordPicker title="Quest" refType="Quest" refTypes="QUST"
-          onPick={(formKey, plugin) => void pickQuest({ formKey, plugin })} onClose={() => setPickingQuest(false)} />
-      )}
-      {conditionsFor && quest && (
-        <ConditionsEditor plugin={quest.plugin} record={conditionsFor.info.formKey} path={CONDITIONS_PATH}
-          label="Reply conditions" onClose={() => setConditionsFor(null)} onSaved={() => void conditionsSaved()} />
-      )}
       {helpOpen && <HelpDrawer topicIds={SCREEN_TOPICS.dialogue} onClose={() => setHelpOpen(false)} />}
     </section>
   );

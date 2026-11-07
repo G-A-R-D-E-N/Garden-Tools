@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import HelpTip from '../help/HelpTip';
-import { CommitInput, FlagChecks } from './questControls';
+import { CommitInput, CommitTextarea, FlagChecks } from './questControls';
 import {
   OBJECTIVE_FLAG_OPTIONS, duplicateObjectiveWarning,
   type QuestAlias, type QuestObjective,
@@ -68,7 +68,14 @@ export default function ObjectivesPane({ objectives, aliases, onCommit }: Props)
             <span>Text the player sees</span>
             <HelpTip topicId="quest-objective-text" />
           </div>
-          <CommitInput type="text" aria-label={`Objective ${objective.index} text`} value={objective.displayText}
+          <CommitTextarea className="quest-text" rows={1} aria-label={`Objective ${objective.index} text`}
+            value={objective.displayText}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
             onCommit={displayText => replace(position, { ...objective, displayText },
               `Change objective ${objective.index} text`)} />
           <div className="quest-row">
