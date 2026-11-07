@@ -43,10 +43,11 @@ interface RawTarget { alias: number; aliasName?: string; flags: number; }
 interface RawObjective { index: number; flags: number; displayText?: string; targets?: RawTarget[]; }
 interface RawCollectionEntry { id: number; maxInitialFillCount?: number; }
 interface RawAlias {
-  id: number;
+  id?: number;
   kind: AliasKind;
   name?: string;
   flags?: number;
+  entries?: RawCollectionEntry[];
   collectionEntries?: RawCollectionEntry[];
 }
 
@@ -79,16 +80,19 @@ export function parseObjectives(raw: unknown): QuestObjective[] {
 
 export function parseAliases(raw: unknown): QuestAlias[] {
   const rows = (raw as { aliases?: RawAlias[] } | null)?.aliases ?? [];
-  return rows.map(row => ({
-    id: row.id,
-    kind: row.kind,
-    name: row.name ?? '',
-    flags: row.flags ?? null,
-    collectionEntries: (row.collectionEntries ?? []).map(entry => ({
-      id: entry.id,
-      maxInitialFillCount: entry.maxInitialFillCount ?? null,
-    })),
-  }));
+  return rows.map(row => {
+    const entries = row.entries ?? row.collectionEntries ?? [];
+    return {
+      id: row.id ?? entries[0]?.id ?? 0,
+      kind: row.kind,
+      name: row.name ?? '',
+      flags: row.flags ?? null,
+      collectionEntries: entries.map(entry => ({
+        id: entry.id,
+        maxInitialFillCount: entry.maxInitialFillCount ?? null,
+      })),
+    };
+  });
 }
 
 export function stagesJson(stages: QuestStage[]): string {
@@ -123,9 +127,9 @@ export function aliasesJson(aliases: QuestAlias[]): string {
       ));
     } else {
       row.id = alias.id;
-      if (alias.flags !== null) row.flags = alias.flags;
+      row.flags = alias.flags;
     }
-    if (alias.name) row.name = alias.name;
+    row.name = alias.name === '' ? null : alias.name;
     if (alias.fill) Object.assign(row, alias.fill);
     return row;
   }));

@@ -3642,7 +3642,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                 {"id", 1},
                 {"name", "LocRef"},
                 {"flags", 0},
-                {"locationAliasReference", {{"alias", 3}, {"referenceType", "000800:Master.esm"}}}
+                {"locationAliasReference", {{"alias", 3}, {"referenceType", "000800:Master.esm"}}},
+                {"conditions", nlohmann::json::array()}
             }
         })));
     REQUIRE(locRef.has_value());
@@ -3662,7 +3663,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                 {"id", 1},
                 {"name", "Ext"},
                 {"flags", 0},
-                {"externalAlias", {{"quest", "000800:Patch.esp"}, {"alias", 4}}}
+                {"externalAlias", {{"quest", "000800:Patch.esp"}, {"alias", 4}}},
+                {"conditions", nlohmann::json::array()}
             }
         })));
     REQUIRE(external.has_value());
@@ -3682,7 +3684,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                 {"id", 1},
                 {"name", "Near"},
                 {"flags", 0},
-                {"findMatchingNearAlias", {{"alias", -3}, {"type", 1}}}
+                {"findMatchingNearAlias", {{"alias", -3}, {"type", 1}}},
+                {"conditions", nlohmann::json::array()}
             }
         })));
     REQUIRE(near.has_value());
@@ -3702,7 +3705,8 @@ TEST_CASE("Native SetQuestAliases writes remaining reference fill types") {
                 {"id", 1},
                 {"name", "Evt"},
                 {"flags", 0},
-                {"findMatchingFromEvent", {{"event", 17}, {"data", 4}}}
+                {"findMatchingFromEvent", {{"event", 17}, {"data", 4}}},
+                {"conditions", nlohmann::json::array()}
             }
         })));
     REQUIRE(fromEvent.has_value());
@@ -3775,7 +3779,8 @@ TEST_CASE("Native SetQuestAliases writes remaining location fill types") {
                 {"kind", "location"},
                 {"id", 2},
                 {"flags", 0},
-                {"externalAliasLocation", {{"quest", "000800:Patch.esp"}, {"alias", 8}}}
+                {"externalAliasLocation", {{"quest", "000800:Patch.esp"}, {"alias", 8}}},
+                {"closestToAlias", nullptr}
             }
         })));
     REQUIRE(extLoc.has_value());

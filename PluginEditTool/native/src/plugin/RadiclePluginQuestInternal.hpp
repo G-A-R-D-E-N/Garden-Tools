@@ -113,6 +113,9 @@ std::optional<Error> parseQuestCondition(
     std::string_view surface = "quest log entries");
 void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
                            std::vector<fo4::CtdaCondition>& conditions);
+bool aliasConditionRun(const fo4::forms::QuestAlias& alias,
+                       std::vector<fo4::CtdaCondition>& conditions);
+nlohmann::json questAliasJson(const fo4::Plugin& plugin, const fo4::forms::QuestAlias& alias);
 std::optional<Error> adapterConditionUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::ConflictGraph& graph,

@@ -1,5 +1,6 @@
 #include "RadiclePluginQuestInternal.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -182,6 +183,70 @@ bool isAliasConditionSuccessor(fo4::forms::QuestAliasKind kind, std::string_view
            name == "ALSP" || name == "ALFC" || name == "ALPC" || name == "VTCK";
 }
 
+std::optional<Error> zeroFormLinkUnrepresentable(const fo4::forms::QuestAlias& alias) {
+    const auto countMembers = [&alias](std::string_view name) {
+        return static_cast<std::size_t>(std::count_if(
+            alias.subrecords.begin(), alias.subrecords.end(),
+            [name](const fo4::Subrecord& member) { return member.signature.to_string() == name; }));
+    };
+    const auto refuse = [](std::string_view slot) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST alias " + std::string(slot) +
+                " has a zero-valued FormLink this adapter cannot reconstruct"
+        };
+    };
+    std::size_t keywordSlots = 0;
+    std::size_t linkedSlots = 0;
+    for (const auto& member : alias.subrecords) {
+        const auto name = member.signature.to_string();
+        if (name == "KWDA") keywordSlots += member.data.size() / 4;
+        if (name == "ALLA") linkedSlots += member.data.size() / 8;
+    }
+    if (keywordSlots != alias.keywords.size()) return refuse("keywords");
+    if (linkedSlots != alias.linked_aliases.size()) return refuse("linkedAliases");
+    if (countMembers("CNTO") != alias.items.size()) return refuse("items");
+    const auto itemsWithExtra = static_cast<std::size_t>(std::count_if(
+        alias.items.begin(), alias.items.end(),
+        [](const fo4::forms::QuestAliasItem& item) { return item.extra.has_value(); }));
+    if (countMembers("COED") != itemsWithExtra) return refuse("items");
+    if (countMembers("ALSP") != alias.spells.size()) return refuse("spells");
+    if (countMembers("ALFC") != alias.factions.size()) return refuse("factions");
+    if (countMembers("ALPC") != alias.packages.size()) return refuse("packages");
+
+    struct OptionalLink {
+        std::string_view signature;
+        std::string_view slot;
+        bool present;
+    };
+    const OptionalLink optionalLinks[] = {
+        {"SPOR", "spectatorOverridePackageList", alias.spectator_override.has_value()},
+        {"OCOR", "observeDeadBodyOverridePackageList", alias.observe_dead_body_override.has_value()},
+        {"GWOR", "guardWarnOverridePackageList", alias.guard_warn_override.has_value()},
+        {"ECOR", "combatOverridePackageList", alias.combat_override.has_value()},
+        {"ALDN", "displayName", alias.display_name.has_value()},
+        {"ALFV", "forcedVoice", alias.forced_voice.has_value()},
+        {"ALDI", "deathItem", alias.death_item.has_value()},
+        {"VTCK", "voiceTypes", alias.voice_types.has_value()},
+    };
+    for (const auto& link : optionalLinks) {
+        const std::size_t expected = link.present ? 1 : 0;
+        if (countMembers(link.signature) != expected) return refuse(link.slot);
+    }
+
+    std::size_t questLinks = 0;
+    if (const auto* externalReference =
+            std::get_if<fo4::forms::QuestExternalAliasReferenceFill>(&alias.fill)) {
+        if (externalReference->quest.has_value()) ++questLinks;
+    }
+    if (const auto* externalLocation =
+            std::get_if<fo4::forms::QuestExternalAliasLocationFill>(&alias.fill)) {
+        if (externalLocation->quest.has_value()) ++questLinks;
+    }
+    if (countMembers("ALEQ") != questLinks) return refuse("externalAlias quest");
+    return std::nullopt;
+}
+
 std::optional<Error> aliasConditionsUnrepresentable(
     fo4::forms::QuestAliasKind kind,
     const std::vector<fo4::Subrecord>& members,
@@ -282,6 +347,9 @@ std::optional<Error> existingAliasesUnrepresentable(
                 "QuestAuthoringCoverageIncomplete",
                 "existing QUST alias has an unresolved FormLink"
             };
+        }
+        if (const auto error = zeroFormLinkUnrepresentable(alias)) {
+            return error;
         }
         if (!supportedAliasFill(alias.fill)) {
             return Error{
