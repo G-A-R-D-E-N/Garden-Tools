@@ -1,9 +1,12 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import QuestEditor from '../QuestEditor';
+import CheckPanel from './CheckPanel';
 import type { QuestSnapshot } from './questBackend';
+import { CHECK_LIMIT } from './questChecks';
+import { parseStages } from './questModel';
 import { openQuest, QUEST, stubBackend } from './questTestHarness';
-import { useQuestCheck } from './useQuestCheck';
+import { BACKEND_TIMEOUT_MS, TIMEOUT_TEXT, useQuestCheck } from './useQuestCheck';
 
 const scrollIntoView = vi.fn();
 
@@ -32,7 +35,7 @@ const runCheck = async () => {
 };
 
 beforeEach(() => { scrollIntoView.mockClear(); Element.prototype.scrollIntoView = scrollIntoView; });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 it('Detects: Check this quest stays disabled, with the reason shown, until the quest has loaded', async () => {
   stubBackend({ GetQuestStages: vi.fn(() => new Promise<string>(() => {})) });
@@ -46,7 +49,7 @@ it('Detects: while the record check runs the panel says it is checking, and the 
   let finish: (raw: string) => void = () => {};
   stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
-    CheckForErrors: vi.fn(() => new Promise<string>(resolve => { finish = resolve; })),
+    CheckQuest: vi.fn(() => new Promise<string>(resolve => { finish = resolve; })),
   });
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
@@ -61,7 +64,7 @@ it('Detects: the counts header matches the list, and errors are listed before wa
   stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
     GetDialogue: vi.fn(async () => JSON.stringify({ branches: [{ formKey: BRANCH }], topics: [] })),
-    CheckForErrors: vi.fn(async () => JSON.stringify([
+    CheckQuest: vi.fn(async () => JSON.stringify([
       { Code: 'dialogue_branch_category_invalid', Severity: 'warning', FormKey: BRANCH, Message: 'Branch category is invalid' },
       { Code: 'unresolved_link', Severity: 'error', FormKey: QUEST, Subrecord: 'ALID', Message: 'Alias link is broken' },
     ])),
@@ -80,7 +83,7 @@ it('Detects: a dialogue finding shows its record id as copyable text, so the rec
   stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
     GetDialogue: vi.fn(async () => JSON.stringify({ branches: [{ formKey: BRANCH }], topics: [] })),
-    CheckForErrors: vi.fn(async () => JSON.stringify([
+    CheckQuest: vi.fn(async () => JSON.stringify([
       { Code: 'dialogue_branch_category_invalid', Severity: 'error', FormKey: BRANCH, Message: 'Branch category is invalid' },
     ])),
   });
@@ -100,6 +103,16 @@ it('Detects: a quest with no problems shows the No problems found state with the
   expect(screen.getByText('0 errors')).toBeTruthy();
   expect(screen.getByText('0 warnings')).toBeTruthy();
   expect(screen.getByText(/^Checked at /)).toBeTruthy();
+});
+
+it('Detects: the quest check calling the whole-load-order CheckForErrors instead of the quest-scoped CheckQuest', async () => {
+  const backend = stubBackend({ GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)) });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  await runCheck();
+  await screen.findByText('No problems found.');
+  expect(backend.CheckQuest).toHaveBeenCalledWith(PLUGIN, QUEST, CHECK_LIMIT);
+  expect(backend.CheckForErrors).not.toHaveBeenCalled();
 });
 
 it('Detects: Show stage on a stage finding selects that stage in the flow chart and the stage list', async () => {
@@ -131,7 +144,7 @@ it('Detects: Show the objectives pane on an objective finding moves focus to tha
 it('Detects: a rejected record check shows a friendly error with its details, instead of an uncaught exception', async () => {
   stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
-    CheckForErrors: vi.fn(async () => { throw new Error('Native check crashed'); }),
+    CheckQuest: vi.fn(async () => { throw new Error('Native check crashed'); }),
   });
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
@@ -144,7 +157,7 @@ it('Detects: a rejected record check shows a friendly error with its details, in
 it('Detects: a record check reply that is not JSON shows the friendly error and stops the checking text, instead of hanging or crashing', async () => {
   stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
-    CheckForErrors: vi.fn(async () => 'not json'),
+    CheckQuest: vi.fn(async () => 'not json'),
   });
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
@@ -174,7 +187,7 @@ it('Detects: a saved stage makes the check results out of date, and checking aga
 it('Detects: a slow first record check that finishes after a second run started is dropped, so the second run result is the one shown', async () => {
   const first = deferredReply();
   const second = deferredReply();
-  stubBackend({ CheckForErrors: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise) });
+  stubBackend({ CheckQuest: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise) });
   const { result } = renderHook(() => useQuestCheck(PLUGIN, QUEST, EMPTY_SNAPSHOT));
   act(() => result.current.run());
   act(() => result.current.run());
@@ -192,7 +205,7 @@ it('Detects: an edit saved while the record check is still running marks the res
   let finish: (raw: string) => void = () => {};
   const backend = stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
-    CheckForErrors: vi.fn(() => new Promise<string>(resolve => { finish = resolve; })),
+    CheckQuest: vi.fn(() => new Promise<string>(resolve => { finish = resolve; })),
   });
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
@@ -210,7 +223,7 @@ it('Detects: an edit saved while the record check is still running marks the res
 it('Detects: Show the aliases pane on an alias finding moves focus to that pane', async () => {
   stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
-    CheckForErrors: vi.fn(async () => questRow('ALID', 'Alias link is broken')),
+    CheckQuest: vi.fn(async () => questRow('ALID', 'Alias link is broken')),
   });
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
@@ -222,7 +235,7 @@ it('Detects: Show the aliases pane on an alias finding moves focus to that pane'
 it('Detects: Show the fragments pane on a script finding moves focus to that pane', async () => {
   stubBackend({
     GetQuestStages: vi.fn(async () => JSON.stringify(TWO_STAGES)),
-    CheckForErrors: vi.fn(async () => questRow('VMAD', 'Fragment script is broken')),
+    CheckQuest: vi.fn(async () => questRow('VMAD', 'Fragment script is broken')),
   });
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
@@ -269,4 +282,106 @@ it('Detects: a written script function makes the check results out of date, beca
   fireEvent.click(screen.getByRole('button', { name: 'Write script function' }));
   await waitFor(() => expect(backend.SetQuestFragment).toHaveBeenCalledTimes(1));
   expect(await screen.findByText(OUT_OF_DATE)).toBeTruthy();
+});
+
+const LOCAL_WARNING = 'No stage completes or fails the quest, so the quest can never finish.';
+const LOCAL_SNAPSHOT: QuestSnapshot = {
+  stages: parseStages({ stages: [{ index: 10, flags: 0, logEntries: [{ logText: 'Find the courier', note: '', flags: 0 }] }] }),
+  objectives: [],
+  aliases: [],
+  jumps: [],
+  fragmentScripts: [],
+};
+
+function CheckHarness() {
+  const check = useQuestCheck(PLUGIN, QUEST, LOCAL_SNAPSHOT);
+  return (
+    <>
+      <button type="button" onClick={check.run}>Start check</button>
+      <CheckPanel result={check.result} running={check.running} error={check.error} outOfDate={check.outOfDate}
+        onOpen={() => {}} onRetry={check.run} />
+    </>
+  );
+}
+
+const startCheck = () => fireEvent.click(screen.getByRole('button', { name: 'Start check' }));
+const elapse = (ms: number) => act(async () => { vi.advanceTimersByTime(ms); });
+
+it('Detects: unmounting while a backend check is pending cancels its timeout, so the timer cannot update state afterwards', async () => {
+  vi.useFakeTimers();
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    stubBackend({ CheckQuest: vi.fn(() => new Promise<string>(() => {})) });
+    const view = render(<CheckHarness />);
+    startCheck();
+    view.unmount();
+    await act(async () => { vi.advanceTimersByTime(BACKEND_TIMEOUT_MS + 1); });
+    expect(error).not.toHaveBeenCalled();
+  } finally {
+    error.mockRestore();
+  }
+});
+
+it('Detects: a backend that never answers ends the check after the timeout, with the timeout message, the local rows and a Retry button', async () => {
+  vi.useFakeTimers();
+  stubBackend({ CheckQuest: vi.fn(() => new Promise<string>(() => {})) });
+  render(<CheckHarness />);
+  startCheck();
+  expect(screen.getByText('Checking this quest...')).toBeTruthy();
+  expect(screen.getByText(LOCAL_WARNING)).toBeTruthy();
+  await elapse(BACKEND_TIMEOUT_MS);
+  expect(screen.queryByText('Checking this quest...')).toBeNull();
+  expect(screen.getByText(TIMEOUT_TEXT)).toBeTruthy();
+  expect(screen.getByText(LOCAL_WARNING)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  expect(document.querySelector('.quest-check-counts')).toBeNull();
+});
+
+it('Detects: Retry after a timed-out check calls the backend again and shows the checking state while it runs', async () => {
+  vi.useFakeTimers();
+  const check = vi.fn(() => new Promise<string>(() => {}));
+  stubBackend({ CheckQuest: check });
+  render(<CheckHarness />);
+  startCheck();
+  await elapse(BACKEND_TIMEOUT_MS);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(check).toHaveBeenCalledTimes(2);
+  expect(screen.queryByText(TIMEOUT_TEXT)).toBeNull();
+  expect(screen.getByText('Checking this quest...')).toBeTruthy();
+});
+
+it('Detects: a scene lookup that never answers also ends in the timeout message, so the check cannot wait on it forever', async () => {
+  vi.useFakeTimers();
+  stubBackend({
+    CheckQuest: vi.fn(async () => '[]'),
+    GetReferencedBy: vi.fn(async () => JSON.stringify([{ Plugin: PLUGIN, FormKey: '000900:Patch.esp', EditorID: '', Type: 'SCEN' }])),
+    GetScene: vi.fn(() => new Promise<string>(() => {})),
+  });
+  render(<CheckHarness />);
+  startCheck();
+  await elapse(BACKEND_TIMEOUT_MS);
+  expect(screen.getByText(TIMEOUT_TEXT)).toBeTruthy();
+  expect(screen.getByText(LOCAL_WARNING)).toBeTruthy();
+});
+
+it('Detects: a rejected backend call shows its error next to the local rows and stops the checking state', async () => {
+  stubBackend({ CheckQuest: vi.fn(async () => { throw new Error('Native check crashed'); }) });
+  render(<CheckHarness />);
+  startCheck();
+  expect(await screen.findByText('Checking this quest failed.')).toBeTruthy();
+  expect(screen.getByText('Details: Native check crashed')).toBeTruthy();
+  expect(screen.getByText(LOCAL_WARNING)).toBeTruthy();
+  expect(screen.queryByText('Checking this quest...')).toBeNull();
+});
+
+it('Detects: a malformed backend reply shows its readable error and does not leave the checking state, for an object reply and for a null reply', async () => {
+  for (const reply of [JSON.stringify({ rows: [] }), null]) {
+    stubBackend({ CheckQuest: vi.fn(async () => reply) });
+    const view = render(<CheckHarness />);
+    startCheck();
+    expect(await screen.findByText('Checking this quest failed.')).toBeTruthy();
+    expect(screen.getByText('Details: The game record check returned a result the editor could not read.')).toBeTruthy();
+    expect(screen.queryByText('Checking this quest...')).toBeNull();
+    view.unmount();
+  }
 });

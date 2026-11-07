@@ -1,5 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include "RadiclePluginSupport.hpp"
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -14,8 +16,32 @@
 #include <fo4/graph/check_errors.hpp>
 #include <fo4/graph/reachability.hpp>
 #include <fo4/plugin/maintenance.hpp>
+#include <fo4/plugin/reader.hpp>
+#include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
+
+namespace {
+
+nlohmann::json findingRows(const std::vector<fo4::CheckFinding>& findings) {
+    nlohmann::json rows = nlohmann::json::array();
+    for (const auto& finding : findings) {
+        rows.push_back({
+            {"Code", std::string(fo4::check_code_name(finding.code))},
+            {"Detail", finding.detail},
+            {"Severity", std::string(fo4::check_severity_name(finding.severity))},
+            {"Plugin", std::string(finding.plugin.filename())},
+            {"FormKey", finding.record.to_string()},
+            {"Subrecord", finding.subrecord == fo4::Signature{} ? std::string{}
+                                                                : finding.subrecord.to_string()},
+            {"Target", finding.target.to_string()},
+            {"Message", finding.message}
+        });
+    }
+    return rows;
+}
+
+}  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::checkForErrors(const nlohmann::json& arguments) const {
     std::string pluginName;
@@ -44,23 +70,53 @@ Result<nlohmann::json> RadiclePluginBackend::checkForErrors(const nlohmann::json
     }
 
     try {
-        nlohmann::json rows = nlohmann::json::array();
-        for (const auto& finding : fo4::check_load_order(loadOrder, options)) {
-            rows.push_back({
-                {"Code", std::string(fo4::check_code_name(finding.code))},
-                {"Detail", finding.detail},
-                {"Severity", std::string(fo4::check_severity_name(finding.severity))},
-                {"Plugin", std::string(finding.plugin.filename())},
-                {"FormKey", finding.record.to_string()},
-                {"Subrecord", finding.subrecord == fo4::Signature{} ? std::string{}
-                                                                    : finding.subrecord.to_string()},
-                {"Target", finding.target.to_string()},
-                {"Message", finding.message}
-            });
-        }
-        return nlohmann::json(rows.dump());
+        return nlohmann::json(findingRows(fo4::check_load_order(loadOrder, options)).dump());
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CheckForErrorsFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::checkQuest(const nlohmann::json& arguments) const {
+    std::string pluginName;
+    std::string questText;
+    std::size_t limit = 500;
+    if (arguments.is_array() && arguments.size() > 0 && arguments[0].is_string()) {
+        pluginName = arguments[0].get<std::string>();
+    }
+    if (arguments.is_array() && arguments.size() > 1 && arguments[1].is_string()) {
+        questText = arguments[1].get<std::string>();
+    }
+    if (arguments.is_array() && arguments.size() > 2 && arguments[2].is_number_integer()) {
+        const auto raw = arguments[2].get<std::int64_t>();
+        if (raw > 0) limit = std::min<std::size_t>(static_cast<std::size_t>(raw), 100000);
+    }
+    if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    if (questText.empty()) return std::unexpected(Error{"RecordMissing", "Record is empty"});
+    auto quest = support::formKeyArgument(questText);
+    if (!quest) return std::unexpected(quest.error());
+
+    OpLock lock(*this, OpLock::Mode::Read);
+    const auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    const auto* record = fo4::find_record(loaded->plugin, *quest);
+    if (record == nullptr) {
+        return std::unexpected(Error{"RecordNotFound", "Record is not present in " + pluginName + ": " + questText});
+    }
+    if (record->header.signature != fo4::sig_qust) {
+        return std::unexpected(Error{"RecordTypeMismatch", "CheckQuest requires a QUST record"});
+    }
+
+    std::vector<const fo4::Plugin*> loadOrder;
+    loadOrder.reserve(plugins_.size());
+    for (const auto& entry : plugins_) loadOrder.push_back(&entry.plugin);
+
+    try {
+        const fo4::QuestCheckRequest request{loaded->plugin.key, *quest, limit};
+        return nlohmann::json(findingRows(fo4::check_quest(loadOrder, request)).dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"CheckQuestFailed", error.what()});
     }
 }
 

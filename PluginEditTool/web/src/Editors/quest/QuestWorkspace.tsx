@@ -44,7 +44,7 @@ export default function QuestWorkspace({ formKey, plugin }: { formKey: string; p
         <>
           <FlowChart stages={snapshot.stages} objectives={snapshot.objectives} jumps={snapshot.jumps}
             selected={selectedStage} onSelect={pickStage} onEdit={editStages} />
-          <CheckPanel result={check.result} running={check.running} error={check.error} outOfDate={check.outOfDate} onOpen={openFinding} />
+          <CheckPanel result={check.result} running={check.running} error={check.error} outOfDate={check.outOfDate} onOpen={openFinding} onRetry={check.run} />
           <div className="quest-panes">
             <StagesPane stages={snapshot.stages} selected={selectedStage} onCommit={commitStages} />
             <ObjectivesPane objectives={snapshot.objectives} aliases={snapshot.aliases} onCommit={commitObjectives} />
