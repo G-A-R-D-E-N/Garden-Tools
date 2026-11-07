@@ -9,7 +9,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/flags.hpp>
 #include <fo4/forms/quest.hpp>
+#include <fo4/localization/strings.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/ctda.hpp>
@@ -83,6 +85,69 @@ std::string createQuestWithAlias(fo4ide::plugin::RadiclePluginBackend& backend) 
     if (!aliased.has_value()) INFO(aliased.error().type + ": " + aliased.error().message);
     REQUIRE(aliased.has_value());
     return key;
+}
+
+void writeU32Subrecord(fo4::test::ByteWriter& out, std::string_view signature, std::uint32_t value) {
+    fo4::test::ByteWriter data;
+    data.u32(value);
+    fo4::test::write_subrecord(out, signature, data.bytes);
+}
+
+std::vector<std::byte> rawBytes(std::string_view text) {
+    std::vector<std::byte> bytes;
+    bytes.reserve(text.size());
+    for (const auto ch : text) bytes.push_back(std::byte{static_cast<unsigned char>(ch)});
+    return bytes;
+}
+
+void writeTexts(const std::filesystem::path& root) {
+    const auto strings = root / "Strings";
+    std::filesystem::create_directories(strings);
+    fo4::localization::write_string_table_file(
+        {fo4::localization::StringTableKind::strings, {{84, rawBytes("Present")}}}, strings / "Patch_en.STRINGS");
+    fo4::localization::write_string_table_file(
+        {fo4::localization::StringTableKind::dlstrings, {{42, rawBytes("Log")}}}, strings / "Patch_en.DLSTRINGS");
+    fo4::localization::write_string_table_file(
+        {fo4::localization::StringTableKind::ilstrings, {}}, strings / "Patch_en.ILSTRINGS");
+}
+
+nlohmann::json localizedQuestContext(const std::filesystem::path& root) {
+    return nlohmann::json{{"language", "en"}, {"stringsDirectory", (root / "Strings").string()}};
+}
+
+std::vector<std::byte> localizedObjectiveQuest(std::uint32_t logTextId) {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::localized, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "QUST", 0);
+    const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"TextQuest\0", 10});
+    fo4::test::ByteWriter stageIndex;
+    stageIndex.u16(10);
+    stageIndex.u8(0);
+    stageIndex.u8(0);
+    fo4::test::write_subrecord(out, "INDX", stageIndex.bytes);
+    fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
+    writeU32Subrecord(out, "CNAM", logTextId);
+    const auto addObjective = [&out](std::uint16_t objectiveIndex, std::uint32_t textId) {
+        fo4::test::ByteWriter objective;
+        objective.u16(objectiveIndex);
+        fo4::test::write_subrecord(out, "QOBJ", objective.bytes);
+        writeU32Subrecord(out, "FNAM", 0);
+        writeU32Subrecord(out, "NNAM", textId);
+    };
+    addObjective(20, 0);
+    addObjective(21, 999);
+    addObjective(22, 84);
+    fo4::test::end_record(out, quest);
+    fo4::test::end_group(out, group);
+    return out.bytes;
 }
 
 nlohmann::json objectivesWithGetStage(const std::string& questKey) {
@@ -320,4 +385,162 @@ TEST_CASE("Native SetQuestObjectives refuses duplicate objective indexes without
     CHECK(result.error().type == "InvalidQuestObjectivePayload");
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native localized quest text ID zero reads as empty text") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    writeBytes(path, localizedObjectiveQuest(0));
+    writeTexts(root);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPatch(backend, path);
+    const auto context = localizedQuestContext(root);
+    const auto stages = parseResult(backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", context})));
+    REQUIRE(stages.at("stages").size() == 1u);
+    CHECK(stages["stages"][0]["logEntries"][0]["logText"] == "");
+    CHECK(stages["stages"][0]["logEntries"][0]["logTextId"] == 0);
+    CHECK_FALSE(stages["stages"][0]["logEntries"][0].contains("textMissing"));
+    const auto objectives = parseResult(backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", context})));
+    REQUIRE(objectives.at("objectives").size() == 3u);
+    CHECK(objectives["objectives"][0]["displayText"] == "");
+    CHECK(objectives["objectives"][0]["displayTextId"] == 0);
+    CHECK_FALSE(objectives["objectives"][0].contains("textMissing"));
+    CHECK(objectives["objectives"][2]["displayText"] == "Present");
+}
+
+TEST_CASE("Native localized quest text ID missing from the table reads with textMissing") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    writeBytes(path, localizedObjectiveQuest(999));
+    writeTexts(root);
+    fo4ide::plugin::RadiclePluginBackend backend; loadPatch(backend, path);
+    const auto context = localizedQuestContext(root);
+    const auto stages = parseResult(backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", context})));
+    REQUIRE(stages.at("stages").size() == 1u);
+    CHECK(stages["stages"][0]["logEntries"][0]["logText"] == "");
+    CHECK(stages["stages"][0]["logEntries"][0]["logTextId"] == 999);
+    CHECK(stages["stages"][0]["logEntries"][0]["textMissing"] == true);
+    const auto objectives = parseResult(backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", context})));
+    REQUIRE(objectives.at("objectives").size() == 3u);
+    CHECK(objectives["objectives"][0]["displayText"] == "");
+    CHECK_FALSE(objectives["objectives"][0].contains("textMissing"));
+    CHECK(objectives["objectives"][1]["displayText"] == "");
+    CHECK(objectives["objectives"][1]["displayTextId"] == 999);
+    CHECK(objectives["objectives"][1]["textMissing"] == true);
+    CHECK(objectives["objectives"][2]["displayText"] == "Present");
+    CHECK_FALSE(objectives["objectives"][2].contains("textMissing"));
+}
+
+TEST_CASE("Native localized textMissing rows keep their text IDs on write back") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    writeBytes(path, localizedObjectiveQuest(999));
+    writeTexts(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.testSetJournalRoot(root / "journal");
+    loadPatch(backend, path);
+    const auto context = localizedQuestContext(root);
+    const std::string key = "000800:Patch.esp";
+    const auto stagesRead = parseResult(backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", key, context})));
+    const auto objectivesRead = parseResult(backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", key, context})));
+    REQUIRE(objectivesRead["objectives"][1]["textMissing"] == true);
+    REQUIRE(backend.invokeBackend("SetQuestObjectives", nlohmann::json::array({
+        "Patch.esp", key, objectivesRead["objectives"], context})).has_value());
+    REQUIRE(backend.invokeBackend("SetQuestStages", nlohmann::json::array({
+        "Patch.esp", key, stagesRead["stages"], context})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto objectives = fo4::forms::decode_quest_objectives(disk, fo4::FormKey::parse(key));
+    REQUIRE(objectives.objectives.size() == 3u);
+    REQUIRE(objectives.objectives[0].display_text.has_value());
+    REQUIRE(objectives.objectives[1].display_text.has_value());
+    REQUIRE(objectives.objectives[2].display_text.has_value());
+    CHECK(objectives.objectives[0].display_text->id == 0u);
+    CHECK(objectives.objectives[1].display_text->id == 999u);
+    CHECK(objectives.objectives[2].display_text->id == 84u);
+    const auto stages = fo4::forms::decode_quest_stages(disk, fo4::FormKey::parse(key));
+    REQUIRE(stages.stages.size() == 1u);
+    REQUIRE(stages.stages[0].log_entries.size() == 1u);
+    REQUIRE(stages.stages[0].log_entries[0].log_text.has_value());
+    CHECK(stages.stages[0].log_entries[0].log_text->id == 999u);
+    const auto dlstrings = fo4::localization::read_string_table_file(
+        root / "Strings" / "Patch_en.DLSTRINGS", fo4::localization::StringTableKind::dlstrings);
+    CHECK(dlstrings.entries.size() == 1u);
+    const auto strings = fo4::localization::read_string_table_file(
+        root / "Strings" / "Patch_en.STRINGS", fo4::localization::StringTableKind::strings);
+    CHECK(strings.entries.size() == 1u);
+}
+
+TEST_CASE("Native textMissing rows without an existing text ID are refused without writing") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    writeBytes(path, localizedObjectiveQuest(999));
+    writeTexts(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.testSetJournalRoot(root / "journal");
+    loadPatch(backend, path);
+    const auto context = localizedQuestContext(root);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto before = readBytes(path);
+    const nlohmann::json objectives = nlohmann::json::array({{
+        {"index", 99}, {"flags", 0}, {"displayText", ""}, {"textMissing", true},
+        {"targets", nlohmann::json::array()}}});
+    const auto objectiveResult = backend.invokeBackend(
+        "SetQuestObjectives", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", objectives, context}));
+    REQUIRE_FALSE(objectiveResult.has_value());
+    CHECK(objectiveResult.error().type == "InvalidQuestObjectivePayload");
+    const nlohmann::json stages = nlohmann::json::array({{
+        {"index", 77}, {"flags", 0},
+        {"logEntries", nlohmann::json::array({nlohmann::json{{"flags", 0}, {"logText", ""}, {"textMissing", true}}})}}});
+    const auto stageResult = backend.invokeBackend(
+        "SetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages, context}));
+    REQUIRE_FALSE(stageResult.has_value());
+    CHECK(stageResult.error().type == "InvalidQuestStagePayload");
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("Native clearing localized quest text writes text ID zero without adding table rows") {
+    const auto root = tempRoot(); Cleanup cleanup{root}; const auto path = root / "Patch.esp";
+    writeBytes(path, localizedObjectiveQuest(42));
+    writeTexts(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.testSetJournalRoot(root / "journal");
+    loadPatch(backend, path);
+    const auto context = localizedQuestContext(root);
+    const std::string key = "000800:Patch.esp";
+    auto stagesRead = parseResult(backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", key, context})));
+    auto objectivesRead = parseResult(backend.invokeBackend(
+        "GetQuestObjectives", nlohmann::json::array({"Patch.esp", key, context})));
+    REQUIRE(stagesRead["stages"][0]["logEntries"][0]["logText"] == "Log");
+    REQUIRE(objectivesRead["objectives"][2]["displayText"] == "Present");
+    stagesRead["stages"][0]["logEntries"][0]["logText"] = "";
+    objectivesRead["objectives"][2]["displayText"] = "";
+    REQUIRE(backend.invokeBackend("SetQuestObjectives", nlohmann::json::array({
+        "Patch.esp", key, objectivesRead["objectives"], context})).has_value());
+    REQUIRE(backend.invokeBackend("SetQuestStages", nlohmann::json::array({
+        "Patch.esp", key, stagesRead["stages"], context})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto objectives = fo4::forms::decode_quest_objectives(disk, fo4::FormKey::parse(key));
+    REQUIRE(objectives.objectives.size() == 3u);
+    REQUIRE(objectives.objectives[1].display_text.has_value());
+    REQUIRE(objectives.objectives[2].display_text.has_value());
+    CHECK(objectives.objectives[1].display_text->id == 999u);
+    CHECK(objectives.objectives[2].display_text->id == 0u);
+    const auto stages = fo4::forms::decode_quest_stages(disk, fo4::FormKey::parse(key));
+    REQUIRE(stages.stages.size() == 1u);
+    REQUIRE(stages.stages[0].log_entries.size() == 1u);
+    REQUIRE(stages.stages[0].log_entries[0].log_text.has_value());
+    CHECK(stages.stages[0].log_entries[0].log_text->id == 0u);
+    const auto dlstrings = fo4::localization::read_string_table_file(
+        root / "Strings" / "Patch_en.DLSTRINGS", fo4::localization::StringTableKind::dlstrings);
+    CHECK(dlstrings.entries.size() == 1u);
+    const auto strings = fo4::localization::read_string_table_file(
+        root / "Strings" / "Patch_en.STRINGS", fo4::localization::StringTableKind::strings);
+    CHECK(strings.entries.size() == 1u);
 }

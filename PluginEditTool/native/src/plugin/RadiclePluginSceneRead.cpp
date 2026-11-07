@@ -147,9 +147,12 @@ std::optional<TopicInfo> infoOf(const fo4::Plugin& plugin, const fo4::Record& re
         if (response.malformed) continue;
         std::string text;
         if (const auto* name = fo4::info_response_subrecord(record, response, k_nam1); name != nullptr) {
-            text = plugin.header.tes4_flags.is_localized() && name->data.size() == 4
-                       ? "#" + std::to_string(readAt<std::uint32_t>(name->data, 0))
-                       : cp1252Text(name->data);
+            if (plugin.header.tes4_flags.is_localized() && name->data.size() == 4) {
+                const auto textId = readAt<std::uint32_t>(name->data, 0);
+                if (textId != 0) text = "#" + std::to_string(textId);
+            } else {
+                text = cp1252Text(name->data);
+            }
         }
         out.responses.emplace_back(response.number, std::move(text));
     }

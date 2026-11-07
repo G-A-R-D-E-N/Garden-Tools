@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 import HelpTip from '../help/HelpTip';
 import { CommitInput, CommitTextarea, FlagChecks } from './questControls';
-import { LOG_ENTRY_FLAG_OPTIONS, STAGE_FLAG_OPTIONS, type QuestStage, type StageLogEntry, type StageSelection } from './questModel';
+import {
+  LOG_ENTRY_FLAG_OPTIONS, STAGE_FLAG_OPTIONS, afterTextEdit,
+  type QuestStage, type StageLogEntry, type StageSelection,
+} from './questModel';
 
 interface Props {
   stages: QuestStage[];
@@ -68,8 +71,11 @@ export default function StagesPane({ stages, selected, onCommit }: Props) {
               </div>
               <CommitTextarea className="quest-text" rows={2} aria-label={`Stage ${stage.index} log entry ${entryAt + 1} text`}
                 value={entry.logText} placeholder="Journal text the player reads"
-                onCommit={logText => replaceStage(position, withEntry(stage, entryAt, { ...entry, logText }),
+                onCommit={logText => replaceStage(position, withEntry(stage, entryAt, { ...afterTextEdit(entry, logText), logText }),
                   `Change stage ${stage.index} log text`)} />
+              {entry.textMissing && (
+                <p className="quest-note" role="note">Text not found in the string table. Saving keeps the existing text ID.</p>
+              )}
               <CommitInput type="text" aria-label={`Stage ${stage.index} log entry ${entryAt + 1} note`}
                 value={entry.note} placeholder="Note for the Creation Kit (optional)"
                 onCommit={note => replaceStage(position, withEntry(stage, entryAt, { ...entry, note }),

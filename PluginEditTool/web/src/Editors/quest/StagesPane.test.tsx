@@ -16,6 +16,42 @@ it('Detects: a log entry offers no Conditions editor, because native rejects Sta
   expect(screen.queryByRole('button', { name: /Conditions/ })).toBeNull();
 });
 
+it('Detects: a log entry whose text is missing from the string table shows a note and keeps textMissing when a stage is saved', async () => {
+  const backend = stubBackend({
+    GetQuestStages: vi.fn(async () => JSON.stringify({ stages: [
+      { index: 10, flags: 0, logEntries: [{ logText: null, flags: 0, textMissing: true, conditions: [] }] },
+    ] })),
+  });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  expect(await screen.findByText(/Text not found in the string table/)).toBeTruthy();
+  const note = screen.getByLabelText('Stage 10 log entry 1 note');
+  fireEvent.change(note, { target: { value: 'Note' } });
+  fireEvent.blur(note);
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
+  const sent = JSON.parse(backend.SetQuestStages.mock.calls[0][2]);
+  expect(sent[0].logEntries[0].textMissing).toBe(true);
+  expect(sent[0].logEntries[0].logText).toBe('');
+});
+
+it('Detects: typing new log text into a log entry with textMissing clears textMissing in the payload and sends the typed text', async () => {
+  const backend = stubBackend({
+    GetQuestStages: vi.fn(async () => JSON.stringify({ stages: [
+      { index: 10, flags: 0, logEntries: [{ logText: null, logTextId: 999, flags: 0, textMissing: true, conditions: [] }] },
+    ] })),
+  });
+  render(<QuestEditor onBack={() => {}} />);
+  await openQuest();
+  const text = await screen.findByLabelText('Stage 10 log entry 1 text');
+  fireEvent.change(text, { target: { value: 'New journal line' } });
+  fireEvent.blur(text);
+  await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
+  const sent = JSON.parse(backend.SetQuestStages.mock.calls[0][2]);
+  expect(sent[0].logEntries[0].textMissing).toBeUndefined();
+  expect(sent[0].logEntries[0].logText).toBe('New journal line');
+  expect(sent[0].logEntries[0].logTextId).toBe(999);
+});
+
 it('Detects: the Stages pane says conditions stay with their log entry when you save and that this screen cannot edit them', async () => {
   stubBackend();
   render(<QuestEditor onBack={() => {}} />);

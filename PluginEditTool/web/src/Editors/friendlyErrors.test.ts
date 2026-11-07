@@ -43,6 +43,18 @@ it.each([
   expect(friendly.details).toBe(raw);
 });
 
+it('Detects: a PluginReadOnly refusal shows the plain game-file sentence naming the plugin instead of the raw backend error', () => {
+  const raw = 'backend.AddSceneActor: PluginReadOnly: Refusing to write protected or game-Data plugin: Fallout4.esm';
+  const friendly = friendlyError(raw);
+  expect(friendly.text).toBe('Fallout4.esm is a game file and cannot be changed. Copy the record into your own plugin first (the Copy as override button above, or the record menu), then edit the copy.');
+  expect(friendly.details).toBe(raw);
+});
+
+it('Detects: a PluginReadOnly refusal for a plugin name with spaces names the whole plugin, not only its first word', () => {
+  const raw = 'backend.SetFieldValue: PluginReadOnly: Refusing to write protected or game-Data plugin: My Game Patch.esp';
+  expect(friendlyError(raw).text).toContain('My Game Patch.esp is a game file and cannot be changed.');
+});
+
 it('Detects: the action number from the backend is lost, so the user cannot tell which scene action blocks the removal', () => {
   const raw = 'backend.RemoveSceneActor: RemoveSceneActorFailed: scene action 2 references the actor alias this edit removes';
   expect(friendlyError(raw).details).toContain('scene action 2');

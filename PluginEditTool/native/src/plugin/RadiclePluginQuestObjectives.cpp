@@ -36,7 +36,7 @@ constexpr const char* kObjectiveError = "InvalidQuestObjectivePayload";
 
 bool knownObjectiveKey(std::string_view key) {
     return key == "index" || key == "flags" || key == "displayText" || key == "targets" ||
-           key == "displayTextId" || key == "flagNames" || key == "unknownFlagBits";
+           key == "displayTextId" || key == "textMissing" || key == "flagNames" || key == "unknownFlagBits";
 }
 
 bool knownTargetKey(std::string_view key) {
@@ -264,6 +264,21 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
             fo4::schema::LocalizedString text;
             text.text = *encoded;
             objective.display_text = text;
+            bool textMissing = false;
+            if (const auto field = element.find("textMissing"); field != element.end() && !field->is_null()) {
+                if (!field->is_boolean()) {
+                    return std::unexpected(Error{kObjectiveError, "objective textMissing must be a boolean"});
+                }
+                textMissing = field->get<bool>();
+            }
+            const auto existingText = previousByIndex.find(objective.index);
+            const bool hasExistingTextId = existingText != previousByIndex.end() &&
+                                           existingText->second->display_text.has_value() &&
+                                           existingText->second->display_text->id.has_value();
+            if (textMissing && !hasExistingTextId) {
+                return std::unexpected(Error{kObjectiveError,
+                    "objective textMissing row has no existing text ID to keep; reload the quest"});
+            }
 
             const auto targetsJson = element.find("targets");
             if (targetsJson == element.end() || !targetsJson->is_array()) {
@@ -369,13 +384,13 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestObjectives(const nlohmann::
                     const auto previousId = *previousObjective->second->display_text->id;
                     const auto* previousText = fo4::localization::find_string(
                         localizedTables->strings, previousId);
-                    if (previousText == nullptr) {
-                        return std::unexpected(Error{
-                            "LocalizedObjectiveTableInvalid",
-                            "STRINGS is missing existing QUST NNAM ID " + std::to_string(previousId)
-                        });
+                    if (encodedText.empty() && previousText == nullptr) {
+                        id = previousId;
+                    } else if (previousText != nullptr && previousText->text == encodedText) {
+                        id = previousId;
+                    } else if (encodedText.empty()) {
+                        id = 0u;
                     }
-                    if (previousText->text == encodedText) id = previousId;
                 }
                 if (!id.has_value()) {
                     if (localizedTables->nextId == std::numeric_limits<std::uint32_t>::max()) {

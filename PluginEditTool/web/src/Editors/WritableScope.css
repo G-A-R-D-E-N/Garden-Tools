@@ -1,0 +1,31 @@
+.writable-scope {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: contents;
+}
+
+.read-only-banner {
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+
+.read-only-banner p {
+  margin: 0;
+}
+
+.read-only-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.read-only-banner-message {
+  margin-top: 6px;
+  opacity: 0.8;
+}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import HelpTip from '../help/HelpTip';
 import { CommitInput, CommitTextarea, FlagChecks } from './questControls';
 import {
-  OBJECTIVE_FLAG_OPTIONS, duplicateObjectiveWarning,
+  OBJECTIVE_FLAG_OPTIONS, afterTextEdit, duplicateObjectiveWarning, renumberObjective,
   type QuestAlias, type QuestObjective,
 } from './questModel';
 
@@ -33,7 +33,7 @@ export default function ObjectivesPane({ objectives, aliases, onCommit }: Props)
       setRefusal('An objective number must be a whole number from 0 to 65535.');
       return;
     }
-    replace(position, { ...objective, index }, `Change objective ${objective.index} number`);
+    replace(position, renumberObjective(objective, index), `Change objective ${objective.index} number`);
   };
 
   const addObjective = () => {
@@ -76,8 +76,11 @@ export default function ObjectivesPane({ objectives, aliases, onCommit }: Props)
                 e.currentTarget.blur();
               }
             }}
-            onCommit={displayText => replace(position, { ...objective, displayText },
+            onCommit={displayText => replace(position, { ...afterTextEdit(objective, displayText), displayText },
               `Change objective ${objective.index} text`)} />
+          {objective.textMissing && (
+            <p className="quest-note" role="note">Text not found in the string table. Saving keeps the existing text ID.</p>
+          )}
           <div className="quest-row">
             <FlagChecks flags={objective.flags} options={OBJECTIVE_FLAG_OPTIONS}
               label={`Objective ${objective.index} flags`}
