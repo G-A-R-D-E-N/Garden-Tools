@@ -9,6 +9,9 @@ export type WizardStep = PluginQuestion | TemplateQuestion;
 export interface TemplateStage { index: number; journal: string; completes?: boolean; fails?: boolean; }
 export interface TemplateObjective { index: number; text: string; targets: string[]; }
 export interface TemplateAlias { slot: string; name: string; kind: AliasKind; }
+export interface TemplateSceneAction { kind: 'dialogue'; phase: number; actor: string; }
+export interface TemplateScene { phases: string[]; actors: string[]; actions: TemplateSceneAction[]; }
+export interface TemplateDialogue { topic: string; replies: string[]; }
 
 export interface QuestTemplate {
   id: string;
@@ -18,4 +21,6 @@ export interface QuestTemplate {
   stages: TemplateStage[];
   objectives: TemplateObjective[];
   aliases: TemplateAlias[];
+  scene?: TemplateScene;
+  dialogue?: TemplateDialogue;
 }
