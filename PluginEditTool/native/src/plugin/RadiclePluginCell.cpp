@@ -7,12 +7,14 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
 
 #include <fo4/environment/cell_view.hpp>
 #include <fo4/forms/cell.hpp>
+#include <fo4/forms/cell_edit.hpp>
 #include <fo4/forms/placed_reference.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
@@ -29,6 +31,49 @@ std::optional<int> intArgument(const nlohmann::json& args, std::size_t index) {
 std::optional<float> floatArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_number()) return std::nullopt;
     return args[index].get<float>();
+}
+
+std::optional<float> numberField(const nlohmann::json& object, const char* key) {
+    if (!object.is_object() || !object.contains(key) || !object.at(key).is_number()) return std::nullopt;
+    return object.at(key).get<float>();
+}
+
+std::optional<fo4::forms::PositionRotation> transformField(const nlohmann::json& value) {
+    const auto x = numberField(value, "x");
+    const auto y = numberField(value, "y");
+    const auto z = numberField(value, "z");
+    const auto rx = numberField(value, "rx");
+    const auto ry = numberField(value, "ry");
+    const auto rz = numberField(value, "rz");
+    if (!x || !y || !z || !rx || !ry || !rz) return std::nullopt;
+    return fo4::forms::PositionRotation{.x = *x, .y = *y, .z = *z, .rx = *rx, .ry = *ry, .rz = *rz};
+}
+
+std::optional<Error> placedReferenceEditError(const fo4::forms::PlacedReferenceEditResult& result,
+                                              std::string_view patchName,
+                                              const std::string& formKeyText) {
+    using Status = fo4::forms::PlacedReferenceEditStatus;
+    switch (result.status) {
+        case Status::edited:
+            return std::nullopt;
+        case Status::reference_missing:
+            if (!result.message.empty()) return Error{"PlacedReferenceNotFound", result.message};
+            return Error{"PlacedReferenceNotFound",
+                         "Placed reference is not present in " + std::string(patchName) + ": " + formKeyText};
+        case Status::reference_deleted:
+            return Error{"PlacedReferenceDeleted", result.message};
+        case Status::target_cell_missing:
+            return Error{"PlacedReferenceTargetCellMissing",
+                         "No loaded exterior cell covers the new position of " + formKeyText};
+        case Status::field_absent:
+            return Error{"PlacedReferenceFieldAbsent",
+                         "Placed reference " + formKeyText + " has no record for this edit"};
+    }
+    return Error{"PlacedReferenceEditFailed", result.message};
+}
+
+nlohmann::json cellEditHistoryJson(std::string_view pluginName, std::size_t undo, std::size_t redo) {
+    return {{"plugin", std::string(pluginName)}, {"undoCount", undo}, {"redoCount", redo}};
 }
 
 nlohmann::json scolPartsJson(const fo4::env::BaseObjectInfo& base) {
@@ -118,10 +163,15 @@ std::shared_ptr<const fo4::env::Environment> RadiclePluginBackend::borrowedEnvir
     return borrowedEnvironment_;
 }
 
-void RadiclePluginBackend::dropBorrowedEnvironmentLocked() {
+void RadiclePluginBackend::dropBorrowedEnvironmentOnlyLocked() {
     std::scoped_lock lock(environmentMutex_);
     ++mutationEpoch_;
     borrowedEnvironment_.reset();
+}
+
+void RadiclePluginBackend::dropBorrowedEnvironmentLocked() {
+    dropBorrowedEnvironmentOnlyLocked();
+    cellEditHistories_.clear();
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getPlacedReferences(
@@ -236,68 +286,179 @@ Result<nlohmann::json> RadiclePluginBackend::setPlacedReferenceTransform(
     if (auto guard = writeGuard(*patch); guard.has_value()) return std::unexpected(*guard);
 
     try {
-        auto mutated = patch->plugin;
-        std::string copiedFrom;
-        if (fo4::find_record(mutated, key) == nullptr) {
-            const LoadedPlugin* source = nullptr;
-            const fo4::Record* winning = nullptr;
-            for (auto it = plugins_.rbegin(); it != plugins_.rend(); ++it) {
-                const auto* candidate = fo4::find_record(it->plugin, key);
-                if (candidate == nullptr) continue;
-                source = &*it;
-                winning = candidate;
-                break;
-            }
-            if (source == nullptr || winning == nullptr) {
-                return std::unexpected(Error{
-                    "PlacedReferenceNotFound",
-                    "Placed reference is not present in the loaded environment: " + formKeyText
-                });
-            }
-            if (winning->header.flags.is_deleted()) {
-                return std::unexpected(Error{
-                    "PlacedReferenceDeleted",
-                    "The winning version of " + formKeyText + " is deleted in " + source->name
-                });
-            }
-
-            const auto copyStatus = fo4::forms::copy_placed_reference_as_override(
-                mutated, source->plugin, key, false);
-            switch (copyStatus) {
-                case fo4::forms::PlacedReferenceCopyStatus::inserted:
-                case fo4::forms::PlacedReferenceCopyStatus::replaced:
-                    copiedFrom = source->name;
-                    break;
-                case fo4::forms::PlacedReferenceCopyStatus::already_exists:
-                    break;
-                case fo4::forms::PlacedReferenceCopyStatus::source_missing:
-                    return std::unexpected(Error{
-                        "PlacedReferenceNotFound",
-                        "Winning source no longer contains placed reference " + formKeyText
-                    });
-            }
-        }
-
-        const bool changed = fo4::forms::set_placed_reference_transform(
-            mutated,
-            key,
-            {.x = *x, .y = *y, .z = *z, .rx = *rx, .ry = *ry, .rz = *rz});
-        if (!changed) {
-            return std::unexpected(Error{
-                "PlacedReferenceNotFound",
-                "Placed reference is not present in " + patchName + ": " + formKeyText
-            });
-        }
-        stagePluginMutationLocked(*patch, std::move(mutated));
+        fo4::forms::PlacedReferenceEdit edit;
+        edit.transform = fo4::forms::PositionRotation{.x = *x, .y = *y, .z = *z, .rx = *rx, .ry = *ry, .rz = *rz};
+        const auto result = editPlacedReferenceLocked(*patch, key, edit);
+        if (!result) return std::unexpected(result.error());
 
         auto message = "Moved " + formKeyText + " in " + patchName + ".";
-        if (!copiedFrom.empty()) {
-            message += " Created the nested override from " + copiedFrom + ".";
+        if (!result->copied_from.empty()) {
+            message += " Created the nested override from " + result->copied_from + ".";
         }
         return nlohmann::json(std::move(message));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PlacedTransformWriteFailed", error.what()});
     }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::editPlacedReference(const nlohmann::json& arguments) {
+    const auto formKeyText = support::stringArgument(arguments, 0);
+    const auto patchName = support::stringArgument(arguments, 1);
+    const auto changes = arguments.is_array() && arguments.size() > 2 ? arguments[2] : nlohmann::json();
+    if (formKeyText.empty() || patchName.empty() || !changes.is_object()) {
+        return std::unexpected(Error{
+            "PlacedEditArgumentsMissing",
+            "EditPlacedReference requires FormKey, patch plugin and an edit object"
+        });
+    }
+
+    fo4::FormKey key;
+    try {
+        key = fo4::FormKey::parse(formKeyText);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+
+    fo4::forms::PlacedReferenceEdit edit;
+    if (changes.contains("transform")) {
+        edit.transform = transformField(changes.at("transform"));
+        if (!edit.transform) {
+            return std::unexpected(Error{
+                "PlacedTransformArgumentsMissing",
+                "EditPlacedReference transform requires numeric x, y, z, rx, ry and rz"
+            });
+        }
+    }
+    if (changes.contains("scale")) {
+        const auto& scale = changes.at("scale");
+        if (!scale.is_null() && !scale.is_number()) {
+            return std::unexpected(Error{"PlacedEditArgumentsMissing", "EditPlacedReference scale must be a number or null"});
+        }
+        edit.scale.emplace();
+        if (scale.is_number()) edit.scale->emplace(scale.get<float>());
+    }
+    if (changes.contains("editorId")) {
+        if (!changes.at("editorId").is_string()) {
+            return std::unexpected(Error{"PlacedEditArgumentsMissing", "EditPlacedReference editorId must be a string"});
+        }
+        edit.editor_id = changes.at("editorId").get<std::string>();
+    }
+    if (!edit.transform && !edit.scale && !edit.editor_id) {
+        return std::unexpected(Error{
+            "PlacedEditArgumentsMissing",
+            "EditPlacedReference supports transform, scale and editorId"
+        });
+    }
+
+    OpLock lock(*this, OpLock::Mode::Write, {patchName});
+    auto* patch = findPlugin(patchName);
+    if (patch == nullptr) {
+        return std::unexpected(Error{
+            "TargetPluginNotLoaded",
+            "Patch plugin is not loaded yet: " + patchName
+        });
+    }
+    if (auto guard = writeGuard(*patch); guard.has_value()) return std::unexpected(*guard);
+
+    try {
+        const auto result = editPlacedReferenceLocked(*patch, key, edit);
+        if (!result) return std::unexpected(result.error());
+        return nlohmann::json(nlohmann::json{
+            {"plugin", patchName},
+            {"formKey", key.to_string()},
+            {"copiedFrom", result->copied_from},
+            {"relocated", result->relocated}
+        }.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"PlacedTransformWriteFailed", error.what()});
+    }
+}
+
+Result<fo4::forms::PlacedReferenceEditResult> RadiclePluginBackend::editPlacedReferenceLocked(
+    LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::PlacedReferenceEdit& edit) {
+    CommitScope commit;
+    const auto env = borrowedEnvironment();
+    auto mutated = patch.plugin;
+    fo4::forms::PlacedReferenceEditResult result;
+    try {
+        result = fo4::forms::edit_placed_reference(mutated, *env, key, edit);
+    } catch (const fo4::forms::PlacedReferenceError& error) {
+        return std::unexpected(Error{"PlacedEditInvalid", error.what()});
+    }
+    if (const auto error = placedReferenceEditError(result, patch.name, key.to_string())) {
+        return std::unexpected(*error);
+    }
+    stageCellEditLocked(patch, std::move(mutated));
+    return result;
+}
+
+void RadiclePluginBackend::stageCellEditLocked(LoadedPlugin& patch, fo4::Plugin mutated) {
+    CommitScope commit;
+    fo4::PluginEditHistory history = std::move(cellEditHistories_[patch.name]);
+    history.record(patch.plugin);
+    stagePluginMutationLocked(patch, std::move(mutated));
+    cellEditHistories_[patch.name] = std::move(history);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::undoCellEdit(const nlohmann::json& arguments) {
+    return stepCellEditHistory(arguments, true);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::redoCellEdit(const nlohmann::json& arguments) {
+    return stepCellEditHistory(arguments, false);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::stepCellEditHistory(const nlohmann::json& arguments, bool undo) {
+    const auto pluginName = support::stringArgument(arguments, 0);
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"CellEditPluginMissing", "Cell edit history requires a patch plugin"});
+    }
+
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
+    auto* patch = findPlugin(pluginName);
+    if (patch == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    if (auto guard = writeGuard(*patch); guard.has_value()) return std::unexpected(*guard);
+
+    try {
+        CommitScope commit;
+        const auto found = cellEditHistories_.find(patch->name);
+        if (found == cellEditHistories_.end()) {
+            return std::unexpected(Error{undo ? "NothingToUndo" : "NothingToRedo", "No cell edit to step in " + pluginName});
+        }
+        auto restored = undo ? found->second.undo(patch->plugin) : found->second.redo(patch->plugin);
+        if (!restored.has_value()) {
+            return std::unexpected(Error{undo ? "NothingToUndo" : "NothingToRedo", "No cell edit to step in " + pluginName});
+        }
+        fo4::PluginEditHistory history = std::move(found->second);
+        stagePluginMutationLocked(*patch, std::move(*restored));
+        auto response = nlohmann::json(cellEditHistoryJson(patch->name, history.undo_count(),
+                                                           history.redo_count()).dump());
+        cellEditHistories_[patch->name] = std::move(history);
+        return response;
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"CellEditHistoryFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getCellEditHistory(const nlohmann::json& arguments) const {
+    const auto pluginName = support::stringArgument(arguments, 0);
+    if (pluginName.empty()) {
+        return std::unexpected(Error{"CellEditPluginMissing", "Cell edit history requires a patch plugin"});
+    }
+
+    OpLock lock(*this, OpLock::Mode::Read);
+    const auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    const auto history = cellEditHistories_.find(loaded->name);
+    if (history == cellEditHistories_.end()) {
+        return nlohmann::json(cellEditHistoryJson(loaded->name, 0, 0).dump());
+    }
+    return nlohmann::json(cellEditHistoryJson(loaded->name, history->second.undo_count(),
+                                              history->second.redo_count()).dump());
 }
 
 Result<nlohmann::json> RadiclePluginBackend::createPlacedObject(const nlohmann::json& arguments) {
