@@ -1,0 +1,80 @@
+name: Native compiler cache warm-up
+
+# Requires the public default branch: only its caches are restorable by ci/pr-N runs.
+# Requires a manual copy to public main; the sync job does not publish this file.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-windows-tests:
+    name: Warm the Windows Release compiler cache
+    runs-on: windows-2022
+    environment: garden-tools-ci
+    timeout-minutes: 90
+    env:
+      # Must stay the same path as native-ci.yml, or the cached objects never match.
+      CCACHE_DIR: C:\ccache
+      CCACHE_MAXSIZE: 2G
+      CCACHE_NOHASHDIR: "1"
+    steps:
+      - name: Checkout the integration branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: G-A-R-D-E-N/GardenTools
+          ref: nomad/dev
+          token: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          persist-credentials: false
+
+      - name: Install ccache
+        continue-on-error: true
+        shell: powershell
+        run: choco install ccache -y
+
+      - name: Restore the compiler cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: C:\ccache
+          key: ccache-windows-msvc-native-windows-tests-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ccache-windows-msvc-native-windows-tests-
+
+      - name: Set up MSVC, Ninja and ccache
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/setup-msvc-ccache.ps1
+
+      - name: Pinned zlib source (cached)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/pinned-zlib-windows.ps1
+
+      - name: Configure
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+
+      - name: Build
+        shell: cmd
+        run: cmake --build build\native -- -k 0
+
+      # Ordering: save runs even when the build fails, because ccache stores each object as it finishes.
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: C:\ccache
+          key: ccache-windows-msvc-native-windows-tests-${{ github.run_id }}-${{ github.run_attempt }}
