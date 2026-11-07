@@ -1,6 +1,12 @@
 export type AliasKind = 'reference' | 'location' | 'collection';
 
-export interface StageLogEntry { logText: string; note: string; flags: number; }
+export interface StageLogEntry {
+  logText: string;
+  note: string;
+  flags: number;
+  conditions?: unknown[];
+  conditionsUnreadable?: boolean;
+}
 export interface QuestStage { index: number; flags: number; logEntries: StageLogEntry[]; }
 export interface StageSelection { index: number; }
 export interface StageJump { from: number; to: number; function: string; }
@@ -37,7 +43,7 @@ export const OBJECTIVE_FLAG_OPTIONS: readonly FlagOption[] = [
 
 export const ALIAS_KINDS: readonly AliasKind[] = ['reference', 'location', 'collection'];
 
-interface RawLogEntry { logText?: string; note?: string; flags: number; }
+interface RawLogEntry { logText?: string; note?: string; flags: number; conditions?: unknown; conditionsUnreadable?: boolean; }
 interface RawStage { index: number; flags: number; logEntries?: RawLogEntry[]; }
 interface RawTarget { alias: number; aliasName?: string; flags: number; }
 interface RawObjective { index: number; flags: number; displayText?: string; targets?: RawTarget[]; }
@@ -51,16 +57,19 @@ interface RawAlias {
   collectionEntries?: RawCollectionEntry[];
 }
 
+function parseLogEntry(entry: RawLogEntry): StageLogEntry {
+  const base = { logText: entry.logText ?? '', note: entry.note ?? '', flags: entry.flags };
+  return Array.isArray(entry.conditions) && entry.conditionsUnreadable !== true
+    ? { ...base, conditions: entry.conditions }
+    : { ...base, conditionsUnreadable: true };
+}
+
 export function parseStages(raw: unknown): QuestStage[] {
   const rows = (raw as { stages?: RawStage[] } | null)?.stages ?? [];
   return rows.map(row => ({
     index: row.index,
     flags: row.flags,
-    logEntries: (row.logEntries ?? []).map(entry => ({
-      logText: entry.logText ?? '',
-      note: entry.note ?? '',
-      flags: entry.flags,
-    })),
+    logEntries: (row.logEntries ?? []).map(parseLogEntry),
   }));
 }
 
@@ -103,6 +112,7 @@ export function stagesJson(stages: QuestStage[]): string {
       flags: entry.flags,
       ...(entry.logText ? { logText: entry.logText } : {}),
       ...(entry.note ? { note: entry.note } : {}),
+      ...(entry.conditionsUnreadable ? {} : { conditions: entry.conditions ?? [] }),
     })),
   })));
 }
