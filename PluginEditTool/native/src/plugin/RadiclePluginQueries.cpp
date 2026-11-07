@@ -227,6 +227,7 @@ Result<nlohmann::json> RadiclePluginBackend::getActivePlugins() const {
             {"Kind", pluginKind(loaded.plugin)},
             {"LoadOrder", index},
             {"Editable", isEditable(loaded)},
+            {"Localized", loaded.plugin.header.tes4_flags.is_localized()},
             {"Pending", loaded.dirty || hasStagedStringTables(loaded.name)},
             {"Size", fo4::plugin_original_bytes(loaded.plugin).size()}
         });

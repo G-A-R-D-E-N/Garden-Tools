@@ -1,4 +1,5 @@
 import type { Backend } from '../../backend';
+import { errorText } from '../../errors';
 import {
   aliasesJson, objectivesJson, stagesJson, type AliasKind, type QuestAlias, type QuestObjective, type QuestStage,
 } from '../quest/questModel';
@@ -119,6 +120,35 @@ const resolveArg = (value: unknown, run: QuestRun): unknown => {
   }
   return value;
 };
+
+export const madeRecordKeys = (run: QuestRun): string[] => [
+  ...[...run.made.values()].reverse(),
+  ...(run.formKey ? [run.formKey] : []),
+];
+
+export interface DeleteOutcome { remaining: string[]; error: string | null; }
+
+export async function deleteMadeRecords(b: Backend, plugin: string, keys: string[]): Promise<DeleteOutcome> {
+  let pending = keys;
+  let error: string | null = null;
+  while (pending.length > 0) {
+    const stuck: string[] = [];
+    let progressed = false;
+    error = null;
+    for (const key of pending) {
+      try {
+        await b.DeleteRecord(plugin, key);
+        progressed = true;
+      } catch (e) {
+        stuck.push(key);
+        error = errorText(e);
+      }
+    }
+    if (!progressed) break;
+    pending = stuck;
+  }
+  return { remaining: pending, error };
+}
 
 export async function runQuestCalls(b: Backend, calls: BackendCall[], run: QuestRun): Promise<void> {
   for (const call of calls) {

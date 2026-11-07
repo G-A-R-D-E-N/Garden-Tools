@@ -153,6 +153,31 @@ TEST_CASE("Bulk topic creation refuses bad input and localized plugins without s
     CHECK(fileBytes(localizedRoot / "Patch.esp") == beforeRefusal);
 }
 
+TEST_CASE("Active plugin listing reports the Localized flag from the TES4 header") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto rowFor = [](const nlohmann::json& rows, const std::string& name) {
+        for (const auto& row : rows) {
+            if (row.at("Name") == name) return row;
+        }
+        return nlohmann::json{};
+    };
+
+    fo4ide::plugin::RadiclePluginBackend plain;
+    openPatch(plain, root);
+    const auto plainRows = parseResult(plain.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    const auto plainRow = rowFor(plainRows, "Patch.esp");
+    REQUIRE(!plainRow.is_null());
+    CHECK(plainRow.at("Localized") == false);
+
+    fo4ide::plugin::RadiclePluginBackend localized;
+    openPatch(localized, root / "localized", 0x80u);
+    const auto localizedRows = parseResult(localized.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    const auto localizedRow = rowFor(localizedRows, "Patch.esp");
+    REQUIRE(!localizedRow.is_null());
+    CHECK(localizedRow.at("Localized") == true);
+}
+
 TEST_CASE("Bulk topic creation keeps accented response text as UTF-8 and refuses text Windows-1252 cannot hold") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
