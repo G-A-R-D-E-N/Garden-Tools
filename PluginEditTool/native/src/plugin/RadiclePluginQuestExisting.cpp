@@ -336,11 +336,15 @@ std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
     return std::nullopt;
 }
 
-fo4::FormLinkTypeLookup questOwnerTypes(const fo4::Plugin& plugin, const fo4::ConflictGraph& graph) {
-    return [&plugin, &graph](const fo4::FormKey& owner) -> std::optional<fo4::Signature> {
+fo4::FormLinkTypeLookup questOwnerTypes(const fo4::Plugin& plugin,
+                                        const fo4::ConflictGraph& graph,
+                                        bool refuseUnresolved) {
+    return [&plugin, &graph, refuseUnresolved](const fo4::FormKey& owner)
+               -> std::optional<fo4::Signature> {
         if (const auto* record = fo4::find_record(plugin, owner)) return record->header.signature;
         const auto* winner = graph.winner(owner);
         if (winner == nullptr) {
+            if (!refuseUnresolved) return std::nullopt;
             throw fo4::forms::QuestError(
                 "QUST alias item extra owner " + owner.to_string() +
                 " does not resolve to a loaded record");

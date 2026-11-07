@@ -187,6 +187,35 @@ void savePatch(fo4ide::plugin::RadiclePluginBackend& backend) {
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
 }
 
+void loadPatchWithoutMaster(fo4ide::plugin::RadiclePluginBackend& backend,
+                            const KeepFixture& fixture) {
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({
+            {
+                {"name", "Patch.esp"},
+                {"path", fixture.patchPath.string()},
+                {"source", "QuestTest"},
+                {"resolved", true}
+            }
+        })}}).has_value());
+}
+
+nlohmann::json unloadedOwnerAliases() {
+    return nlohmann::json::array({
+        nlohmann::json{
+            {"kind", "reference"}, {"id", 1}, {"name", "Rich"}, {"flags", 0},
+            {"items", nlohmann::json::array({
+                nlohmann::json{{"item", "000801:Master.esm"}, {"count", 2},
+                               {"extra", nlohmann::json{{"owner", "000805:Master.esm"},
+                                                        {"global", "00080D:Master.esm"},
+                                                        {"itemCondition", 0.5}}}}
+            })}
+        },
+        nlohmann::json{{"kind", "reference"}, {"id", 2}, {"name", "Plain"}, {"flags", 0}}
+    });
+}
+
 SubrecordBytes questSubrecords(const std::filesystem::path& path) {
     const auto disk = fo4::read_plugin_file(path);
     const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
@@ -854,5 +883,54 @@ TEST_CASE("Native QUST alias keep refuses converting an existing reference alias
     })));
     REQUIRE_FALSE(sugar.has_value());
     CHECK(sugar.error().type == "InvalidQuestAliasPayload");
+    CHECK(readBytes(fixture.patchPath) == before);
+}
+
+TEST_CASE("Native GetQuestAliases still reads a quest whose item COED owner master is not loaded and flags extrasUnreadable") {
+    KeepFixture fixture;
+    {
+        fo4ide::plugin::RadiclePluginBackend backend;
+        loadKeep(backend, fixture);
+        setAliases(backend, unloadedOwnerAliases());
+        savePatch(backend);
+    }
+
+    fo4ide::plugin::RadiclePluginBackend reloaded;
+    loadPatchWithoutMaster(reloaded, fixture);
+    const auto payload = getAliases(reloaded);
+    REQUIRE(payload.size() == 2u);
+    CHECK(payload[0].at("id") == 1);
+    REQUIRE(payload[0].at("items").size() == 1u);
+    const auto& extra = payload[0].at("items")[0].at("extra");
+    CHECK(extra.contains("owner"));
+    CHECK_FALSE(extra.contains("global"));
+    CHECK_FALSE(extra.contains("requiredRank"));
+    CHECK(payload[0].at("extrasUnreadable") == true);
+    CHECK_FALSE(payload[1].contains("extrasUnreadable"));
+}
+
+TEST_CASE("Native SetQuestAliases refuses a quest whose item COED owner master is not loaded and leaves the file unchanged") {
+    KeepFixture fixture;
+    {
+        fo4ide::plugin::RadiclePluginBackend backend;
+        loadKeep(backend, fixture);
+        setAliases(backend, unloadedOwnerAliases());
+        savePatch(backend);
+    }
+    const auto before = readBytes(fixture.patchPath);
+
+    fo4ide::plugin::RadiclePluginBackend reloaded;
+    loadPatchWithoutMaster(reloaded, fixture);
+    const auto payload = getAliases(reloaded);
+    const auto result = reloaded.invokeBackend("SetQuestAliases", aliasArgs(payload));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
+    CHECK(readBytes(fixture.patchPath) == before);
+
+    const auto plain = reloaded.invokeBackend("SetQuestAliases", aliasArgs(nlohmann::json::array({
+        nlohmann::json{{"kind", "reference"}, {"id", 2}, {"name", "Plain"}, {"flags", 0}}
+    })));
+    REQUIRE_FALSE(plain.has_value());
+    CHECK(plain.error().type == "QuestAuthoringCoverageIncomplete");
     CHECK(readBytes(fixture.patchPath) == before);
 }
