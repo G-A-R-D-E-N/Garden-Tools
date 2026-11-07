@@ -1,0 +1,20 @@
+file(MAKE_DIRECTORY ${OUT_DIR})
+foreach(pair "cs;${COMMITTED_CS}" "probe;${COMMITTED_PROBE}")
+  list(GET pair 0 tag)
+  list(GET pair 1 committed)
+  file(READ ${committed} text)
+  string(FIND "${text}" "\r\n" crlf)
+  if(crlf EQUAL -1)
+    string(REPLACE "\n" "\r\n" text "${text}")
+  else()
+    string(REPLACE "\r\n" "\n" text "${text}")
+  endif()
+  file(WRITE ${OUT_DIR}/${tag}.flipped "${text}")
+endforeach()
+execute_process(COMMAND ${CMAKE_COMMAND} -DPYTHON=${PYTHON} -DGENERATOR=${GENERATOR} -DINCLUDE_DIR=${INCLUDE_DIR}
+                        -DOUT_DIR=${OUT_DIR}/regenerated -DCOMMITTED_CS=${OUT_DIR}/cs.flipped
+                        -DCOMMITTED_PROBE=${OUT_DIR}/probe.flipped -P ${CHECK}
+                RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+  message(FATAL_ERROR "check_generated.cmake reports committed files as stale when only their line endings differ")
+endif()

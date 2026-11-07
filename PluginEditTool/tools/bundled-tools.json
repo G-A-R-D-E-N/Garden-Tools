@@ -1,0 +1,27 @@
+{
+  "tools": [
+    {
+      "id": "texconv",
+      "name": "texconv (DirectXTex, Microsoft)",
+      "version": "may2026",
+      "url": "https://github.com/microsoft/DirectXTex/releases/download/may2026/texconv.exe",
+      "sha256": "dcfdec10244e02cf5037fba089c55fb7e1326b1c8181742d77d15fa5cb5eef06",
+      "member": null,
+      "file": "tools/texconv/Texconvx64.exe",
+      "license": "MIT",
+      "licenseUrl": "https://raw.githubusercontent.com/microsoft/DirectXTex/4feb3e11a020f35b796fc769a74216a555d4f5ef/LICENSE"
+    },
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg (BtbN/FFmpeg-Builds win64-lgpl static build)",
+      "version": "n9.0.2-36-g6882969ce9",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-27-18-38/ffmpeg-n9.0.2-36-g6882969ce9-win64-lgpl-9.0.zip",
+      "sha256": "79e8ff30c01ac58a2bc4e820c86be81d426ea0bee10df8030fc6ac3c72fe785c",
+      "member": "bin/ffmpeg.exe",
+      "file": "tools/audio/ffmpeg.exe",
+      "license": "LGPL-3.0-or-later",
+      "licenseUrl": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/6882969ce9fd2aa6aa1d0008b2bfe1c838aac11d/COPYING.LGPLv3",
+      "pinNote": "BtbN prunes autobuild releases (newest ~14, then about one per month), so this tag will 404 within about two weeks. The fetch then fails closed. Re-pin url, sha256, member and licenseUrl together from a current autobuild and update this note."
+    }
+  ]
+}

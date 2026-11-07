@@ -1,0 +1,303 @@
+# Behaviour Graph Studio Changelog
+
+Changes that affect Behaviour Graph Studio users are documented here.
+
+New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framework.github.io/Prisma2.0/tools/behaviourgraphstudio/guide/getting-started).
+
+## Unreleased
+
+* Playback applies sampled root translation and turns, draws a ground path with second ticks and a facing arrow, and offers Follow travel camera tracking. Invalid/non-finite motion or travel above 1,000,000 units is reported but not applied or drawn; the archive corpus report counts it separately and keeps angles unwrapped. (#684)
+
+* A control that is out of reach stays readable, and a clip opened out of an archive or the Animations index takes its skeleton from the archive that holds it. Disabled buttons and checkboxes now draw one shared out-of-reach look - a dark surface, a visible border and a light grey label - instead of the theme's near-black rows that a locally painted button could not override, so the header Undo/Redo/Save pills, the Animation tab's Save changes, the Playback transport and the overlay toggles that wait for a ragdoll all say what they are. The Animation and Playback tool rows carry their own captions and spacing, each panel's heading is the tool's own name, the frame count no longer runs into the next group, Save changes stands alone without its SAVE caption, the two tool pickers no longer draw their text in the code colour, the workspace toolbar hides its horizontal scrollbar when the ribbon fits, and opening a window no longer writes the remembered tool to settings. An archive clip resolves its packed sibling skeleton before it looks at the loose copies in the shared extraction folder, so two creatures extracted into that folder can no longer swap skeletons; a hint folder that cannot serve an entry falls back to the configured game data folder, the folder is discovered once per open and its archives are released when the load ends.
+
+* A new canonical packfile writer rebuilds a file's data section from its object graph in the order the game's own writer produced: object bodies and their extra data (array payloads and strings) are placed by the measured rules, the local, global and virtual fixup tables are rebuilt from the same walk, and the class-name table is rebuilt with the meta classes first. Re-serializing an unedited vanilla file reproduces its bytes exactly (17,469 of 17,469 checked); a struct-array row can be added or removed, a new row copying the last one, and adding then removing a row returns the file to its original bytes. (#671)
+* A file that carries a fixed-size member holding several pointers - a ragdoll constraint's three motors, or a level-of-detail shape's eight shapes - now keeps those entries in the order the game's own writer produced, instead of moving them to the end of the fixup table. `symrm walk --data <Data folder>` checks the fixup order of every `.hkx` the game data resolves and reports how many files it reproduced and how many it left alone because this build has no definition for one of their classes; a fixup entry the walk cannot place is now refused with its offset named instead of being reordered silently. (#671)
+* Ragdoll values can be written back into the file they were read from. The rig physics tab's masses, material friction and joint limits are stored in the file's own bytes, and `symrm ragdoll <file> [--set <field>:<index>=<values>] [--set ragdoll=<i>] [--out <file>] [--force] [--data <folder>]` edits body mass, centre of mass, material dynamic and static friction and restitution, and a ragdoll's twist, plane and cone limits and friction. Capsule geometry is derived instead of refused: every capsule in the shipped game carries `7` vertices, `7` planes, `5` faces and `23` indices derived from its endpoints and radius, and `882` of the `933` vanilla capsules also carry a stored volume, centre of mass and inertia, so `--set radius:` and `--set capsule:` re-derive all of them in place while the capsule's direction stays the same - the stored mass and the undecoded `majorAxisSpace` are kept, and a direction change, stored arrays that do not match the endpoints and radius, or a capsule shape another body shares, or whose mass properties another capsule shape shares, without `--allow-shared-shape` is refused; a cone is written only in the angle measurement mode the game uses; material friction takes the two lanes separately and writes only the one that changed — through one value writer that patches only the bytes of the fields it owns, refuses any other byte change, leaves every other object in the file untouched and never reorders the fixup tables. Bodies, shapes and constraints are never added or removed, and `collisionFilterInfo`, `qualityId`, motion ids, frames and motors are never written. Saving keeps the original as a `.bak`, and `--out` equal to the source keeps it too. (#671)
+* Animations whose compression this build cannot decode now say so in plain English, name the class or the spline sub-format (rotation quantization format N), and state that the file was not changed, in the window, the inspection assistant, the round-trip report and the command line. `symrm scale` and `symrm frames` now count and list every file they cannot decode, and exit 0 when the only problems were unsupported animation classes or refused spline sub-formats instead of skipping them silently; a read failure or a run that decoded nothing still exits 1, and their new `--strict` flag also exits 1 for unsupported or refused files. (#663)
+* The Animation tab can trim a clip to a frame range, retime it by a speed factor or to a new length, and close a loop by matching the last frame to the first (or easing the last few frames into it), with a preview before each change. Annotation times move with the clip and annotations outside a trim are dropped, with the count shown before and after. Each change is saved through the same verified path as a frame edit, keeping the original as a `.bak`. (#680)
+* Physics loading now reports why it produced no ragdoll instead of failing silently: a plain-words status (`SKELETON ONLY`, `LEGACY PHYSICS`, `UNSUPPORTED SHAPES`, `MAPPER MISSING`, `NO BODIES`, `WRONG CONTAINER`, `PARSE ERROR`), the classes it measured, and the count of body and constraint entries it had to skip. Playback shows the reason in its status line and offers Copy diagnostics, and it shows the sibling skeleton's own physics problem when that is where the ragdoll would come from. The rig physics tab shows the same, can copy it too, and keeps the previously loaded ragdoll when a newly opened file has none instead of emptying the preview. The assistant refuses a ragdoll open with the report's summary rather than reporting success. (#660)
+* Added `--scan-skeleton-physics <folder>`, a headless census of every `skeleton*.hkx` in a folder or `.ba2` with its ragdoll status, body/shape/constraint classes, mapper and `hknpBSMaterial`. A skeleton with no ragdoll is reported as `SKELETON ONLY` and does not count as a failure, so a vanilla install exits 0. It censuses the archives the game loads — the `.ba2` files directly under the Data folder in `plugins.txt` order plus the enabled mods' top-level archives — and a skeleton it cannot read (over the 512 MB HKX input cap, or an IO error) is reported as `unreadable` with the reason, and counted per distinct archive when the archive itself cannot be opened. (#659)
+* Playback names a fully packed actor's sibling skeleton by its own `CharacterAssets` entry name instead of by the animation's path, so the physics source line and the physics report refer to the skeleton the ragdoll actually came from. (#660)
+* Skin weights on full-precision skinned meshes are read and saved at the correct vertex offset. Skinned shapes whose vertex stride does not match their declared attributes are refused instead of misread.
+* The Animations tab lists every animation, behaviour graph, project file and character asset a load order can reach, loose or packed, grouped by kind and filtered by search, kind, project and folder. `--scan-index <folder>` prints the same census headlessly: exit 0 when it reached at least one indexed file, 1 when it reached none and 2 for a missing folder, with `--json`, `--cache <file>`, `--no-cache` and `--rebuild`. Both share a per-load-order cache under `%AppData%\BehaviourGraphStudio\cache`, named for the Data folder, the profile and the modlist path, so a warm run rescans only the sources whose stamp changed and merges the rest again. `AnimationIndex.DefaultCachePath` was replaced by `AnimationIndex.DefaultCachePathFor(request)`. (#664)
+* A malformed `hkaSkeleton` embedded in an animation no longer makes the whole animation unreadable: that skeleton candidate is skipped, and the clip still opens, plays from its sibling skeleton and saves. A standalone skeleton read (`ReadSkeleton`, the skeleton document path and the `symrm` skeleton commands) still fails closed on the same file. The unused public `HkxAnimationData.SupportedAnimationClasses` and the public `HavokPhysicsExtractor.MapperClass` constant were removed. (#661)
+* Skeleton-mapper write-back reaches the command line: `symrm mapper --recompute` measures the shipped `hkaSkeletonMapper` rows and reports the error against the reference extent, `--out <file>` writes the result to a copy instead of the source, `--force` allows an in-place overwrite, and `--data <folder>` names the game data the mapper's skeletons come from. (#672)
+* Every `.ba2` read and every loose-versus-archive decision now goes through one shared `GameData` API (`ReadEntry`/`TryReadEntry`, `Read(GameAsset)`, `EnumerateWinners`, `MergeWinners`), so a feature cannot invent its own precedence: loose files win over archives, the enabled mod roots win over the game data, and the later-loaded archive wins within the archives. An archive entry is checked against the 512 MiB reading limit from the archive's own live entry size before it is decompressed, so a stale cached entry index cannot force a large allocation. `--scan-skeleton-physics` now censuses the archives the game loads (the top-level `.ba2` files under the Data folder in `plugins.txt` order plus the enabled mods' top-level archives) instead of every archive a directory walk found. (#696)
+
+* When several base game archives contain the same file, the copy from the plugin loaded last is used, as in the game, instead of the copy from the first plugin in plugins.txt.
+
+## 1.3.0
+
+October 1, 2026
+
+* The Home tour includes an AI chat guide for setup, requests, action approval and checking results before saving. The tour can be replayed after finishing or skipping it.
+
+* The assistant can read and propose interactions with editor and authoring controls, including graph and rig viewport gestures, using the existing handlers. Each action and named file/folder operation requires approval; stale actions are refused. Account, password and assistant approval controls are excluded.
+* Top toolbar scrollbars reserve their own space below controls, preventing overlap on all workspace tabs.
+* Rig previews fill the remaining window space and clip zoomed or panned geometry to the viewport. Skeleton, skin and physics tabs each offer Fit preview; settings scroll independently.
+* Home now offers direct buttons for skeleton editing, skin weights, physics simulation, structure authoring and batch authoring. Rig shortcuts open the selected tool immediately.
+* Moved Home, Graph, Inspect, Animation and Project navigation to the top of the window. Each view has its own grouped command toolbar; wide toolbars scroll horizontally, while inspectors and the playback timeline stay beside the content they affect.
+* Removed duplicate workspace tab headers. Graph authoring tools live under Graph, skeleton/skin authoring under Animation, and About and assistant controls remain available in the top bar.
+* Added a Skeleton / skin authoring window with bone names, reference transforms, translation locks, parent changes, validation, undo/redo, and verified HKX save/reopen. Bone addition/removal and reorderings are supported for standalone skeleton files; dependent rigs refuse changes that require asset remapping.
+* Added Fallout 4 NIF vertex influence editing, shape-wide normalization and pruning, bone-weight copying, mirror matching, a mesh preview, and verified weight-only save/reopen with backups and external-change protection.
+* Added interactive BEPU physics preview with measured convex hulls, gravity, ground and body collisions, fixed/ball/hinge/cone/twist preview joints, pause/step/reset, and body impulses. Masses and preview joint limits are explicitly authored in the window; uniform-density inertia and preview settings do not reproduce or modify native Havok solver settings.
+* Added mounted editor and simulation lifecycle checks to both CI platforms.
+
+## 1.2.0
+
+October 1, 2026
+
+* Editor workspace: a left activity rail (Home, Graph, Inspect, Animation, Project) with contextual secondary views, and one command bar for Open, Save, Undo, Redo and validation. Tree expand/collapse and the object filter live on Inspect → Tree. Graph find is a separate field on the Graph toolbar.
+* Batch authoring and About sit in the command bar on the production window path, not on a second top strip.
+* Tree/grid column headers now scroll horizontally with their rows.
+* Added a bounded read-only stdio MCP server for behavior, object, animation, project-chain, project-search, and project-check inspection, plus a side-effect-free clip-animation preview.
+* Added an optional in-app Assistant drawer with an OpenAI-compatible provider boundary, bounded editor context, cancellation, and sequential tool execution.
+* Assistant clip changes require explicit UI approval and remain bound to the exact active-document revision, object, old value, and new value; normal undo and verified save behavior remain in force.
+* External MCP has no write-capable tool, shell/process access, arbitrary filesystem write, or caller-controlled approval path.
+* Bridge layout and drag-and-drop handling are platform-safe alongside the Assistant drawer, with deterministic mounted-turret mesh auto-resolution.
+* Structure authoring now covers supported transition conditions, enter/exit notify events, global events, and non-empty state-machine creation and attachment through the verified save/reopen path.
+* Playback resolves adjacent skeletons and matching mounted-turret meshes deterministically, including platform-safe single-file and multi-file Bridge drops.
+* The ragdoll inspector exposes measured body frames, centres of mass, pivots, limits, engineering labels, and animation-to-ragdoll mapping; pinned body-frame distance measurement refuses self-pairs and stale selections.
+* Drop/Recover remains a constrained engineering preview with lifecycle reset and stale-state protections rather than a full physics simulation.
+* The workspace shell groups existing tools under Home, Graph, Inspect, Animation, and Project activities, keeps contextual secondary views reachable, and keeps command controls accessible at narrow widths.
+
+### Current release boundaries
+
+* Ragdoll support is inspection and constrained preview only: measured bodies, shapes, constraints, bone bindings, frames, and animation mappings are displayed, but ragdoll authoring, body collision solving, and full Havok dynamics are not implemented.
+* Cloth support is inspection and validation only: bounded cloth structures and references can be read and checked, but cloth simulation, mesh deformation, cloth authoring, and cloth save/write-back are not implemented.
+* Drop/Recover follows measured poses as an engineering preview; it is not a Havok solver, body-collision simulation, cloth interaction, or in-game behavior substitute.
+* Skeleton-mapper serialization/write-back and chain mapper authoring remain incomplete; automatic bone pairing is not proven.
+* Havok 2018 support remains incomplete, and unsupported layouts or conversions remain read-only or are refused.
+
+## 1.1.0
+
+August 27, 2026
+
+The complete user-facing summary, authoring boundaries, compatibility notes, and known limitations
+are in the [Behaviour Graph Studio 1.1.0 release notes](RELEASE-NOTES.md).
+
+<details>
+<summary><strong>Headless Load-Order Scanning</strong></summary>
+<br>
+
+Behaviour Graph Studio can now scan a whole load order from the command line, without opening the
+window — for vetting a mod or gating a build in CI. See the
+[Headless scanning guide](guide/scan/README.md) for full details, the JSON schema, and MO2 setup.
+
+* `--scan-archives <folder>` walks every `.ba2` under a folder (plus loose files) and reports
+  behaviour/character `.hkx` files that are corrupt or unreadable. No game install or MO2 instance
+  required. See the [scan-archives guide](guide/scan/scan-archives.md).
+* `--scan-modlist <MO2 instance>` layers a modlist's enabled mods over the base game the way the
+  engine loads them, and reports character files whose declared animations no longer resolve. See
+  the [scan-modlist guide](guide/scan/scan-modlist.md).
+* `--scan-clips <MO2 instance>` checks, for every behaviour a mod actually loads, that each clip's
+  animation resolves somewhere in the merged load order. It reports unresolved virtual references;
+  it does not reproduce the game's animation-DB or binding behavior.
+  See the [scan-clips guide](guide/scan/scan-clips.md).
+* Every mode returns a clear exit code — `0` clean, `1` defects found, `2` usage/config error — so a
+  scan can gate a script or CI job directly.
+* Add `--json` to any mode for a single, versioned JSON report on stdout (progress goes to stderr,
+  so the redirected output is always one parseable document). The report's `exitCode` always matches
+  the process exit code.
+* Large load orders scan faster: each mod archive's index is parsed once per run, and existence
+  checks no longer decompress the file they are only confirming is present. Progress is streamed
+  while a scan runs.
+
+</details>
+
+## 1.0.6
+
+August 17, 2026
+
+<details>
+<summary><strong>Crash Log Diagnosis</strong></summary>
+<br>
+
+* `symrm crash <hash | crashlog.txt> --data <Data folder>` now resolves an AnimTextData subgraph hash (the `AnimationOffsets\<id>.txt` name a crash log complains about) to the subgraph it names.
+* The resolver reads the game's own `AnimationFileData\<id>.txt` manifests from the .ba2 archives (loose files win), so no hash algorithm is reimplemented — the engine's ground truth is used.
+* It reports the subgraph's behavior graph(s), the archive the manifest came from, whether its offset-data file exists, and which of the subgraph's animations are missing from the game data.
+* Loose manifest overrides (e.g. a merged AnimTextData mod) are honored, matching how the engine resolves the tree.
+* New `symrm hash <behavior.hkx> <sapt> [...]` computes the subgraph id itself from a race record's behavior graph and animation folder prefixes. The algorithm was reverse-engineered from the game binary and validated against the game's shipped ids: it is CRC-32 (reflected 0xEDB88320 table, init 0, no final xor) of the lowercased prefix list joined by `|` in the high half, and of the lowercased behavior path in the low half. Every base-game subgraph id recomputes exactly from its race record.
+* `symrm crash` then resolves the subgraph to the specific per-weapon clip that is missing: it opens each behavior the manifest names (plus the behavior its `AnimationOffsets` file hints at) and runs the engine-search check, reporting the failing weapon chain prefix and whether a generic `Animations\<clip>` fallback exists for every unresolved clip.
+* `symrm crash --mods <MO2 mods folder> [--profile <name>]` resolves the same hash against modded game data: enabled mods from the modlist (or `profiles/<name>/modlist.txt`) are layered over the base game the way the engine loads them — loose mod files and mod .ba2 archives override base data, the profile overwrite folder wins, and merged AnimTextData manifests shipped loose in a mod are honored.
+* New `symrm sweep --data <Data folder> [--mods ...]` runs the crash resolution across every shipped subgraph hash and reports any that resolve to a per-weapon clip gap, as a regression sweep (the base game ships clean: 3401 manifests / 2238 weapon subgraphs, zero gaps).
+* New `symrm diff --data <Data folder> --mods <MO2 mods folder>` compares vanilla and modded subgraph coverage side by side: which AnimationFileData manifests and behavior paths the modlist adds or drops, and which of the new behaviors are weapon subgraphs.
+* Modded data lookups are indexed once, so per-file checks stay O(1) no matter how many mod roots are layered on.
+* Resolving a crash hash on the Chain tab now floats a panel over the graph canvas: it names the subgraph's behaviors, the animation presence, and every per-weapon gap, and each gap has a **Jump** button that selects and centres the missing clip's node on the graph.
+* The Chain tab's new **Sweep all subgraphs** button runs the same whole-load-order per-weapon check as `symrm sweep` in the app: it scans every AnimationFileData manifest and reports each subgraph with a per-weapon gap (behavior, id, and the exact missing clips), running off the UI thread so the studio stays responsive.
+* The Chain tab has a **mods folder** field (the MO2 instance root): when set, game data, the crash-hash lookup, and the sweep all run against the modlist the way the engine loads it — enabled mods from `modlist.txt` (or the profile's), the profile overwrite folder, mod loose files and mod .ba2 archives overriding base data, and merged AnimTextData manifests honored.
+
+</details>
+
+## 1.0.5
+
+August 15, 2026
+
+<details>
+<summary><strong>The Bridge</strong></summary>
+<br>
+
+* Added The Bridge, a new home tab that puts the main parts of BGS in one place.
+* See your current file, jump directly to tools, and quickly find where something lives in the studio.
+* Added a first-run tour. You can replay it from the Bridge header at any time or press `Escape` to close it.
+* BGS now remembers which tab you were using and returns to it the next time you open the app.
+* Added search to the Bridge. Stations and reference entries filter as you type.
+* Drag and drop a `.hkx` file anywhere onto the Bridge to open it.
+* Recent files are now available directly from the Bridge.
+
+</details>
+
+<details>
+<summary><strong>Safer Saving</strong></summary>
+<br>
+
+* Saving no longer temporarily removes the original file while replacing it.
+* If BGS or the system crashes during a save, the original file will not disappear as a result.
+* BGS now detects if another program changes a file while it is being saved. The save is stopped instead of overwriting the newer version.
+* Interrupted saves can be recovered the next time you save the same file.
+* The version replaced during recovery is preserved as a backup.
+* Recovery only touches files created by BGS during the save process. Other files next to your `.hkx` are left alone.
+* A backup rotation problem no longer causes BGS to report the entire save as failed when the main file was written successfully.
+
+</details>
+
+<details>
+<summary><strong>File Handling &amp; Safety</strong></summary>
+<br>
+
+* Large valid arrays load correctly again. BGS no longer rejects them because of an arbitrary element limit.
+* Malformed arrays are rejected before memory is allocated for them, with an error explaining the problem.
+* `.ba2` extraction now rejects unsafe paths that could write outside the folder you selected.
+
+</details>
+
+<details>
+<summary><strong>Game Data Aware Validation</strong></summary>
+<br>
+
+* `symrm chain` and `symrm check` now accept `--data <Data folder>` and resolve every animation against the game's `.ba2` archives (loose files first, archives in plugin load order), so vanilla animations are no longer reported missing just because they are packed.
+* The Chain tab has a Game Data folder field: set your game's `Data` folder once and every chain, graph check and project check resolves animations against its `.ba2` archives, with each animation marked as loose or naming the archive it came from.
+* With game data attached, an animation that is genuinely absent anywhere becomes an error instead of a warning.
+* Weapon subgraphs (behaviors that play `Animations\Weapon\...` clips) get one finding per genuinely missing clip, each resolved to the exact engine search: the failing weapon chain prefix the engine looked under (in fallback order, from the master's AnimationSetData) and whether a generic `Animations\<clip>` fallback exists. Adding the generic copy clears the warning. The Chain tab shows these gaps directly under a "weapon clips" group when game data is attached, with the same message text `symrm` reports.
+* Borrowed `..\` animation paths (for example into `PowerArmor`) resolve correctly against the archives.
+* The Playback tab can now play clips that only exist inside a `.ba2` archive: with the Game Data folder set, selecting a clip whose animation is packed reads the animation (and, when the rig is packed too, the `CharacterAssets` skeleton) straight out of the archive, and the summary names the archive it came from.
+
+</details>
+
+## 1.0.4
+
+<details>
+<summary><strong>Saving &amp; Reliability</strong></summary>
+<br>
+
+* Supported behaviour and animation edits can now be saved through BGS's native pipeline.
+* Saving creates a `.bak` copy of the original file.
+* If an edit cannot be written safely, BGS refuses the save before touching the source file.
+* Refused saves tell you which field could not be written and why.
+* Fixed corruption when creating a `variableBounds` array from an empty list.
+* Added graph validation and supported-project checks before saving.
+* Closing a modified file now gives you Save, Discard, or Cancel.
+* If a save is refused, the file stays open.
+
+</details>
+
+<details>
+<summary><strong>Editing &amp; Authoring</strong></summary>
+<br>
+
+* Create, edit, and remove states, transitions, generators, variables, events, and bindings.
+* Copy graph subtrees between files.
+* Save reusable templates from your own work.
+* Edit animation frames, trim clips, and change clip duration.
+* Compare behaviour files to see what was added, removed, or changed.
+* Browse behaviour files in tree or graph views.
+* Inspect project chains, symbol usage, playback paths, and validation results.
+* The Symbols tab now shows the actual minimum and maximum values of variable bounds.
+
+</details>
+
+<details>
+<summary><strong>Playback &amp; File Support</strong></summary>
+<br>
+
+* Large behaviour files can now open without freezing the UI.
+* Graph validation runs in the background instead of blocking the window.
+* Files that are not Fallout 4 packfiles are rejected before opening, with an explanation.
+* Preview animations using skeletons and supported skinned meshes.
+* Playback can use a sibling `CharacterAssets` folder when the behaviour file does not provide its own project rig.
+* Open vanilla files directly from Bethesda `.ba2` archives for read-only inspection.
+
+</details>
+
+## 1.0.3
+
+August 8, 2026
+
+<details>
+<summary><strong>Changes</strong></summary>
+<br>
+
+* Added graph simulation for event-driven states, transition timing, and blend weights.
+* Added subtree copy and paste, reusable templates, and path highlighting.
+* Added animation trimming, retiming, and improved frame editing.
+* Improved animation playback, root-motion display, and mesh previews.
+
+</details>
+
+## 1.0.2
+
+August 7, 2026
+
+<details>
+<summary><strong>Changes</strong></summary>
+<br>
+
+* Added native animation saving for supported frame edits.
+* Added a frame browser with bone filtering and direct frame navigation.
+* Improved animation details, playback controls, and validation feedback.
+
+</details>
+
+## 1.0.1
+
+August 6, 2026
+
+<details>
+<summary><strong>Changes</strong></summary>
+<br>
+
+* Added archive browsing so vanilla behaviour files can be inspected without manually extracting them first.
+* Added skeleton, mesh, and root-motion views.
+* Improved graph editing, symbol management, field editing, and save safeguards.
+
+</details>
+
+## 1.0.0
+
+August 4, 2026
+
+<details>
+<summary><strong>Initial Release</strong></summary>
+<br>
+
+* Initial release of Behaviour Graph Studio.
+* Added graph editing, filtering, selection, validation markers, undo, and file comparison.
+* Added animation controls, variables, events, and behaviour authoring tools.
+
+</details>
+
+## Help &amp; Feedback
+
+<details>
+<summary><strong>Getting Started, Documentation &amp; Bug Reports</strong></summary>
+<br>
+
+New to BGS?
+
+Read the [Getting Started Guide](https://prisma-user-interface-framework.github.io/Prisma2.0/tools/behaviourgraphstudio/guide/getting-started).
+
+Found a bug?
+
+Open a report through [GitHub Issues](https://github.com/G-A-R-D-E-N/BGS/issues). Please include enough information to reproduce the problem.
+
+</details>
