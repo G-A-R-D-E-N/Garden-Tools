@@ -175,7 +175,8 @@ void RadiclePluginBackend::stagePluginMutationLocked(LoadedPlugin& loaded,
                                                      fo4::Plugin mutated) {
     CommitScope commit;
     loaded.plugin = std::move(mutated);
-    dropBorrowedEnvironmentLocked();
+    dropBorrowedEnvironmentOnlyLocked();
+    cellEditHistories_.erase(loaded.name);
     loaded.dirty = true;
     ++mutationEpoch_;
     markGraphDirtyLocked();
@@ -201,7 +202,8 @@ bool RadiclePluginBackend::stageQuestFragmentMutationLocked(
                 support::asciiLower(fragments.pexPath.generic_string())) return false;
     }
     loaded.plugin = std::move(mutated);
-    dropBorrowedEnvironmentLocked();
+    dropBorrowedEnvironmentOnlyLocked();
+    cellEditHistories_.erase(loaded.name);
     loaded.stagedQuestFragments = std::move(fragments);
     loaded.dirty = true;
     ++mutationEpoch_;

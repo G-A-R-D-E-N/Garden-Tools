@@ -24,10 +24,20 @@
 #include <fo4/graph/conflict_graph.hpp>
 #include <fo4/localization/strings.hpp>
 #include <fo4/plugin/container.hpp>
+#include <fo4/plugin/edit_history.hpp>
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 namespace fo4::env { class Environment; }
+namespace fo4::forms {
+struct PlacedReferenceEdit;
+struct PlacedReferenceEditResult;
+struct DuplicateOptions;
+struct DuplicateResult;
+struct DeleteResult;
+struct CellEdit;
+struct CellEditResult;
+}
 
 namespace fo4ide::plugin {
 
@@ -127,6 +137,14 @@ public:
     Result<nlohmann::json> resolveWorldspace(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> resolveWorldspaceId(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> editPlacedReference(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> undoCellEdit(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> redoCellEdit(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getCellEditHistory(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> duplicatePlacedReference(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> deletePlacedReference(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getCellProperties(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> setCellProperties(const nlohmann::json& arguments) override;
     Result<nlohmann::json> createPlacedObject(const nlohmann::json& arguments) override;
     Result<nlohmann::json> createInteriorCell(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getLeveledList(const nlohmann::json& arguments) const override;
@@ -581,6 +599,16 @@ private:
     void dropConflictGraphLocked() const;
     std::shared_ptr<const fo4::env::Environment> borrowedEnvironment() const;
     void dropBorrowedEnvironmentLocked();
+    void dropBorrowedEnvironmentOnlyLocked();
+    Result<fo4::forms::PlacedReferenceEditResult> editPlacedReferenceLocked(
+        LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::PlacedReferenceEdit& edit);
+    void stageCellEditLocked(LoadedPlugin& patch, fo4::Plugin mutated);
+    Result<nlohmann::json> stepCellEditHistory(const nlohmann::json& arguments, bool undo);
+    Result<fo4::forms::DuplicateResult> duplicatePlacedReferenceLocked(
+        LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::DuplicateOptions& options);
+    Result<fo4::forms::DeleteResult> deletePlacedReferenceLocked(LoadedPlugin& patch, const fo4::FormKey& key);
+    Result<fo4::forms::CellEditResult> setCellPropertiesLocked(
+        LoadedPlugin& patch, const fo4::FormKey& key, const fo4::forms::CellEdit& edit);
     std::string dirtyPluginListLocked() const;
 
     // Constraint: references from this proxy must not be held across a stage, because the next access may rebuild the graph.
@@ -610,6 +638,7 @@ private:
     mutable std::mutex environmentMutex_;
     mutable std::shared_ptr<const fo4::env::Environment> borrowedEnvironment_;
     mutable std::uint64_t borrowedEnvironmentEpoch_{0};
+    std::map<std::string, fo4::PluginEditHistory> cellEditHistories_;
     mutable bool graphDirty_{true};
     mutable std::chrono::steady_clock::time_point graphLastUse_{};
     mutable std::chrono::seconds graphIdleLimit_{60};

@@ -732,6 +732,14 @@ export interface CellPlacedReference {
   scale: number;
   isMarker?: boolean;
 }
+export interface CellTransform {
+  x: number; y: number; z: number; rx: number; ry: number; rz: number;
+}
+export interface CellEditChanges {
+  transform?: CellTransform;
+  scale?: number | null;
+  editorId?: string;
+}
 export interface CellReferencesResult {
   cellFormKey?: string;
   cellEditorId?: string;
@@ -779,6 +787,13 @@ export interface CellHost {
 
   SetPlacedReferenceTransform(formKey: string, patchPlugin: string,
     x: number, y: number, z: number, rx: number, ry: number, rz: number): Promise<string>;
+
+  EditPlacedReference(formKey: string, patchPlugin: string, changes: CellEditChanges): Promise<string>;
+  DeletePlacedReference(formKey: string, patchPlugin: string): Promise<string>;
+  DuplicatePlacedReference(formKey: string, patchPlugin: string, offset: CellTransform | null): Promise<string>;
+  UndoCellEdit(patchPlugin: string): Promise<string>;
+  RedoCellEdit(patchPlugin: string): Promise<string>;
+  GetCellEditHistory(patchPlugin: string): Promise<string>;
 }
 
 

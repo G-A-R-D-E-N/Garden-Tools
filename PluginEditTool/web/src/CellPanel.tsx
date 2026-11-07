@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDialogs } from './useDialogs';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff, Info, ScrollText } from 'lucide-react';
-import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
+import { getCell, getBackend, type CellEditChanges, type CellHost, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import { errorText } from './errors';
 import CellViewport, { type CellGeoMap, type CellTextureStats } from './CellViewport';
+import CellEditPanel from './CellEditPanel';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 import { parseCellGridCoordinate } from './util/cellGrid';
 import { statusBanner } from './util/cellStatus';
@@ -66,6 +67,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   };
   const resetVisibilityHistory = () => setHistory({ undo: [], redo: [] });
 
+  const [editCounts, setEditCounts] = useState({ undo: 0, redo: 0 });
+
 
 
 
@@ -108,6 +111,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   };
 
   const gizmoPatchRef = useRef<string | null>(null);
+  const busyRef = useRef(false);
 
 
 
@@ -402,37 +406,141 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
 
 
+  const ensurePatch = async (): Promise<string | null> => {
+    if (gizmoPatchRef.current) return gizmoPatchRef.current;
+    const picked = await askForTarget({
+      title: 'Save cell edits into',
+      description: 'Cell edits made this session are written here.',
+      confirmLabel: 'Save into', defaultTarget: LS('gizmoPatch', 'CellEdits.esp'),
+    });
+    if (!picked) return null;
+    gizmoPatchRef.current = picked.target;
+    setLS('gizmoPatch', picked.target);
+    return picked.target;
+  };
+
+  const exclusive = async (run: () => Promise<boolean>): Promise<boolean> => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    try { return await run(); } finally { busyRef.current = false; }
+  };
+
+  const refreshEditCounts = async (patch: string) => {
+    const c = getCell();
+    if (!c) return;
+    const h = JSON.parse(await c.GetCellEditHistory(patch)) as { undoCount: number; redoCount: number };
+    setEditCounts({ undo: h.undoCount, redo: h.redoCount });
+  };
+
+  const reloadReferences = async (select: string | null, from: string | null) => {
+    const c = getCell();
+    const cellKey = result?.cellFormKey;
+    if (!c || !cellKey) return;
+    const mine = loadSeq.current;
+    const parsed = JSON.parse(await c.GetPlacedReferences(cellKey)) as CellReferencesResult;
+    if (mine !== loadSeq.current) return;
+    if (parsed.error) { appendLog('✗ ' + parsed.error); return; }
+    setResult(parsed);
+    setSelected(prev => {
+      const key = prev?.formKey === from ? select : (prev?.formKey ?? null);
+      return parsed.references?.find(r => r.formKey === key) ?? null;
+    });
+  };
+
+  const mutate = async (label: string, patch: string, from: string | null,
+    act: (c: CellHost) => Promise<string | null>): Promise<boolean> => {
+    const c = getCell();
+    const backend = getBackend();
+    if (!c || !backend) return false;
+    try {
+      const select = await act(c);
+      const saveMsg = await backend.SavePlugin(patch, '');
+      appendLog(`• ${label} -> ${patch}`);
+      if (/error|fail/i.test(saveMsg)) appendLog('✗ save: ' + saveMsg);
+      try {
+        await reloadReferences(select, from);
+      } catch (e) {
+        appendLog('✗ reload failed: ' + errorText(e));
+      }
+      return true;
+    } catch (e) {
+      appendLog(`✗ ${label} failed: ` + errorText(e));
+      return false;
+    } finally {
+      await refreshEditCounts(patch).catch(e => appendLog('✗ edit counts: ' + errorText(e)));
+    }
+  };
+
+  const editSelected = (label: string, from: string | null,
+    act: (c: CellHost, patch: string) => Promise<string | null>): Promise<boolean> => exclusive(async () => {
+    const patch = await ensurePatch();
+    if (!patch) { appendLog(`x ${label} not saved -- no patch plugin chosen.`); return false; }
+    return mutate(label, patch, from, c => act(c, patch));
+  });
+
+  const editReference = async (changes: CellEditChanges): Promise<boolean> => {
+    if (!selected) return false;
+    const key = selected.formKey;
+    return editSelected(`edit ${selected.editorId || key}`, key, async (c, patch) => {
+      const reply = JSON.parse(await c.EditPlacedReference(key, patch, changes)) as { relocated?: boolean };
+      if (reply.relocated) appendLog(`• ${key} moved into another cell`);
+      return key;
+    });
+  };
+
+  const deleteSelected = async () => {
+    if (!selected) return;
+    const key = selected.formKey;
+    await editSelected(`delete ${selected.editorId || key}`, key, async (c, patch) => {
+      await c.DeletePlacedReference(key, patch);
+      return null;
+    });
+  };
+
+  const duplicateSelected = async () => {
+    if (!selected) return;
+    const key = selected.formKey;
+    await editSelected(`duplicate ${selected.editorId || key}`, key, async (c, patch) => {
+      const copy = JSON.parse(await c.DuplicatePlacedReference(key, patch, null)) as { newFormKey?: string };
+      return copy.newFormKey ?? null;
+    });
+  };
+
+  const stepEdit = async (undo: boolean) => {
+    const patch = gizmoPatchRef.current;
+    if (!patch || (undo ? editCounts.undo : editCounts.redo) === 0) return;
+    const key = selected?.formKey ?? null;
+    await exclusive(() => mutate(undo ? 'undo edit' : 'redo edit', patch, key, async c => {
+      await (undo ? c.UndoCellEdit(patch) : c.RedoCellEdit(patch));
+      return key;
+    }));
+  };
+
   const moveEnd = useCallback(async (ref: CellPlacedReference) => {
     const c = getCell();
     const backend = getBackend();
     if (!c || !backend) return;
-    let patch = gizmoPatchRef.current;
-    if (!patch) {
-      const picked = await askForTarget({
-        title: 'Save cell edits into',
-        description: 'This move, and any further moves this session, are written here.',
-        confirmLabel: 'Save into', defaultTarget: LS('gizmoPatch', 'CellEdits.esp'),
-      });
-      if (!picked) { appendLog('x move not saved -- no patch plugin chosen.'); return; }
-      patch = picked.target;
-      gizmoPatchRef.current = patch;
-      setLS('gizmoPatch', patch);
-    }
-    try {
-      const msg = await c.SetPlacedReferenceTransform(
-        ref.formKey, patch,
-        ref.position.x, ref.position.y, ref.position.z,
-        ref.rotation.x, ref.rotation.y, ref.rotation.z);
-      if (/error|fail|invalid|could not|choose/i.test(msg)) { appendLog(`✗ move: ${msg}`); return; }
-      const saveMsg = await backend.SavePlugin(patch, '');
-      appendLog(`• moved ${ref.editorId || ref.formKey} -> ${patch}`);
-      if (/error|fail/i.test(saveMsg)) appendLog('✗ save: ' + saveMsg);
-    } catch (e) {
-      appendLog('✗ move failed: ' + (e instanceof Error ? e.message : String(e)));
-      return;
-    }
-
-
+    if (busyRef.current) { appendLog('x move not saved -- another edit is running.'); return; }
+    const moved = await exclusive(async () => {
+      const patch = await ensurePatch();
+      if (!patch) { appendLog('x move not saved -- no patch plugin chosen.'); return false; }
+      try {
+        const msg = await c.SetPlacedReferenceTransform(
+          ref.formKey, patch,
+          ref.position.x, ref.position.y, ref.position.z,
+          ref.rotation.x, ref.rotation.y, ref.rotation.z);
+        if (/error|fail|invalid|could not|choose/i.test(msg)) { appendLog(`✗ move: ${msg}`); return false; }
+        const saveMsg = await backend.SavePlugin(patch, '');
+        appendLog(`• moved ${ref.editorId || ref.formKey} -> ${patch}`);
+        if (/error|fail/i.test(saveMsg)) appendLog('✗ save: ' + saveMsg);
+      } catch (e) {
+        appendLog('✗ move failed: ' + (e instanceof Error ? e.message : String(e)));
+        return false;
+      }
+      await refreshEditCounts(patch).catch(e => appendLog('✗ edit counts: ' + errorText(e)));
+      return true;
+    });
+    if (!moved) return;
 
     setSelected(prev => prev && prev.formKey === ref.formKey
       ? { ...prev, position: { ...ref.position }, rotation: { ...ref.rotation } }
@@ -630,6 +738,19 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
 
+                {selected && (
+                  <CellEditPanel
+                    reference={selected}
+                    canUndo={editCounts.undo > 0}
+                    canRedo={editCounts.redo > 0}
+                    onEdit={editReference}
+                    onDelete={() => void deleteSelected()}
+                    onDuplicate={() => void duplicateSelected()}
+                    onUndoEdit={() => void stepEdit(true)}
+                    onRedoEdit={() => void stepEdit(false)}
+                  />
+                )}
+
                 {texStats && (texStats.resolveFail > 0 || texStats.decodeFail > 0) && (
                   <div className="cell-hidden-bar" title={texStats.firstFailure ?? undefined}>
                     <span>
@@ -648,10 +769,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                     <span>{hiddenRefs.size > 0 ? `${hiddenRefs.size} mesh${hiddenRefs.size === 1 ? '' : 'es'} hidden` : ''}</span>
                     <div className="cell-hidden-actions">
                       <button className="papyrus-copy" onClick={undoVisibility} disabled={history.undo.length === 0} title="Undo last hide/show">
-                        Undo <kbd>Ctrl+Z</kbd>
+                        Undo
                       </button>
-                      <button className="papyrus-copy" onClick={redoVisibility} disabled={history.redo.length === 0} title="Redo">
-                        Redo <kbd>Ctrl+Y</kbd>
+                      <button className="papyrus-copy" onClick={redoVisibility} disabled={history.redo.length === 0} title="Redo last hide/show">
+                        Redo
                       </button>
                       {hiddenRefs.size > 0 && <button className="papyrus-copy" onClick={unhideAll}>Unhide all <kbd>Alt+1</kbd></button>}
                     </div>
@@ -694,7 +815,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                 <div className="cell-hotkeys">
                   <div><kbd>Click</kbd> select · <kbd>1</kbd> hide · <kbd>Alt+1</kbd> unhide all</div>
                   <div><kbd>Shift+F</kbd> focus · <kbd>T</kbd> top-down · <kbd>M</kbd> markers · <kbd>D</kbd> deselect</div>
-                  <div><kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Y</kbd> redo</div>
+                  <div><kbd>Ctrl+Z</kbd> undo edit · <kbd>Ctrl+Y</kbd> redo edit · <kbd>Del</kbd> delete · <kbd>Ctrl+D</kbd> duplicate</div>
                   <div><kbd>G</kbd> move gizmo · <kbd>R</kbd> rotate gizmo (drag a selected reference)</div>
                 </div>
                 <div className="nif-view-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
@@ -742,8 +863,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   onHideSelected={hideSelected}
                   onUnhideAll={unhideAll}
                   onToggleMarkers={toggleMarkers}
-                  onUndo={undoVisibility}
-                  onRedo={redoVisibility}
+                  onUndoEdit={() => void stepEdit(true)}
+                  onRedoEdit={() => void stepEdit(false)}
+                  onDeleteSelected={() => void deleteSelected()}
+                  onDuplicateSelected={() => void duplicateSelected()}
                   onMoveEnd={moveEnd}
                   onTextureStats={onTextureStats}
                 />
