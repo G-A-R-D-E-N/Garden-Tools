@@ -1,0 +1,2444 @@
+﻿diff --git a/PluginEditTool/native/include/fo4ide/assets/NifRender.hpp b/PluginEditTool/native/include/fo4ide/assets/NifRender.hpp
+index 595b6ff14..e46e148c5 100644
+--- a/PluginEditTool/native/include/fo4ide/assets/NifRender.hpp
++++ b/PluginEditTool/native/include/fo4ide/assets/NifRender.hpp
+@@ -15,5 +15,6 @@ Result<std::string> renderGeometry(const std::filesystem::path& nifPath);
+ Result<std::string> renderInspect(const std::filesystem::path& nifPath);
+ Result<std::string> renderTree(const std::filesystem::path& nifPath);
+ Result<std::string> renderVerify(const std::filesystem::path& nifPath);
++Result<std::string> renderVerifyJson(const std::filesystem::path& nifPath);
+ 
+ }
+diff --git a/PluginEditTool/native/include/fo4ide/assets/NifService.hpp b/PluginEditTool/native/include/fo4ide/assets/NifService.hpp
+index 62ac2be5f..5fe69e27d 100644
+--- a/PluginEditTool/native/include/fo4ide/assets/NifService.hpp
++++ b/PluginEditTool/native/include/fo4ide/assets/NifService.hpp
+@@ -28,7 +28,7 @@ public:
+     Result<std::string> verify(const std::filesystem::path& nifPath) const;
+     Result<std::string> tree(const std::filesystem::path& nifPath) const;
+     Result<std::string> fix(const std::filesystem::path& nifPath,
+-                            const std::filesystem::path& outputPath) const;
++                            const std::filesystem::path& outputPath, std::string_view check = {}) const;
+     Result<std::string> importObj(const std::filesystem::path& objPath,
+                                   const std::filesystem::path& outputPath,
+                                   const NifImportOptions& options = {}) const;
+diff --git a/PluginEditTool/native/src/app/ServiceTargets.cpp b/PluginEditTool/native/src/app/ServiceTargets.cpp
+index 60784fac3..dfa7386b6 100644
+--- a/PluginEditTool/native/src/app/ServiceTargets.cpp
++++ b/PluginEditTool/native/src/app/ServiceTargets.cpp
+@@ -240,7 +240,9 @@ Result<nlohmann::json> NifTarget::invoke(std::string_view method,
+     if (method == "Verify") return serviceText(service_.verify(stringArgument(args, 0)));
+     if (method == "Tree") return serviceJsonText(service_.tree(stringArgument(args, 0)));
+     if (method == "Fix") {
+-        return serviceText(service_.fix(stringArgument(args, 0), stringArgument(args, 1)));
++        if (const auto* check = argument(args, 2); check && (!check->is_string() || check->get<std::string>().empty()))
++            return serviceText(std::unexpected(Error{"InvalidArgument", "Invalid NIF repair check"}));
++        return serviceText(service_.fix(stringArgument(args, 0), stringArgument(args, 1), stringArgument(args, 2)));
+     }
+     if (method == "Import") {
+         assets::NifImportOptions options;
+diff --git a/PluginEditTool/native/src/assets/NifRender.cpp b/PluginEditTool/native/src/assets/NifRender.cpp
+index 3f6f7cf1c..234830aba 100644
+--- a/PluginEditTool/native/src/assets/NifRender.cpp
++++ b/PluginEditTool/native/src/assets/NifRender.cpp
+@@ -7,6 +7,8 @@
+ #include <span>
+ #include <stdexcept>
+ #include <string>
++#include <string_view>
++#include <system_error>
+ #include <utility>
+ #include <vector>
+ 
+@@ -64,6 +66,32 @@ std::string verifyText(const fo4::nif::VerifyReport& report) {
+     return out;
+ }
+ 
++// Constraint: a sidecar that is not present passes, since vanilla names sidecars it does not ship.
++fo4::nif::VerifyReport verifyReport(const std::filesystem::path& nifPath) {
++    const auto folder = nifPath.parent_path();
++    const fo4::nif::SidecarProbe readable = [&folder](std::string_view name) {
++        std::error_code error;
++        const auto sidecar = folder / std::string(name);
++        if (!std::filesystem::exists(sidecar, error)) return true;
++        return std::ifstream(sidecar, std::ios::binary).good();
++    };
++    try {
++        return fo4::nif::verify_nif(loadNif(nifPath), readable);
++    } catch (const fo4::parse_error& error) {
++        return fo4::nif::VerifyReport{{{"header parses", error.parse_message()}}};
++    } catch (const std::exception& error) {
++        return fo4::nif::VerifyReport{{{"header parses", error.what()}}};
++    }
++}
++
++nlohmann::json verifyJson(const fo4::nif::VerifyReport& report) {
++    auto checks = nlohmann::json::array();
++    for (const auto& check : report.checks) {
++        checks.push_back({{"name", check.name}, {"failure", check.failure}, {"fixable", check.fixable}});
++    }
++    return {{"text", verifyText(report)}, {"checks", std::move(checks)}};
++}
++
+ }  // namespace
+ 
+ Result<std::string> renderGeometry(const std::filesystem::path& nifPath) {
+@@ -151,13 +179,11 @@ Result<std::string> renderTree(const std::filesystem::path& nifPath) {
+ }
+ 
+ Result<std::string> renderVerify(const std::filesystem::path& nifPath) {
+-    try {
+-        return verifyText(fo4::nif::verify_nif(loadNif(nifPath)));
+-    } catch (const fo4::parse_error& error) {
+-        return verifyText(fo4::nif::VerifyReport{{{"header parses", error.parse_message()}}});
+-    } catch (const std::exception& error) {
+-        return verifyText(fo4::nif::VerifyReport{{{"header parses", error.what()}}});
+-    }
++    return verifyText(verifyReport(nifPath));
++}
++
++Result<std::string> renderVerifyJson(const std::filesystem::path& nifPath) {
++    return dumpJson(verifyJson(verifyReport(nifPath)));
+ }
+ 
+ }  // namespace fo4ide::assets
+diff --git a/PluginEditTool/native/src/assets/NifService.cpp b/PluginEditTool/native/src/assets/NifService.cpp
+index 04620b5e4..59d1c3565 100644
+--- a/PluginEditTool/native/src/assets/NifService.cpp
++++ b/PluginEditTool/native/src/assets/NifService.cpp
+@@ -58,10 +58,11 @@ Result<std::string> importInProcess(const std::filesystem::path& objPath, const
+         (verify ? *verify : verify.error().message);
+ }
+ 
+-Result<std::string> fixInProcess(const std::filesystem::path& nifPath, const std::filesystem::path& outputPath) {
++Result<std::string> fixInProcess(const std::filesystem::path& nifPath, const std::filesystem::path& outputPath,
++                                 std::string_view check) {
+     std::vector<std::byte> bytes;
+     try {
+-        bytes = fo4::nif::fix_nif(readNif(nifPath));
++        bytes = fo4::nif::fix_nif(readNif(nifPath), check);
+     } catch (const fo4::parse_error& error) {
+         return std::unexpected(Error{"NifFixFailed", error.parse_message()});
+     } catch (const std::exception& ex) {
+@@ -97,7 +98,7 @@ Result<std::string> NifService::geometry(const std::filesystem::path& nifPath) c
+ 
+ Result<std::string> NifService::verify(const std::filesystem::path& nifPath) const {
+     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
+-    return renderVerify(nifPath);
++    return renderVerifyJson(nifPath);
+ }
+ 
+ Result<std::string> NifService::tree(const std::filesystem::path& nifPath) const {
+@@ -106,10 +107,10 @@ Result<std::string> NifService::tree(const std::filesystem::path& nifPath) const
+ }
+ 
+ Result<std::string> NifService::fix(const std::filesystem::path& nifPath,
+-                                    const std::filesystem::path& outputPath) const {
++                                    const std::filesystem::path& outputPath, std::string_view check) const {
+     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
+     if (outputPath.empty()) return std::unexpected(Error{"InvalidPath", "Output NIF path is empty"});
+-    return fixInProcess(nifPath, outputPath);
++    return fixInProcess(nifPath, outputPath, check);
+ }
+ 
+ Result<std::string> NifService::importObj(const std::filesystem::path& objPath,
+diff --git a/PluginEditTool/native/tests/helpers/NifFixture.hpp b/PluginEditTool/native/tests/helpers/NifFixture.hpp
+index 41ba5f7a2..cb93cef68 100644
+--- a/PluginEditTool/native/tests/helpers/NifFixture.hpp
++++ b/PluginEditTool/native/tests/helpers/NifFixture.hpp
+@@ -34,7 +34,7 @@ inline std::vector<std::byte> triangleShapeBlock(std::uint32_t shader, float tra
+         putFloat(out, value);
+     }
+     putUint(out, 0xFFFFFFFFU, 4);
+-    for (int i = 0; i < 4; ++i) putFloat(out, 0.0f);
++    for (const float value : {0.5f, 0.5f, 0.0f, 0.70710678f}) putFloat(out, value);
+     putUint(out, 0xFFFFFFFFU, 4);
+     putUint(out, shader, 4);
+     putUint(out, 0xFFFFFFFFU, 4);
+diff --git a/PluginEditTool/native/tests/unit/NifServiceTests.cpp b/PluginEditTool/native/tests/unit/NifServiceTests.cpp
+index 0a841c52a..ce68dbdfd 100644
+--- a/PluginEditTool/native/tests/unit/NifServiceTests.cpp
++++ b/PluginEditTool/native/tests/unit/NifServiceTests.cpp
+@@ -248,7 +248,7 @@ TEST_CASE("NifService fix repairs in-process and the written NIF verifies") {
+ 
+     REQUIRE(fix.has_value());
+     CHECK(fix->starts_with("RESULT: fix OK (in-process)\nSaved: " + fixed.string() +
+-                           "\nRESULT: 10 checks, 0 failed\n"));
++                           "\nRESULT: 18 checks, 0 failed\n"));
+     CHECK(fileBytes(nif) == before);
+     CHECK(std::filesystem::is_regular_file(fixed));
+     CHECK_FALSE(std::filesystem::exists(fixed.string() + ".niftmp"));
+@@ -345,8 +345,36 @@ TEST_CASE("NifService verify reports a readable FO4 NIF in-process") {
+     auto result = service.verify(nif);
+ 
+     REQUIRE(result.has_value());
+-    CHECK(result->starts_with("RESULT: 10 checks, 0 failed\n[ok] header parses\n"));
+-    CHECK(result->find("[FAIL]") == std::string::npos);
++    const auto text = nlohmann::json::parse(*result).at("text").get<std::string>();
++    CHECK(text.starts_with("RESULT: 18 checks, 0 failed\n[ok] header parses\n"));
++    CHECK(text.find("[FAIL]") == std::string::npos);
++}
++
++// Detects: a verify reply that drops the per-check fixable flag, which would show a fix button for a check no repair clears
++TEST_CASE("NifService verify returns each check with its name, failure and fixable flag") {
++    const auto root = tempRoot();
++    Cleanup cleanup{root};
++    const auto nif = root / "paths.nif";
++    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
++                                                       {"C:\\Art\\Thing_d.dds", "Textures\\Thing_n.dds"}));
++
++    fo4ide::assets::NifService service;
++    auto result = service.verify(nif);
++
++    REQUIRE(result.has_value());
++    const auto checks = nlohmann::json::parse(*result).at("checks");
++    REQUIRE(checks.size() == 18U);
++    const auto named = [&checks](std::string_view name) {
++        for (const auto& check : checks) {
++            if (check.at("name").get<std::string>() == name) return check;
++        }
++        return nlohmann::json{};
++    };
++    CHECK(named("texture paths are relative").at("failure").get<std::string>().find("is a drive-letter path") !=
++          std::string::npos);
++    CHECK_FALSE(named("texture paths are relative").at("fixable").get<bool>());
++    CHECK(named("no editor markers").at("fixable").get<bool>());
++    CHECK(named("no editor markers").at("failure").get<std::string>().empty());
+ }
+ 
+ TEST_CASE("NifService verify reports a truncated NIF as a failed header check") {
+@@ -361,7 +389,8 @@ TEST_CASE("NifService verify reports a truncated NIF as a failed header check")
+     auto result = service.verify(nif);
+ 
+     REQUIRE(result.has_value());
+-    CHECK(result->starts_with("RESULT: 1 checks, 1 failed\n[FAIL] header parses: "));
++    const auto text = nlohmann::json::parse(*result).at("text").get<std::string>();
++    CHECK(text.starts_with("RESULT: 1 checks, 1 failed\n[FAIL] header parses: "));
+ }
+ 
+ TEST_CASE("NifService verify flags a drive-letter texture path") {
+@@ -375,9 +404,10 @@ TEST_CASE("NifService verify flags a drive-letter texture path") {
+     auto result = service.verify(nif);
+ 
+     REQUIRE(result.has_value());
+-    CHECK(result->starts_with("RESULT: 10 checks, 1 failed\n"));
+-    CHECK(result->find("[FAIL] texture paths are relative: shape 'Tri' (block 1) texture 'C:\\Art\\Thing_d.dds' "
+-                       "is a drive-letter path") != std::string::npos);
++    const auto text = nlohmann::json::parse(*result).at("text").get<std::string>();
++    CHECK(text.starts_with("RESULT: 18 checks, 1 failed\n"));
++    CHECK(text.find("[FAIL] texture paths are relative: shape 'Tri' (block 1) texture 'C:\\Art\\Thing_d.dds' "
++                    "is a drive-letter path") != std::string::npos);
+ }
+ 
+ TEST_CASE("NifService verify flags a child that two nodes both list") {
+@@ -395,9 +425,10 @@ TEST_CASE("NifService verify flags a child that two nodes both list") {
+     auto result = service.verify(nif);
+ 
+     REQUIRE(result.has_value());
+-    CHECK(result->starts_with("RESULT: 10 checks, 1 failed\n"));
+-    CHECK(result->find("[FAIL] each block is listed under one parent only: block 1 is listed under node 2 "
+-                       "but its parent is 0") != std::string::npos);
++    const auto text = nlohmann::json::parse(*result).at("text").get<std::string>();
++    CHECK(text.starts_with("RESULT: 18 checks, 1 failed\n"));
++    CHECK(text.find("[FAIL] each block is listed under one parent only: block 1 is listed under node 2 "
++                    "but its parent is 0") != std::string::npos);
+ }
+ 
+ TEST_CASE("NifService imports an OBJ in-process and the written NIF verifies") {
+@@ -417,7 +448,7 @@ TEST_CASE("NifService imports an OBJ in-process and the written NIF verifies") {
+ 
+     REQUIRE(result.has_value());
+     CHECK(result->starts_with("RESULT: import OK (in-process)\nSaved: " + nif.string() +
+-                              "\nRESULT: 10 checks, 0 failed\n"));
++                              "\nRESULT: 18 checks, 0 failed\n"));
+     CHECK(std::filesystem::is_regular_file(nif));
+     CHECK_FALSE(std::filesystem::exists(root / "quad.nif.niftmp"));
+ }
+diff --git a/PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp b/PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp
+index 3be1600f7..1fb13b7de 100644
+--- a/PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp
++++ b/PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp
+@@ -129,6 +129,45 @@ TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF") {
+     CHECK_FALSE(parsed.contains("blocks"));
+ }
+ 
++// Detects: malformed selected-check arguments must not trigger whole-file repair.
++TEST_CASE("NifTarget refuses malformed selected repair without writing") {
++    const auto root = tempRoot();
++    Cleanup cleanup{root};
++    const auto nif = root / "input.nif";
++    const auto output = root / "output.nif";
++    fo4ide::test::writeBytes(nif, fo4ide::test::triangleNif());
++    FakePlatform platform;
++    fo4ide::assets::NifService service;
++    fo4ide::assets::TextureResolver textures;
++    fo4ide::app::NifTarget target(service, textures, platform);
++    const auto result = target.invoke("Fix", nlohmann::json::array({nif.string(), output.string(), 42}));
++    REQUIRE(result.has_value());
++    CHECK(result->get<std::string>() == "Error: Invalid NIF repair check");
++    CHECK_FALSE(std::filesystem::exists(output));
++}
++
++// Detects: the bridge must forward a selected repair instead of running all fixes.
++TEST_CASE("NifTarget forwards the selected repair") {
++    const auto root = tempRoot();
++    Cleanup cleanup{root};
++    const auto nif = root / "input.nif";
++    const auto output = root / "output.nif";
++    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM ",
++                                                       {" Textures\\Thing_d.dds "}));
++    FakePlatform platform;
++    fo4ide::assets::NifService service;
++    fo4ide::assets::TextureResolver textures;
++    fo4ide::app::NifTarget target(service, textures, platform);
++    const auto result = target.invoke("Fix", nlohmann::json::array({nif.string(), output.string(), "no editor markers"}));
++    REQUIRE(result.has_value());
++    CHECK(result->get<std::string>().starts_with("RESULT: fix OK"));
++    const auto inspected = service.inspect(output);
++    REQUIRE(inspected.has_value());
++    const auto report = nlohmann::json::parse(*inspected);
++    CHECK(report.at("shapes").at(0).at("shader") == "Materials\\Clutter\\Thing.BGSM ");
++    CHECK(report.at("shapes").at(0).at("textures").at(0).at("path") == " Textures\\Thing_d.dds ");
++}
++
+ // Constraint: detects the Import RPC dropping the collision argument, which would save a NIF without the box the user asked for.
+ TEST_CASE("NifTarget Import passes the collision argument to the service") {
+     const auto root = tempRoot();
+diff --git a/PluginEditTool/web/src/NifPanel.css b/PluginEditTool/web/src/NifPanel.css
+index 78da9363f..0c3e44e55 100644
+--- a/PluginEditTool/web/src/NifPanel.css
++++ b/PluginEditTool/web/src/NifPanel.css
+@@ -308,3 +308,13 @@
+ .nif-editor-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+ .nif-save-btn { padding: 5px 14px; }
+ .nif-save-btn:disabled, .sidebar-action-btn:disabled { opacity: 0.45; cursor: default; }
++
++.nif-issues { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; overflow: auto; }
++.nif-issues-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
++.nif-issues-summary { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
++.nif-issues-summary.ok { color: #00c8c8; }
++.nif-issues-actions { display: flex; gap: 6px; align-items: center; }
++.nif-issue-group { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 8px 10px; }
++.nif-issue-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
++.nif-issue-name { font-size: 13px; font-weight: 600; }
++.nif-issue-finding { margin: 4px 0 0; font-size: 12px; color: var(--muted, #9aa0aa); word-break: break-word; }
+diff --git a/PluginEditTool/web/src/NifPanel.tsx b/PluginEditTool/web/src/NifPanel.tsx
+index 61d3afe92..038ec2a6b 100644
+--- a/PluginEditTool/web/src/NifPanel.tsx
++++ b/PluginEditTool/web/src/NifPanel.tsx
+@@ -5,6 +5,7 @@ import NifViewport, { type NifGeo } from './NifViewport';
+ import NifEditor, { type NifTree } from './NifEditor';
+ import MaterialEditor from './MaterialEditor';
+ import { useDialogs } from './useDialogs';
++import Issues, { type VerifyCheck } from './nifmodes/Issues';
+ import './PapyrusPanel.css';
+ import './NifPanel.css';
+ 
+@@ -52,6 +53,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
+ 
+   const [busy, setBusy] = useState(false);
+   const [result, setResult] = useState('');
++  const [report, setReport] = useState<{ path: string; checks: VerifyCheck[] } | null>(null);
+   const [log, setLog] = useState<string[]>([]);
+   const [dragOver, setDragOver] = useState(false);
+   const [lastOutDir, setLastOutDir] = useState('');
+@@ -194,6 +196,20 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
+     onClose();
+   };
+ 
++  const verifyPath = async (path: string) => {
++    if (!nif) return '';
++    const raw = await nif.Verify(path);
++    const reply = parseVerify(raw);
++    setReport(reply ? { path, checks: reply.checks } : null);
++    return reply ? reply.text : raw;
++  };
++
++  const onIssuesWritten = async (outPath: string) => {
++    setLastOutDir(outPath);
++    setResult(`RESULT: fix OK (in-process)\nSaved: ${outPath}`);
++    await verifyPath(outPath);
++  };
++
+   const run = async () => {
+     if (mode === 'materials') { await loadMaterial(); return; }
+     if (!nif) return;
+@@ -213,14 +229,14 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
+         appendLog(`• inspected ${baseName(nifPath)}`);
+       } else if (mode === 'verify') {
+         if (!nifPath.trim()) { setResult('Pick a NIF to verify.'); setBusy(false); return; }
+-        out = await nif.Verify(nifPath);
++        out = await verifyPath(nifPath);
+         const r = out.split('\n').find(l => l.startsWith('RESULT:')) ?? '';
+         const failed = /^RESULT: \d+ checks, (\d+) failed/.exec(r);
+         appendLog(`${failed?.[1] === '0' ? '✓' : '✗'} verify ${baseName(nifPath)} -- ${r.replace('RESULT:', '').trim()}`);
+       } else {
+         if (!nifPath.trim() || !fixOut.trim()) { setResult('Pick a NIF and an output path.'); setBusy(false); return; }
+         out = await nif.Fix(nifPath, fixOut);
+-        if (/RESULT: fix OK/.test(out)) setLastOutDir(fixOut);
++        if (/RESULT: fix OK/.test(out)) { setLastOutDir(fixOut); await verifyPath(fixOut); }
+         appendLog(`${/OK/.test(out) ? '✓' : '✗'} fix ${baseName(nifPath)} → ${baseName(fixOut)}`);
+       }
+       setResult(out || '(no output)');
+@@ -444,7 +460,10 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
+               <span>OUTPUT -- {mode}</span>
+               {result && <button className="papyrus-copy" onClick={() => navigator.clipboard.writeText(result)}>Copy</button>}
+             </div>
+-            <pre className="papyrus-output-body nif-output">{result || 'Pick a file and run.'}</pre>
++            {(mode === 'verify' || mode === 'fix') && report && nif
++              ? <Issues key={report.path} nif={nif} path={report.path} checks={report.checks}
++                  onWritten={onIssuesWritten} appendLog={appendLog} />
++              : <pre className="papyrus-output-body nif-output">{result || 'Pick a file and run.'}</pre>}
+             <div className="papyrus-log-head">
+               <span>LOG ({log.length})</span>
+               {log.length > 0 && <button className="papyrus-copy" onClick={() => setLog([])}>Clear</button>}
+@@ -461,6 +480,17 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
+   );
+ }
+ 
++function parseVerify(raw: string): { text: string; checks: VerifyCheck[] } | null {
++  try {
++    const parsed = JSON.parse(raw) as { text?: unknown; checks?: unknown };
++    return typeof parsed.text === 'string' && Array.isArray(parsed.checks)
++      ? { text: parsed.text, checks: parsed.checks as VerifyCheck[] }
++      : null;
++  } catch {
++    return null;
++  }
++}
++
+ function makeBanner(text: string): { kind: 'ok' | 'warn' | 'error'; text: string } {
+   const result = text.split('\n').find(l => l.startsWith('RESULT:'));
+   if (result) {
+diff --git a/PluginEditTool/web/src/backend.ts b/PluginEditTool/web/src/backend.ts
+index 23e2c75aa..821927d06 100644
+--- a/PluginEditTool/web/src/backend.ts
++++ b/PluginEditTool/web/src/backend.ts
+@@ -521,7 +521,7 @@ export interface NifHost {
+ 
+   GetTexture(nifPath: string, relTexPath: string, textureRoot: string): Promise<string>;
+   Verify(nifPath: string): Promise<string>;
+-  Fix(nifPath: string, outNif: string): Promise<string>;
++  Fix(nifPath: string, outNif: string, check?: string): Promise<string>;
+   Tree(nifPath: string): Promise<string>;
+ 
+   ApplyEdits(nifPath: string, editsJson: string, outNif: string): Promise<string>;
+diff --git a/PluginEditTool/web/src/nifmodes/Issues.test.tsx b/PluginEditTool/web/src/nifmodes/Issues.test.tsx
+new file mode 100644
+index 000000000..1d0c46a0e
+--- /dev/null
++++ b/PluginEditTool/web/src/nifmodes/Issues.test.tsx
+@@ -0,0 +1,189 @@
++import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import type { NifHost } from '../backend';
++import NifPanel from '../NifPanel';
++import type { ConfirmRequest } from '../useDialogs';
++import Issues, { type VerifyCheck } from './Issues';
++
++const dialogs = vi.hoisted(() => ({ confirm: vi.fn<(req: ConfirmRequest) => Promise<boolean>>() }));
++vi.mock('../useDialogs', () => ({ useDialogs: () => ({ confirm: dialogs.confirm }) }));
++vi.mock('../NifViewport', () => ({ default: () => null }));
++vi.mock('../NifEditor', () => ({ default: () => null }));
++
++const PATH = 'C:\\mods\\Body.nif';
++const SAVED = 'C:\\mods\\Body_fixed.nif';
++
++const fix = vi.fn<(path: string, outNif: string, check?: string) => Promise<string>>();
++const browseForSave = vi.fn<(title: string, filter: string) => Promise<string>>();
++const verify = vi.fn<(path: string) => Promise<string>>();
++
++const passing = (name: string): VerifyCheck => ({ name, failure: '', fixable: false });
++const failing = (name: string, failure: string, fixable: boolean): VerifyCheck => ({ name, failure, fixable });
++
++const checks: VerifyCheck[] = [
++  passing('header parses'),
++  failing('no editor markers', 'block 5 sets the BSX editor-marker bit', true),
++  failing('texture paths are relative', "texture 'C:\\a.dds' is a drive-letter path", false),
++  passing('UVs match the vertex count'),
++];
++
++function renderIssues(list: VerifyCheck[] = checks) {
++  const onWritten = vi.fn<(outPath: string) => void>();
++  const appendLog = vi.fn<(line: string) => void>();
++  const nif = { Fix: fix, BrowseForSave: browseForSave } as unknown as NifHost;
++  render(<Issues nif={nif} path={PATH} checks={list} onWritten={onWritten} appendLog={appendLog} />);
++  return { onWritten, appendLog };
++}
++
++function groupOf(name: string) {
++  return screen.getByText(name).closest('section') as HTMLElement;
++}
++
++beforeEach(() => {
++  vi.clearAllMocks();
++  localStorage.clear();
++  dialogs.confirm.mockResolvedValue(true);
++  fix.mockResolvedValue('RESULT: fix OK (in-process)\nSaved: ' + SAVED);
++  browseForSave.mockResolvedValue(SAVED);
++});
++
++afterEach(() => {
++  cleanup();
++  vi.unstubAllGlobals();
++});
++
++function stubPanelBridge() {
++  vi.stubGlobal('chrome', {
++    webview: {
++      addEventListener: vi.fn(),
++      removeEventListener: vi.fn(),
++      hostObjects: {
++        nif: {
++          Verify: verify, Fix: fix, BrowseForSave: browseForSave, StageDroppedFile: vi.fn(),
++          Geo: vi.fn(async () => JSON.stringify({ shapes: [] })), Tree: vi.fn(async () => JSON.stringify({ blocks: [] })),
++        },
++      },
++    },
++  });
++}
++
++async function runVerifyOn(path: string) {
++  render(<NifPanel onClose={() => undefined} />);
++  fireEvent.change(screen.getByPlaceholderText(/drag a \.nif here/), { target: { value: path } });
++  fireEvent.click(document.querySelector('.papyrus-run')!);
++}
++
++describe('Issues', () => {
++  // Detects: a passing check listed as a finding, so a clean check would look like a failure
++  it('lists only the failing checks, each under its own name', () => {
++    renderIssues();
++    expect(screen.getByText('2 of 4 checks failed')).toBeDefined();
++    expect(screen.queryByText('header parses')).toBeNull();
++    expect(screen.getByText('block 5 sets the BSX editor-marker bit')).toBeDefined();
++    expect(screen.getByText("texture 'C:\\a.dds' is a drive-letter path")).toBeDefined();
++  });
++
++  // Detects: a fix button shown on a check that no repair clears, which would change nothing and leave the finding
++  it('offers a fix only on a finding that the fix route repairs', () => {
++    renderIssues();
++    expect(within(groupOf('no editor markers')).getByRole('button', { name: 'Fix' })).toBeDefined();
++    expect(within(groupOf('texture paths are relative')).queryByRole('button', { name: 'Fix' })).toBeNull();
++  });
++
++  // Detects: a row repair must pass its selected check and confirm before overwriting.
++  it('confirms before a fix overwrites the open file, then writes back to the same path', async () => {
++    const { onWritten } = renderIssues();
++    fireEvent.click(within(groupOf('no editor markers')).getByRole('button', { name: 'Fix' }));
++    await waitFor(() => expect(fix).toHaveBeenCalledWith(PATH, PATH, 'no editor markers'));
++    expect(dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ danger: true }));
++    expect(dialogs.confirm.mock.invocationCallOrder[0]).toBeLessThan(fix.mock.invocationCallOrder[0]);
++    expect(onWritten).toHaveBeenCalledWith(PATH);
++  });
++
++  // Detects: a declined overwrite still running the fix, so the file changes without consent
++  it('writes nothing when the overwrite is declined', async () => {
++    dialogs.confirm.mockResolvedValue(false);
++    renderIssues();
++    fireEvent.click(screen.getByRole('button', { name: /Fix all/ }));
++    await waitFor(() => expect(dialogs.confirm).toHaveBeenCalledTimes(1));
++    await act(async () => {
++      await new Promise(resolve => setTimeout(resolve, 0));
++    });
++    expect(fix).not.toHaveBeenCalled();
++  });
++
++  // Detects: Save As writing the fixed copy back over the source NIF instead of the path the user picked
++  it('saves the fixed copy to the chosen path and leaves the source alone', async () => {
++    const { onWritten } = renderIssues();
++    fireEvent.click(screen.getByRole('button', { name: /Save As/ }));
++    await waitFor(() => expect(fix).toHaveBeenCalledWith(PATH, SAVED));
++    expect(dialogs.confirm).not.toHaveBeenCalled();
++    expect(onWritten).toHaveBeenCalledWith(SAVED);
++  });
++
++  // Detects: a cancelled Save As running a fix into an empty output path
++  it('does nothing when Save As is cancelled', async () => {
++    browseForSave.mockResolvedValue('');
++    renderIssues();
++    fireEvent.click(screen.getByRole('button', { name: /Save As/ }));
++    await waitFor(() => expect(browseForSave).toHaveBeenCalledTimes(1));
++    await act(async () => {
++      await new Promise(resolve => setTimeout(resolve, 0));
++    });
++    expect(fix).not.toHaveBeenCalled();
++  });
++
++  // Detects: Fix all running the repair more than once for a single click
++  it('runs Fix all as one repair of the file', async () => {
++    renderIssues();
++    fireEvent.click(screen.getByRole('button', { name: /Fix all \(1\)/ }));
++    await waitFor(() => expect(fix).toHaveBeenCalledTimes(1));
++    await act(async () => {
++      await new Promise(resolve => setTimeout(resolve, 0));
++    });
++    expect(fix).toHaveBeenCalledTimes(1);
++  });
++
++  // Detects: a failed repair shown as a finished one, so the file looks fixed when nothing was written
++  it('shows a failed repair and does not report the file as written', async () => {
++    fix.mockResolvedValue('Error: NIF not found');
++    const { onWritten, appendLog } = renderIssues();
++    fireEvent.click(screen.getByRole('button', { name: /Fix all/ }));
++    expect(await screen.findByText('Error: NIF not found')).toBeDefined();
++    expect(onWritten).not.toHaveBeenCalled();
++    expect(appendLog).toHaveBeenCalledWith(expect.stringContaining('✗'));
++  });
++
++  // Detects: a report whose checks all pass still offering a repair or listing findings
++  it('offers no repair and lists nothing when every check passes', () => {
++    renderIssues([passing('header parses'), passing('UVs match the vertex count')]);
++    expect(screen.getByText('All 2 checks pass')).toBeDefined();
++    expect(screen.queryByRole('button', { name: /Fix/ })).toBeNull();
++    expect(screen.queryByRole('button', { name: /Save As/ })).toBeNull();
++  });
++});
++
++describe('NifPanel verify output', () => {
++  // Detects: Verify falling back to the plain-text report instead of the issues list built from its checks
++  it('shows the verify result as issues with their fix button', async () => {
++    localStorage.setItem('nif.mode', 'verify');
++    verify.mockResolvedValue(JSON.stringify({
++      text: 'RESULT: 2 checks, 1 failed\n[ok] header parses\n[FAIL] no editor markers: block 5 sets the BSX editor-marker bit',
++      checks: [passing('header parses'), failing('no editor markers', 'block 5 sets the BSX editor-marker bit', true)],
++    }));
++    stubPanelBridge();
++    await runVerifyOn(PATH);
++    expect(await screen.findByText('1 of 2 checks failed')).toBeDefined();
++    expect(document.querySelector('.nif-output')).toBeNull();
++    expect(within(groupOf('no editor markers')).getByRole('button', { name: 'Fix' })).toBeDefined();
++  });
++
++  // Detects: a failed Verify whose error is swallowed by the issues view, so the user sees nothing happen
++  it('keeps a failed verify as its error text', async () => {
++    localStorage.setItem('nif.mode', 'verify');
++    verify.mockResolvedValue('Error: NIF not found: C:\\mods\\Body.nif');
++    stubPanelBridge();
++    await runVerifyOn(PATH);
++    expect(await screen.findByText('Error: NIF not found: C:\\mods\\Body.nif')).toBeDefined();
++  });
++});
+diff --git a/PluginEditTool/web/src/nifmodes/Issues.tsx b/PluginEditTool/web/src/nifmodes/Issues.tsx
+new file mode 100644
+index 000000000..f052d2ece
+--- /dev/null
++++ b/PluginEditTool/web/src/nifmodes/Issues.tsx
+@@ -0,0 +1,94 @@
++import { useState } from 'react';
++import { AlertTriangle, CheckCircle2, Save, Wrench } from 'lucide-react';
++import type { NifHost } from '../backend';
++import { useDialogs } from '../useDialogs';
++
++export interface VerifyCheck { name: string; failure: string; fixable: boolean; }
++
++const fileName = (p: string) => p.split(/[\\/]/).pop() || p;
++
++export default function Issues(
++  { nif, path, checks, onWritten, appendLog }: {
++    nif: NifHost;
++    path: string;
++    checks: VerifyCheck[];
++    onWritten: (outPath: string) => void;
++    appendLog: (line: string) => void;
++  }
++) {
++  const { confirm } = useDialogs();
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState('');
++  const name = fileName(path);
++  const failing = checks.filter(c => c.failure !== '');
++  const fixable = failing.filter(c => c.fixable);
++
++  const writeFix = async (outPath: string, check?: string) => {
++    setBusy(true);
++    setError('');
++    try {
++      const res = check ? await nif.Fix(path, outPath, check) : await nif.Fix(path, outPath);
++      if (!/RESULT: fix OK/.test(res)) {
++        const line = res.split('\n')[0];
++        setError(line);
++        appendLog(`✗ fix ${name} -- ${line}`);
++        return;
++      }
++      appendLog(`✓ fixed ${name} → ${fileName(outPath)}`);
++      onWritten(outPath);
++    } catch (e) {
++      const msg = e instanceof Error ? e.message : String(e);
++      setError(msg);
++      appendLog(`✗ fix ${name} -- ${msg}`);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  const fixInPlace = async (check?: string) => {
++    const ok = await confirm({
++      title: 'Overwrite NIF with fixes?',
++      message: check ? `${name} is rewritten in place to repair ${check}.` : `${name} is rewritten in place with all fixes.`,
++      confirmLabel: 'Fix in place',
++      danger: true,
++    });
++    if (ok) await writeFix(path, check);
++  };
++
++  const saveAs = async () => {
++    const out = await nif.BrowseForSave('Save fixed NIF as', 'NIF mesh (*.nif)|*.nif');
++    if (out) await writeFix(out);
++  };
++
++  if (checks.length === 0) return null;
++
++  return (
++    <div className="nif-issues">
++      <div className="nif-issues-head">
++        {failing.length === 0
++          ? <span className="nif-issues-summary ok"><CheckCircle2 size={14} /> All {checks.length} checks pass</span>
++          : <span className="nif-issues-summary"><AlertTriangle size={14} /> {failing.length} of {checks.length} checks failed</span>}
++        {fixable.length > 0 && (
++          <div className="nif-issues-actions">
++            <button className="sidebar-action-btn" disabled={busy} onClick={saveAs}><Save size={13} /> Save As…</button>
++            <button className="papyrus-run" disabled={busy} onClick={() => fixInPlace()}><Wrench size={13} /> Fix all ({fixable.length})</button>
++          </div>
++        )}
++      </div>
++      {error && <div className="papyrus-warn">{error}</div>}
++      {failing.map(check => (
++        <section key={check.name} className="nif-issue-group">
++          <div className="nif-issue-head">
++            <span className="nif-issue-name">{check.name}</span>
++            {check.fixable && (
++              <button className="sidebar-action-btn" disabled={busy} onClick={() => fixInPlace(check.name)} title="Repairs this check">
++                <Wrench size={12} /> Fix
++              </button>
++            )}
++          </div>
++          <p className="nif-issue-finding">{check.failure}</p>
++        </section>
++      ))}
++    </div>
++  );
++}
+diff --git a/Radicle/CMakeLists.txt b/Radicle/CMakeLists.txt
+index d942f40c9..13d8210eb 100644
+--- a/Radicle/CMakeLists.txt
++++ b/Radicle/CMakeLists.txt
+@@ -196,6 +196,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
+   src/nif/import_obj.cpp
+   src/nif/import_build.cpp
+   src/nif/fix_nif.cpp
++  src/nif/skin_checks.cpp
++  src/nif/lint_checks.cpp
++  src/nif/lint_fixes.cpp
+   src/nif/nif_audit.cpp
+   src/forms/armor.cpp
+   src/forms/armor_edit.cpp
+@@ -986,6 +989,8 @@ if(RADICLE_BUILD_TESTS)
+     tests/test_nif.cpp
+     tests/test_nif_nodes.cpp
+     tests/test_nif_describe.cpp
++    tests/test_nif_skin_checks.cpp
++    tests/test_nif_lint.cpp
+     tests/test_nif_corpus.cpp
+     tests/test_nif_collision.cpp
+     tests/test_nif_collision_real.cpp
+diff --git a/Radicle/docs/NIF.md b/Radicle/docs/NIF.md
+index 5588d6991..59956cbde 100644
+--- a/Radicle/docs/NIF.md
++++ b/Radicle/docs/NIF.md
+@@ -395,8 +395,17 @@ nothing itself.
+   `no editor markers`, `shapes parse`, `vertex descriptor matches the data`,
+   `shapes have vertices and triangles`, `normals match the vertex count`,
+   `UVs match the vertex count`, `shader and skin reads are clean`,
+-  `texture paths are relative`. The header check is the caller's: a file that does not
+-  parse never reaches `verify_nif`. `shapes parse` names the block and its fault
++  `texture paths are relative`, `skin bind transforms are present`,
++  `skin bone names resolve to nodes in the file`,
++  `skin weights are finite, non-negative and sum to one`,
++  `absolute texture paths can be made relative`, `rigid shapes carry a bounding sphere`,
++  `no triangles name a vertex twice`, `no unused strings in the header string table`,
++  `named SSF sidecars that exist beside the mesh are readable`.
++  `VerifyCheck::fixable` is true for the four checks `fix_nif` repairs: `no editor markers`,
++  `absolute texture paths can be made relative`, `rigid shapes carry a bounding sphere` and
++  `no triangles name a vertex twice`. The other checks have no repair.
++  The header check is the caller's: a file that does not parse never reaches
++  `verify_nif`. `shapes parse` names the block and its fault
+   rather than failing the whole report, so a broken shape still leaves the other
+   checks meaningful.
+ - `vertex descriptor matches the data` reads each shape's `BSVertexDesc`
+@@ -410,6 +419,17 @@ nothing itself.
+   `src/nif/vertex_desc.cpp:vertex_bytes_for`, the one function this check and the
+   reader both measure with), and `nif.xml:BSVertexData` is what says
+   the binormal and tangent take four bytes each.
++- `no triangles name a vertex twice` fails when a `BSTriShape` or `BSDynamicTriShape`
++  triangle repeats a vertex index (`src/nif/lint_checks.cpp:repeated_vertex_fault`).
++  `fix_nif` drops those triangles (`src/nif/lint_fixes.cpp:drop_repeated_vertex_triangles`).
++- `no unused strings in the header string table` fails when a non-empty header string
++  has no four bytes, at any offset in any block, that equal its index
++  (`src/nif/lint_checks.cpp:unused_string_fault`). It has no repair.
++- `named SSF sidecars that exist beside the mesh are readable` reads the `SSF File` of
++  each `BSSubIndexTriShape` (`src/nif/lint_checks.cpp:segment_sidecar`) and asks the
++  `SidecarProbe` for its leaf name beside the NIF. The probe returns false only for a file
++  that exists and cannot be read, so a missing file passes. Without a probe the check
++  passes unjudged. It has no repair.
+ - `no editor markers` fails when a `BSXFlags` block has bit 5 set
+   (`nif.xml:BSXFlags`; `PluginBrreakdown@5a58943:include/RE/B/BSXFlags.h`), the bit
+   the engine's `is_editor_marker` reads. `BSXFlags` is a `NiIntegerExtraData`, so
+diff --git a/Radicle/docs/code-notes/Radicle.md b/Radicle/docs/code-notes/Radicle.md
+index 9a7ecbe31..998cf5dd2 100644
+--- a/Radicle/docs/code-notes/Radicle.md
++++ b/Radicle/docs/code-notes/Radicle.md
+@@ -10997,6 +10997,29 @@ Tests: `Radicle/tests/test_avm2_frame_listeners.cpp` has `Avm2FrameListeners.Two
+ 
+ With `FO4_DATA_DIR`, the test passes, and `ran` is 7. Its `R8_HASH` lines (program, frame hash, host-log hash, BGS calls) are AtomicCommand 15, GJ_Defrag 30, Grognak 2, PipFall 10, RedMenace 8, TurretHack 5 and ZetaInvaders 6. They are the same with and without the render dispatch. The test fails on any handler failure, and none occurred. `Radicle/testdata/swf/program_replay_pins.txt` has no rows, so the file does not pin these counts. TurretHack's 5 matches the round-5 note. The other six were compared only with this round's no-render baseline. `ComparesTheCapturedBgsSequenceForEachProgram` skips here, because it needs `FO4_SWF_CAPTURE_DIR` and this machine has no captures.
+ 
++## Radicle/src/nif/skin_checks.cpp:bind_fault
++
++"Bind transforms present" means the BSSkin::Instance data ref names a BSSkin::BoneData block. `read_bones` returns identity bones without it, so the reader alone cannot show this.
++
++## Radicle/src/nif/skin_checks.cpp:weight_fault
++
++A vertex's weights must sum to 1 within 0.001: four half-float weights of at most 1.0 round by at most 4 x 2^-12. Vertices with zero total weight are not judged, because vanilla has them (`Meshes\Actors\Robot\Parts\HeadSentryType1.nif`).
++
++## Radicle/src/nif/lint_checks.cpp:lint_checks
++
++Measured clean on 226,454 vanilla NIFs and 23,587 skinned shapes. Deliberately absent, because they fire on vanilla: unused strings, triangles repeating a vertex, and sphere enclosure. Vanilla spheres are approximate: `Meshes\Interface\Objects\PADashPipboyScreenSUW.nif` misses by 184%. So only an unset sphere is reported, and skinned shapes, which store zero spheres, are skipped.
++
++## Radicle/src/nif/lint_checks.cpp:relative_texture_path
++
++An absolute path, with a drive letter or leading separator, is cut at its first Textures folder segment that has a file after it. Otherwise the result is empty and no fix is offered.
++
++## Radicle/src/nif/lint_fixes.cpp:lint_fixes
++
++Relocation, then sphere refit (centre = bounds centre, radius = max distance). It runs after the trim loop in `Radicle/src/nif/fix_nif.cpp:fix_nif`, otherwise a path trimmed to absolute stays unfixed and a second fix changes bytes.
++
++## Radicle/src/nif/verify.cpp:verify_nif
++
++Skin then lint checks follow the original ten; the order is the contract, 15 checks in all.
+ ## Radicle/include/fo4/math/interpolation.hpp:pchip, Radicle/include/fo4/texture/palette.hpp:palette_kmeans (generic maths, intake row 31, Lane E)
+ 
+ Two self-contained maths helpers the intake marks to-do because their `scientific` and `palette` crates have no Radicle counterpart: monotone cubic interpolation for terrain height resampling and k-means palette reduction for texture atlases. Both are implemented from the published algorithms, not from their code, and neither is wired to a consumer yet. C++ only, so `RADICLE_ABI_VERSION` is unchanged.
+diff --git a/Radicle/include/fo4/nif/describe.hpp b/Radicle/include/fo4/nif/describe.hpp
+index 5d8a1eb39..4b5d4d4b2 100644
+--- a/Radicle/include/fo4/nif/describe.hpp
++++ b/Radicle/include/fo4/nif/describe.hpp
+@@ -4,6 +4,7 @@
+ 
+ #include <cstddef>
+ #include <cstdint>
++#include <functional>
+ #include <string>
+ #include <string_view>
+ #include <variant>
+@@ -52,10 +53,11 @@ struct GeometryReport {
+   std::vector<GeometryShape> shapes;
+ };
+ 
+-// Invariant: a check with an empty failure passed; the name is the report key a caller must not rename.
++// Invariant: a check with an empty failure passed; the name is the report key a caller must not rename, and fixable means fix_nif repairs its failures.
+ struct VerifyCheck {
+   std::string name;
+   std::string failure;
++  bool fixable{false};
+ };
+ 
+ struct VerifyReport {
+@@ -64,6 +66,9 @@ struct VerifyReport {
+   std::size_t failed() const noexcept;
+ };
+ 
++// Invariant: the probe takes a leaf file name and returns false only for a file that exists beside the NIF but cannot be read; without a probe the sidecar check passes unjudged.
++using SidecarProbe = std::function<bool(std::string_view file_name)>;
++
+ // Invariant: type is the editor widget tag (string, tex, readonly, float, int, vec2, vec3, bool, flags) and value's alternative must match it.
+ struct TreeFlag {
+   std::string key;
+@@ -97,7 +102,7 @@ struct NifTree {
+ 
+ InspectReport inspect_nif(const NifFile& nif);
+ GeometryReport geometry_nif(const NifFile& nif);
+-VerifyReport verify_nif(const NifFile& nif);
++VerifyReport verify_nif(const NifFile& nif, const SidecarProbe& sidecar_readable = {});
+ // Requires every block to appear exactly once, ordered by block index.
+ NifTree describe_nif(const NifFile& nif);
+ 
+diff --git a/Radicle/include/fo4/nif/lint.hpp b/Radicle/include/fo4/nif/lint.hpp
+new file mode 100644
+index 000000000..b7dc53bb9
+--- /dev/null
++++ b/Radicle/include/fo4/nif/lint.hpp
+@@ -0,0 +1,14 @@
++#pragma once
++
++#include "fo4/nif/describe.hpp"
++#include "fo4/nif/nif.hpp"
++
++#include <vector>
++
++namespace fo4::nif {
++
++// Requires shapes read from nif; the five checks come back in a fixed order for verify_nif to append.
++std::vector<VerifyCheck> lint_checks(const NifFile& nif, const std::vector<Shape>& shapes,
++                                     const SidecarProbe& sidecar_readable = {});
++
++}  // namespace fo4::nif
+diff --git a/Radicle/include/fo4/nif/nif_fix.hpp b/Radicle/include/fo4/nif/nif_fix.hpp
+index 0b64aa0f0..67b196bb1 100644
+--- a/Radicle/include/fo4/nif/nif_fix.hpp
++++ b/Radicle/include/fo4/nif/nif_fix.hpp
+@@ -3,10 +3,12 @@
+ #include "fo4/nif/nif.hpp"
+ 
+ #include <cstddef>
++#include <string_view>
+ #include <vector>
+ 
+ namespace fo4::nif {
+ 
+ std::vector<std::byte> fix_nif(const NifFile& nif);
++std::vector<std::byte> fix_nif(const NifFile& nif, std::string_view check);
+ 
+ }  // namespace fo4::nif
+diff --git a/Radicle/include/fo4/nif/skin_checks.hpp b/Radicle/include/fo4/nif/skin_checks.hpp
+new file mode 100644
+index 000000000..a3f489f1c
+--- /dev/null
++++ b/Radicle/include/fo4/nif/skin_checks.hpp
+@@ -0,0 +1,13 @@
++#pragma once
++
++#include "fo4/nif/describe.hpp"
++#include "fo4/nif/nif.hpp"
++
++#include <vector>
++
++namespace fo4::nif {
++
++// Requires shapes read from nif; the three checks come back in a fixed order for verify_nif to append.
++std::vector<VerifyCheck> skin_checks(const NifFile& nif, const std::vector<Shape>& shapes);
++
++}  // namespace fo4::nif
+diff --git a/Radicle/src/nif/fix_nif.cpp b/Radicle/src/nif/fix_nif.cpp
+index 4592fd703..3ae2131f4 100644
+--- a/Radicle/src/nif/fix_nif.cpp
++++ b/Radicle/src/nif/fix_nif.cpp
+@@ -4,6 +4,7 @@
+ #include "fo4/error.hpp"
+ #include "fo4/nif/nif.hpp"
+ #include "import_mesh.hpp"
++#include "lint_internal.hpp"
+ #include "nif_internal.hpp"
+ #include "write_model.hpp"
+ 
+@@ -47,29 +48,6 @@ constexpr std::string_view k_bsx_name = "BSX";
+ constexpr std::string_view k_shader_type = "BSLightingShaderProperty";
+ constexpr std::string_view k_texture_set_type = "BSShaderTextureSet";
+ 
+-struct VertexRun {
+-  std::size_t first;
+-  std::size_t stride;
+-  std::uint32_t flags;
+-};
+-
+-VertexRun vertex_run(const NifFile& nif, std::uint32_t block) {
+-  auto cursor = detail::block_cursor(nif, block);
+-  detail::read_av_header(cursor, nif);
+-  cursor.read_i32();
+-  cursor.read_bytes(16);
+-  cursor.read_bytes(12);
+-  const auto descriptor_low = cursor.read_u32();
+-  const auto descriptor_high = cursor.read_u32();
+-  const auto descriptor =
+-      static_cast<std::uint64_t>(descriptor_low) | (static_cast<std::uint64_t>(descriptor_high) << 32U);
+-  cursor.read_u32();
+-  cursor.read_u16();
+-  cursor.read_u32();
+-  return {cursor.position(), static_cast<std::size_t>(descriptor & 0xFU) * 4,
+-          static_cast<std::uint32_t>(descriptor >> 44U)};
+-}
+-
+ Mesh shape_mesh(const Shape& shape) {
+   Mesh mesh;
+   for (std::size_t v = 0; v + 2 < shape.verts.size(); v += 3) {
+@@ -192,14 +170,15 @@ void attach_bsx(Model& model, std::uint32_t root) {
+   write_int(bytes, k_extra_count_at, static_cast<std::uint32_t>(count + 1));
+ }
+ 
+-void require_same_shapes(const NifFile& nif, const Bytes& bytes) {
++void require_same_shapes(const NifFile& nif, const Bytes& bytes, bool repair_triangles) {
+   const auto before = read_shapes(nif);
+   const auto after = read_shapes(read_nif(bytes));
+   if (before.size() != after.size()) {
+     throw std::runtime_error("internal error: the fixed NIF has a different shape count");
+   }
+   for (std::size_t i = 0; i < before.size(); ++i) {
+-    if (after[i].verts.size() != before[i].verts.size() || after[i].tris != before[i].tris ||
++    if (after[i].verts.size() != before[i].verts.size() ||
++        after[i].tris != (repair_triangles ? triangles_after_fix(nif, before[i]) : before[i].tris) ||
+         after[i].warning != before[i].warning) {
+       throw std::runtime_error("internal error: the fixed NIF does not read back as the same shapes");
+     }
+@@ -209,22 +188,30 @@ void require_same_shapes(const NifFile& nif, const Bytes& bytes) {
+ }  // namespace
+ 
+ std::vector<std::byte> fix_nif(const NifFile& nif) {
++  return fix_nif(nif, {});
++}
++
++std::vector<std::byte> fix_nif(const NifFile& nif, std::string_view check) {
++  if (!check.empty() && check != "no editor markers" && check != "absolute texture paths can be made relative" &&
++      check != "rigid shapes carry a bounding sphere" && check != "no triangles name a vertex twice")
++    throw std::invalid_argument("unknown NIF repair check");
+   if (nif.roots().empty()) throw parse_error(0, "NIF has no root block");
+   const auto root = nif.roots().front();
+-  if (nif.node_for_block(root) < 0) {
++  if (check.empty() && nif.node_for_block(root) < 0) {
+     throw parse_error(nif.blocks().at(root).offset, "root block is not a node, so BSXFlags cannot be attached");
+   }
+   auto model = write_detail::load_model(nif);
+-  for (const auto& shape : read_shapes(nif)) rewrite_tangent_frame(nif, model, shape);
++  if (check.empty()) for (const auto& shape : read_shapes(nif)) rewrite_tangent_frame(nif, model, shape);
+   for (std::uint32_t block = 0; block < nif.blocks().size(); ++block) {
+     const auto& type = nif.blocks()[block].type;
+-    if (type == k_shader_type) trim_shader_name(model, block);
+-    if (type == k_texture_set_type) trim_texture_set(model, block);
+-    if (type == k_bsx_type) clear_editor_marker(model, block);
++    if (check.empty() && type == k_shader_type) trim_shader_name(model, block);
++    if (check.empty() && type == k_texture_set_type) trim_texture_set(model, block);
++    if ((check.empty() || check == "no editor markers") && type == k_bsx_type) clear_editor_marker(model, block);
+   }
+-  if (!has_bsx(model, root)) attach_bsx(model, root);
++  lint_fixes(nif, model, check);
++  if (check.empty() && !has_bsx(model, root)) attach_bsx(model, root);
+   auto bytes = write_detail::serialize(model);
+-  require_same_shapes(nif, bytes);
++  require_same_shapes(nif, bytes, check.empty() || check == "no triangles name a vertex twice");
+   return bytes;
+ }
+ 
+diff --git a/Radicle/src/nif/lint_checks.cpp b/Radicle/src/nif/lint_checks.cpp
+new file mode 100644
+index 000000000..48ad0a680
+--- /dev/null
++++ b/Radicle/src/nif/lint_checks.cpp
+@@ -0,0 +1,248 @@
++#include "fo4/nif/lint.hpp"
++
++#include "fo4/error.hpp"
++#include "lint_internal.hpp"
++#include "nif_internal.hpp"
++
++#include <algorithm>
++#include <array>
++#include <cctype>
++#include <cmath>
++#include <cstddef>
++#include <cstdint>
++#include <string>
++#include <string_view>
++#include <vector>
++
++namespace fo4::nif {
++namespace {
++
++// name, extra-data count, controller, flags, transform and collision reference come before the sphere
++constexpr std::size_t k_sphere_fixed_bytes = 72;
++constexpr std::string_view k_textures_folder = "textures";
++constexpr std::string_view k_sub_index_type = "BSSubIndexTriShape";
++constexpr std::size_t k_segment_head_bytes = 12;
++constexpr std::size_t k_subsegment_bytes = 16;
++constexpr std::size_t k_per_segment_head_bytes = 8;
++
++bool is_separator(char ch) { return ch == '\\' || ch == '/'; }
++
++bool is_textures_folder(std::string_view segment) {
++  return segment.size() == k_textures_folder.size() &&
++         std::equal(segment.begin(), segment.end(), k_textures_folder.begin(),
++                    [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; });
++}
++
++std::string where(const Shape& shape) {
++  return "shape '" + shape.name + "' (block " + std::to_string(shape.block) + ")";
++}
++
++std::string leaf_name(std::string_view path) {
++  const auto cut = path.find_last_of("\\/");
++  return std::string(cut == std::string_view::npos ? path : path.substr(cut + 1));
++}
++
++std::string relocatable_texture_fault(const std::vector<Shape>& shapes) {
++  for (const auto& shape : shapes) {
++    for (const auto& path : shape.textures) {
++      const auto relative = relative_texture_path(path);
++      if (!relative.empty()) {
++        return where(shape) + " texture '" + path + "' can be made relative to '" + relative + "'";
++      }
++    }
++  }
++  return {};
++}
++
++std::string sphere_fault(const NifFile& nif, const std::vector<Shape>& shapes) {
++  for (const auto& shape : shapes) {
++    if (!shape.verts.empty() && bounding_sphere_misses(nif, shape)) {
++      return where(shape) + " has no bounding sphere";
++    }
++  }
++  return {};
++}
++
++// Constraint: collinear and coincident triangles with distinct vertices are common in vanilla, so only index repeats are judged.
++std::string repeated_vertex_fault(const NifFile& nif, const std::vector<Shape>& shapes) {
++  for (const auto& shape : shapes) {
++    if (!repairs_triangles(nif, shape)) continue;
++    std::size_t count = 0;
++    for (std::size_t triangle = 0; triangle < shape.tris.size() / 3; ++triangle) {
++      if (repeats_a_vertex(shape, triangle)) ++count;
++    }
++    if (count > 0) return where(shape) + " has " + std::to_string(count) + " triangle(s) that name a vertex twice";
++  }
++  return {};
++}
++
++std::string unused_string_fault(const NifFile& nif) {
++  const auto& strings = nif.strings();
++  std::vector<bool> used(strings.size(), false);
++  for (const auto& block : nif.blocks()) {
++    const auto end = block.offset + block.size;
++    for (std::size_t at = block.offset; at + 4 <= end; ++at) {
++      const auto value = write_detail::read_int<std::uint32_t>(nif.bytes(), at);
++      if (value < used.size()) used[value] = true;
++    }
++  }
++  for (std::size_t index = 0; index < strings.size(); ++index) {
++    if (!used[index] && !strings[index].empty()) {
++      return "string " + std::to_string(index) + " '" + strings[index] + "' is used by no block";
++    }
++  }
++  return {};
++}
++
++// Requires a BSSubIndexTriShape block.
++std::string segment_sidecar(const NifFile& nif, std::uint32_t block) {
++  const auto run = vertex_run(nif, block);
++  if (run.data_size == 0) return {};
++  auto cursor = detail::block_cursor(nif, block);
++  cursor.seek(run.first + run.data_size);
++  cursor.read_u32();
++  const auto segments = cursor.read_u32();
++  const auto total = cursor.read_u32();
++  for (std::uint32_t segment = 0; segment < segments; ++segment) {
++    cursor.read_bytes(k_segment_head_bytes);
++    const auto subsegments = cursor.read_u32();
++    cursor.read_bytes(k_subsegment_bytes * static_cast<std::size_t>(subsegments));
++  }
++  if (segments >= total) return {};
++  const auto shared_segments = cursor.read_u32();
++  const auto shared_total = cursor.read_u32();
++  cursor.read_bytes(4 * static_cast<std::size_t>(shared_segments));
++  for (std::uint32_t entry = 0; entry < shared_total; ++entry) {
++    cursor.read_bytes(k_per_segment_head_bytes);
++    const auto cut_offsets = cursor.read_u32();
++    cursor.read_bytes(4 * static_cast<std::size_t>(cut_offsets));
++  }
++  const auto length = cursor.read_u16();
++  const auto text = cursor.read_bytes(length);
++  return std::string(reinterpret_cast<const char*>(text.data()), text.size());
++}
++
++// Constraint: a sidecar that is not present passes, because vanilla names sidecars it does not ship.
++std::string sidecar_fault(const NifFile& nif, const std::vector<Shape>& shapes, const SidecarProbe& readable) {
++  if (!readable) return {};
++  for (const auto& shape : shapes) {
++    if (nif.blocks()[shape.block].type != k_sub_index_type) continue;
++    std::string sidecar;
++    try {
++      sidecar = segment_sidecar(nif, shape.block);
++    } catch (const parse_error& error) {
++      return where(shape) + " segment data does not parse: " + error.parse_message();
++    }
++    if (!sidecar.empty() && !readable(leaf_name(sidecar))) {
++      return where(shape) + " names sidecar '" + sidecar + "', which cannot be read beside the mesh";
++    }
++  }
++  return {};
++}
++
++}  // namespace
++
++std::size_t bounding_sphere_offset(const NifFile& nif, std::uint32_t block) {
++  auto cursor = detail::block_cursor(nif, block);
++  cursor.read_i32();
++  return k_sphere_fixed_bytes + 4 * static_cast<std::size_t>(cursor.read_u32());
++}
++
++bool finite_position(const Shape& shape, std::size_t v) {
++  return std::isfinite(shape.verts[v]) && std::isfinite(shape.verts[v + 1]) && std::isfinite(shape.verts[v + 2]);
++}
++
++bool bounding_sphere_misses(const NifFile& nif, const Shape& shape) {
++  // Constraint: skinned shapes carry no authored sphere in vanilla, so they are not judged.
++  if (shape.skin_ref >= 0) return false;
++  auto cursor = detail::block_cursor(nif, shape.block);
++  cursor.read_bytes(bounding_sphere_offset(nif, shape.block));
++  std::array<float, 4> sphere{};
++  for (float& value : sphere) value = cursor.read_f32();
++  if (sphere[3] != 0.0f) return false;
++  for (std::size_t v = 0; v + 2 < shape.verts.size(); v += 3) {
++    if (!finite_position(shape, v)) continue;
++    for (std::size_t k = 0; k < 3; ++k) {
++      if (shape.verts[v + k] != sphere[k]) return true;
++    }
++  }
++  return false;
++}
++
++std::string relative_texture_path(std::string_view path) {
++  const bool absolute = (path.size() >= 2 && path[1] == ':') || (!path.empty() && is_separator(path.front()));
++  if (!absolute) return {};
++  for (std::size_t begin = 0; begin < path.size();) {
++    const auto end = path.find_first_of("\\/", begin);
++    if (end == std::string_view::npos) break;
++    if (is_textures_folder(path.substr(begin, end - begin)) && end + 1 < path.size()) {
++      return std::string(path.substr(begin));
++    }
++    begin = end + 1;
++  }
++  return {};
++}
++
++VertexRun vertex_run(const NifFile& nif, std::uint32_t block) {
++  auto cursor = detail::block_cursor(nif, block);
++  detail::read_av_header(cursor, nif);
++  cursor.read_i32();
++  cursor.read_bytes(16);
++  cursor.read_bytes(12);
++  const auto descriptor_low = cursor.read_u32();
++  const auto descriptor_high = cursor.read_u32();
++  const auto descriptor =
++      static_cast<std::uint64_t>(descriptor_low) | (static_cast<std::uint64_t>(descriptor_high) << 32U);
++  cursor.read_u32();
++  cursor.read_u16();
++  const auto data_size = cursor.read_u32();
++  return {cursor.position(), static_cast<std::size_t>(descriptor & 0xFU) * 4,
++          static_cast<std::uint32_t>(descriptor >> 44U), data_size};
++}
++
++bool repairs_triangles(const NifFile& nif, const Shape& shape) {
++  const auto& type = nif.blocks()[shape.block].type;
++  return type == "BSTriShape" || type == "BSDynamicTriShape";
++}
++
++bool repeats_a_vertex(const Shape& shape, std::size_t triangle) {
++  const auto a = shape.tris[3 * triangle];
++  const auto b = shape.tris[3 * triangle + 1];
++  const auto c = shape.tris[3 * triangle + 2];
++  return a == b || b == c || a == c;
++}
++
++std::vector<std::uint16_t> triangles_after_fix(const NifFile& nif, const Shape& shape) {
++  if (!repairs_triangles(nif, shape)) return shape.tris;
++  std::vector<std::uint16_t> kept;
++  for (std::size_t triangle = 0; triangle < shape.tris.size() / 3; ++triangle) {
++    if (repeats_a_vertex(shape, triangle)) continue;
++    for (std::size_t slot = 0; slot < 3; ++slot) kept.push_back(shape.tris[3 * triangle + slot]);
++  }
++  if (kept.empty()) return shape.tris;
++  return kept;
++}
++
++std::vector<VerifyCheck> lint_checks(const NifFile& nif, const std::vector<Shape>& shapes,
++                                     const SidecarProbe& sidecar_readable) {
++  const bool triangles_fixable = std::all_of(shapes.begin(), shapes.end(), [&nif](const Shape& shape) {
++    if (!repairs_triangles(nif, shape)) return true;
++    bool repeated = false;
++    bool valid = false;
++    for (std::size_t triangle = 0; triangle < shape.tris.size() / 3; ++triangle) {
++      if (repeats_a_vertex(shape, triangle)) repeated = true;
++      else valid = true;
++    }
++    return !repeated || valid;
++  });
++  return {
++      {"absolute texture paths can be made relative", relocatable_texture_fault(shapes), true},
++      {"rigid shapes carry a bounding sphere", sphere_fault(nif, shapes), true},
++      {"no triangles name a vertex twice", repeated_vertex_fault(nif, shapes), triangles_fixable},
++      {"no unused strings in the header string table", unused_string_fault(nif), false},
++      {"named SSF sidecars that exist beside the mesh are readable", sidecar_fault(nif, shapes, sidecar_readable),
++       false},
++  };
++}
++
++}  // namespace fo4::nif
+diff --git a/Radicle/src/nif/lint_fixes.cpp b/Radicle/src/nif/lint_fixes.cpp
+new file mode 100644
+index 000000000..1446348ac
+--- /dev/null
++++ b/Radicle/src/nif/lint_fixes.cpp
+@@ -0,0 +1,105 @@
++#include "lint_internal.hpp"
++
++#include "fo4/nif/nif.hpp"
++#include "write_edit_internal.hpp"
++#include "write_model.hpp"
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <cstddef>
++#include <cstdint>
++#include <limits>
++#include <string>
++#include <utility>
++#include <vector>
++
++namespace fo4::nif {
++namespace {
++
++using write_detail::Bytes;
++using write_detail::Model;
++using write_detail::append_int;
++using write_detail::append_sized;
++using write_detail::read_int;
++
++void relocate_texture_paths(Model& model, std::uint32_t block) {
++  const auto& bytes = model.blocks[block];
++  const auto count = read_int<std::uint32_t>(bytes, 0);
++  Bytes rebuilt;
++  append_int(rebuilt, count);
++  bool changed = false;
++  std::size_t at = 4;
++  for (std::uint32_t slot = 0; slot < count; ++slot) {
++    const auto length = read_int<std::uint32_t>(bytes, at);
++    at += 4;
++    const std::string path(reinterpret_cast<const char*>(bytes.data() + at), length);
++    at += length;
++    const auto relative = relative_texture_path(path);
++    changed = changed || !relative.empty();
++    append_sized(rebuilt, relative.empty() ? path : relative);
++  }
++  if (changed) model.blocks[block] = rebuilt;
++}
++
++void refit_bounding_sphere(const NifFile& nif, Model& model, const Shape& shape) {
++  constexpr float inf = std::numeric_limits<float>::infinity();
++  std::array<float, 3> low{inf, inf, inf};
++  std::array<float, 3> high{-inf, -inf, -inf};
++  for (std::size_t v = 0; v + 2 < shape.verts.size(); v += 3) {
++    if (!finite_position(shape, v)) continue;
++    for (std::size_t k = 0; k < 3; ++k) {
++      low[k] = std::min(low[k], shape.verts[v + k]);
++      high[k] = std::max(high[k], shape.verts[v + k]);
++    }
++  }
++  std::vector<float> sphere(4);
++  for (std::size_t k = 0; k < 3; ++k) sphere[k] = (low[k] + high[k]) * 0.5f;
++  float radius_sq = 0.0f;
++  for (std::size_t v = 0; v + 2 < shape.verts.size(); v += 3) {
++    if (!finite_position(shape, v)) continue;
++    float distance_sq = 0.0f;
++    for (std::size_t k = 0; k < 3; ++k) {
++      const float d = shape.verts[v + k] - sphere[k];
++      distance_sq += d * d;
++    }
++    radius_sq = std::max(radius_sq, distance_sq);
++  }
++  sphere[3] = std::sqrt(radius_sq);
++  edit_detail::write_floats(nif, model, shape.block, bounding_sphere_offset(nif, shape.block), sphere);
++}
++
++void drop_repeated_vertex_triangles(const NifFile& nif, Model& model, const Shape& shape) {
++  const auto kept = triangles_after_fix(nif, shape);
++  if (kept.size() == shape.tris.size()) return;
++  const auto run = vertex_run(nif, shape.block);
++  const auto& bytes = model.blocks[shape.block];
++  const auto vertex_count = read_int<std::uint16_t>(bytes, run.first - 6);
++  const auto vertex_end = run.first + static_cast<std::size_t>(vertex_count) * run.stride;
++  const auto block_end = run.first + run.data_size;
++  Bytes rebuilt(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(run.first - 10));
++  append_int(rebuilt, static_cast<std::uint32_t>(kept.size() / 3));
++  append_int(rebuilt, vertex_count);
++  append_int(rebuilt, static_cast<std::uint32_t>(vertex_end - run.first + kept.size() * 2));
++  rebuilt.insert(rebuilt.end(), bytes.begin() + static_cast<std::ptrdiff_t>(run.first),
++                 bytes.begin() + static_cast<std::ptrdiff_t>(vertex_end));
++  for (const auto index : kept) append_int(rebuilt, index);
++  rebuilt.insert(rebuilt.end(), bytes.begin() + static_cast<std::ptrdiff_t>(block_end), bytes.end());
++  model.blocks[shape.block] = std::move(rebuilt);
++}
++
++}  // namespace
++
++void lint_fixes(const NifFile& nif, Model& model, std::string_view check) {
++  for (std::uint32_t block = 0; block < nif.blocks().size(); ++block) {
++    if ((check.empty() || check == "absolute texture paths can be made relative") &&
++        nif.blocks()[block].type == edit_detail::k_texture_set_type) relocate_texture_paths(model, block);
++  }
++  for (const auto& shape : read_shapes(nif)) {
++    if ((check.empty() || check == "rigid shapes carry a bounding sphere") &&
++        !shape.verts.empty() && bounding_sphere_misses(nif, shape)) refit_bounding_sphere(nif, model, shape);
++    if (check.empty() || check == "no triangles name a vertex twice") drop_repeated_vertex_triangles(nif, model, shape);
++  }
++}
++
++}  // namespace fo4::nif
+diff --git a/Radicle/src/nif/lint_internal.hpp b/Radicle/src/nif/lint_internal.hpp
+new file mode 100644
+index 000000000..df03e26b1
+--- /dev/null
++++ b/Radicle/src/nif/lint_internal.hpp
+@@ -0,0 +1,36 @@
++#pragma once
++
++#include "fo4/nif/nif.hpp"
++#include "write_model.hpp"
++
++#include <cstddef>
++#include <cstdint>
++#include <string>
++#include <string_view>
++#include <vector>
++
++namespace fo4::nif {
++
++// Requires a tri-shape block; the sphere follows the AV header, the extra-data list and the collision reference.
++std::size_t bounding_sphere_offset(const NifFile& nif, std::uint32_t block);
++bool bounding_sphere_misses(const NifFile& nif, const Shape& shape);
++bool finite_position(const Shape& shape, std::size_t v);
++// Returns the path from its Textures folder on, or an empty string when there is no such folder to cut to.
++std::string relative_texture_path(std::string_view path);
++
++struct VertexRun {
++  std::size_t first;
++  std::size_t stride;
++  std::uint32_t flags;
++  std::uint32_t data_size;
++};
++// Requires a tri-shape block; the triangle count, vertex count and data size sit in the 10 bytes before first.
++VertexRun vertex_run(const NifFile& nif, std::uint32_t block);
++// Invariant: only BSTriShape and BSDynamicTriShape have triangles the fix can drop; the others keep their triangles.
++bool repairs_triangles(const NifFile& nif, const Shape& shape);
++bool repeats_a_vertex(const Shape& shape, std::size_t triangle);
++// Constraint: a shape left with no triangles keeps them all, since an empty shape fails another check.
++std::vector<std::uint16_t> triangles_after_fix(const NifFile& nif, const Shape& shape);
++void lint_fixes(const NifFile& nif, write_detail::Model& model, std::string_view check);
++
++}  // namespace fo4::nif
+diff --git a/Radicle/src/nif/skin_checks.cpp b/Radicle/src/nif/skin_checks.cpp
+new file mode 100644
+index 000000000..cf1cc4a67
+--- /dev/null
++++ b/Radicle/src/nif/skin_checks.cpp
+@@ -0,0 +1,84 @@
++#include "fo4/nif/skin_checks.hpp"
++
++#include "nif_internal.hpp"
++
++#include <cmath>
++#include <cstddef>
++#include <cstdint>
++#include <string>
++#include <string_view>
++#include <unordered_set>
++#include <vector>
++
++namespace fo4::nif {
++namespace {
++
++constexpr std::size_t k_weights_per_vertex = 4;
++// Constraint: each half-float weight rounds by at most 2^-12, so four exact weights stay within this sum tolerance.
++constexpr float k_weight_sum_tolerance = 0.001f;
++constexpr std::string_view k_bone_data_type = "BSSkin::BoneData";
++
++std::string where(const Shape& shape) {
++  return "shape '" + shape.name + "' (block " + std::to_string(shape.block) + ")";
++}
++
++std::string bind_fault(const NifFile& nif, const std::vector<Shape>& shapes) {
++  for (const auto& shape : shapes) {
++    if (shape.bones.empty()) continue;
++    auto cursor = detail::block_cursor(nif, static_cast<std::uint32_t>(shape.skin_ref));
++    cursor.read_i32();
++    const auto data = cursor.read_i32();
++    const bool present = data >= 0 && static_cast<std::size_t>(data) < nif.blocks().size() &&
++                         nif.blocks()[static_cast<std::size_t>(data)].type == k_bone_data_type;
++    if (!present) return where(shape) + " has no bind transforms: its skin holds no BSSkin::BoneData block";
++  }
++  return {};
++}
++
++std::string name_fault(const NifFile& nif, const std::vector<Shape>& shapes) {
++  std::unordered_set<std::string> nodes;
++  for (const auto& node : nif.nodes()) nodes.insert(node.name);
++  for (const auto& shape : shapes) {
++    for (const auto& bone : shape.bones) {
++      if (bone.name.empty() || !nodes.contains(bone.name)) {
++        return where(shape) + " bone '" + bone.name + "' does not name a node in this file";
++      }
++    }
++  }
++  return {};
++}
++
++std::string weight_fault(const std::vector<Shape>& shapes) {
++  for (const auto& shape : shapes) {
++    if (shape.bones.empty()) continue;
++    for (std::size_t at = 0; at < shape.weights.size(); at += k_weights_per_vertex) {
++      const auto vertex = std::to_string(at / k_weights_per_vertex);
++      float total = 0.0f;
++      for (std::size_t slot = 0; slot < k_weights_per_vertex; ++slot) {
++        const float weight = shape.weights[at + slot];
++        if (!std::isfinite(weight)) {
++          return where(shape) + " vertex " + vertex + " has a weight that is not a finite number";
++        }
++        if (weight < 0.0f) return where(shape) + " vertex " + vertex + " has a negative weight";
++        total += weight;
++      }
++      // Constraint: vanilla leaves some vertices with no weight at all, so an unweighted vertex is not a sum fault.
++      if (total != 0.0f && std::fabs(total - 1.0f) > k_weight_sum_tolerance) {
++        return where(shape) + " vertex " + vertex + " weights sum to " + std::to_string(total) + ", not 1";
++      }
++    }
++  }
++  return {};
++}
++
++}  // namespace
++
++std::vector<VerifyCheck> skin_checks(const NifFile& nif, const std::vector<Shape>& shapes) {
++  return {
++      {"skin bind transforms are present", bind_fault(nif, shapes)},
++      {"skin bone names resolve to nodes in the file", name_fault(nif, shapes)},
++      {"skin weights are finite, non-negative and sum to one", weight_fault(shapes)},
++  };
++}
++
++}  // namespace fo4::nif
+diff --git a/Radicle/src/nif/verify.cpp b/Radicle/src/nif/verify.cpp
+index ad1e82d91..1e0e864a3 100644
+--- a/Radicle/src/nif/verify.cpp
++++ b/Radicle/src/nif/verify.cpp
+@@ -1,7 +1,9 @@
+ #include "fo4/nif/describe.hpp"
+ 
+ #include "fo4/error.hpp"
++#include "fo4/nif/lint.hpp"
+ #include "fo4/nif/nif.hpp"
++#include "fo4/nif/skin_checks.hpp"
+ #include "fo4/nif/vertex_desc.hpp"
+ 
+ #include <cstddef>
+@@ -106,11 +108,11 @@ std::vector<Shape> read_shapes_for_verify(const NifFile& nif, std::string& fault
+ 
+ }  // namespace
+ 
+-VerifyReport verify_nif(const NifFile& nif) {
++VerifyReport verify_nif(const NifFile& nif, const SidecarProbe& sidecar_readable) {
+   VerifyReport report;
+   report.checks.push_back({"header parses", {}});
+   report.checks.push_back({"each block is listed under one parent only", parent_fault(nif)});
+-  report.checks.push_back({"no editor markers", editor_marker_fault(nif)});
++  report.checks.push_back({"no editor markers", editor_marker_fault(nif), true});
+ 
+   std::string fault;
+   const auto shapes = read_shapes_for_verify(nif, fault);
+@@ -143,6 +145,8 @@ VerifyReport verify_nif(const NifFile& nif) {
+     }
+     return {};
+   }));
++  for (auto& check : skin_checks(nif, shapes)) report.checks.push_back(std::move(check));
++  for (auto& check : lint_checks(nif, shapes, sidecar_readable)) report.checks.push_back(std::move(check));
+   return report;
+ }
+ 
+diff --git a/Radicle/tests/nif_build.hpp b/Radicle/tests/nif_build.hpp
+index 6d61b4c74..2aa392269 100644
+--- a/Radicle/tests/nif_build.hpp
++++ b/Radicle/tests/nif_build.hpp
+@@ -6,6 +6,7 @@
+ #include <gtest/gtest.h>
+ 
+ #include <algorithm>
++#include <array>
+ #include <bit>
+ #include <cmath>
+ #include <cstddef>
+@@ -180,7 +181,8 @@ inline Block shape_block(std::string type, std::int32_t name, const fo4::nif::Tr
+ 
+ inline Block shape_with_refs(std::string type, std::int32_t name, const fo4::nif::Transform& xf, std::uint32_t flags,
+                              std::size_t stride, std::int32_t skin, std::int32_t shader, std::int32_t alpha,
+-                             const std::vector<std::byte>& vertices, const std::vector<std::uint16_t>& tris) {
++                             const std::vector<std::byte>& vertices, const std::vector<std::uint16_t>& tris,
++                             const std::array<float, 4>& sphere = {}) {
+   Writer w;
+   w.i32(name);
+   w.u32(0);
+@@ -188,7 +190,7 @@ inline Block shape_with_refs(std::string type, std::int32_t name, const fo4::nif
+   w.u32(0);
+   w.transform(xf);
+   w.i32(-1);
+-  for (int i = 0; i < 4; ++i) w.f32(0.0f);
++  for (const float value : sphere) w.f32(value);
+   w.i32(skin);
+   w.i32(shader);
+   w.i32(alpha);
+@@ -376,6 +378,9 @@ inline std::vector<std::byte> triangle_vertices() {
+   return w.bytes();
+ }
+ 
++// Centre and radius that enclose triangle_vertices.
++inline constexpr std::array<float, 4> k_triangle_sphere{0.5f, 0.5f, 0.0f, 0.70710678f};
++
+ inline Block triangle_block(std::string type, const fo4::nif::Transform& xf) {
+   return shape_block(std::move(type), 0, xf, k_full, 16, triangle_vertices(), {0, 1, 2});
+ }
+diff --git a/Radicle/tests/test_nif_describe.cpp b/Radicle/tests/test_nif_describe.cpp
+index eec4329d6..fb206735e 100644
+--- a/Radicle/tests/test_nif_describe.cpp
++++ b/Radicle/tests/test_nif_describe.cpp
+@@ -110,7 +110,7 @@ Block shape_with_descriptor(std::uint64_t descriptor, std::uint32_t triangles, s
+   w.u32(0);
+   w.transform(Transform{});
+   w.i32(-1);
+-  for (int i = 0; i < 4; ++i) w.f32(0.0f);
++  for (const float value : k_triangle_sphere) w.f32(value);
+   w.i32(-1);
+   w.i32(-1);
+   w.i32(-1);
+@@ -136,7 +136,8 @@ std::vector<std::byte> full_file(std::uint32_t bsx_flags) {
+   lighting.texture_set = 4;
+   std::vector<Block> blocks;
+   blocks.push_back(named_node_block("NiNode", 2, Transform{}, {1}));
+-  blocks.push_back(shape_with_refs("BSTriShape", 0, shape_xf, k_full, 16, -1, 2, 3, triangle_vertices(), {0, 1, 2}));
++  blocks.push_back(shape_with_refs("BSTriShape", 0, shape_xf, k_full, 16, -1, 2, 3, triangle_vertices(), {0, 1, 2},
++                                   k_triangle_sphere));
+   blocks.push_back(full_lighting_shader_block(lighting));
+   blocks.push_back(alpha_block(0x201U, 128));
+   blocks.push_back(texture_set({"Textures\\a_d.dds", "Textures\\a_n.dds"}));
+@@ -348,7 +349,13 @@ TEST(NifVerify, ReportsTheSameCheckingOrderOnACleanFile) {
+                                        "vertex descriptor matches the data",
+                                        "shapes have vertices and triangles", "normals match the vertex count",
+                                        "UVs match the vertex count", "shader and skin reads are clean",
+-                                       "texture paths are relative"};
++                                       "texture paths are relative",
++                                       "skin bind transforms are present",
++                                       "skin bone names resolve to nodes in the file",
++                                       "skin weights are finite, non-negative and sum to one",
++                                       "absolute texture paths can be made relative", "rigid shapes carry a bounding sphere",
++                                       "no triangles name a vertex twice", "no unused strings in the header string table",
++                                       "named SSF sidecars that exist beside the mesh are readable"};
+   ASSERT_EQ(report.checks.size(), names.size());
+   for (std::size_t i = 0; i < names.size(); ++i) {
+     EXPECT_EQ(report.checks[i].name, names[i]);
+@@ -381,7 +388,9 @@ TEST(NifVerify, TexturePathFaultNamesTheShapeAndThePath) {
+ }
+ 
+ TEST(NifVerify, ShapeFaultNamesTheBlock) {
+-  const std::vector<Block> blocks{opaque_block("BSTriShape", 4)};
++  Writer name;
++  name.i32(0);
++  const std::vector<Block> blocks{Block{"BSTriShape", name.bytes()}};
+   const auto nif = fo4::nif::read_nif(build_nif({"shape"}, blocks, {}));
+   const auto report = fo4::nif::verify_nif(nif);
+   EXPECT_EQ(report.checks.at(3).name, "shapes parse");
+@@ -408,9 +417,11 @@ TEST(NifVerify, DescriptorOffsetsThatDisagreeWithTheAttributeSizesFailTheCheck)
+ // Invariant: a land-data flag adds no vertex bytes, so the reader and the descriptor check agree.
+ // Invariant: verify used to count land data as four bytes and faulted a file the reader accepts.
+ TEST(NifVerify, LandDataFlagAddsNoVertexBytesAndBothReadersAgree) {
++  const float positions[9] = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+   Writer vertices;
+   for (int vertex = 0; vertex < 3; ++vertex) {
+-    for (int i = 0; i < 4; ++i) vertices.u32(0);
++    for (int i = 0; i < 3; ++i) vertices.f32(positions[3 * vertex + i]);
++    vertices.u32(0);
+     vertices.u32(0);
+   }
+   const std::uint64_t flags = static_cast<std::uint64_t>(k_has_uv | k_has_land_data | k_full) << 44U;
+diff --git a/Radicle/tests/test_nif_lint.cpp b/Radicle/tests/test_nif_lint.cpp
+new file mode 100644
+index 000000000..ab0a30638
+--- /dev/null
++++ b/Radicle/tests/test_nif_lint.cpp
+@@ -0,0 +1,498 @@
++#include "fo4/archive/assets.hpp"
++#include "fo4/error.hpp"
++#include "fo4/nif/describe.hpp"
++#include "fo4/nif/lint.hpp"
++#include "fo4/nif/nif.hpp"
++#include "fo4/nif/nif_fix.hpp"
++#include "nif_build.hpp"
++#include "real_data_build.hpp"
++#include "real_data_plugins.hpp"
++
++#include <gtest/gtest.h>
++
++#include <algorithm>
++#include <array>
++#include <cctype>
++#include <cstddef>
++#include <cstdint>
++#include <cstdlib>
++#include <cstring>
++#include <exception>
++#include <filesystem>
++#include <iostream>
++#include <limits>
++#include <map>
++#include <string>
++#include <string_view>
++#include <vector>
++
++using fo4::nif::Transform;
++using namespace nif_build;
++
++namespace {
++
++Block texture_paths_block(const std::vector<std::string>& paths) {
++  Writer w;
++  w.u32(static_cast<std::uint32_t>(paths.size()));
++  for (const auto& path : paths) w.sized(path);
++  return Block{"BSShaderTextureSet", w.bytes()};
++}
++
++// Root, a shape named Body with a lighting shader, and its texture set; the shape carries the given sphere.
++std::vector<std::byte> body_nif(const std::array<float, 4>& sphere, const std::vector<std::string>& textures,
++                                const std::vector<std::uint16_t>& tris = {0, 1, 2},
++                                const std::vector<std::byte>& vertices = triangle_vertices(),
++                                const std::vector<std::string>& extra_strings = {}) {
++  LightingFields lighting;
++  lighting.name = 2;
++  lighting.texture_set = 3;
++  const std::vector<Block> blocks{
++      named_node_block("NiNode", 0, Transform{}, {1}),
++      shape_with_refs("BSTriShape", 1, Transform{}, k_full, 16, -1, 2, -1, vertices, tris, sphere),
++      full_lighting_shader_block(lighting),
++      texture_paths_block(textures),
++  };
++  std::vector<std::string> strings{"Root", "Body", "shaderName"};
++  strings.insert(strings.end(), extra_strings.begin(), extra_strings.end());
++  return build_nif(strings, blocks, {0});
++}
++
++Block sub_index_block(std::uint32_t segments, std::uint32_t total, std::uint32_t subsegments, const std::string& ssf,
++                      bool shared_data = true) {
++  Block shape = shape_with_refs("BSSubIndexTriShape", 1, Transform{}, k_full, 16, -1, -1, -1, triangle_vertices(),
++                                {0, 1, 2}, k_triangle_sphere);
++  Writer w;
++  w.u32(1);
++  w.u32(segments);
++  w.u32(total);
++  for (std::uint32_t segment = 0; segment < segments; ++segment) {
++    w.u32(0);
++    w.u32(1);
++    w.u32(0xFFFFFFFFU);
++    w.u32(subsegments);
++    for (std::uint32_t sub = 0; sub < subsegments; ++sub) {
++      for (int i = 0; i < 4; ++i) w.u32(0);
++    }
++  }
++  if (segments < total && shared_data) {
++    w.u32(segments);
++    w.u32(total);
++    for (std::uint32_t segment = 0; segment < segments; ++segment) w.u32(0);
++    for (std::uint32_t entry = 0; entry < total; ++entry) {
++      w.u32(entry);
++      w.u32(0);
++      w.u32(0);
++    }
++    w.u16(static_cast<std::uint16_t>(ssf.size()));
++    w.text(ssf);
++  }
++  shape.data.insert(shape.data.end(), w.bytes().begin(), w.bytes().end());
++  return shape;
++}
++
++std::vector<std::byte> sub_index_nif(std::uint32_t segments, std::uint32_t total, std::uint32_t subsegments,
++                                     const std::string& ssf, bool shared_data = true) {
++  return build_nif({"Root", "Body"},
++                   {named_node_block("NiNode", 0, Transform{}, {1}),
++                    sub_index_block(segments, total, subsegments, ssf, shared_data)},
++                   {0});
++}
++
++// A skinned shape with a zero sphere, as vanilla writes them, bound to one bone block.
++std::vector<std::byte> skinned_zero_sphere_nif() {
++  Writer vertices;
++  for (const float x : {0.0f, 1.0f, 0.0f}) {
++    vertices.f32(x);
++    vertices.f32(0.0f);
++    vertices.f32(0.0f);
++    vertices.u32(0);
++    for (const int weight : {0x3C00, 0, 0, 0}) vertices.u16(static_cast<std::uint16_t>(weight));
++    for (int i = 0; i < 4; ++i) vertices.u8(0);
++  }
++  const std::vector<Block> blocks{
++      named_node_block("NiNode", 0, Transform{}, {1, 3}),
++      shape_with_refs("BSTriShape", 1, Transform{}, k_full | k_has_skin, 28, 2, -1, -1, vertices.bytes(), {0, 1, 2}),
++      skin_instance_block(-1, {3}),
++      named_node_block("NiNode", -1, Transform{}, {}),
++  };
++  return build_nif({"Root", "Body"}, blocks, {0});
++}
++
++std::vector<std::byte> positions_bytes(const std::vector<std::array<float, 3>>& positions) {
++  Writer w;
++  for (const auto& position : positions) {
++    for (const float value : position) w.f32(value);
++    w.u32(0);
++  }
++  return w.bytes();
++}
++
++// Constraint: the sphere sits 72 bytes into a shape block whose extra-data count is zero.
++constexpr std::size_t k_sphere_offset = 72;
++
++std::array<float, 4> bounding_sphere_of(const fo4::nif::NifFile& nif, std::uint32_t block) {
++  std::array<float, 4> sphere{};
++  std::memcpy(sphere.data(), nif.bytes().data() + nif.blocks()[block].offset + k_sphere_offset, sizeof sphere);
++  return sphere;
++}
++
++std::string lower(std::string text) {
++  std::transform(text.begin(), text.end(), text.begin(),
++                 [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
++  return text;
++}
++
++std::string sibling_path(const std::string& path, std::string_view leaf) {
++  return path.substr(0, path.find_last_of("\\/") + 1) + std::string(leaf);
++}
++
++}  // namespace
++
++TEST(NifLint, AbsoluteTexturePathWithATexturesFolderIsMadeRelative) {
++  // regression: a drive-letter path copied from the author's machine survived the fix, so the mesh still failed verify
++  const auto input = body_nif(k_triangle_sphere, {"C:\\Art\\Textures\\a_d.dds", "Textures\\a_n.dds"});
++  const auto report = fo4::nif::verify_nif(fo4::nif::read_nif(input));
++  ASSERT_EQ(report.checks.at(13).name, "absolute texture paths can be made relative");
++  EXPECT_EQ(report.checks.at(13).failure,
++            "shape 'Body' (block 1) texture 'C:\\Art\\Textures\\a_d.dds' can be made relative to 'Textures\\a_d.dds'");
++
++  const auto fixed = fo4::nif::fix_nif(fo4::nif::read_nif(input));
++  const auto shapes = fo4::nif::read_shapes(fo4::nif::read_nif(fixed));
++  ASSERT_EQ(shapes.size(), 1U);
++  ASSERT_EQ(shapes[0].textures.size(), 2U);
++  EXPECT_EQ(shapes[0].textures[0], "Textures\\a_d.dds");
++  EXPECT_EQ(shapes[0].textures[1], "Textures\\a_n.dds");
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(fixed)).checks.at(9).failure, "");
++}
++
++TEST(NifLint, AbsolutePathWithoutATexturesFolderIsLeftForTheRelativeCheck) {
++  // regression: a path with no Textures folder was rewritten to an invented folder instead of being reported
++  const auto input = body_nif(k_triangle_sphere, {"C:\\Art\\a_d.dds"});
++  const auto report = fo4::nif::verify_nif(fo4::nif::read_nif(input));
++  EXPECT_EQ(report.checks.at(13).failure, "");
++  EXPECT_NE(report.checks.at(9).failure, "");
++
++  const auto fixed = fo4::nif::fix_nif(fo4::nif::read_nif(input));
++  const auto shapes = fo4::nif::read_shapes(fo4::nif::read_nif(fixed));
++  ASSERT_EQ(shapes.size(), 1U);
++  ASSERT_EQ(shapes[0].textures.size(), 1U);
++  EXPECT_EQ(shapes[0].textures[0], "C:\\Art\\a_d.dds");
++}
++
++TEST(NifLint, ZeroRadiusSphereIsRefitAroundTheVertices) {
++  // regression: a rigid shape with no bounding sphere culls wrongly when its origin is off screen, so the fix must refit it
++  const auto input = body_nif({}, {"Textures\\a_d.dds"});
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(input)).checks.at(14).failure,
++            "shape 'Body' (block 1) has no bounding sphere");
++
++  const auto fixed = fo4::nif::fix_nif(fo4::nif::read_nif(input));
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(fixed)).checks.at(14).failure, "");
++  const auto before = fo4::nif::read_shapes(fo4::nif::read_nif(input));
++  const auto after = fo4::nif::read_shapes(fo4::nif::read_nif(fixed));
++  ASSERT_EQ(after.size(), 1U);
++  EXPECT_EQ(after[0].verts, before[0].verts);
++}
++
++TEST(NifLint, ApproximateSphereOnARigidShapeIsNotReported) {
++  // regression: vanilla spheres are approximate, some miss their vertices by far, so a set sphere must pass
++  const auto input = body_nif({0.1f, 0.1f, 0.0f, 0.1f}, {"Textures\\a_d.dds"});
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(input)).checks.at(14).failure, "");
++}
++
++TEST(NifLint, ZeroSphereOnASkinnedShapeIsNotReported) {
++  // regression: vanilla skinned shapes carry a zero sphere, so judging them would fail every character mesh
++  const auto nif = fo4::nif::read_nif(skinned_zero_sphere_nif());
++  EXPECT_EQ(fo4::nif::verify_nif(nif).checks.at(14).failure, "");
++  EXPECT_EQ(fo4::nif::read_shapes(nif).at(0).skin_ref, 2);
++}
++
++// Detects: an Inf position pulling the refit sphere to infinity, which the fix then writes into the file
++TEST(NifLint, NonFinitePositionIsLeftOutOfTheSphereRefit) {
++  constexpr float quiet_nan = std::numeric_limits<float>::quiet_NaN();
++  constexpr float inf = std::numeric_limits<float>::infinity();
++  const auto input = body_nif({}, {"Textures\\a_d.dds"}, {0, 1, 2},
++                              positions_bytes({{0.0f, 0.0f, 0.0f},
++                                               {1.0f, 0.0f, 0.0f},
++                                               {0.0f, 1.0f, 0.0f},
++                                               {quiet_nan, 0.0f, 0.0f},
++                                               {0.0f, inf, 0.0f}}));
++  const auto fixed = fo4::nif::read_nif(fo4::nif::fix_nif(fo4::nif::read_nif(input)));
++  const auto sphere = bounding_sphere_of(fixed, 1);
++  for (std::size_t k = 0; k < sphere.size(); ++k) EXPECT_FLOAT_EQ(sphere[k], k_triangle_sphere[k]) << "component " << k;
++  EXPECT_EQ(fo4::nif::verify_nif(fixed).checks.at(14).failure, "");
++}
++
++// Detects: a shape with no finite position reported as missing its sphere, because a NaN never equals the zero sphere
++TEST(NifLint, AllNonFinitePositionsAreNotJudgedForASphere) {
++  constexpr float quiet_nan = std::numeric_limits<float>::quiet_NaN();
++  const auto input = body_nif({}, {"Textures\\a_d.dds"}, {0, 1, 2},
++                              positions_bytes({{quiet_nan, 0.0f, 0.0f},
++                                               {0.0f, quiet_nan, 0.0f},
++                                               {0.0f, 0.0f, quiet_nan}}));
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(input)).checks.at(14).failure, "");
++  const auto fixed = fo4::nif::fix_nif(fo4::nif::read_nif(input));
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(fixed)).checks.at(14).failure, "");
++}
++
++TEST(NifLint, RepairsOfPathAndSphereAreIdempotent) {
++  // regression: a second fix on a repaired file must change no bytes, or every re-save churns the file
++  const auto once = fo4::nif::fix_nif(fo4::nif::read_nif(body_nif({}, {"C:\\Art\\Textures\\a_d.dds"})));
++  const auto twice = fo4::nif::fix_nif(fo4::nif::read_nif(once));
++  EXPECT_TRUE(twice == once);
++}
++
++// Detects: repairing one reported issue must leave other repairable findings intact.
++TEST(NifLint, SelectedRepairLeavesOtherFindingsUntouched) {
++  const auto original = fo4::nif::read_nif(body_nif({}, {"C:\\Art\\Textures\\a_d.dds"}, {0, 1, 2, 0, 0, 1}));
++  const auto before = fo4::nif::verify_nif(original);
++  ASSERT_FALSE(before.checks.at(13).failure.empty());
++  ASSERT_FALSE(before.checks.at(14).failure.empty());
++  ASSERT_FALSE(before.checks.at(15).failure.empty());
++  const auto fixed = fo4::nif::read_nif(fo4::nif::fix_nif(original, "absolute texture paths can be made relative"));
++  const auto after = fo4::nif::verify_nif(fixed);
++  EXPECT_TRUE(after.checks.at(13).failure.empty());
++  EXPECT_EQ(after.checks.at(14).failure, before.checks.at(14).failure);
++  EXPECT_EQ(after.checks.at(15).failure, before.checks.at(15).failure);
++  EXPECT_EQ(fo4::nif::read_shapes(fixed).at(0).tris, fo4::nif::read_shapes(original).at(0).tris);
++  for (const auto selected : {14U, 15U}) {
++    const auto single = fo4::nif::read_nif(fo4::nif::fix_nif(original, before.checks.at(selected).name));
++    const auto report = fo4::nif::verify_nif(single);
++    EXPECT_TRUE(report.checks.at(selected).failure.empty());
++    EXPECT_EQ(report.checks.at(13).failure, before.checks.at(13).failure);
++    const auto other = selected == 14U ? 15U : 14U;
++    EXPECT_EQ(report.checks.at(other).failure, before.checks.at(other).failure);
++  }
++  EXPECT_THROW(fo4::nif::fix_nif(original, "unknown repair"), std::invalid_argument);
++}
++
++// Detects: a selected texture repair must accept a shape as the root.
++TEST(NifLint, SelectedRepairDoesNotRequireANodeRoot) {
++  LightingFields lighting;
++  lighting.name = 1;
++  lighting.texture_set = 2;
++  const auto input = build_nif({"Body", "shaderName"},
++      {shape_with_refs("BSTriShape", 0, Transform{}, k_full, 16, -1, 1, -1, triangle_vertices(), {0, 1, 2}, k_triangle_sphere),
++       full_lighting_shader_block(lighting), texture_paths_block({"C:\\Art\\Textures\\a_d.dds"})}, {0});
++  const auto original = fo4::nif::read_nif(input);
++  const auto fixed = fo4::nif::read_nif(fo4::nif::fix_nif(original, "absolute texture paths can be made relative"));
++  EXPECT_EQ(fo4::nif::read_shapes(fixed).at(0).textures.at(0), "Textures\\a_d.dds");
++}
++
++// Detects: a triangle naming one vertex twice left in a rigid mesh, and a fix that keeps the good triangle and the vertices
++TEST(NifLint, RepeatedVertexTriangleIsDroppedAndTheFixIsIdempotent) {
++  const auto input = body_nif(k_triangle_sphere, {"Textures\\a_d.dds"}, {0, 1, 2, 0, 0, 1});
++  const auto check = fo4::nif::verify_nif(fo4::nif::read_nif(input)).checks.at(15);
++  EXPECT_TRUE(check.fixable);
++  EXPECT_EQ(check.failure,
++            "shape 'Body' (block 1) has 1 triangle(s) that name a vertex twice");
++
++  const auto once = fo4::nif::fix_nif(fo4::nif::read_nif(input));
++  const auto fixed = fo4::nif::read_nif(once);
++  EXPECT_EQ(fo4::nif::verify_nif(fixed).checks.at(15).failure, "");
++  EXPECT_EQ(fo4::nif::verify_nif(fixed).failed(), 0U);
++  const auto before = fo4::nif::read_shapes(fo4::nif::read_nif(input));
++  const auto after = fo4::nif::read_shapes(fixed);
++  ASSERT_EQ(after.size(), 1U);
++  EXPECT_EQ(after[0].tris, (std::vector<std::uint16_t>{0, 1, 2}));
++  EXPECT_EQ(after[0].verts, before[0].verts);
++  EXPECT_TRUE(fo4::nif::fix_nif(fixed) == once);
++}
++
++// Detects: a shape whose only triangle repeats a vertex, which the fix must leave in place since an empty shape fails another check
++TEST(NifLint, ShapeWithOnlyRepeatedVertexTrianglesIsReportedButNotEmptied) {
++  const auto input = body_nif(k_triangle_sphere, {"Textures\\a_d.dds"}, {0, 0, 1});
++  const auto check = fo4::nif::verify_nif(fo4::nif::read_nif(input)).checks.at(15);
++  EXPECT_FALSE(check.fixable);
++  EXPECT_EQ(check.failure,
++            "shape 'Body' (block 1) has 1 triangle(s) that name a vertex twice");
++  const auto fixed = fo4::nif::read_shapes(fo4::nif::read_nif(fo4::nif::fix_nif(fo4::nif::read_nif(input))));
++  ASSERT_EQ(fixed.size(), 1U);
++  EXPECT_EQ(fixed[0].tris, (std::vector<std::uint16_t>{0, 0, 1}));
++}
++
++// Detects: a collinear triangle with three distinct vertices reported, which vanilla ships in quantity and the check must leave alone
++TEST(NifLint, CollinearTriangleWithDistinctVerticesIsNotReported) {
++  const auto input = body_nif(k_triangle_sphere, {"Textures\\a_d.dds"}, {0, 1, 2},
++                              positions_bytes({{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}}));
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(input)).checks.at(15).failure, "");
++}
++
++// Detects: a header string that no block names going unreported, so stale names pile up in the table unnoticed
++TEST(NifLint, HeaderStringNoBlockNamesIsReported) {
++  const auto input = build_nif({"Root", "Body", "orphan"},
++                               {named_node_block("NiNode", 0, Transform{}, {1}),
++                                named_node_block("NiNode", 1, Transform{}, {})},
++                               {0});
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(input)).checks.at(16).failure,
++            "string 2 'orphan' is used by no block");
++}
++
++// Detects: a header string that a block names being reported as unused
++TEST(NifLint, NamedHeaderStringsAreNotReportedAsUnused) {
++  EXPECT_EQ(fo4::nif::verify_nif(fo4::nif::read_nif(body_nif(k_triangle_sphere, {"Textures\\a_d.dds"})))
++                .checks.at(16)
++                .failure,
++            "");
++}
++
++// Detects: a sidecar that exists beside the mesh but cannot be read, reported with the file name the shape asks for
++TEST(NifLint, UnreadableSidecarNamedBySubIndexShapeIsReported) {
++  const auto nif = fo4::nif::read_nif(sub_index_nif(1, 2, 0, "Body.ssf"));
++  std::vector<std::string> asked;
++  const auto report = fo4::nif::verify_nif(nif, [&asked](std::string_view leaf) {
++    asked.emplace_back(leaf);
++    return false;
++  });
++  EXPECT_EQ(report.checks.at(17).failure,
++            "shape 'Body' (block 1) names sidecar 'Body.ssf', which cannot be read beside the mesh");
++  EXPECT_EQ(asked, (std::vector<std::string>{"Body.ssf"}));
++}
++
++// Detects: a sidecar beside the mesh that exists passing the check, so a present file never fails verify
++TEST(NifLint, PresentSidecarNamedBySubIndexShapePasses) {
++  const auto nif = fo4::nif::read_nif(sub_index_nif(1, 2, 0, "Body.ssf"));
++  EXPECT_EQ(fo4::nif::verify_nif(nif, [](std::string_view) { return true; }).checks.at(17).failure, "");
++}
++
++// Detects: a sidecar named with folders being looked up by its leaf name beside the mesh, not by the full reference
++TEST(NifLint, SidecarIsLookedUpByItsLeafNameBesideTheMesh) {
++  const auto nif = fo4::nif::read_nif(sub_index_nif(1, 2, 0, "Actors\\Male\\Body.ssf"));
++  std::vector<std::string> asked;
++  const auto report = fo4::nif::verify_nif(nif, [&asked](std::string_view leaf) {
++    asked.emplace_back(leaf);
++    return false;
++  });
++  EXPECT_EQ(asked, (std::vector<std::string>{"Body.ssf"}));
++  EXPECT_EQ(report.checks.at(17).failure,
++            "shape 'Body' (block 1) names sidecar 'Actors\\Male\\Body.ssf', which cannot be read beside the mesh");
++}
++
++// Detects: a sub-index shape with no segment data being looked up for a sidecar it never names
++TEST(NifLint, SubIndexShapeWithoutSegmentDataIsNotJudgedForASidecar) {
++  const auto nif = fo4::nif::read_nif(sub_index_nif(2, 2, 0, "Body.ssf"));
++  std::vector<std::string> asked;
++  const auto report = fo4::nif::verify_nif(nif, [&asked](std::string_view leaf) {
++    asked.emplace_back(leaf);
++    return false;
++  });
++  EXPECT_EQ(report.checks.at(17).failure, "");
++  EXPECT_TRUE(asked.empty());
++}
++
++// Detects: a sidecar name read at the wrong offset when the segments carry sub-segments, which would ask for garbage
++TEST(NifLint, SidecarIsReadPastTheSubSegmentsOfEachSegment) {
++  const auto nif = fo4::nif::read_nif(sub_index_nif(1, 2, 2, "Body.ssf"));
++  std::vector<std::string> asked;
++  fo4::nif::verify_nif(nif, [&asked](std::string_view leaf) {
++    asked.emplace_back(leaf);
++    return false;
++  });
++  EXPECT_EQ(asked, (std::vector<std::string>{"Body.ssf"}));
++}
++
++// Detects: a file without a probe failing every sub-index shape, since nothing is read to judge the sidecar by
++TEST(NifLint, WithoutAProbeTheSidecarCheckIsNotJudged) {
++  const auto nif = fo4::nif::read_nif(sub_index_nif(1, 2, 0, "Body.ssf"));
++  EXPECT_EQ(fo4::nif::verify_nif(nif).checks.at(17).failure, "");
++}
++
++// Detects: a segment table cut short being reported as not parsing, instead of reading past the end of its block
++TEST(NifLint, TruncatedSegmentDataIsReportedAsNotParsing) {
++  const auto nif = fo4::nif::read_nif(sub_index_nif(1, 2, 0, "Body.ssf", false));
++  const auto failure = fo4::nif::verify_nif(nif, [](std::string_view) { return true; }).checks.at(17).failure;
++  EXPECT_EQ(failure.rfind("shape 'Body' (block 1) segment data does not parse: ", 0), 0U) << failure;
++}
++
++// Detects: a check marked fixable that fix_nif does not repair, which would offer a button that leaves its finding in place
++TEST(NifLint, OnlyTheChecksThatFixNifRepairsAreFixable) {
++  const auto report = fo4::nif::verify_nif(fo4::nif::read_nif(body_nif({}, {"C:\\Art\\a_d.dds"})));
++  const std::array<std::size_t, 4> repairable{2, 13, 14, 15};
++  ASSERT_EQ(report.checks.size(), 18U);
++  for (std::size_t i = 0; i < report.checks.size(); ++i) {
++    const bool expected = std::find(repairable.begin(), repairable.end(), i) != repairable.end();
++    EXPECT_EQ(report.checks[i].fixable, expected) << report.checks[i].name;
++  }
++}
++
++// Detects: triangle repair on a dynamic shape must preserve its trailing bytes and remain idempotent.
++TEST(NifLint, DynamicShapeKeepsTheBytesAfterItsTriangles) {
++  Block shape = shape_with_refs("BSDynamicTriShape", 1, Transform{}, k_full, 16, -1, -1, -1, triangle_vertices(),
++                                {0, 0, 1, 0, 1, 2}, k_triangle_sphere);
++  Writer tail;
++  tail.u32(1);
++  for (const float value : {7.0f, 8.0f, 9.0f, 10.0f}) tail.f32(value);
++  shape.data.insert(shape.data.end(), tail.bytes().begin(), tail.bytes().end());
++  const auto input = build_nif({"Root", "Body", "shaderName"},
++                               {named_node_block("NiNode", 0, Transform{}, {1}), shape}, {0});
++  const auto original = fo4::nif::read_nif(input);
++  ASSERT_EQ(fo4::nif::read_shapes(original).at(0).tris, (std::vector<std::uint16_t>{0, 0, 1, 0, 1, 2}));
++  EXPECT_NE(fo4::nif::verify_nif(original).checks.at(15).failure, "");
++  const auto once = fo4::nif::fix_nif(original);
++  const auto fixed = fo4::nif::read_nif(once);
++  const auto shapes = fo4::nif::read_shapes(fixed);
++  ASSERT_EQ(shapes.size(), 1U);
++  EXPECT_EQ(shapes[0].tris, (std::vector<std::uint16_t>{0, 1, 2}));
++  const auto& block = fixed.blocks()[1];
++  const auto end = fixed.bytes().begin() + static_cast<std::ptrdiff_t>(block.offset + block.size);
++  EXPECT_TRUE(std::equal(tail.bytes().begin(), tail.bytes().end(), end - static_cast<std::ptrdiff_t>(tail.bytes().size())));
++  EXPECT_EQ(fo4::nif::fix_nif(fixed), once);
++}
++
++// regression: a lint check that fires on a shipped NIF would flag files the game loads fine
++TEST(NifLintReal, VanillaNifsGiveNoLintFindings) {
++  const char* dir = std::getenv("FO4_DATA_DIR");
++  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
++  record_game_build(detect_game_build(dir));
++  const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
++  if (archives.empty()) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
++
++  const auto assets = fo4::archive::AssetResolver::open({}, archives);
++  std::map<std::string, std::size_t> findings;
++  std::size_t nifs = 0;
++  std::size_t parse_failures = 0;
++  std::size_t sidecar_lookups = 0;
++  std::size_t sidecars_missing = 0;
++  std::string first_finding;
++  for (const auto& reader : assets.archives()) {
++    if (reader.kind() != fo4::archive::Ba2Kind::general) continue;
++    // Constraint: one in 37 keeps this test inside the shared real-data job.
++    for (std::size_t i = 0; i < reader.entries().size(); i += 37) {
++      const auto& path = reader.entries()[i].path;
++      if (lower(std::filesystem::path(path).extension().string()) != ".nif") continue;
++      ++nifs;
++      try {
++        const auto bytes = reader.extract(i);
++        const auto nif = fo4::nif::read_nif(bytes);
++        const auto sidecar = [&assets, &path, &sidecar_lookups, &sidecars_missing](std::string_view leaf) {
++          ++sidecar_lookups;
++          const auto found = assets.locate(sibling_path(path, leaf));
++          if (!found) {
++            ++sidecars_missing;
++            return true;
++          }
++          try {
++            assets.read(*found);
++            return true;
++          } catch (const std::exception&) {
++            return false;
++          }
++        };
++        for (const auto& check : fo4::nif::lint_checks(nif, fo4::nif::read_shapes(nif), sidecar)) {
++          if (check.failure.empty()) continue;
++          ++findings[check.name];
++          if (first_finding.empty()) first_finding = path + ": " + check.failure;
++        }
++      } catch (const fo4::parse_error& error) {
++        ++parse_failures;
++        ADD_FAILURE() << path << ": " << error.what();
++      }
++    }
++  }
++
++  for (const auto& [name, count] : findings) std::cout << "lint check fires on vanilla: " << name << ": " << count << '\n';
++  std::cout << "nifs " << nifs << ", parse failures " << parse_failures << ", sidecar lookups " << sidecar_lookups
++            << ", sidecars not shipped " << sidecars_missing << '\n';
++  RecordProperty("lint_check_nif_count", std::to_string(nifs));
++  RecordProperty("lint_check_sidecar_lookups", std::to_string(sidecar_lookups));
++  EXPECT_TRUE(findings.empty()) << first_finding;
++}
+diff --git a/Radicle/tests/test_nif_skin_checks.cpp b/Radicle/tests/test_nif_skin_checks.cpp
+new file mode 100644
+index 000000000..b94655458
+--- /dev/null
++++ b/Radicle/tests/test_nif_skin_checks.cpp
+@@ -0,0 +1,218 @@
++#include "fo4/archive/assets.hpp"
++#include "fo4/error.hpp"
++#include "fo4/nif/describe.hpp"
++#include "fo4/nif/nif.hpp"
++#include "fo4/nif/skin_checks.hpp"
++#include "nif_build.hpp"
++#include "real_data_build.hpp"
++#include "real_data_plugins.hpp"
++
++#include <gtest/gtest.h>
++
++#include <algorithm>
++#include <cctype>
++#include <cstddef>
++#include <cstdint>
++#include <cstdlib>
++#include <filesystem>
++#include <iostream>
++#include <map>
++#include <string>
++#include <vector>
++
++using fo4::nif::Transform;
++using namespace nif_build;
++
++namespace {
++
++constexpr std::uint32_t k_skin_flags = k_full | k_has_skin;
++constexpr std::size_t k_skin_stride = 28;
++
++// Weights are half floats: 0x3C00 is 1.0, 0x3800 is 0.5, 0x3400 is 0.25, 0xBC00 is -1.0.
++struct SkinnedVertex {
++  float position[3];
++  std::uint16_t weights[4];
++  std::uint8_t bones[4];
++};
++
++const std::vector<SkinnedVertex> k_clean{
++    {{0.0f, 0.0f, 0.0f}, {0x3C00, 0, 0, 0}, {0, 0, 0, 0}},
++    {{1.0f, 0.0f, 0.0f}, {0x3800, 0x3800, 0, 0}, {0, 1, 0, 0}},
++    {{0.0f, 1.0f, 0.0f}, {0x3400, 0x3400, 0x3400, 0x3400}, {0, 1, 0, 1}},
++};
++
++std::vector<std::byte> skinned_vertex_bytes(const std::vector<SkinnedVertex>& vertices) {
++  Writer w;
++  for (const auto& vertex : vertices) {
++    for (const float value : vertex.position) w.f32(value);
++    w.u32(0);
++    for (const auto weight : vertex.weights) w.u16(weight);
++    for (const auto bone : vertex.bones) w.u8(bone);
++  }
++  return w.bytes();
++}
++
++Block name_only_block(std::int32_t name) {
++  Writer w;
++  w.i32(name);
++  return Block{"NiStringExtraData", w.bytes()};
++}
++
++// Bones are blocks 3 and 4, named Bone0 and Bone1; the bind transforms are block 5 unless data says otherwise.
++std::vector<std::byte> skinned_nif(const std::vector<SkinnedVertex>& vertices, std::int32_t data = 5,
++                                   const Block& second_bone = named_node_block("NiNode", 3, Transform{}, {})) {
++  const std::vector<Block> blocks{
++      named_node_block("NiNode", 0, Transform{}, {1, 3, 4}),
++      shape_with_refs("BSTriShape", 1, Transform{}, k_skin_flags, k_skin_stride, 2, -1, -1,
++                      skinned_vertex_bytes(vertices), {0, 1, 2}),
++      skin_instance_block(data, {3, 4}),
++      named_node_block("NiNode", 2, Transform{}, {}),
++      second_bone,
++      bone_data_block(2),
++  };
++  return build_nif({"Root", "Body", "Bone0", "Bone1"}, blocks, {0});
++}
++
++std::string lower(std::string text) {
++  std::transform(text.begin(), text.end(), text.begin(),
++                 [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
++  return text;
++}
++
++}  // namespace
++
++TEST(NifSkinChecks, WellWeightedSkinPassesEveryCheck) {
++  // regression: a correctly weighted, fully bound skin must not be reported (false positive on a clean rig)
++  const auto nif = fo4::nif::read_nif(skinned_nif(k_clean));
++  const auto checks = fo4::nif::skin_checks(nif, fo4::nif::read_shapes(nif));
++  ASSERT_EQ(checks.size(), 3U);
++  for (const auto& check : checks) EXPECT_EQ(check.failure, "") << check.name;
++}
++
++TEST(NifSkinChecks, WeightsThatDoNotSumToOneNameTheVertex) {
++  // regression: unnormalised weights shrink or stretch a vertex as the rig moves, so the sum must be named
++  auto vertices = k_clean;
++  vertices[1].weights[0] = 0x3800;
++  vertices[1].weights[1] = 0;
++  const auto nif = fo4::nif::read_nif(skinned_nif(vertices));
++  const auto checks = fo4::nif::skin_checks(nif, fo4::nif::read_shapes(nif));
++  EXPECT_EQ(checks.at(2).failure, "shape 'Body' (block 1) vertex 1 weights sum to 0.500000, not 1");
++}
++
++TEST(NifSkinChecks, UnweightedVertexIsNotASumFault) {
++  // regression: vanilla skins leave a few vertices with no weight at all, and those must not fail the sum check
++  auto vertices = k_clean;
++  vertices[1].weights[0] = 0;
++  vertices[1].weights[1] = 0;
++  const auto nif = fo4::nif::read_nif(skinned_nif(vertices));
++  EXPECT_EQ(fo4::nif::skin_checks(nif, fo4::nif::read_shapes(nif)).at(2).failure, "");
++}
++
++TEST(NifSkinChecks, NegativeWeightIsReportedBeforeTheSumCancelsIt) {
++  // regression: a -1 weight paired with a +1 sums to zero and must not pass as a weighted vertex
++  auto vertices = k_clean;
++  vertices[2].weights[0] = 0xBC00;
++  vertices[2].weights[1] = 0x3C00;
++  vertices[2].weights[2] = 0;
++  vertices[2].weights[3] = 0;
++  const auto nif = fo4::nif::read_nif(skinned_nif(vertices));
++  const auto checks = fo4::nif::skin_checks(nif, fo4::nif::read_shapes(nif));
++  EXPECT_EQ(checks.at(2).failure, "shape 'Body' (block 1) vertex 2 has a negative weight");
++}
++
++// Detects: a NaN weight passing the sum check, since NaN fails every comparison and only the finite test names it
++TEST(NifSkinChecks, NonFiniteWeightIsNamedInsteadOfPassingTheSum) {
++  auto vertices = k_clean;
++  vertices[1].weights[0] = 0x7E00;
++  const auto nif = fo4::nif::read_nif(skinned_nif(vertices));
++  EXPECT_EQ(fo4::nif::skin_checks(nif, fo4::nif::read_shapes(nif)).at(2).failure,
++            "shape 'Body' (block 1) vertex 1 has a weight that is not a finite number");
++}
++
++TEST(NifSkinChecks, SkinWithoutBoneDataFailsTheBindCheck) {
++  // regression: a skin whose bind transforms are missing loads with identity bones and must be named
++  const auto nif = fo4::nif::read_nif(skinned_nif(k_clean, -1));
++  const auto checks = fo4::nif::skin_checks(nif, fo4::nif::read_shapes(nif));
++  EXPECT_EQ(checks.at(0).failure,
++            "shape 'Body' (block 1) has no bind transforms: its skin holds no BSSkin::BoneData block");
++}
++
++TEST(NifSkinChecks, BoneNameThatNamesNoNodeFailsTheResolveCheck) {
++  // regression: a skin bound to a bone the file does not hold must not pass as resolved
++  const auto nif = fo4::nif::read_nif(skinned_nif(k_clean, 5, name_only_block(3)));
++  const auto checks = fo4::nif::skin_checks(nif, fo4::nif::read_shapes(nif));
++  EXPECT_EQ(checks.at(1).failure, "shape 'Body' (block 1) bone 'Bone1' does not name a node in this file");
++}
++
++TEST(NifSkinChecks, WeightsOnAShapeWithoutASkinInstanceAreNotChecked) {
++  // regression: a shape that sets the skinned flag but has no skin instance is not a skin, so its weights are not judged
++  auto vertices = k_clean;
++  vertices[1].weights[0] = 0x3800;
++  vertices[1].weights[1] = 0;
++  const std::vector<Block> blocks{
++      named_node_block("NiNode", 0, Transform{}, {1}),
++      shape_with_refs("BSTriShape", 1, Transform{}, k_skin_flags, k_skin_stride, -1, -1, -1,
++                      skinned_vertex_bytes(vertices), {0, 1, 2}),
++  };
++  const auto nif = fo4::nif::read_nif(build_nif({"Root", "Body"}, blocks, {0}));
++  for (const auto& check : fo4::nif::skin_checks(nif, fo4::nif::read_shapes(nif))) {
++    EXPECT_EQ(check.failure, "") << check.name;
++  }
++}
++
++TEST(NifSkinChecks, BoneIndexPastTheListFailsTheShapeParseCheck) {
++  // regression: a bone index past the skin's bone list must fail verify rather than pass with a zero weight
++  auto vertices = k_clean;
++  vertices[0].bones[0] = 5;
++  const auto report = fo4::nif::verify_nif(fo4::nif::read_nif(skinned_nif(vertices)));
++  EXPECT_EQ(report.checks.at(3).name, "shapes parse");
++  EXPECT_NE(report.checks.at(3).failure.find("bone index is past the end of the skin's bone list"), std::string::npos);
++}
++
++// regression: a skin check that fires on a shipped skinned mesh would flag files the game loads fine
++TEST(NifSkinChecksReal, VanillaSkinnedShapesGiveNoFindings) {
++  const char* dir = std::getenv("FO4_DATA_DIR");
++  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
++  record_game_build(detect_game_build(dir));
++  const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
++  if (archives.empty()) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
++
++  const auto assets = fo4::archive::AssetResolver::open({}, archives);
++  std::map<std::string, std::size_t> failures;
++  std::size_t nifs = 0;
++  std::size_t skinned_shapes = 0;
++  std::size_t parse_failures = 0;
++  std::string first_failure;
++  for (const auto& reader : assets.archives()) {
++    if (reader.kind() != fo4::archive::Ba2Kind::general) continue;
++    // Constraint: one in 37 keeps this test inside the shared real-data job.
++    for (std::size_t i = 0; i < reader.entries().size(); i += 37) {
++      const auto& path = reader.entries()[i].path;
++      if (lower(std::filesystem::path(path).extension().string()) != ".nif") continue;
++      ++nifs;
++      try {
++        const auto bytes = reader.extract(i);
++        const auto nif = fo4::nif::read_nif(bytes);
++        const auto shapes = fo4::nif::read_shapes(nif);
++        for (const auto& shape : shapes) {
++          if (!shape.bones.empty()) ++skinned_shapes;
++        }
++        for (const auto& check : fo4::nif::skin_checks(nif, shapes)) {
++          if (check.failure.empty()) continue;
++          ++failures[check.name];
++          if (first_failure.empty()) first_failure = path + ": " + check.failure;
++        }
++      } catch (const fo4::parse_error& error) {
++        ++parse_failures;
++        ADD_FAILURE() << path << ": " << error.what();
++      }
++    }
++  }
++
++  for (const auto& [name, count] : failures) std::cout << "skin check fires on vanilla: " << name << ": " << count << '\n';
++  std::cout << "nifs " << nifs << ", skinned shapes " << skinned_shapes << ", parse failures " << parse_failures << '\n';
++  RecordProperty("skinned_shape_count", std::to_string(skinned_shapes));
++  RecordProperty("skin_check_nif_count", std::to_string(nifs));
++  EXPECT_GT(skinned_shapes, 0U);
++  EXPECT_TRUE(failures.empty()) << first_failure;
++}
+diff --git a/Radicle/tests/test_nif_write.cpp b/Radicle/tests/test_nif_write.cpp
+index 607fe645e..ae55c1e92 100644
+--- a/Radicle/tests/test_nif_write.cpp
++++ b/Radicle/tests/test_nif_write.cpp
+@@ -617,6 +617,9 @@ TEST(NifFix, ClearsTheEditorMarkerAndKeepsTheOtherBsxBits) {
+     return fo4::nif::verify_nif(read_nif(bytes)).checks.at(2).failure;
+   };
+   ASSERT_NE(marker_fault(marked), "");
++  const auto selected = fix_nif(read_nif(marked), "no editor markers");
++  EXPECT_EQ(marker_fault(selected), "");
++  EXPECT_EQ(fo4::nif::read_bsx_flags(read_nif(selected), bsx), 640U);
+   const auto repaired = fix_nif(read_nif(marked));
+   EXPECT_EQ(marker_fault(repaired), "");
+   EXPECT_EQ(fo4::nif::read_bsx_flags(read_nif(repaired), bsx), 640U);
+diff --git a/docs/code-notes/GARDEN-TOOLS.md b/docs/code-notes/GARDEN-TOOLS.md
+index 7bf2a95a0..4fe674dc3 100644
+--- a/docs/code-notes/GARDEN-TOOLS.md
++++ b/docs/code-notes/GARDEN-TOOLS.md
+@@ -2909,6 +2909,43 @@ The destructor removes the shared parent when it looks empty, so a test creating
+ - Error semantics: the service targets (`archive`, `graph`, `papyrus`, `nif`, `material`, `audio`, `app`, `settings`) report some failures as ordinary strings beginning `Error:` or `ERR:` rather than RPC errors. `PluginEditTool/native/apps/fo4ide/McpCatalog.cpp:addCatalogTool` checks every string result, backend results included, for a leading `Error:` or `ERR:` and marks it `isError: true`; otherwise a missing archive/NIF/script looked like a success to MCP clients. Non-string results are never marked as errors.
+ - Independent verification also reported two pre-existing limitations that are not MCP-only: the first `get_referenced_by`/`get_dependencies` call on the 482 MB order pays the lazy reference-index build in `Radicle/src/graph/conflict_graph.cpp:ensure_references` (about 113 s; later calls cached), and `set_conditions` rewrites three opaque CTDA bytes (`60 72 73 41` → `60 00 00 00`) that vanilla conditions carry in most sampled cases. `PluginEditTool/native/src/plugin/RadiclePluginMemory.cpp:releaseMemory` and `RadiclePluginGraphCache.cpp:reapIdleConflictGraph` call `HeapCompact` after `_heapmin`, but committed memory after a graph drop is still retained by the allocator, so only the working set visibly falls.
+ 
++## Radicle/src/nif/lint_checks.cpp:finite_position — non-finite positions are skipped by the sphere checks
++
++A half-float Inf or NaN position reaches the reader as a float Inf or NaN (`Radicle/src/nif/geometry.cpp:half_to_float`). NaN never equals the zero sphere, so `bounding_sphere_misses` reported such a shape as having no sphere, and an Inf position pushed the refit bounds to infinity. `finite_position` lets `bounding_sphere_misses` and both loops of `Radicle/src/nif/lint_fixes.cpp:refit_bounding_sphere` skip any vertex with a non-finite component. A shape whose positions are all non-finite is therefore neither judged nor refit, and a refit sphere is built from finite positions only. Residual: finite positions near the float maximum can still overflow the centre sum or a squared distance; vanilla positions are far below that.
++
++## Radicle/src/nif/skin_checks.cpp:weight_fault — a non-finite weight is named before the sign and sum tests
++
++The finite test comes first because NaN fails both later comparisons: `NaN < 0` is false and `fabs(NaN - 1) > tolerance` is false, so without the guard a NaN weight passes silently. An Inf weight would be reported as a sum fault instead. `Radicle/tests/test_nif_skin_checks.cpp:NonFiniteWeightIsNamedInsteadOfPassingTheSum` pins the NaN case.
++## Radicle/src/nif/lint_checks.cpp:repeated_vertex_fault — only a triangle that names one vertex twice is a verify failure
++
++The first draft judged zero-area triangles by an exact zero cross product. The real-data sample of 6,110 vanilla NIFs flagged 35 of them, carrying 1,850 collinear or coincident triangles whose three vertex indices are distinct (for example `Meshes\Architecture\Buildings\HouseKit\HouseKGrndAddonGarage01.nif`, block 14, which has eight). Vanilla ships those, so the check judges only `repeats_a_vertex`, a triangle whose index list repeats, which has zero area by construction. Across the full census of 226,454 vanilla NIFs, run once with the sampling stride set to 1, no shape repeats a vertex and no lint check fires. `Radicle/tests/test_nif_lint.cpp:CollinearTriangleWithDistinctVerticesIsNotReported` pins the narrowing.
++
++Only `BSTriShape` and `BSDynamicTriShape` are judged and repaired (`Radicle/src/nif/lint_checks.cpp:repairs_triangles`). A `BSSubIndexTriShape` carries a segment table that indexes its triangles, and a `BSMeshLODTriShape` carries LOD size fields after its triangles; the fix rewrites neither, so both are left out of the check as well as the repair.
++
++## Radicle/src/nif/lint_checks.cpp:sidecar_fault — a missing sidecar passes, only an unreadable one fails
++
++The `SSF File` of a `BSSubIndexTriShape` is a `SizedString16` after its segment table and, when `Num Segments` is below `Total Segments`, after the shared segment data (`Radicle/src/nif/lint_checks.cpp:segment_sidecar`, following `nif.xml:BSSubIndexTriShape`, `BSGeometrySegmentSharedData` and `BSGeometryPerSegmentSharedData`). The layout is confirmed on vanilla: in the 6,110-NIF sample every such block's string ends exactly at the block end (419 blocks).
++
++Vanilla names sidecars it does not ship. The full census made 7,478 lookups and 6,078 of them found no file (FaceGen heads and DLC robot and armour parts among them), and the game tolerates it, so absence cannot be a verify failure. The probe therefore fails only a file that exists beside the NIF and cannot be opened: the native host (`PluginEditTool/native/src/assets/NifRender.cpp:verifyReport`) and the real-data test both do that. The leaf name is what gets looked up, because the owner's checker in the NifSkope port also looks beside the mesh by file name.
++
++## Radicle/src/nif/lint_checks.cpp:unused_string_fault — a string counts as used on any four-byte match
++
++The reader has no schema for every field that holds a string index, so the check does not map references. A string is used when any four bytes of any block equal its index. That over-counts use: an unrelated integer or a float bit pattern keeps a truly unused string. The real-data sample found no unused non-empty string, and empty strings are not reported. `Radicle/tests/test_nif_lint.cpp:HeaderStringNoBlockNamesIsReported` pins the detection.
++
++There is no repair. Removing a string renumbers every index above it, and the over-count cannot tell a reference from a coincident number, so a byte-level renumbering would rewrite data that is not a reference.
++
++## Radicle/src/nif/lint_fixes.cpp:drop_repeated_vertex_triangles — the fix rebuilds only the triangle block
++
++The triangle count and data size are rewritten in the ten bytes before the vertex data. The vertex data and any bytes after the triangles (a `BSDynamicTriShape` keeps its dynamic vertices there) are copied unchanged. A shape whose every triangle repeats a vertex keeps them all, because an empty shape fails `shapes have vertices and triangles`. `Radicle/src/nif/fix_nif.cpp:require_same_shapes` compares the written triangles with `triangles_after_fix`, so any other change to the triangle list fails the fix instead of being written. A second fix finds no repeats and writes the same bytes (`Radicle/tests/test_nif_lint.cpp:RepeatedVertexTriangleIsDroppedAndTheFixIsIdempotent`).
++
++## PluginEditTool/native/src/assets/NifRender.cpp:verifyReport — the verify reply is JSON, with the old text inside it
++
++`NifService::verify` returns `{"text": ..., "checks": [{name, failure, fixable}]}`, where `text` is exactly the output the reply used to be. Fix and import replies still append that text form. The probe binds the NIF's folder and passes a missing file. The `nif_verify` MCP tool (`PluginEditTool/native/apps/fo4ide/McpTools.cpp`) forwards the reply, so its output is now the JSON string and the old text is in its `text` field.
++
++## PluginEditTool/web/src/nifmodes/Issues.tsx:Issues — every fix button runs the whole-file route
++
++The Fix route takes an input path and an output path and no check list, so each fix button, including a group's own, repairs every fixable finding in the file, and the confirm text says so. A group button appears only where `fixable` is true. Overwriting the open NIF asks through `useDialogs` with `danger` set; Save As picks a path with `BrowseForSave` and writes the fixed copy there, as `PluginEditTool/web/src/NifEditor.tsx:NifEditor` does. After a write `PluginEditTool/web/src/NifPanel.tsx:NifPanel` verifies the file it wrote.
++
+ ## PluginEditTool/native/src/app/SwfTargetFile.cpp:gameArchives (game archive source for the SWF browse)
+ 
+ `gameArchives` builds a read-only `fo4::archive::AssetResolver` over the game's BA2 archives, so the SWF panel can list and open archive entries. The Data folder is `roots[0]` of the `SwfRootsProvider`, because `swfRootsFor` puts `settings.dataFolder` first, and only that folder is read. The plugin names are the `.esm`, `.esp` and `.esl` files in it, sorted by name, passed to `fo4::archive::archive_load_order` with an empty INI list. This is the call `PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::stringAssets` makes. `archive_load_order` then mounts `<plugin>.ba2` and `<plugin> - *.ba2` for each plugin, so `Fallout4 - Interface.ba2` is found through `Fallout4.esm`. The resolver is opened with no loose roots, so `AssetResolver::list` and `locate_in_archives` see archive entries only.

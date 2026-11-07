@@ -1,0 +1,41 @@
+.nif-cp {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: auto;
+}
+
+.nif-cp-head,
+.nif-cp-row,
+.nif-cp-actions,
+.nif-cp-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.nif-cp-head {
+  justify-content: space-between;
+}
+
+.nif-cp-body,
+.nif-cp-point {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nif-cp-point {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.3);
+}
+
+.nif-cp-row input[type='number'] {
+  width: 5.5em;
+}
+
+.nif-cp-status {
+  white-space: pre-wrap;
+}

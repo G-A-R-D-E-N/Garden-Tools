@@ -1,0 +1,30 @@
+.nif-collision {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+}
+.nif-collision h4 { margin: 6px 0 0; font-size: 12px; }
+.nif-collision-warning { display: flex; align-items: center; gap: 6px; color: #e0b46a; }
+.nif-collision-row,
+.nif-collision-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nif-collision-row input,
+.nif-collision-form input,
+.nif-collision-form select { flex: 1; min-width: 160px; }
+.nif-collision-table { border-collapse: collapse; width: 100%; }
+.nif-collision-table th,
+.nif-collision-table td { text-align: left; padding: 3px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.nif-collision-system { display: flex; flex-direction: column; gap: 4px; }
+.nif-collision-note { color: var(--muted, #9aa0aa); margin: 0; }
+.nif-collision-error { color: #ff8a8a; }
+.nif-collision-output {
+  white-space: pre-wrap;
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+}

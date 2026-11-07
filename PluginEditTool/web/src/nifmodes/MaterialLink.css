@@ -1,0 +1,74 @@
+.matlink {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+}
+
+.matlink-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.matlink-field > span {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.matlink-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.matlink-block {
+  width: 120px;
+}
+
+.matlink-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.matlink-table th,
+.matlink-table td {
+  padding: 4px 6px;
+  text-align: left;
+  word-break: break-all;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+}
+
+.matlink-note {
+  margin: 0;
+  font-size: 13px;
+}
+
+.matlink-note.warn {
+  color: #e0a030;
+}
+
+.matlink-note.ok {
+  color: #6cc07a;
+}
+
+.matlink-status {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.matlink-shapes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.matlink-pick {
+  width: 100%;
+  text-align: left;
+}

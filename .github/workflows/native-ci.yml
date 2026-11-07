@@ -1,0 +1,564 @@
+name: native-ci
+
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CCACHE_NOHASHDIR: "1"
+  CMAKE_BUILD_PARALLEL_LEVEL: "4"
+  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|[A-Za-z0-9_]*Real\.|NavmeshCorpus\.Fallout4FixturesBoundaryCountsAndNvppSize|PexCorpus\.EveryDataDirArchivePexRoundTripsByteIdentically|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.CorpusDecodeSweepWhenPresent|BehaviorReal\.|DialogueReal\.|DialogueWriterReal\.|BehaviorWriterReal\.|ClimateWeatherReal\.|ConditionScopesReal\.|NavmeshReal\.|NavmeshWriterReal\.|NifCorpus\.|ShapeOpsCorpus\.|QuestStructureReal\.|SoundWriterReal\.|VegetationReal\.|VmadWriterOfficial\.|Official normal and AutoWeapon sounds'
+
+jobs:
+  # PluginEditTool/native builds Radicle as a subproject, so one build covers
+  # both: Radicle's own tests, tools and warnings-as-errors are switched on here
+  # instead of compiling Radicle a second time in a separate job.
+  native-linux:
+    name: Native (Linux, Debug)
+    runs-on: ubuntu-24.04
+    environment: garden-tools-ci
+    timeout-minutes: 60
+    env:
+      CC: gcc-14
+      CXX: g++-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+
+      - name: Restore the private test fixtures
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+        run: bash .github/scripts/fetch-private-fixtures.sh
+
+      - name: Install build tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build ccache
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: Radicle/bindings/csharp/global.json
+
+      - name: Restore RID consumer (linux-x64)
+        run: |
+          python3 -c 'import os, pathlib, shutil; root = pathlib.Path.cwd(); temp = pathlib.Path(os.environ["RUNNER_TEMP"]) / "radicle-consumer"; temp.mkdir(exist_ok=True); shutil.copy2(root / "Radicle/bindings/csharp/global.json", temp / "global.json"); (temp / "Consumer.csproj").write_text("<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><ProjectReference Include=\"" + str(root / "Radicle/bindings/csharp/Radicle.Interop/Radicle.Interop.csproj") + "\" /></ItemGroup></Project>")'
+          cd "$RUNNER_TEMP/radicle-consumer"
+          dotnet restore Consumer.csproj -r linux-x64
+
+      - name: Find ccache
+        run: |
+          for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then
+              echo "CCACHE=$c" >> "$GITHUB_ENV"
+              echo "CCACHE_BASEDIR=$PWD" >> "$GITHUB_ENV"
+              "$c" --zero-stats > /dev/null
+              echo "Using $c"
+              exit 0
+            fi
+          done
+          echo "ccache not found; building without a compiler cache"
+
+      - name: Configure
+        timeout-minutes: 15
+        run: |
+          for attempt in 1 2 3; do
+            if cmake -S PluginEditTool/native -B build/native -G Ninja \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DFO4IDE_BUILD_TESTS=ON \
+              -DRADICLE_BUILD_TESTS=ON \
+              -DRADICLE_BUILD_TOOLS=ON \
+              -DRADICLE_CSHARP_TESTS=ON \
+              -DRADICLE_WARNINGS_AS_ERRORS=ON \
+              ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::configure failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::configure attempt $attempt failed, retrying"
+            sleep $((attempt * 30))
+          done
+
+      - name: Build
+        run: cmake --build build/native
+
+      - name: ccache statistics
+        if: always()
+        run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
+
+      - name: Check real-data regex covers game-data tests
+        run: |
+          python3 -I -B -m unittest discover -s .github/scripts -p 'test_*.py'
+          python3 -I .github/scripts/check_real_data_regex.py
+
+      - name: Check static xEdit scalar deny pass
+        run: python3 -I -B -m unittest discover -s Radicle/tools/corpus -p 'test_*.py'
+
+      - name: Test
+        run: |
+          ctest --test-dir build/native --output-on-failure --parallel 4 -E '^radicle_csharp_bindings$'
+
+      - name: Prove clean managed tests without external networking
+        run: sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0 && unshare --user --map-root-user --net python3 Radicle/bindings/csharp/tools/run_managed_tests.py --build-dir build/native --network-isolated
+
+  radicle-windows-cross:
+    name: Radicle (Windows cross, clang-cl/xwin, build-only)
+    if: ${{ !startsWith(github.ref_name, 'ci/pr-') }}
+    runs-on: ubuntu-24.04
+    environment: garden-tools-ci
+    timeout-minutes: 45
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+
+
+      - name: Restore the private test fixtures
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+        run: bash .github/scripts/fetch-private-fixtures.sh
+
+      - name: Install build tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build ccache
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      - name: Create the xwin folder
+        run: sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/xwin
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: xwin
+        with:
+          path: /opt/xwin
+          key: xwin-0.10.0
+
+      - name: Install clang-cl and the xwin CRT and SDK
+        env:
+          XWIN_HIT: ${{ steps.xwin.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq clang-19 clang-tools-19 lld-19 llvm-19
+          echo /usr/lib/llvm-19/bin >> "$GITHUB_PATH"
+          if [ "$XWIN_HIT" != true ]; then
+            curl -fsSL https://github.com/Jake-Shadle/xwin/releases/download/0.10.0/xwin-0.10.0-x86_64-unknown-linux-musl.tar.gz | tar -xz --strip-components=1 -C "$RUNNER_TEMP"
+            "$RUNNER_TEMP/xwin" --accept-license splat --output /opt/xwin
+          fi
+
+      - name: Find ccache
+        run: |
+          for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then
+              echo "CCACHE=$c" >> "$GITHUB_ENV"
+              echo "CCACHE_BASEDIR=$PWD" >> "$GITHUB_ENV"
+              "$c" --zero-stats > /dev/null
+              echo "Using $c"
+              exit 0
+            fi
+          done
+          echo "ccache not found; building without a compiler cache"
+
+      - name: Pinned zlib source (cached)
+        run: bash .github/scripts/pinned-zlib.sh
+
+      - name: Build Windows static zlib dependency
+        run: |
+          cmake -S "$ZLIB_SRC" -B build/zlib-win -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/cmake/xwin-clang-cl.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DZLIB_BUILD_EXAMPLES=OFF \
+            ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
+          cmake --build build/zlib-win --target zlibstatic
+          cp "$ZLIB_SRC/zlib.h" build/zlib-win/zlib.h
+          test -f build/zlib-win/zconf.h
+          test -f build/zlib-win/zlibstatic.lib
+
+      - name: Configure (clang-cl / xwin, Release)
+        run: |
+          for attempt in 1 2 3; do
+            if cmake -S Radicle -B build/radicle-win -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_TESTING=OFF \
+              -DRADICLE_BUILD_TESTS=OFF \
+              -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win \
+              -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-win/zlibstatic.lib \
+              -DZLIB_LIBRARY_RELEASE=${{ github.workspace }}/build/zlib-win/zlibstatic.lib \
+              -DZLIB_LIBRARY_DEBUG=${{ github.workspace }}/build/zlib-win/zlibstatic.lib \
+              ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::configure failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::configure attempt $attempt failed, retrying"
+            sleep $((attempt * 30))
+          done
+
+      - name: Build
+        run: cmake --build build/radicle-win
+
+      - name: ccache statistics
+        if: always()
+        run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
+
+  plugineditool-native-windows-cross:
+    name: PluginEditTool native (Windows cross, clang-cl/xwin)
+    if: ${{ !startsWith(github.ref_name, 'ci/pr-') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+
+
+      - name: Install build tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build ccache
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      - name: Create the xwin folder
+        run: sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/xwin
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: xwin
+        with:
+          path: /opt/xwin
+          key: xwin-0.10.0
+
+      - name: Install clang-cl and the xwin CRT and SDK
+        env:
+          XWIN_HIT: ${{ steps.xwin.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq clang-19 clang-tools-19 lld-19 llvm-19
+          echo /usr/lib/llvm-19/bin >> "$GITHUB_PATH"
+          if [ "$XWIN_HIT" != true ]; then
+            curl -fsSL https://github.com/Jake-Shadle/xwin/releases/download/0.10.0/xwin-0.10.0-x86_64-unknown-linux-musl.tar.gz | tar -xz --strip-components=1 -C "$RUNNER_TEMP"
+            "$RUNNER_TEMP/xwin" --accept-license splat --output /opt/xwin
+          fi
+
+      - name: Find ccache
+        run: |
+          for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then
+              echo "CCACHE=$c" >> "$GITHUB_ENV"
+              echo "CCACHE_BASEDIR=$PWD" >> "$GITHUB_ENV"
+              "$c" --zero-stats > /dev/null
+              echo "Using $c"
+              exit 0
+            fi
+          done
+          echo "ccache not found; building without a compiler cache"
+
+      - name: Pinned zlib source (cached)
+        run: bash .github/scripts/pinned-zlib.sh
+
+      - name: Configure native Windows host
+        run: |
+          for attempt in 1 2 3; do
+            if cmake -S PluginEditTool/native -B build/fo4ide-win -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DFO4IDE_BUILD_TESTS=OFF \
+              -DFO4IDE_BUILD_HTTP=ON \
+              -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON \
+              -DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB="$ZLIB_SRC" \
+              ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::configure failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::configure attempt $attempt failed, retrying"
+            sleep $((attempt * 30))
+          done
+
+      - name: Build FO4RecordEditor.exe
+        run: cmake --build build/fo4ide-win --target fo4ide
+
+      - name: ccache statistics
+        if: always()
+        run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
+
+      - name: Verify native Windows executable
+        run: test -f build/fo4ide-win/bin/FO4RecordEditor.exe
+
+  native-windows-tests:
+    name: Native tests (Windows, MSVC)
+    runs-on: windows-2022
+    environment: garden-tools-ci
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+
+      - name: Restore the private test fixtures
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+        run: bash .github/scripts/fetch-private-fixtures.sh
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: Radicle/bindings/csharp/global.json
+
+      - name: Restore RID consumer (win-x64)
+        shell: powershell
+        run: |
+          $consumer = Join-Path $env:RUNNER_TEMP 'radicle-consumer'
+          New-Item -ItemType Directory -Force $consumer | Out-Null
+          Copy-Item Radicle/bindings/csharp/global.json "$consumer/global.json"
+          $library = [Security.SecurityElement]::Escape((Resolve-Path Radicle/bindings/csharp/Radicle.Interop/Radicle.Interop.csproj).Path)
+          "<Project Sdk=`"Microsoft.NET.Sdk`"><PropertyGroup><TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><ProjectReference Include=`"$library`" /></ItemGroup></Project>" | Set-Content "$consumer/Consumer.csproj"
+          Set-Location $consumer
+          dotnet restore Consumer.csproj -r win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Set up MSVC, Ninja and ccache
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/setup-msvc-ccache.ps1
+
+      - name: Pinned zlib source (cached)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/pinned-zlib-windows.ps1
+
+      - name: Configure
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+
+      - name: Build
+        run: cmake --build build\native -- -k 0
+
+      - name: ccache statistics
+        if: always()
+        run: if defined CCACHE "%CCACHE%" --show-stats
+
+      - name: Test
+        shell: powershell
+        run: |
+          Remove-Item Env:FO4_DATA_DIR -ErrorAction SilentlyContinue
+          $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '-E', $env:REAL_DATA_TEST_REGEX)
+          ctest @ctestArgs
+          exit $LASTEXITCODE
+
+      # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
+      # Debug on pull requests, so this runs on main pushes and manual runs.
+      # /Z7 (Embedded) instead of CMake's default /Zi: ccache can't cache
+      # compiles that write to a shared PDB.
+      - name: Configure (Debug)
+        timeout-minutes: 15
+        if: ${{ !startsWith(github.ref_name, 'ci/pr-') }}
+        shell: powershell
+        run: |
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+
+      - name: Build (Debug)
+        if: ${{ !startsWith(github.ref_name, 'ci/pr-') }}
+        run: cmake --build build\native-debug
+
+      # Real-data tests run only in native-windows-real-data; Debug with game data exceeds the job timeout.
+      - name: Test (Debug)
+        if: ${{ !startsWith(github.ref_name, 'ci/pr-') }}
+        run: |
+          set FO4_DATA_DIR=
+          ctest --test-dir build\native-debug --output-on-failure --parallel 4 -E "^radicle_csharp_bindings$"
+
+      - name: Stop .NET build servers
+        if: always()
+        run: dotnet build-server shutdown
+
+  # Builds the shipping configuration - Radicle as radicle.dll, the editor
+  # linking it - and the release package that is deployed from this artifact.
+  # native-windows-tests keeps covering the static default (RADICLE_SHARED=OFF).
+  fo4ide-package:
+    name: FO4IDE package (Windows, MSVC, shared Radicle)
+    runs-on: windows-2022
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: PluginEditTool/web/package-lock.json
+
+      - name: Set up MSVC, Ninja and ccache
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/setup-msvc-ccache.ps1
+
+      - name: Pinned zlib source (cached)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/pinned-zlib-windows.ps1
+
+      - name: Configure (shared Radicle)
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\fo4ide-package -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=OFF -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_SHARED=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+
+      - name: Build FO4RecordEditor.exe and radicle.dll
+        run: cmake --build build\fo4ide-package --target fo4ide
+
+      - name: ccache statistics
+        if: always()
+        run: if defined CCACHE "%CCACHE%" --show-stats
+
+      # The editor must load Radicle at run time: the import table is the proof.
+      - name: Verify FO4RecordEditor.exe imports radicle.dll
+        run: dumpbin /nologo /dependents build\fo4ide-package\bin\FO4RecordEditor.exe | findstr /i /c:"radicle.dll"
+
+      # The header is the contract; the exported function is what consumers read.
+      - name: Verify radicle.dll ABI matches RADICLE_ABI_VERSION
+        shell: powershell
+        run: |
+          $header = Get-Content -Raw Radicle\include\fo4\c_api.h
+          if ($header -notmatch '#define\s+RADICLE_ABI_VERSION\s+(\d+)u?') {
+            throw 'RADICLE_ABI_VERSION is not defined in Radicle/include/fo4/c_api.h'
+          }
+          $expected = [int]$Matches[1]
+          $dll = (Resolve-Path 'build\fo4ide-package\bin\radicle.dll').Path
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          namespace RadicleAbiProbe {
+            public delegate uint AbiFn();
+            public static class Native {
+              [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] public static extern IntPtr LoadLibraryW(string path);
+              [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GetProcAddress(IntPtr module, string name);
+            }
+          }
+          '@
+          $module = [RadicleAbiProbe.Native]::LoadLibraryW($dll)
+          if ($module -eq [IntPtr]::Zero) {
+            throw "LoadLibraryW failed for $dll (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))"
+          }
+          $entry = [RadicleAbiProbe.Native]::GetProcAddress($module, 'radicle_abi_version')
+          if ($entry -eq [IntPtr]::Zero) { throw 'radicle.dll does not export radicle_abi_version' }
+          $actual = [int][Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($entry, [RadicleAbiProbe.AbiFn]).Invoke()
+          Write-Output "radicle.dll ABI=$actual header RADICLE_ABI_VERSION=$expected"
+          if ($actual -ne $expected) {
+            Write-Output "::error::radicle.dll reports ABI $actual but RADICLE_ABI_VERSION is $expected"
+            exit 1
+          }
+
+      - name: Native MCP smoke
+        run: python PluginEditTool\native\tests\native_mcp_smoke.py build\fo4ide-package\bin\FO4RecordEditor.exe
+
+      # The web build and the staging rules live in package.ps1; -BuildDir reuses
+      # the tree built above instead of compiling a second Visual Studio tree.
+      - name: Package
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File PluginEditTool\package.ps1 -BuildDir build\fo4ide-package
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fo4ide-package
+          path: PluginEditTool/dist/FO4RecordEditor-*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  report:
+    name: Report to the private PR
+    needs: [native-linux, radicle-windows-cross, plugineditool-native-windows-cross, native-windows-tests, fo4ide-package]
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    environment: garden-tools-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Post the result as a commit status on the private commit
+        env:
+          GH_TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          source=$(git log -1 --format=%B | sed -n 's/^Source-Commit: \([0-9a-f]\{40\}\)$/\1/p')
+          [ -n "$source" ] || { echo "::error::no Source-Commit trailer"; exit 1; }
+          failed=$(jq -r 'to_entries | map(select(.value.result != "success" and .value.result != "skipped") | .key) | join(", ")' <<<"$NEEDS")
+          if [ -n "$failed" ]; then state=failure; description="failed: $failed"; else state=success; description="passed"; fi
+          gh api "repos/G-A-R-D-E-N/GardenTools/statuses/$source" -f state="$state" \
+            -f context="public-ci/native-ci" -f target_url="$RUN_URL" -f description="${description:0:140}" >/dev/null
+          echo "$state posted for native-ci ($description)"

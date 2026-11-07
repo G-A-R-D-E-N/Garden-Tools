@@ -1,0 +1,83 @@
+.seg-root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  overflow: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.seg-head,
+.seg-row,
+.seg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.seg-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.seg-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.seg-cell input,
+.seg-cell select {
+  min-width: 96px;
+}
+
+.seg-wide {
+  flex: 1 1 220px;
+}
+
+.seg-wide input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.seg-note {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.seg-segment {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.seg-sub {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.seg-sub th,
+.seg-sub td {
+  text-align: left;
+  padding: 2px 4px;
+  vertical-align: bottom;
+}
+
+.seg-error {
+  margin: 0;
+  color: #ff8a8a;
+  font-size: 12px;
+}
+
+.seg-ok {
+  margin: 0;
+  color: #9be59b;
+  font-size: 12px;
+}
