@@ -81,7 +81,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     setMadeKey(null);
     const run: QuestRun = { formKey: null, made: new Map() };
     try {
-      await runQuestCalls(backend, [...buildQuestCalls(template, answers, formKeys), ...buildSceneCalls(template, answers)], run);
+      await runQuestCalls(backend, [...buildQuestCalls(template, answers, formKeys), ...buildSceneCalls(template, answers, formKeys)], run);
       onCreated({ formKey: run.formKey ?? '', plugin: answers.plugin });
     } catch (e) {
       const failure = friendlyError(errorText(e));
@@ -170,14 +170,16 @@ export default function NewQuestWizard({ onBack, onCreated }: {
               </div>
             ))}
           </dl>
-          {(template.scene || template.dialogue) && (
+          {(template.scene || template.dialogue || template.choices) && (
             <div className="wizard-extras">
-              <h4>Scene and starter dialogue <HelpTip topicId="wizard-scene" /></h4>
+              <h4>Scene and starter dialogue <HelpTip topicId={template.choices ? 'wizard-choices' : 'wizard-scene'} /></h4>
               <ul>
                 {describeSceneAndDialogue(template, answers).map(line => <li key={line}>{line}</li>)}
               </ul>
               <p className="editor-purpose">
-                The scene does not start by itself, and the dialogue is not linked to a character.
+                {template.choices
+                  ? `Each choice is offered only by ${answers[template.choices.speaker]}, while the quest is at stage ${template.choices.fromStage} or ${template.choices.toStage}. Picking one sets stage ${template.choices.options.map(option => option.setsStage).join(' or ')}, which finishes the quest. Nothing sets stage ${template.choices.fromStage} or ${template.choices.toStage} yet: the quest only offers the choices once something has started it at one of those stages. The wizard marks the first stage as the start-up stage, but nothing moves the quest from stage ${template.choices.fromStage} to stage ${template.choices.toStage}, and nothing shows the objectives to the player yet.`
+                  : 'The scene does not start by itself, and the dialogue is not linked to a character.'}
               </p>
             </div>
           )}

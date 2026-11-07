@@ -10,7 +10,7 @@ export type Answers = Record<string, string>;
 export type FormKeys = Record<string, string>;
 export type BackendMethod = 'CreateRecord' | 'SetField' | 'SetQuestStages' | 'SetQuestObjectives' | 'SetQuestAliases'
   | 'CreateScene' | 'AddScenePhase' | 'AddSceneActor' | 'SetSceneActor' | 'AddSceneAction' | 'SetSceneAction'
-  | 'CreateDialogueBranch' | 'CreateDialogueTopic' | 'CreateInfo';
+  | 'CreateDialogueBranch' | 'CreateDialogueTopic' | 'CreateInfo' | 'SetDialogueBranchStart';
 export interface BackendCall { method: BackendMethod; args: unknown[]; produces?: string; }
 export interface QuestRun { formKey: string | null; made: Map<string, string>; }
 

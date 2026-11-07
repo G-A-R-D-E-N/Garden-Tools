@@ -152,14 +152,127 @@ it('Detects: the kill-a-target quest calls changing from what the wizard made be
   ]);
 });
 
-it('Detects: a fetch, kill or choice template gaining a scene or starter dialogue, which would make the quest contain content its template never asked for', () => {
-  for (const template of [FETCH_AN_ITEM, KILL_A_TARGET, CHOICE_TWO_ENDINGS]) {
-    expect(buildSceneCalls(template, sampleAnswers(template))).toEqual([]);
+it('Detects: a fetch or kill template gaining a scene or starter dialogue, which would make the quest contain content its template never asked for', () => {
+  for (const template of [FETCH_AN_ITEM, KILL_A_TARGET]) {
+    expect(buildSceneCalls(template, sampleAnswers(template), {})).toEqual([]);
   }
 });
 
+const CHOICE_CONDITIONS = [
+  { function: 'GetIsID', operator: '==', param1: FORM_KEYS.questGiver, value: 1 },
+  { function: 'GetStage', operator: '>=', param1: NEW_RECORD, value: 10 },
+  { function: 'GetStage', operator: '<=', param1: NEW_RECORD, value: 20 },
+];
+
+const choiceCalls = (i: number, prompt: string, reply: string, stage: number): BackendCall[] => [
+  {
+    method: 'CreateDialogueBranch',
+    args: ['Patch.esp', NEW_RECORD, { editorId: `The_Raider_Deal_Choice${i + 1}_Branch`, category: 0, flags: 1 }],
+    produces: `$newChoiceBranch${i}`,
+  },
+  {
+    method: 'CreateDialogueTopic',
+    args: ['Patch.esp', NEW_RECORD, {
+      editorId: `The_Raider_Deal_Choice${i + 1}_Topic`, name: prompt, priority: 50, branch: `$newChoiceBranch${i}`,
+      category: 0, subtype: 0, subtypeName: 'CUST',
+    }],
+    produces: `$newChoiceTopic${i}`,
+  },
+  {
+    method: 'CreateInfo',
+    args: ['Patch.esp', `$newChoiceTopic${i}`, {
+      responses: [{ text: reply }], conditions: CHOICE_CONDITIONS, setStageOnEnd: stage,
+    }],
+  },
+  { method: 'SetDialogueBranchStart', args: ['Patch.esp', `$newChoiceBranch${i}`, `$newChoiceTopic${i}`] },
+];
+
+it('Detects: the two-ending template making no way to finish, because neither choice line sets stage 30 or 40', () => {
+  expect(buildSceneCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS)).toEqual([
+    ...choiceCalls(0, 'Spare the raiders', 'Then it is done. Your reward is 50 caps.', 30),
+    ...choiceCalls(1, 'Hand the raiders over', 'Then it is done. Your reward is 20 caps.', 40),
+  ]);
+  const conditionsJson = '[{"function":"GetIsID","operator":"==","param1":"000900:Patch.esp","value":1},{"function":"GetStage","operator":">=","param1":"$newQuest","value":10},{"function":"GetStage","operator":"<=","param1":"$newQuest","value":20}]';
+  const infos = buildSceneCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS).filter(call => call.method === 'CreateInfo');
+  expect(infos.map(call => JSON.stringify(call.args[2]))).toEqual([
+    `{"responses":[{"text":"Then it is done. Your reward is 50 caps."}],"conditions":${conditionsJson},"setStageOnEnd":30}`,
+    `{"responses":[{"text":"Then it is done. Your reward is 20 caps."}],"conditions":${conditionsJson},"setStageOnEnd":40}`,
+  ]);
+});
+
+it('Detects: a choice offered by anyone but the quest giver, or at the wrong stage, because the condition must name the giver and the quest stages 10 to 20', () => {
+  const infos = buildSceneCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS).filter(call => call.method === 'CreateInfo');
+  expect(infos).toHaveLength(2);
+  for (const info of infos) {
+    const conditions = (info.args[2] as { conditions: { function: string; operator: string; param1: unknown; value: number }[] }).conditions;
+    expect(conditions.filter(item => item.function === 'GetIsID').map(item => item.param1)).toEqual([FORM_KEYS.questGiver]);
+    expect(conditions.filter(item => item.function === 'GetStage').map(item => [item.operator, item.param1, item.value])).toEqual([
+      ['>=', NEW_RECORD, 10],
+      ['<=', NEW_RECORD, 20],
+    ]);
+  }
+});
+
+it('Detects: the choice calls losing the quest giver, so the choice would be offered by nobody and the build would stop without a message', () => {
+  expect(() => buildSceneCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, {})).toThrow('No record was picked for {questGiver}.');
+  expect(() => buildSceneCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, { ...FORM_KEYS, questGiver: '' })).toThrow('No record was picked for {questGiver}.');
+});
+
+it('Detects: a template choice that sets a stage that does not exist or does not finish the quest, so the player who picks it would be stuck', () => {
+  const withChoices = QUEST_TEMPLATES.filter(template => template.choices);
+  expect(withChoices.map(template => template.id)).toContain('choice-two-endings');
+  for (const template of withChoices) {
+    const { choices } = template;
+    if (!choices) continue;
+    const stageIndexes = template.stages.map(stage => stage.index);
+    expect(stageIndexes).toContain(choices.fromStage);
+    expect(stageIndexes).toContain(choices.toStage);
+    for (const option of choices.options) {
+      expect(template.stages.find(stage => stage.index === option.setsStage)?.completes).toBe(true);
+    }
+  }
+});
+
+it('Detects: the runner sending a choice placeholder to the game as text, so the choice lines would point at nothing and the stage would never be set', async () => {
+  const sequence = ['000D00:Patch.esp', '000E00:Patch.esp', '000F00:Patch.esp', '001000:Patch.esp', '001100:Patch.esp', '001200:Patch.esp', '001300:Patch.esp'];
+  const madeMethods = ['CreateRecord', 'CreateDialogueBranch', 'CreateDialogueTopic', 'CreateInfo'];
+  let issued = 0;
+  const methods = ['CreateRecord', 'SetField', 'SetQuestStages', 'SetQuestObjectives', 'SetQuestAliases', 'CreateDialogueBranch', 'CreateDialogueTopic', 'CreateInfo', 'SetDialogueBranchStart'];
+  const backend = Object.fromEntries(methods.map(name => [name, vi.fn(async () => (
+    madeMethods.includes(name) ? JSON.stringify({ formKey: sequence[issued++] }) : 'ok'
+  ))]));
+  const run: QuestRun = { formKey: null, made: new Map() };
+  await runQuestCalls(backend as unknown as Backend, [
+    ...buildQuestCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS),
+    ...buildSceneCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS),
+  ], run);
+  expect(backend.CreateDialogueTopic).toHaveBeenCalledWith('Patch.esp', '000D00:Patch.esp', expect.objectContaining({ branch: '000E00:Patch.esp' }));
+  expect(backend.CreateDialogueTopic).toHaveBeenCalledWith('Patch.esp', '000D00:Patch.esp', expect.objectContaining({ branch: '001100:Patch.esp' }));
+  expect(backend.CreateInfo).toHaveBeenCalledWith('Patch.esp', '000F00:Patch.esp', expect.objectContaining({
+    conditions: [
+      { function: 'GetIsID', operator: '==', param1: '000900:Patch.esp', value: 1 },
+      { function: 'GetStage', operator: '>=', param1: '000D00:Patch.esp', value: 10 },
+      { function: 'GetStage', operator: '<=', param1: '000D00:Patch.esp', value: 20 },
+    ],
+    setStageOnEnd: 30,
+  }));
+  expect(backend.CreateInfo).toHaveBeenCalledWith('Patch.esp', '001200:Patch.esp', expect.objectContaining({ setStageOnEnd: 40 }));
+  expect(backend.SetDialogueBranchStart).toHaveBeenNthCalledWith(1, 'Patch.esp', '000E00:Patch.esp', '000F00:Patch.esp');
+  expect(backend.SetDialogueBranchStart).toHaveBeenNthCalledWith(2, 'Patch.esp', '001100:Patch.esp', '001200:Patch.esp');
+  for (const mock of Object.values(backend)) {
+    expect(JSON.stringify(mock.mock.calls)).not.toContain('$new');
+  }
+});
+
+it('Detects: the two-ending choice review dropping the choice lines or the giver, so the user is not shown what the wizard will create', () => {
+  expect(describeSceneAndDialogue(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS)).toEqual([
+    'The player can say: "Spare the raiders" or "Hand the raiders over".',
+    'Courier Bob answers, and each choice ends the quest at stage 30 or 40.',
+  ]);
+});
+
 it('Detects: the talk-to-someone scene and dialogue calls changing fields, order or the topic link, so the scene is written with fields the game does not read or a link to a topic not yet made', () => {
-  expect(buildSceneCalls(TALK_TO_SOMEONE, TALK_ANSWERS)).toEqual([
+  expect(buildSceneCalls(TALK_TO_SOMEONE, TALK_ANSWERS, {})).toEqual([
     { method: 'CreateDialogueBranch', args: ['Patch.esp', NEW_RECORD, { editorId: 'The_Old_Friend_Branch' }], produces: NEW_BRANCH },
     {
       method: 'CreateDialogueTopic',
@@ -181,7 +294,7 @@ it('Detects: the talk-to-someone scene and dialogue calls changing fields, order
 });
 
 it('Detects: the escort scene and dialogue calls pointing the escortee action at the wrong alias or phase, so the scene would make the wrong character speak', () => {
-  expect(buildSceneCalls(ESCORT, ESCORT_ANSWERS)).toEqual([
+  expect(buildSceneCalls(ESCORT, ESCORT_ANSWERS, {})).toEqual([
     { method: 'CreateDialogueBranch', args: ['Patch.esp', NEW_RECORD, { editorId: 'Safe_Passage_Branch' }], produces: NEW_BRANCH },
     {
       method: 'CreateDialogueTopic',
@@ -212,7 +325,7 @@ it('Detects: a scene skeleton whose actor slot is not a quest alias, whose actio
     expect(scene.actions.filter(action => !scene.actors.includes(action.actor))).toEqual([]);
     expect(scene.actions.filter(action => action.phase < 0 || action.phase >= scene.phases.length)).toEqual([]);
     expect(scene.actions.some(action => action.kind === 'dialogue') && !template.dialogue).toBe(false);
-    const calls = buildSceneCalls(template, sampleAnswers(template));
+    const calls = buildSceneCalls(template, sampleAnswers(template), FORM_KEYS);
     expect(calls.map(call => call.method)).toContain('CreateScene');
     expect(JSON.stringify(calls)).not.toMatch(/\{\w+\}/);
   }
@@ -232,7 +345,7 @@ it('Detects: the runner sending a scene or topic placeholder to the game as text
   ))]));
   const run: QuestRun = { formKey: null, made: new Map() };
   await runQuestCalls(backend as unknown as Backend, [
-    ...buildQuestCalls(TALK_TO_SOMEONE, TALK_ANSWERS, FORM_KEYS), ...buildSceneCalls(TALK_TO_SOMEONE, TALK_ANSWERS),
+    ...buildQuestCalls(TALK_TO_SOMEONE, TALK_ANSWERS, FORM_KEYS), ...buildSceneCalls(TALK_TO_SOMEONE, TALK_ANSWERS, FORM_KEYS),
   ], run);
   expect(backend.CreateDialogueTopic).toHaveBeenCalledWith('Patch.esp', '000D00:Patch.esp', expect.objectContaining({ branch: '000E00:Patch.esp' }));
   expect(backend.CreateInfo).toHaveBeenCalledWith('Patch.esp', '000F00:Patch.esp', expect.anything());

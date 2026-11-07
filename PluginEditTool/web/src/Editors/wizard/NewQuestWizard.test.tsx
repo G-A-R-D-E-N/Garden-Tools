@@ -39,6 +39,7 @@ function sceneStubs() {
     SetSceneActor: vi.fn(async () => 'ok'),
     AddSceneAction: vi.fn(async () => 'ok'),
     SetSceneAction: vi.fn(async () => 'ok'),
+    SetDialogueBranchStart: vi.fn(async () => 'ok'),
   };
 }
 
@@ -58,6 +59,24 @@ async function pickRecord(row: string, label: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Choose' }));
   fireEvent.click(await screen.findByText(row));
   await screen.findByText(label);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+}
+
+async function answerChoiceSteps() {
+  fireEvent.click(screen.getByRole('button', { name: /Choice with two endings/ }));
+  await screen.findByRole('option', { name: 'Patch.esp' });
+  fireEvent.change(screen.getByLabelText('Which plugin should the quest go in?'), { target: { value: 'Patch.esp' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.change(screen.getByLabelText(NAME_LABEL), { target: { value: 'The Raider Deal' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await pickRecord('CourierBob', 'Courier Bob');
+  fireEvent.change(screen.getByLabelText('What is the first choice?'), { target: { value: 'Spare the raiders' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.change(screen.getByLabelText('What is the second choice?'), { target: { value: 'Hand the raiders over' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.change(screen.getByLabelText('What does the player get for the first choice?'), { target: { value: '50 caps' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.change(screen.getByLabelText('What does the player get for the second choice?'), { target: { value: '20 caps' } });
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 }
 
@@ -245,4 +264,35 @@ it('Detects: finishing Fetch an item sending any scene or dialogue call, because
   fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
   for (const mock of Object.values(stubs)) expect(mock).not.toHaveBeenCalled();
+});
+
+it('Detects: finishing Choice with two endings with the review still saying the dialogue is not linked, or with the choice calls out of order, so the player could never reach stage 30 or 40', async () => {
+  const stubs = sceneStubs();
+  const createRecord = vi.fn(async () => JSON.stringify({ formKey: CREATED }));
+  const backend = wizardBackend({ CreateRecord: createRecord, ...stubs });
+  const onCreated = vi.fn();
+  render(<NewQuestWizard onBack={() => {}} onCreated={onCreated} />);
+  await answerChoiceSteps();
+  expect(screen.getByText('The player can say: "Spare the raiders" or "Hand the raiders over".')).toBeTruthy();
+  expect(screen.getByText('Courier Bob answers, and each choice ends the quest at stage 30 or 40.')).toBeTruthy();
+  expect(screen.getByText(/Each choice is offered only by Courier Bob, while the quest is at stage 10 or 20/)).toBeTruthy();
+  expect(screen.getByText(/Nothing sets stage 10 or 20 yet: the quest only offers the choices once something has started it at one of those stages\. The wizard marks the first stage as the start-up stage, but nothing moves the quest from stage 10 to stage 20, and nothing shows the objectives to the player yet\./)).toBeTruthy();
+  expect(screen.queryByText(/the first stage runs when the quest starts/)).toBeNull();
+  expect(screen.queryByText(/dialogue is not linked to a character/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Create quest' }));
+  await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ formKey: CREATED, plugin: 'Patch.esp' }));
+  const order = (mock: { mock: { invocationCallOrder: number[] } }) => mock.mock.invocationCallOrder[0];
+  expect(order(createRecord)).toBeLessThan(order(stubs.CreateDialogueBranch));
+  expect(order(stubs.CreateDialogueBranch)).toBeLessThan(order(stubs.CreateDialogueTopic));
+  expect(order(stubs.CreateDialogueTopic)).toBeLessThan(order(stubs.CreateInfo));
+  expect(order(stubs.CreateInfo)).toBeLessThan(order(stubs.SetDialogueBranchStart));
+  expect(stubs.CreateDialogueBranch).toHaveBeenCalledTimes(2);
+  expect(stubs.CreateDialogueTopic).toHaveBeenNthCalledWith(1, 'Patch.esp', CREATED, expect.objectContaining({ name: 'Spare the raiders', branch: BRANCH }));
+  expect(stubs.CreateDialogueTopic).toHaveBeenNthCalledWith(2, 'Patch.esp', CREATED, expect.objectContaining({ name: 'Hand the raiders over', branch: BRANCH }));
+  expect(stubs.CreateInfo).toHaveBeenNthCalledWith(1, 'Patch.esp', TOPIC, expect.objectContaining({ responses: [{ text: 'Then it is done. Your reward is 50 caps.' }], setStageOnEnd: 30 }));
+  expect(stubs.CreateInfo).toHaveBeenNthCalledWith(2, 'Patch.esp', TOPIC, expect.objectContaining({ responses: [{ text: 'Then it is done. Your reward is 20 caps.' }], setStageOnEnd: 40 }));
+  expect(stubs.SetDialogueBranchStart).toHaveBeenNthCalledWith(1, 'Patch.esp', BRANCH, TOPIC);
+  expect(stubs.SetDialogueBranchStart).toHaveBeenNthCalledWith(2, 'Patch.esp', BRANCH, TOPIC);
+  expect(stubs.CreateScene).not.toHaveBeenCalled();
+  expect(backend.SetQuestObjectives).toHaveBeenCalledWith('Patch.esp', CREATED, expect.stringContaining('"displayText":"Choose: Spare the raiders or Hand the raiders over"'));
 });

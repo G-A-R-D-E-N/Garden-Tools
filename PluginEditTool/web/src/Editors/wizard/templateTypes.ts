@@ -12,6 +12,8 @@ export interface TemplateAlias { slot: string; name: string; kind: AliasKind; }
 export interface TemplateSceneAction { kind: 'dialogue'; phase: number; actor: string; }
 export interface TemplateScene { phases: string[]; actors: string[]; actions: TemplateSceneAction[]; }
 export interface TemplateDialogue { topic: string; replies: string[]; }
+export interface TemplateChoice { prompt: string; reply: string; setsStage: number; }
+export interface TemplateChoices { speaker: string; fromStage: number; toStage: number; options: TemplateChoice[]; }
 
 export interface QuestTemplate {
   id: string;
@@ -23,4 +25,5 @@ export interface QuestTemplate {
   aliases: TemplateAlias[];
   scene?: TemplateScene;
   dialogue?: TemplateDialogue;
+  choices?: TemplateChoices;
 }

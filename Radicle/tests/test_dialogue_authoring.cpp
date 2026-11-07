@@ -132,6 +132,21 @@ fo4::forms::DialogueInfoSpec info_spec() {
   return spec;
 }
 
+fo4::forms::DialogueInfoSpec stage_info_spec(std::optional<std::uint16_t> begin,
+                                             std::optional<std::uint16_t> end) {
+  auto spec = info_spec();
+  spec.set_stage_on_begin = begin;
+  spec.set_stage_on_end = end;
+  return spec;
+}
+
+std::vector<std::byte> stage_pair(std::uint16_t begin, std::uint16_t end) {
+  std::vector<std::byte> out(4);
+  std::memcpy(out.data(), &begin, sizeof(begin));
+  std::memcpy(out.data() + sizeof(begin), &end, sizeof(end));
+  return out;
+}
+
 const fo4::Group* find_group(const fo4::Plugin& plugin, fo4::GroupType type, std::uint32_t label) {
   const fo4::Group* found = nullptr;
   const auto visit = [&](const auto& self, const fo4::Group& group) -> void {
@@ -829,4 +844,136 @@ TEST(DialogueAuthoring, LocalizedPluginRefusesResponseTextAndWritesNothing) {
   EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, info.key, info_spec()),
             fo4::forms::DialogueAuthorStatus::localized_unsupported);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(DialogueAuthoring, CreateInfoWithSetStageOnEndWritesTheParentStageSubrecordBeforeNam0) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  ASSERT_EQ(topic.status, fo4::forms::DialogueAuthorStatus::ok);
+  const auto info = fo4::forms::create_dialogue_info(plugin, topic.key, stage_info_spec({}, 30));
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(sub_tags(*record), (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3",
+                                                         "NAM4", "TIQS", "NAM0", "INAM"}));
+  EXPECT_EQ(find_subrecord(*record, "TIQS")->data, stage_pair(0xFFFF, 30));
+}
+
+TEST(DialogueAuthoring, CreateInfoWithSetStageOnBeginWritesTheParentStageSubrecord) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  const auto info = fo4::forms::create_dialogue_info(plugin, topic.key, stage_info_spec(25, {}));
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(find_subrecord(*record, "TIQS")->data, stage_pair(25, 0xFFFF));
+}
+
+TEST(DialogueAuthoring, CreateInfoWithBothStagesWritesTiqsAfterTheConditionRunAndBeforeNam0) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  auto spec = stage_info_spec(10, 40);
+  fo4::CtdaCondition condition;
+  condition.function = 72;
+  condition.comparison_raw = 0x3f800000u;
+  condition.reference = 0x800u;
+  spec.conditions.push_back(condition);
+  const auto info = fo4::forms::create_dialogue_info(plugin, topic.key, spec);
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(sub_tags(*record), (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3",
+                                                         "NAM4", "CTDA", "TIQS", "NAM0", "INAM"}));
+  EXPECT_EQ(find_subrecord(*record, "TIQS")->data, stage_pair(10, 40));
+}
+
+TEST(DialogueAuthoring, CreateInfoWithoutStagesWritesNoParentStageSubrecord) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  const auto info = fo4::forms::create_dialogue_info(plugin, topic.key, info_spec());
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(find_subrecord(*record, "TIQS"), nullptr);
+}
+
+TEST(DialogueAuthoring, UpdateSetsTheBeginHalfOfAnExistingTiqsAndKeepsTheEndHalf) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  const auto info = fo4::forms::create_dialogue_info(plugin, topic.key, stage_info_spec({}, 20));
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+
+  fo4::forms::DialogueInfoPatch begin;
+  begin.set_stage_on_begin = 5;
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, info.key, begin), fo4::forms::DialogueAuthorStatus::ok);
+  auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(sub_tags(*record), (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3",
+                                                         "NAM4", "TIQS", "NAM0", "INAM"}));
+  EXPECT_EQ(find_subrecord(*record, "TIQS")->data, stage_pair(5, 20));
+
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, info.key, info_spec()),
+            fo4::forms::DialogueAuthorStatus::ok);
+  reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(find_subrecord(*record, "TIQS")->data, stage_pair(5, 20));
+}
+
+TEST(DialogueAuthoring, UpdateReplacesOnlyTheStageHalfThatIsSet) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  const auto info = fo4::forms::create_dialogue_info(plugin, topic.key, stage_info_spec(10, 40));
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+
+  fo4::forms::DialogueInfoPatch end;
+  end.set_stage_on_end = 30;
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, info.key, end), fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(find_subrecord(*record, "TIQS")->data, stage_pair(10, 30));
+  EXPECT_EQ(sub_tags(*record), (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3",
+                                                         "NAM4", "TIQS", "NAM0", "INAM"}));
+}
+
+TEST(DialogueAuthoring, CreateInfoWithBothStagesNoneWritesNoParentStageSubrecord) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  const auto info = fo4::forms::create_dialogue_info(plugin, topic.key, stage_info_spec(0xFFFF, 0xFFFF));
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(find_subrecord(*record, "TIQS"), nullptr);
+}
+
+TEST(DialogueAuthoring, UpdateClearingBothStagesRemovesTheTiqsSubrecord) {
+  auto plugin = fo4::read_plugin(quest_plugin({}, true), "Q.esp");
+  const auto topic = fo4::forms::create_dialogue_topic(plugin, quest_key(), topic_spec());
+  const auto info = fo4::forms::create_dialogue_info(plugin, topic.key, stage_info_spec(10, 40));
+  ASSERT_EQ(info.status, fo4::forms::DialogueAuthorStatus::ok);
+
+  fo4::forms::DialogueInfoPatch clear;
+  clear.set_stage_on_begin = 0xFFFF;
+  clear.set_stage_on_end = 0xFFFF;
+  EXPECT_EQ(fo4::forms::update_dialogue_info(plugin, info.key, clear), fo4::forms::DialogueAuthorStatus::ok);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Q.esp");
+  const auto* record = fo4::find_record(reread, info.key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(find_subrecord(*record, "TIQS"), nullptr);
+  EXPECT_EQ(sub_tags(*record), (std::vector<std::string>{"ENAM", "PNAM", "TRDA", "NAM1", "NAM2", "NAM3",
+                                                         "NAM4", "NAM0", "INAM"}));
 }
