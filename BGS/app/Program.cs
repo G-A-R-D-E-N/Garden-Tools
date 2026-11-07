@@ -1,0 +1,171 @@
+using System;
+using System.IO;
+using System.Linq;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Themes.Fluent;
+using OpenCommonwealth.Services.Hkx;
+
+namespace BehaviourStudio.App;
+
+public class App : Application
+{
+    public override void Initialize() => Ux.Install(this);
+
+    public static MainWindow CreateMainWindow()
+    {
+        var window = new MainWindow();
+        NativeAuthoringUi.Attach(window);
+        AdvancedAuthoringUi.Attach(window);
+        RigAuthoringUi.Attach(window);
+        BuildInfoUi.Attach(window);
+        return window;
+    }
+
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            var window = CreateMainWindow();
+            desktop.MainWindow = window;
+
+            var args = desktop.Args ?? Array.Empty<string>();
+            foreach (string arg in args)
+                if (File.Exists(arg) && !arg.EndsWith(".nif", StringComparison.OrdinalIgnoreCase))
+                {
+                    window.Open(arg);
+                    break;
+                }
+
+            foreach (string arg in args)
+                if (File.Exists(arg) && arg.EndsWith(".nif", StringComparison.OrdinalIgnoreCase))
+                {
+                    window.OpenMesh(arg);
+                    break;
+                }
+        }
+        base.OnFrameworkInitializationCompleted();
+    }
+}
+
+public static class Program
+{
+    internal const string RenderingPreferenceVariable = "BGS_RENDERING";
+
+    internal static readonly string[] DefaultRenderingModes = { "AngleEgl", "Wgl", "Software" };
+
+    [STAThread]
+    public static int Main(string[] args)
+    {
+        if (args.Contains("--version")) { Console.WriteLine(BuildInfo.Report); return 0; }
+        if (args.Contains("--probe-havok")) return ProbeHavok(args);
+        if (args.Contains("--scan-archives")) return ModlistScan.Run(args);
+        if (args.Contains("--scan-modlist")) return ModlistScan.ScanModlist(args);
+        if (args.Contains("--scan-clips")) return ModlistScan.ScanClips(args);
+        if (args.Contains("--scan-skeleton-physics")) return ModlistScan.ScanSkeletonPhysics(args);
+        if (args.Contains("--scan-index")) return IndexScan.Run(args);
+        if (args.Contains("--extract")) return ModlistScan.Extract(args);
+        if (args.Contains("--headless")) return Headless.Run(args);
+
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return 0;
+    }
+
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        var builder = AppBuilder.Configure<App>().UsePlatformDetect();
+        if (OperatingSystem.IsWindows())
+        {
+            string[] order = RenderingModeOrderFor(Environment.GetEnvironmentVariable(RenderingPreferenceVariable));
+            builder = builder.With(new Win32PlatformOptions
+            {
+                RenderingMode = order.Select(ToRenderingMode).ToArray(),
+            });
+        }
+        return builder.LogToTrace();
+    }
+
+    internal static string[] RenderingModeOrderFor(string? preference)
+    {
+        string wanted = (preference ?? "").Trim();
+        int at = Array.FindIndex(DefaultRenderingModes,
+                                 mode => mode.Equals(wanted, StringComparison.OrdinalIgnoreCase));
+        if (at <= 0) return DefaultRenderingModes;
+
+        var order = new string[DefaultRenderingModes.Length];
+        order[0] = DefaultRenderingModes[at];
+        int next = 1;
+        for (int i = 0; i < DefaultRenderingModes.Length; i++)
+            if (i != at) order[next++] = DefaultRenderingModes[i];
+        return order;
+    }
+
+    private static Win32RenderingMode ToRenderingMode(string name) => name switch
+    {
+        "AngleEgl" => Win32RenderingMode.AngleEgl,
+        "Wgl" => Win32RenderingMode.Wgl,
+        _ => Win32RenderingMode.Software,
+    };
+
+    private static int ProbeHavok(string[] args)
+    {
+        string? path = args.FirstOrDefault(arg => arg != "--probe-havok" && File.Exists(arg));
+        if (path == null)
+        {
+            Console.Error.WriteLine("--probe-havok needs a path to a Havok file");
+            return 2;
+        }
+
+        var version = HavokVersionProbe.Read(path);
+        if (version == null)
+        {
+            Console.Error.WriteLine($"{Path.GetFileName(path)}: no hk_ version string in the first {HavokVersionProbe.HeaderBytes} bytes");
+            return 1;
+        }
+
+        Console.WriteLine($"{Path.GetFileName(path)}  {version.Version}  header offset 0x{version.Offset:X}");
+        return 0;
+    }
+}
+
+public static class Headless
+{
+    public static int Run(string[] args)
+    {
+        string? path = args.FirstOrDefault(File.Exists);
+        if (path == null) { Console.Error.WriteLine("--headless needs a path to a .hkx file"); return 2; }
+
+        if (!HkxBinaryReader.IsFo4Hkx(path))
+        {
+            Console.Error.WriteLine("not a Fallout 4 hk_2014.1.0-r1 packfile");
+            return 1;
+        }
+
+        var root = HkxBehaviorParser.ParseBehavior(path);
+        if (root == null) { Console.Error.WriteLine("no root object resolved"); return 1; }
+
+        var objects = HkxBehaviorParser.LastObjects;
+        Console.WriteLine($"{Path.GetFileName(path)}  root {root.ClassName}  {objects.Count} objects  " +
+                          $"{objects.Select(o => o.ClassName).Distinct().Count()} classes");
+
+        string xml = HkxTextEdit.TextOf(path);
+        if (xml.Length == 0)
+        {
+            Console.WriteLine("read only: this file holds a class this build cannot describe");
+            return 0;
+        }
+        var model = BehaviourGraphModel.Parse(xml);
+
+        Console.WriteLine($"graph  {GraphAuthor.Layout(model, 4000).Count} nodes drawn");
+        Console.WriteLine("symbols  " + SymbolEditor.Audit(model));
+
+        var chain = ProjectChain.Resolve(path);
+        Console.WriteLine($"chain  {chain.Animations.Count} animations declared under {chain.Root}");
+
+        var findings = GraphValidator.Check(xml, chain);
+        foreach (var f in findings) Console.WriteLine("check  " + f);
+        int errors = findings.Count(f => f.Level == GraphValidator.Level.Error);
+        Console.WriteLine($"check  {errors} errors, {findings.Count - errors} warnings");
+        return errors == 0 ? 0 : 1;
+    }
+}

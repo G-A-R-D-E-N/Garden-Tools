@@ -1,0 +1,308 @@
+include(Catch)
+
+set(FO4IDE_TEST_TIMEOUT 10)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(FO4IDE_TEST_TIMEOUT 60)
+endif()
+set(FO4IDE_SLOW_TEST_TIMEOUT 300)
+# Tests tagged [multi-process] spawn a fresh worker per crash phase and must keep this longer timeout under runner load.
+set(FO4IDE_MULTI_PROCESS_TEST_TIMEOUT 120)
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME fo4ide_native_mcp_smoke
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/native_mcp_smoke.py" "$<TARGET_FILE:fo4ide>")
+set_tests_properties(fo4ide_native_mcp_smoke PROPERTIES TIMEOUT 120)
+
+function(fo4ide_add_test name source library)
+    add_executable(${name} ${source})
+    target_link_libraries(${name} PRIVATE ${library} Catch2::Catch2WithMain)
+    fo4ide_enable_warnings(${name})
+    fo4ide_enable_sanitizers(${name})
+    catch_discover_tests(${name} TEST_SPEC "~[slow]" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+    catch_discover_tests(${name} TEST_SPEC "[slow]" OUTPUT_SUFFIX _slow PROPERTIES TIMEOUT ${FO4IDE_SLOW_TEST_TIMEOUT})
+endfunction()
+
+fo4ide_add_test(fo4ide_test_wiki unit/WikiServiceTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_nif unit/NifServiceTests.cpp fo4ide_nif)
+fo4ide_add_test(fo4ide_test_material unit/MaterialServiceTests.cpp fo4ide_material)
+
+add_executable(
+    fo4ide_test_texture_resolver
+    unit/TextureResolverTests.cpp
+    unit/TextureResolverPriorityTests.cpp
+)
+target_link_libraries(
+    fo4ide_test_texture_resolver
+    PRIVATE fo4ide_assets fo4 Catch2::Catch2WithMain
+)
+fo4ide_enable_warnings(fo4ide_test_texture_resolver)
+fo4ide_enable_sanitizers(fo4ide_test_texture_resolver)
+catch_discover_tests(fo4ide_test_texture_resolver PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+fo4ide_add_test(fo4ide_test_textures unit/TextureCodecTests.cpp fo4ide_textures)
+
+add_executable(fo4ide_fake_process helpers/fake_process.cpp)
+fo4ide_enable_warnings(fo4ide_fake_process)
+fo4ide_enable_sanitizers(fo4ide_fake_process)
+
+add_executable(
+    fo4ide_test_core
+    unit/EventBusTests.cpp
+    unit/RpcDispatcherTests.cpp
+    unit/McpServerTests.cpp
+    unit/SettingsTests.cpp
+    unit/LoggerTests.cpp
+    unit/ToolLocatorTests.cpp
+    unit/ProcessRunnerTests.cpp
+)
+target_link_libraries(
+    fo4ide_test_core
+    PRIVATE
+        fo4ide_events
+        fo4ide_rpc
+        fo4ide_mcp
+        fo4ide_settings
+        fo4ide_logging
+        fo4ide_tools
+        fo4ide_process
+        Catch2::Catch2WithMain
+)
+target_compile_definitions(
+    fo4ide_test_core
+    PRIVATE FO4IDE_FAKE_PROCESS_PATH="$<TARGET_FILE:fo4ide_fake_process>"
+)
+add_dependencies(fo4ide_test_core fo4ide_fake_process)
+fo4ide_enable_warnings(fo4ide_test_core)
+fo4ide_enable_sanitizers(fo4ide_test_core)
+catch_discover_tests(fo4ide_test_core PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+
+add_executable(
+    fo4ide_test_papyrus
+    unit/PapyrusLexerTests.cpp
+    unit/PapyrusParserTests.cpp
+    unit/PapyrusResolverTests.cpp
+    unit/PapyrusTypeCheckerTests.cpp
+    unit/PapyrusPexTests.cpp
+    unit/PapyrusCodeGenTests.cpp
+    unit/PapyrusUserFlagTableTests.cpp
+    unit/PapyrusSymbolsTests.cpp
+    unit/PapyrusAnalysisServiceTests.cpp
+)
+target_link_libraries(fo4ide_test_papyrus PRIVATE fo4ide_papyrus Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_papyrus)
+fo4ide_enable_sanitizers(fo4ide_test_papyrus)
+catch_discover_tests(fo4ide_test_papyrus PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+
+add_executable(
+    fo4ide_test_corpus
+    unit/PapyrusCorpusTests.cpp
+    unit/PapyrusDifferentialTests.cpp
+)
+target_link_libraries(fo4ide_test_corpus PRIVATE fo4ide_papyrus Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_corpus)
+fo4ide_enable_sanitizers(fo4ide_test_corpus)
+# The corpus sweep parses thousands of real base scripts; give it headroom.
+catch_discover_tests(fo4ide_test_corpus TEST_SPEC "The*" PROPERTIES TIMEOUT 300)
+# The differential compiles every vanilla pair with a fresh index each; give it 3x the corpus headroom.
+catch_discover_tests(fo4ide_test_corpus TEST_SPEC "Compiled*" PROPERTIES TIMEOUT 900)
+
+fo4ide_add_test(fo4ide_test_service_targets unit/ServiceTargetsTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_audio_service unit/AudioServiceTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_material_target unit/MaterialTargetTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_swf_target unit/SwfTargetTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_swf_target_save_as unit/SwfTargetSaveAsTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_settings_security unit/SettingsTargetSecurityTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_papyrus_target unit/PapyrusTargetTests.cpp fo4ide_app)
+target_sources(fo4ide_test_papyrus_target PRIVATE unit/PapyrusSnapshotFlagsTests.cpp)
+target_compile_definitions(fo4ide_test_papyrus_target PRIVATE FO4IDE_TEST_HOOKS)
+fo4ide_add_test(fo4ide_test_plugin_backend_target unit/PluginBackendTargetTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_plugin_backend_target_perk unit/PluginBackendTargetPerkTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_plugin_element_routing unit/PluginBackendElementRoutingTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_mo2 unit/Mo2ProfileTests.cpp fo4ide_mo2)
+fo4ide_add_test(fo4ide_test_app_interop unit/AppInteropTargetTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_app_interop_rollback unit/AppInteropRollbackTests.cpp fo4ide_app)
+
+# Fixture trees are found through an absolute path rather than __FILE__:
+# ccache's base_dir rewrites __FILE__ to a build-relative path, which no
+# longer resolves from the directory ctest runs the tests in.
+foreach(fixture_test
+        fo4ide_test_papyrus fo4ide_test_corpus fo4ide_test_service_targets fo4ide_test_papyrus_target)
+    target_compile_definitions(
+        ${fixture_test}
+        PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+    )
+endforeach()
+
+add_executable(
+    fo4ide_test_plugin_backend
+    unit/RadiclePluginBackendTests.cpp
+    unit/RadiclePluginNameFieldTests.cpp
+    unit/RadiclePluginQuestObjectiveTests.cpp
+    unit/RadiclePluginQuestAuthorTests.cpp
+    unit/RadiclePluginQuestFragmentAuthorTests.cpp
+    unit/RadiclePluginQuestScriptEditTests.cpp
+    unit/RadiclePluginQuestScriptSafetyTests.cpp
+    unit/RadiclePluginJournalRootTests.cpp
+    unit/RadiclePluginJournalIntegrationTests.cpp
+    unit/RadiclePluginJournalDirectoryTests.cpp
+    unit/RadiclePluginJournalArchiveTests.cpp
+    unit/RadiclePluginJournalReadStringsTests.cpp
+    unit/RadiclePluginBa2SourceTests.cpp
+    unit/RadiclePluginStringJournalTests.cpp
+    unit/RadiclePluginWindowsJournalProbeTests.cpp
+    unit/RadiclePluginWindowsJournalSessionTests.cpp
+    unit/RadiclePluginWindowsJournalIntentTests.cpp
+    unit/RadiclePluginHedrCountTests.cpp
+    unit/RadiclePluginStringsTests.cpp
+    unit/RadiclePluginStringLanguagesTests.cpp
+    unit/RadiclePluginWorklistTests.cpp
+    unit/RadiclePluginMastersTests.cpp
+    unit/RadiclePluginMutationTests.cpp
+    unit/RadiclePluginLifecycleTests.cpp
+    unit/RadiclePluginDeleteChildGroupTests.cpp
+    unit/RadiclePluginEditorIdTextTests.cpp
+    unit/RadiclePluginCreateTests.cpp
+    unit/RadiclePluginMasterOverrideTests.cpp
+    unit/RadiclePluginScalarTests.cpp
+    unit/RadiclePluginSchemaGridTests.cpp
+    unit/RadiclePluginW0Tests.cpp
+    unit/RadiclePluginSoundSemanticTests.cpp
+    unit/RadiclePluginSchemaAuthoringTests.cpp
+    unit/RadiclePluginWaterSemanticTests.cpp
+    unit/RadiclePluginVegetationSemanticTests.cpp
+    unit/RadiclePluginClimateSemanticTests.cpp
+    unit/RadiclePluginPreflightTests.cpp
+    unit/RadiclePluginArmorCreationTests.cpp
+    unit/RadiclePluginRaceCreationTests.cpp
+    unit/RadiclePluginRichCreationTests.cpp
+    unit/RadiclePluginMemoryTests.cpp
+    unit/RadiclePluginFormLinkListTests.cpp
+    unit/RadiclePluginListItemTests.cpp
+    unit/RadiclePluginComponentsTests.cpp
+    unit/RadiclePluginNestedFormLinkListTests.cpp
+    unit/RadiclePluginElementTests.cpp
+    unit/RadiclePluginMaintenanceTests.cpp
+    unit/RadiclePluginUndecodableMaintenanceTests.cpp
+    unit/RadiclePluginDeepCopyTests.cpp
+    unit/RadiclePluginRenumberTests.cpp
+    unit/RadiclePluginLeveledTests.cpp
+    unit/RadiclePluginSeqTests.cpp
+    unit/RadiclePluginReferenceRemapTests.cpp
+    unit/RadiclePluginOverridePatchTests.cpp
+    unit/RadiclePluginExteriorCellTests.cpp
+    unit/RadiclePluginCellTests.cpp
+    unit/RadiclePluginCellEditTests.cpp
+    unit/RadiclePluginCellCleanupTests.cpp
+    unit/RadiclePluginTypedRecordsTests.cpp
+    unit/RadiclePluginTypedEntryEditTests.cpp
+    unit/RadiclePluginSoundTests.cpp
+    unit/RadiclePluginPackageTests.cpp
+    unit/RadiclePluginScriptTests.cpp
+    unit/RadiclePluginQuestAliasScriptTests.cpp
+    unit/RadiclePluginEyesTests.cpp
+    unit/RadiclePluginEyesGridTests.cpp
+    unit/RadiclePluginLvspTests.cpp
+    unit/RadiclePluginLvspGridTests.cpp
+    unit/RadiclePluginPerkTests.cpp
+    unit/RadiclePluginPerkRoundTripTests.cpp
+    unit/RadiclePluginBatchMutationTests.cpp
+    unit/RadiclePluginAddMastersTests.cpp
+    unit/RadiclePluginCopyAsWrapperTests.cpp
+    unit/RadiclePluginItmNestedTests.cpp
+    unit/RadiclePluginCompareTests.cpp
+    unit/RadiclePluginReachableTests.cpp
+    unit/RadiclePluginReadApiTests.cpp
+    unit/RadiclePluginEslTests.cpp
+    unit/RadiclePluginCompactTests.cpp
+    unit/RadiclePluginEditableTests.cpp
+    unit/RadiclePluginBackendHygieneTests.cpp
+    unit/ConditionFunctionsTests.cpp
+    unit/ConditionBackendTests.cpp
+    unit/ConditionCodecValidationTests.cpp
+    unit/RadiclePluginListReplaceTests.cpp
+    unit/ConditionBackendParamTests.cpp
+    unit/ConditionCodecTests.cpp
+    unit/ConditionOwnerContextTests.cpp
+    unit/QuestOpaqueConditionTests.cpp
+    unit/ConditionPreservationBackendTests.cpp
+    unit/RadiclePluginConcurrencyTests.cpp
+    unit/RadiclePluginProjExplHazdTests.cpp
+    unit/RadiclePluginProjExplHazdFormLinkTests.cpp
+    unit/RadiclePluginProjFlagsTests.cpp
+    unit/RadiclePluginProjExplHazdLimitsTests.cpp
+    unit/RadiclePluginQuestAuthoringTests.cpp
+    unit/RadiclePluginQuestAliasKeepTests.cpp
+    unit/RadiclePluginQuestLocalizedCnamTests.cpp
+    unit/RadiclePluginQuestLocalizationTests.cpp
+    unit/RadiclePluginQuestReadbackTests.cpp
+    unit/RadiclePluginQuestEventDataTests.cpp
+    unit/RadiclePluginQuestPartialFormTests.cpp
+    unit/RadiclePluginQuestCreateLevelTests.cpp
+    unit/RadiclePluginQuestConditionDefaultsTests.cpp
+    unit/RadiclePluginDeferredLocalizationTests.cpp
+    unit/RadiclePluginPendingLifecycleTests.cpp
+    unit/RadiclePluginQuestEndToEndTests.cpp
+    unit/RadiclePluginDialogueTests.cpp
+    unit/RadiclePluginSceneTests.cpp
+    unit/RadiclePluginFragmentsTests.cpp
+    unit/RadiclePluginDialogueBulkTests.cpp
+    unit/RadiclePluginCheckQuestTests.cpp
+    "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
+)
+target_include_directories(
+    fo4ide_test_plugin_backend
+    PRIVATE "${PROJECT_SOURCE_DIR}/../../Radicle/tests"
+)
+target_compile_definitions(
+    fo4ide_test_plugin_backend
+    PRIVATE FO4IDE_RADICLE_TESTDATA_DIR="${PROJECT_SOURCE_DIR}/../../Radicle/testdata"
+)
+target_link_libraries(
+    fo4ide_test_plugin_backend
+    PRIVATE fo4ide_plugin fo4ide_app Catch2::Catch2WithMain ZLIB::ZLIB
+)
+if(WIN32)
+    target_link_libraries(fo4ide_test_plugin_backend PRIVATE ntdll advapi32 userenv)
+endif()
+target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
+target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+fo4ide_enable_warnings(fo4ide_test_plugin_backend)
+fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
+catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "~[multi-process]~QuestScriptReal.*" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "[multi-process]" OUTPUT_SUFFIX _multi_process PROPERTIES TIMEOUT ${FO4IDE_MULTI_PROCESS_TEST_TIMEOUT})
+# Real-game QuestScriptReal cases decompile and compile whole vanilla archives; they need the long real-data timeout.
+catch_discover_tests(fo4ide_test_plugin_backend TEST_SPEC "QuestScriptReal.*" OUTPUT_SUFFIX _quest_script_real PROPERTIES TIMEOUT 1800)
+
+add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRealTests.cpp)
+target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_sound_semantic_real)
+fo4ide_enable_sanitizers(fo4ide_test_sound_semantic_real)
+catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 1800)
+
+# The vanilla sweep decompiles and recompiles every quest script in Misc.ba2; give it headroom.
+add_executable(
+    fo4ide_test_quest_script_real
+    unit/QuestScriptRealTests.cpp
+    unit/VanillaScriptSourcesTests.cpp
+)
+target_link_libraries(fo4ide_test_quest_script_real PRIVATE fo4ide_papyrus fo4ide_archive Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_quest_script_real)
+fo4ide_enable_sanitizers(fo4ide_test_quest_script_real)
+catch_discover_tests(fo4ide_test_quest_script_real PROPERTIES TIMEOUT 1800)
+
+add_executable(
+    fo4ide_test_archive_backend
+    unit/RadicleArchiveBackendTests.cpp
+)
+target_link_libraries(
+    fo4ide_test_archive_backend
+    PRIVATE fo4ide_archive fo4 Catch2::Catch2WithMain
+)
+fo4ide_enable_warnings(fo4ide_test_archive_backend)
+fo4ide_enable_sanitizers(fo4ide_test_archive_backend)
+catch_discover_tests(fo4ide_test_archive_backend PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+
+fo4ide_use_utf8_code_page()
+
+if(FO4IDE_BUILD_HTTP)
+    add_subdirectory(integration)
+endif()
