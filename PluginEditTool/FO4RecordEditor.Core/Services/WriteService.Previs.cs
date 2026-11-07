@@ -159,6 +159,9 @@ public static partial class WriteService
             return ToolError.Fail("output_oc_nif is required.");
         if (!System.IO.File.Exists(sourceNif))
             return ToolError.Fail($"Source NIF does not exist: {sourceNif}");
+        if (!System.IO.File.ReadAllText(sourceNif, System.Text.Encoding.Latin1)
+                .Contains("BSPackedCombinedSharedGeomDataExtra", StringComparison.Ordinal))
+            return ToolError.Fail("Source NIF is not a shipped-style _OC.NIF (missing BSPackedCombinedSharedGeomDataExtra).");
 
         if (!apply)
             return $"DRY RUN: would copy '{sourceNif}' to '{outputOcNif}' (placeholder until Shared packed-geometry bake ships in Radicle). Re-run with apply=true.";

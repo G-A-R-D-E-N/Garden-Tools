@@ -1,5 +1,6 @@
 #include "fo4/io/sha256.hpp"
 #include "fo4/nif/nif.hpp"
+#include "fo4/previs/bake_oc.hpp"
 
 #include <fstream>
 #include <filesystem>
@@ -42,6 +43,28 @@ TEST(PrevisOracle, ManifestMatchesPinnedBytes) {
     ASSERT_TRUE(fs::exists(path)) << rel;
     const auto bytes = read_bytes(path);
     ASSERT_EQ(fo4::io::sha256_hex(bytes), expected) << rel;
-    EXPECT_NO_THROW((void)fo4::nif::read_nif(bytes)) << rel;
+    const auto nif = fo4::nif::read_nif(bytes);
+    bool shared = false;
+    for (const auto& block : nif.blocks()) {
+      if (block.type == "BSPackedCombinedSharedGeomDataExtra") shared = true;
+    }
+    EXPECT_TRUE(shared) << rel;
   }
+}
+
+// Regression: bake must preserve pinned oracle bytes when output is a valid _OC.NIF path.
+TEST(PrevisOracle, BakePreservesPinnedFixture) {
+  namespace previs = fo4::previs;
+  const auto manifest_path = oracle_root() / "manifest.json";
+  if (!fs::exists(manifest_path)) GTEST_SKIP();
+  const auto manifest = nlohmann::json::parse(std::ifstream(manifest_path));
+  if (manifest.at("files").empty()) GTEST_SKIP();
+  const auto& row = manifest.at("files").front();
+  const auto path = oracle_root() / fs::path(row.at("path").get<std::string>()).filename();
+  const auto bytes = read_bytes(path);
+  const auto dir = fs::temp_directory_path() / "previs_oracle_bake";
+  fs::remove_all(dir);
+  const auto out = dir / path.filename();
+  ASSERT_EQ(previs::bake_oc_single_source_bytes(bytes, out), previs::BakeOcStatus::ok);
+  ASSERT_EQ(fo4::io::sha256_hex(read_bytes(out)), row.at("sha256").get<std::string>());
 }

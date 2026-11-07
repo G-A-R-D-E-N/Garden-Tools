@@ -15,7 +15,9 @@ enum class BakeOcStatus {
   unsupported,
 };
 
-// ponytail: single-source copy until Shared packed-geometry authoring lands in Radicle NIF.
+bool oc_nif_has_shared_combined_geom(std::span<const std::byte> nif_bytes);
+
+// Pass-through bake for measured _OC.NIF inputs until Shared packed-geometry authoring lands.
 BakeOcStatus bake_oc_single_source(const std::filesystem::path& source_nif,
                                    const std::filesystem::path& output_oc_nif);
 

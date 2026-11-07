@@ -372,20 +372,12 @@ TEST(PrevisStamp, WritesPrevisSubrecords) {
   EXPECT_EQ(fo4::previs::parse_xcri_bytes(xcri->data).mesh_ids, req.xcri.mesh_ids);
 }
 
-// Regression: bake step must copy a measured source NIF to the OC output path unchanged.
-TEST(PrevisBake, CopiesSourceBytes) {
-  namespace en = fo4::test::envnode;
+// Regression: bake must refuse sources that are not shipped-style _OC.NIF (Shared geom extra).
+TEST(PrevisBake, RejectsNonOcSource) {
   const std::vector<std::byte> source{std::byte{0x4E}, std::byte{0x49}, std::byte{0x46},
                                       std::byte{0x20}, std::byte{0x01}};
-  const auto dir = std::filesystem::temp_directory_path() / "previs_bake_test";
-  std::filesystem::remove_all(dir);
-  const auto out = dir / "00001234_00005678_OC.NIF";
-  ASSERT_EQ(fo4::previs::bake_oc_single_source_bytes(source, out), fo4::previs::BakeOcStatus::ok);
-  std::ifstream in(out, std::ios::binary);
-  const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-  ASSERT_EQ(chars.size(), source.size());
-  for (std::size_t i = 0; i < source.size(); ++i) {
-    EXPECT_EQ(static_cast<unsigned char>(chars[i]), static_cast<unsigned char>(source[i]));
-  }
+  const auto out = std::filesystem::temp_directory_path() / "previs_bake_reject" / "x_OC.NIF";
+  EXPECT_EQ(fo4::previs::bake_oc_single_source_bytes(source, out),
+            fo4::previs::BakeOcStatus::unsupported);
 }
 

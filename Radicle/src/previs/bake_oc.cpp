@@ -1,5 +1,7 @@
 #include "fo4/previs/bake_oc.hpp"
 
+#include "fo4/nif/nif.hpp"
+
 #include <fstream>
 
 namespace fo4::previs {
@@ -15,9 +17,23 @@ BakeOcStatus write_bytes(const std::filesystem::path& path, std::span<const std:
 
 }  // namespace
 
+bool oc_nif_has_shared_combined_geom(std::span<const std::byte> nif_bytes) {
+  if (nif_bytes.empty()) return false;
+  try {
+    const auto nif = fo4::nif::read_nif(nif_bytes);
+    for (const auto& block : nif.blocks()) {
+      if (block.type == "BSPackedCombinedSharedGeomDataExtra") return true;
+    }
+  } catch (...) {
+    return false;
+  }
+  return false;
+}
+
 BakeOcStatus bake_oc_single_source_bytes(std::span<const std::byte> source,
                                          const std::filesystem::path& output_oc_nif) {
   if (source.empty()) return BakeOcStatus::invalid_input;
+  if (!oc_nif_has_shared_combined_geom(source)) return BakeOcStatus::unsupported;
   if (output_oc_nif.empty()) return BakeOcStatus::invalid_input;
   std::error_code ec;
   std::filesystem::create_directories(output_oc_nif.parent_path(), ec);
