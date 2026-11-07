@@ -37,7 +37,8 @@ namespace detail {
 void decode_alias_extras(QuestAlias& alias,
                          const PluginFormIdContext& context,
                          const Plugin* plugin,
-                         const RecordIndex* index) {
+                         const RecordIndex* index,
+                         const FormLinkTypeLookup* owner_types) {
   if (alias.kind != QuestAliasKind::reference) return;
 
   const auto* ksiz = unique_member(alias, k_ksiz, "KSIZ");
@@ -139,16 +140,18 @@ void decode_alias_extras(QuestAlias& alias,
         if (!std::isfinite(extra.item_condition)) {
           throw QuestError("QUST alias COED item condition must be finite");
         }
-        const Record* owner_record = nullptr;
-        if (extra.owner.has_value() && plugin != nullptr) {
-          owner_record = index != nullptr ? index->find(*extra.owner)
-                                          : find_record(*plugin, *extra.owner);
+        std::optional<Signature> owner_signature;
+        if (extra.owner.has_value() && owner_types != nullptr) {
+          owner_signature = (*owner_types)(*extra.owner);
+        } else if (extra.owner.has_value() && plugin != nullptr) {
+          const Record* owner_record = index != nullptr
+                                           ? index->find(*extra.owner)
+                                           : find_record(*plugin, *extra.owner);
+          if (owner_record != nullptr) owner_signature = owner_record->header.signature;
         }
-        if (owner_record != nullptr &&
-            owner_record->header.signature.to_string() == "FACT") {
+        if (owner_signature.has_value() && owner_signature->to_string() == "FACT") {
           extra.required_rank = read_i32(member.data, 4);
-        } else if (owner_record != nullptr &&
-                   owner_record->header.signature.to_string() == "NPC_") {
+        } else if (owner_signature.has_value() && owner_signature->to_string() == "NPC_") {
           extra.global = decode_optional_form_key_at(
               member.data, 4, k_coed, context, "COED global");
         }

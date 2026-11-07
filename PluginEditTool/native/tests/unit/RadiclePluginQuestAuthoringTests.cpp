@@ -4243,7 +4243,7 @@ TEST_CASE("Native SetQuestAliases refuses existing remaining-member coverage gap
             writeU32(out, "SPOR", 0);
             fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
         },
-        "is null");
+        "zero-valued");
 
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);

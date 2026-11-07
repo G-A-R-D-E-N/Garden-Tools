@@ -14,6 +14,7 @@
 
 #include <fo4/flags.hpp>
 #include <fo4/forms/quest.hpp>
+#include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -225,9 +226,18 @@ std::vector<std::string> aliasMembers(const SubrecordBytes& subs, std::string_vi
     return members;
 }
 
-fo4::forms::QuestAliases decodeKeep(const std::filesystem::path& path) {
+fo4::forms::QuestAliases decodeKeep(const KeepFixture& fixture) {
+    const auto master = fo4::read_plugin_file(fixture.masterPath);
+    const auto patch = fo4::read_plugin_file(fixture.patchPath);
+    const std::vector<const fo4::Plugin*> loadOrder{&master, &patch};
+    const auto graph = fo4::ConflictGraph::build(loadOrder);
     return fo4::forms::decode_quest_aliases(
-        fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+        patch, fo4::FormKey::parse("000800:Patch.esp"),
+        [&graph](const fo4::FormKey& owner) -> std::optional<fo4::Signature> {
+            const auto* winner = graph.winner(owner);
+            if (winner == nullptr) return std::nullopt;
+            return winner->signature;
+        });
 }
 
 nlohmann::json expectGetterRoundTripIdentical(const KeepFixture& fixture,
@@ -260,7 +270,7 @@ TEST_CASE("Native QUST alias keep round trip is byte-identical for forcedReferen
                        {"forceIntoAlias", 2}, {"forcedReference", "000807:Master.esm"}}
     });
     expectGetterRoundTripIdentical(fixture, written);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     const auto* fill =
         std::get_if<fo4::forms::QuestSpecificReferenceFill>(&decoded.aliases[0].fill);
@@ -276,7 +286,7 @@ TEST_CASE("Native QUST alias keep round trip is byte-identical for uniqueActor")
                        {"uniqueActor", "000805:Master.esm"}}
     });
     expectGetterRoundTripIdentical(fixture, written);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     const auto* fill = std::get_if<fo4::forms::QuestUniqueActorFill>(&decoded.aliases[0].fill);
     REQUIRE(fill != nullptr);
@@ -292,7 +302,7 @@ TEST_CASE("Native QUST alias keep round trip is byte-identical for specificLocat
                        {"specificLocation", "000806:Master.esm"}, {"closestToAlias", 1}}
     });
     expectGetterRoundTripIdentical(fixture, written);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 2u);
     CHECK(decoded.aliases[1].kind == fo4::forms::QuestAliasKind::location);
     const auto* fill =
@@ -311,7 +321,7 @@ TEST_CASE("Native QUST alias keep round trip is byte-identical for createReferen
                                                           {"level", "Hard"}}}}
     });
     expectGetterRoundTripIdentical(fixture, written);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     const auto* fill =
         std::get_if<fo4::forms::QuestCreateReferenceFill>(&decoded.aliases[0].fill);
@@ -334,7 +344,7 @@ TEST_CASE("Native QUST alias keep wizard fills survive a reload and getter round
                                                           {"level", "None"}}}}
     });
     expectGetterRoundTripIdentical(fixture, written);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 3u);
     CHECK(std::holds_alternative<fo4::forms::QuestUniqueActorFill>(decoded.aliases[0].fill));
     CHECK(std::holds_alternative<fo4::forms::QuestSpecificLocationFill>(decoded.aliases[1].fill));
@@ -366,7 +376,7 @@ TEST_CASE("Native QUST alias keep round trip is byte-identical for keywords item
         }
     });
     expectGetterRoundTripIdentical(fixture, written);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     const auto& alias = decoded.aliases[0];
     CHECK(alias.keywords.size() == 1u);
@@ -419,7 +429,7 @@ TEST_CASE("Native QUST alias keep round trip is byte-identical for display name 
         }
     });
     expectGetterRoundTripIdentical(fixture, written);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     const auto& alias = decoded.aliases[0];
     CHECK(alias.display_name == std::optional<fo4::FormKey>{fo4::FormKey::parse("00080A:Master.esm")});
@@ -471,7 +481,7 @@ TEST_CASE("Native QUST alias keep web-style payload keeps fill keywords items an
     const auto after = questSubrecords(fixture.patchPath);
 
     CHECK(withoutSignatures(after, {"ALID", "FNAM"}) == withoutSignatures(before, {"ALID", "FNAM"}));
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     CHECK(decoded.aliases[0].name == std::optional<std::string>{"Renamed"});
     CHECK(decoded.aliases[0].flags == std::optional<std::uint32_t>{0x20u});
@@ -498,7 +508,7 @@ TEST_CASE("Native QUST alias keep omitted keys keep data while an explicit empty
 
     CHECK(withoutSignatures(after, {"KSIZ", "KWDA"}) == withoutSignatures(before, {"KSIZ", "KWDA"}));
     CHECK(countSignature(after, "KWDA") == 0u);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     CHECK(decoded.aliases[0].keywords.empty());
     CHECK(decoded.aliases[0].items.size() == 1u);
@@ -529,7 +539,7 @@ TEST_CASE("Native QUST alias keep explicit null and empty values clear carried r
     const auto subs = questSubrecords(fixture.patchPath);
     CHECK(aliasMembers(subs, "ALST") == std::vector<std::string>{"ALST", "ALID", "FNAM", "ALED"});
     CHECK(countSignature(subs, "CTDA") == 0u);
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     CHECK(decoded.aliases[0].name == std::optional<std::string>{"Alias1"});
     CHECK(decoded.aliases[0].flags == std::optional<std::uint32_t>{0u});
@@ -562,7 +572,7 @@ TEST_CASE("Native QUST alias keep explicit null name and flags clear a location 
 
     const auto subs = questSubrecords(fixture.patchPath);
     CHECK(aliasMembers(subs, "ALLS") == std::vector<std::string>{"ALLS", "FNAM", "ALED"});
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 2u);
     CHECK(decoded.aliases[1].name == std::nullopt);
     CHECK(decoded.aliases[1].flags == std::optional<std::uint32_t>{0u});
@@ -652,7 +662,7 @@ TEST_CASE("Native QUST alias keep accepts a kind change when the fill and closes
     }));
     savePatch(backend);
 
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 2u);
     CHECK(decoded.aliases[1].kind == fo4::forms::QuestAliasKind::reference);
     CHECK(std::holds_alternative<std::monostate>(decoded.aliases[1].fill));
@@ -673,7 +683,7 @@ TEST_CASE("Native QUST alias keep round trip is byte-identical for a plain multi
     CHECK(payload.at(0).at("kind") == "collection");
     CHECK(payload.at(0).at("entries").size() == 2u);
 
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 2u);
     REQUIRE(decoded.aliases[0].collection_entries.size() == 2u);
     CHECK(decoded.aliases[0].collection_entries[0].id == 5u);
@@ -690,7 +700,7 @@ TEST_CASE("Native QUST alias keep accepts a collection payload with name null an
         })}}
     }));
     savePatch(backend);
-    const auto accepted = decodeKeep(fixture.patchPath);
+    const auto accepted = decodeKeep(fixture);
     REQUIRE(accepted.aliases.size() == 1u);
     CHECK(accepted.aliases[0].kind == fo4::forms::QuestAliasKind::collection);
 
@@ -812,7 +822,7 @@ TEST_CASE("Native QUST alias keep reference to location accepts explicit null an
     }));
     savePatch(backend);
 
-    const auto decoded = decodeKeep(fixture.patchPath);
+    const auto decoded = decodeKeep(fixture);
     REQUIRE(decoded.aliases.size() == 1u);
     CHECK(decoded.aliases[0].kind == fo4::forms::QuestAliasKind::location);
     CHECK(std::holds_alternative<fo4::forms::QuestSpecificLocationFill>(decoded.aliases[0].fill));

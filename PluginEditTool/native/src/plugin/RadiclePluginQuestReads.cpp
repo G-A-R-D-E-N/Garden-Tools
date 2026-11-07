@@ -328,7 +328,8 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestAliases(const nlohmann::jso
     }
 
     try {
-        const auto aliases = fo4::forms::decode_quest_aliases(loaded->plugin, questKey);
+        const auto aliases = fo4::forms::decode_quest_aliases(
+            loaded->plugin, questKey, questOwnerTypes(loaded->plugin, *graph_));
         nlohmann::json out = nlohmann::json::array();
         for (const auto& alias : aliases.aliases) {
             out.push_back(questAliasJson(loaded->plugin, alias));

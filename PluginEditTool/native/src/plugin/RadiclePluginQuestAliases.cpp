@@ -214,7 +214,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 existingAliasesUnrepresentable(loaded->plugin, questKey, graph_)) {
             return std::unexpected(*error);
         }
-        previousAliases = fo4::forms::decode_quest_aliases(loaded->plugin, questKey);
+        previousAliases = fo4::forms::decode_quest_aliases(
+            loaded->plugin, questKey, questOwnerTypes(loaded->plugin, *graph_));
     } catch (const fo4::forms::QuestError& error) {
         return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
     }
@@ -753,7 +754,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
     try {
         auto mutated = loaded->plugin;
         for (const auto& key : fillKeys) ensureOwnerMaster(mutated, key.owner());
-        const auto remappedAliases = fo4::forms::decode_quest_aliases(mutated, questKey);
+        const auto remappedAliases = fo4::forms::decode_quest_aliases(
+            mutated, questKey, questOwnerTypes(mutated, *graph_));
         for (std::size_t i = 0; i < creations.size(); ++i) {
             if (!carryConditionRuns[i]) continue;
             const auto* carriedFrom = previousAliasWithId(remappedAliases, creations[i].id);

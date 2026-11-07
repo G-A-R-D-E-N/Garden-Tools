@@ -124,6 +124,7 @@ std::optional<Error> adapterConditionUnrepresentable(
 std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
                                                       bool aliases,
                                                       bool stages);
+fo4::FormLinkTypeLookup questOwnerTypes(const fo4::Plugin& plugin, const fo4::ConflictGraph& graph);
 std::optional<Error> existingAliasesUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::FormKey& quest,
