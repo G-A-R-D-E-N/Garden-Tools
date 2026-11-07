@@ -104,6 +104,23 @@ std::optional<Error> resetHoursField(const nlohmann::json& object, std::optional
     return std::nullopt;
 }
 
+std::optional<Error> parentStageField(const nlohmann::json& object, const char* key,
+                                      std::optional<std::uint16_t>& out) {
+    if (!object.contains(key)) return std::nullopt;
+    if (object.at(key).is_null()) {
+        out = fo4::forms::k_info_no_parent_stage;
+        return std::nullopt;
+    }
+    std::uint16_t stage = 0;
+    if (auto error = unsignedField<std::uint16_t>(object, key, 0, stage)) return error;
+    if (stage == fo4::forms::k_info_no_parent_stage) {
+        return Error{"InvalidDialogueArgument",
+                     std::string(key) + " must be a quest stage below 65535, or null for none"};
+    }
+    out = stage;
+    return std::nullopt;
+}
+
 std::optional<fo4::RawFormId> encodedFor(const fo4::Plugin& target, const fo4::FormKey& key) {
     try {
         return fo4::encode_plugin_form_id(key, fo4::plugin_form_id_context(target));
@@ -186,12 +203,15 @@ std::optional<Error> parseInfoPatch(const nlohmann::json& object, const fo4::Plu
                                     std::span<const fo4::CtdaCondition> existing,
                                     const EditorIdResolver& resolveEditorId, DialogueInfoPatch& out) {
     if (auto error = requireKnownKeys(object, [](std::string_view key) {
-            return key == "flags" || key == "resetHours" || key == "responses" || key == "conditions";
+            return key == "flags" || key == "resetHours" || key == "responses" || key == "conditions" ||
+                   key == "setStageOnBegin" || key == "setStageOnEnd";
         }, "dialogue INFO")) {
         return error;
     }
     if (auto error = optionalUnsignedField<std::uint16_t>(object, "flags", out.flags)) return error;
     if (auto error = resetHoursField(object, out.reset_hours)) return error;
+    if (auto error = parentStageField(object, "setStageOnBegin", out.set_stage_on_begin)) return error;
+    if (auto error = parentStageField(object, "setStageOnEnd", out.set_stage_on_end)) return error;
     if (jsonObjectPresent(object, "responses")) {
         const auto& responses = object.at("responses");
         if (!responses.is_array()) return Error{"InvalidDialogueArgument", "responses must be an array"};
@@ -361,6 +381,8 @@ Result<nlohmann::json> RadiclePluginBackend::createInfo(const nlohmann::json& ar
     spec.reset_hours = patch.reset_hours.value_or(0);
     spec.responses = patch.responses.value_or(std::vector<DialogueResponseSpec>{});
     spec.conditions = patch.conditions.value_or(std::vector<fo4::CtdaCondition>{});
+    spec.set_stage_on_begin = patch.set_stage_on_begin;
+    spec.set_stage_on_end = patch.set_stage_on_end;
     try {
         auto mutated = target;
         const auto created = fo4::forms::create_dialogue_info(mutated, *topic, spec);

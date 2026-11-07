@@ -12,6 +12,7 @@ namespace fo4::papyrus {
 namespace {
 
 constexpr int kMaxInheritanceHops = 64;
+constexpr std::size_t kMaxCallRecords = 4096;
 
 std::string fold(const std::string& text) { return lowerAscii(text); }
 
@@ -127,6 +128,8 @@ bool Runtime::detach(InstanceId instance) {
     Instance* found = findInstance(instance);
     if (found == nullptr) return false;
     found->detached = true;
+    for (const QueuedCall& call : found->queued) settleCall(call.ticket, CallState::Dropped, Status::HostError);
+    found->queued.clear();
     registrations_.unregisterAll(found->owner);
     return true;
 }
@@ -193,8 +196,10 @@ const Runtime::Instance* Runtime::findInstance(InstanceId instance) const {
 }
 
 Runtime::Instance* Runtime::instanceFor(const ObjectRef& object) {
+    if ((object.handle & kEngineHandleBit) != 0) return nullptr;
     const auto found = instances_.find(object.handle);
-    return found == instances_.end() ? nullptr : &found->second;
+    if (found == instances_.end() || !sameName(found->second.script, object.type)) return nullptr;
+    return &found->second;
 }
 
 Status Runtime::initialize(InstanceId instance) {
@@ -216,8 +221,7 @@ Status Runtime::initialize(InstanceId instance) {
     if (overridden.outcome == OverrideOutcome::Refused) {
         found->lifecycle = Lifecycle::Failed;
         found->failure = overridden.reason;
-        refusedEvents_ += static_cast<std::int32_t>(found->queued.size());
-        found->queued.clear();
+        refuseQueued(*found);
         return Status::HostError;
     }
 
@@ -235,8 +239,7 @@ Status Runtime::initialize(InstanceId instance) {
     if (result.status != Status::Ok) {
         found->lifecycle = Lifecycle::Failed;
         found->failure = statusName(result.status);
-        refusedEvents_ += static_cast<std::int32_t>(found->queued.size());
-        found->queued.clear();
+        refuseQueued(*found);
         return result.status;
     }
     found->lifecycle = Lifecycle::Ready;
@@ -245,64 +248,137 @@ Status Runtime::initialize(InstanceId instance) {
 }
 
 Status Runtime::sendEvent(InstanceId instance, const std::string& function, std::vector<Value> args) {
+    Status status = Status::Ok;
+    submitCall(instance, function, std::move(args), status, false);
+    return status;
+}
+
+std::uint64_t Runtime::submitCall(InstanceId instance, const std::string& function, std::vector<Value> args,
+                                  Status& status, bool track) {
     Instance* found = findInstance(instance);
     if (found == nullptr || found->detached) {
         refusedEvents_ += 1;
-        return Status::HostError;
+        status = Status::HostError;
+        return 0;
     }
     if (found->lifecycle == Lifecycle::Failed) {
         refusedEvents_ += 1;
-        return Status::HostError;
+        status = Status::HostError;
+        return 0;
     }
     if (found->lifecycle == Lifecycle::NotInitialized) {
         refusedEvents_ += 1;
-        return Status::HostError;
+        status = Status::HostError;
+        return 0;
     }
     if (found->lifecycle == Lifecycle::Initializing) {
         if (gate("vm.lifecycle.event_during_oninit") &&
             onInitPolicy_ == OnInitArrivalPolicy::QueueAsApproximation) {
-            found->queued.emplace_back(function, std::move(args));
+            const std::uint64_t queuedTicket = track ? openCall() : 0;
+            found->queued.push_back(QueuedCall{function, std::move(args), queuedTicket});
             queuedDuringOnInit_ += 1;
-            return Status::Ok;
+            status = Status::Ok;
+            return queuedTicket;
         }
         refusedEvents_ += 1;
-        return Status::GateRefused;
+        status = Status::GateRefused;
+        return 0;
     }
 
     const pex::PexObject* object = findObject(found->script);
     const pex::PexFunction* declared =
         object == nullptr ? nullptr : findInStates(*object, found->state, function);
-    const OverrideResult overridden = tryOverride(*found, function, args);
+    OverrideResult overridden = tryOverride(*found, function, args);
     if (overridden.outcome == OverrideOutcome::Handled) {
         completedEvents_ += 1;
-        return Status::Ok;
+        const std::uint64_t handledTicket = track ? openCall() : 0;
+        settleCall(handledTicket, CallState::Done, Status::Ok, std::move(overridden.value));
+        status = Status::Ok;
+        return handledTicket;
     }
     if (overridden.outcome == OverrideOutcome::Refused) {
         refusedEvents_ += 1;
-        return Status::HostError;
+        status = Status::HostError;
+        return 0;
     }
     if (declared == nullptr) {
         refusedEvents_ += 1;
-        return Status::FunctionNotFound;
+        status = Status::FunctionNotFound;
+        return 0;
     }
     Execution execution;
     execution.instance = instance;
     execution.function = function;
     execution.arguments = std::move(args);
+    execution.ticket = track ? openCall() : 0;
+    const std::uint64_t ticket = execution.ticket;
     ready_.push_back(std::move(execution));
-    return Status::Ok;
+    status = Status::Ok;
+    return ticket;
+}
+
+bool Runtime::takeResult(std::uint64_t ticket, bool consume, CallRecord& out) {
+    const auto found = results_.find(ticket);
+    if (found == results_.end()) return false;
+    out = found->second;
+    const bool terminal = found->second.state != CallState::Pending && found->second.state != CallState::Waiting;
+    if (consume && terminal) results_.erase(found);
+    return true;
+}
+
+std::vector<InstanceId> Runtime::instanceIds() const {
+    std::vector<InstanceId> ids;
+    ids.reserve(instances_.size());
+    for (const auto& entry : instances_) ids.push_back(entry.first);
+    return ids;
+}
+
+std::uint64_t Runtime::openCall() {
+    const std::uint64_t ticket = nextTicket_++;
+    results_[ticket] = CallRecord{};
+    trimResults();
+    return ticket;
+}
+
+void Runtime::settleCall(std::uint64_t ticket, CallState state, Status status, Value value,
+                         std::size_t instructions) {
+    if (ticket == 0) return;
+    const auto found = results_.find(ticket);
+    if (found == results_.end()) return;
+    if (found->second.state != CallState::Pending && found->second.state != CallState::Waiting) return;
+    found->second.state = state;
+    found->second.status = status;
+    found->second.value = std::move(value);
+    found->second.instructions = instructions;
+}
+
+void Runtime::trimResults() {
+    for (auto it = results_.begin(); it != results_.end() && results_.size() > kMaxCallRecords;) {
+        if (it->second.state == CallState::Pending || it->second.state == CallState::Waiting) {
+            ++it;
+            continue;
+        }
+        it = results_.erase(it);
+    }
 }
 
 void Runtime::drainQueued(Instance& instance) {
-    std::vector<std::pair<std::string, std::vector<Value>>> queued = std::move(instance.queued);
+    std::vector<QueuedCall> queued = std::move(instance.queued);
     instance.queued.clear();
-    for (auto& [function, arguments] : queued) {
+    for (QueuedCall& call : queued) {
         Execution execution;
         execution.instance = instance.id;
-        execution.function = std::move(function);
-        execution.arguments = std::move(arguments);
+        execution.function = std::move(call.function);
+        execution.arguments = std::move(call.arguments);
+        execution.ticket = call.ticket;
         ready_.push_back(std::move(execution));
     }
+}
+
+void Runtime::refuseQueued(Instance& instance) {
+    refusedEvents_ += static_cast<std::int32_t>(instance.queued.size());
+    for (const QueuedCall& call : instance.queued) settleCall(call.ticket, CallState::Failed, Status::HostError);
+    instance.queued.clear();
 }
 
 void Runtime::registerNative(std::string script, std::string function, NativeRegistration registration) {
@@ -409,6 +485,13 @@ bool Runtime::setVariable(const ObjectRef& object, const std::string& name, cons
 
 bool Runtime::getProperty(const ObjectRef& object, const std::string& name, Value& out,
                           Status& status) {
+    if ((object.handle & kEngineHandleBit) != 0) {
+        if (!engineHooks_.get) {
+            status = Status::UnknownIdentifier;
+            return false;
+        }
+        return engineHooks_.get(object, name, out, status);
+    }
     Instance* instance = instanceFor(object);
     if (instance == nullptr) {
         status = Status::UnknownIdentifier;
@@ -425,9 +508,9 @@ bool Runtime::getProperty(const ObjectRef& object, const std::string& name, Valu
 
 bool Runtime::setProperty(const ObjectRef& object, const std::string& name, const Value& value,
                           Status& status) {
-    (void)object;
-    (void)name;
-    (void)value;
+    if ((object.handle & kEngineHandleBit) != 0 && engineHooks_.set) {
+        return engineHooks_.set(object, name, value, status);
+    }
     nativeTargetRefusals_ += 1;
     status = Status::HostError;
     return false;
@@ -435,28 +518,108 @@ bool Runtime::setProperty(const ObjectRef& object, const std::string& name, cons
 
 bool Runtime::callNative(const std::string& script, const std::string& function,
                          const std::vector<Value>& args, Value& out, Status& status) {
-    std::string owner;
-    const NativeRegistration* registration = findNative(script, function, owner);
-    if (registration == nullptr || !registration->body) {
-        status = Status::FunctionNotFound;
+    const Value none = noneValue();
+    NativeResult native;
+    if (!callNativeEx(NativeCall{none, script, function, args, false}, native)) {
+        status = native.status;
         return false;
     }
-    if (registration->kind != NativeTargetKind::Static) {
-        nativeTargetRefusals_ += 1;
+    if (native.latentToken != 0) {
         status = Status::HostError;
         return false;
     }
-    return registration->body(noneValue(), args, out, status);
+    out = std::move(native.value);
+    return true;
 }
 
 bool Runtime::callLatent(const std::string& script, const std::string& function,
                          const std::vector<Value>& args, Status& status, std::uint64_t& token) {
-    std::string owner;
-    const NativeRegistration* registration = findNative(script, function, owner);
-    if (registration == nullptr || !registration->latent || !registration->begin) return false;
-    token = registration->begin(args, status);
+    const Value none = noneValue();
+    NativeResult native;
+    if (!callNativeEx(NativeCall{none, script, function, args, true}, native)) {
+        status = native.status;
+        token = 0;
+        return false;
+    }
+    status = native.status;
+    token = native.latentToken;
     return token != 0;
 }
+
+bool Runtime::callNativeEx(const NativeCall& call, NativeResult& result) {
+    std::string owner;
+    const NativeRegistration* registration = findNative(call.script, call.function, owner);
+    if (registration == nullptr) {
+        result.status = Status::FunctionNotFound;
+        return false;
+    }
+    if (call.mayPark && registration->latent && !registration->invoke && registration->begin) {
+        Status beginStatus = Status::Ok;
+        const std::uint64_t token = registration->begin(call.args, beginStatus);
+        if (token != 0) {
+            result = NativeResult{};
+            result.latentToken = token;
+            return true;
+        }
+    }
+    const bool accepted = registration->invoke ? nativeTargetAccepted(*registration, call.self)
+                                              : registration->kind == NativeTargetKind::Static;
+    if (!accepted) {
+        nativeTargetRefusals_ += 1;
+        result.status = Status::HostError;
+        return false;
+    }
+    if (registration->invoke) return registration->invoke(call, result);
+    if (!registration->body) {
+        result.status = Status::FunctionNotFound;
+        return false;
+    }
+    const Value none = noneValue();
+    Value out;
+    Status status = Status::Ok;
+    if (!registration->body(none, call.args, out, status)) {
+        result.status = status;
+        return false;
+    }
+    result = NativeResult{};
+    result.value = std::move(out);
+    return true;
+}
+
+bool Runtime::nativeTargetAccepted(const NativeRegistration& registration, const Value& self) const {
+    if (registration.kind == NativeTargetKind::Static) return true;
+    if (self.type != ValueType::Object || self.object == nullptr || self.object->handle == 0) return false;
+    const std::uint64_t handle = self.object->handle;
+    if (registration.kind == NativeTargetKind::EngineObject) {
+        if ((handle & kEngineHandleBit) == 0) return false;
+        return registration.requiredScript.empty() || scriptInherits(self.object->type, registration.requiredScript);
+    }
+    if ((handle & kEngineHandleBit) != 0) return false;
+    const Instance* instance = findInstance(handle);
+    if (instance == nullptr || instance->detached || !sameName(instance->script, self.object->type)) return false;
+    return registration.requiredScript.empty() || scriptInherits(instance->script, registration.requiredScript);
+}
+
+bool Runtime::scriptInherits(const std::string& script, const std::string& ancestor) const {
+    std::string current = script;
+    for (int hop = 0; hop <= kMaxInheritanceHops && !current.empty(); ++hop) {
+        if (sameName(current, ancestor)) return true;
+        const pex::PexObject* object = findObject(current);
+        if (object == nullptr) return false;
+        current = object->parentClassName;
+    }
+    return false;
+}
+
+std::uint64_t Runtime::beginWait() {
+    while (usedTokens_.count(nextToken_) != 0) nextToken_ += 1;
+    const std::uint64_t token = nextToken_;
+    nextToken_ += 1;
+    issued_.insert(token);
+    return token;
+}
+
+void Runtime::setEngineObjectHooks(EngineObjectHooks hooks) { engineHooks_ = std::move(hooks); }
 
 bool Runtime::setState(ObjectRef& object, const std::string& state, Status& status) {
     object.state = state;

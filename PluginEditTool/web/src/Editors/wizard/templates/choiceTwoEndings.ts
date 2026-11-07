@@ -25,4 +25,13 @@ export const CHOICE_TWO_ENDINGS: QuestTemplate = {
   aliases: [
     { slot: 'questGiver', name: 'QuestGiver', kind: 'reference' },
   ],
+  choices: {
+    speaker: 'questGiver',
+    fromStage: 10,
+    toStage: 20,
+    options: [
+      { prompt: '{optionA}', reply: 'Then it is done. Your reward is {reward}.', setsStage: 30 },
+      { prompt: '{optionB}', reply: 'Then it is done. Your reward is {rewardB}.', setsStage: 40 },
+    ],
+  },
 };

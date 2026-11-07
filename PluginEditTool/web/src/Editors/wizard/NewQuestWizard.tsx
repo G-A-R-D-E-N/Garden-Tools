@@ -52,7 +52,13 @@ export default function NewQuestWizard({ onBack, onCreated }: {
   const flow: WizardStep[] = template ? [PLUGIN_QUESTION, ...template.questions] : [];
   const current = flow[step];
   const answered = (question: WizardStep) => (answers[question.id] ?? '').trim() !== '';
+  const placesItems = template !== null && template.questions.some(question =>
+    question.kind === 'record' && question.recordType === 'MISC' && isLinked(template, question.id) && answered(question));
   const problem = current && current.id === 'name' ? questNameError(answers.name ?? '') : null;
+  const choices = template?.choices;
+  const advanceNote = choices
+    ? `The choices set stage ${choices.options.map(option => option.setsStage).join(' or ')}, which finishes the quest. They are offered from stage ${choices.fromStage}, so the quest works as soon as it starts. Nothing in the wizard moves the quest through any other stage.`
+    : 'Nothing moves the player past the first stage yet. Add the fragments, dialogue results or scripts that set the next stage in the quest editor after you create the quest.';
   const setAnswer = (id: string, value: string) => setAnswers(prev => ({ ...prev, [id]: value }));
 
   const choose = (next: QuestTemplate) => {
@@ -175,13 +181,12 @@ export default function NewQuestWizard({ onBack, onCreated }: {
               Check the answers. The wizard writes the internal name, the journal lines, the objectives and the alias
               names. It sets the quest to start with the game and marks the first stage as the start-up stage. When the
               quest is made, it also writes the plugin&apos;s SEQ file, the same as the record menu&apos;s Create SEQ file,
-              so the game starts the quest. It links each NPC and location you picked to its alias. It places each item you
-              picked at the location as a new copy, so an item you already placed in the world with the mapper will be
-              duplicated. A record marked not linked still has to be set in the Creation Kit.
+              so the game starts the quest. It links each NPC and location you picked to its alias.
+              {placesItems && ' It places each item you picked at the location as a new copy, so an item you already placed in the world with the mapper will be duplicated.'}
+              {' '}A record marked not linked still has to be set in the Creation Kit.
             </p>
             <p className="editor-purpose" role="note">
-              Nothing moves the player past the first stage yet. Add the fragments, dialogue results or scripts that set
-              the next stage in the quest editor after you create the quest. <HelpTip topicId="wizard-stage-advance" />
+              {advanceNote} <HelpTip topicId="wizard-stage-advance" />
             </p>
             <dl className="wizard-review">
               {flow.map(question => (
@@ -194,14 +199,16 @@ export default function NewQuestWizard({ onBack, onCreated }: {
                 </div>
               ))}
             </dl>
-            {(template.scene || template.dialogue) && (
+            {(template.scene || template.dialogue || template.choices) && (
               <div className="wizard-extras">
-                <h4>Scene and starter dialogue <HelpTip topicId="wizard-scene" /></h4>
+                <h4>Scene and starter dialogue <HelpTip topicId={template.choices ? 'wizard-choices' : 'wizard-scene'} /></h4>
                 <ul>
                   {describeSceneAndDialogue(template, answers).map(line => <li key={line}>{line}</li>)}
                 </ul>
                 <p className="editor-purpose">
-                  The scene does not start by itself, and the dialogue is not linked to a character.
+                  {template.choices
+                    ? `Each choice is offered only by ${answers[template.choices.speaker]}, and only while the quest is at a stage from ${template.choices.fromStage} to ${template.choices.toStage}. Nothing shows the objectives to the player yet.`
+                    : 'The scene does not start by itself, and the dialogue is not linked to a character.'}
                 </p>
               </div>
             )}

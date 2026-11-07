@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -116,6 +118,15 @@ const fo4::Subrecord* subrecordOf(const fo4::Plugin& plugin, const fo4::FormKey&
         if (sub.signature == wanted) return &sub;
     }
     return nullptr;
+}
+
+std::vector<int> savedStageBytes(const std::filesystem::path& path, const std::string& info) {
+    const auto saved = fo4::read_plugin_file(path);
+    const auto* tiqs = subrecordOf(saved, fo4::FormKey::parse(info), "TIQS");
+    REQUIRE(tiqs != nullptr);
+    std::vector<int> out;
+    for (const auto byte : tiqs->data) out.push_back(std::to_integer<int>(byte));
+    return out;
 }
 
 }
@@ -334,4 +345,143 @@ TEST_CASE("INFO conditions read back by get_dialogue write through SetInfo uncha
     REQUIRE(conditions.size() == 1);
     REQUIRE(editInfo(backend, info, nlohmann::json{{"conditions", conditions}}).has_value());
     CHECK(dialogueOf(backend, quest) == before);
+}
+
+TEST_CASE("CreateInfo setStageOnEnd writes the parent quest stage subrecord before NAM0") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root, 0u);
+    const auto quest = freshQuest(backend);
+    const auto topic = freshTopic(backend, quest);
+    const auto info = createdKey(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json{{"setStageOnEnd", 30}}})));
+    const auto created = firstInfoOf(backend, quest);
+    CHECK(created.at("setStageOnEnd") == 30);
+    CHECK(created.at("setStageOnBegin").is_null());
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(savedStageBytes(root / "Patch.esp", info) == std::vector<int>{0xFF, 0xFF, 0x1E, 0x00});
+    const auto saved = fo4::read_plugin_file(root / "Patch.esp");
+    const auto* record = fo4::find_record(saved, fo4::FormKey::parse(info));
+    REQUIRE(record != nullptr);
+    std::vector<std::string> tags;
+    for (const auto& sub : record->subrecords) tags.push_back(sub.signature.to_string());
+    const auto nam0 = std::find(tags.begin(), tags.end(), "NAM0");
+    REQUIRE(nam0 != tags.end());
+    REQUIRE(nam0 != tags.begin());
+    CHECK(*(nam0 - 1) == "TIQS");
+
+    fo4ide::plugin::RadiclePluginBackend restarted;
+    loadPatch(restarted, root / "Patch.esp");
+    CHECK(dialogueOf(restarted, quest) == dialogueOf(backend, quest));
+}
+
+TEST_CASE("CreateInfo and SetInfo refuse parent stage 65535 and -1 and leave the plugin unchanged") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root, 0u);
+    const auto quest = freshQuest(backend);
+    const auto topic = freshTopic(backend, quest);
+    const auto info = createdKey(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json{{"flags", 1}}})));
+    const auto snapshot = dialogueOf(backend, quest);
+    for (const int stage : {65535, -1}) {
+        CHECK(errorType(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+            "Patch.esp", topic, nlohmann::json{{"setStageOnBegin", stage}}}))) == "InvalidDialogueArgument");
+        CHECK(errorType(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+            "Patch.esp", topic, nlohmann::json{{"setStageOnEnd", stage}}}))) == "InvalidDialogueArgument");
+        CHECK(errorType(editInfo(backend, info, nlohmann::json{{"setStageOnBegin", stage}})) ==
+              "InvalidDialogueArgument");
+        CHECK(errorType(editInfo(backend, info, nlohmann::json{{"setStageOnEnd", stage}})) ==
+              "InvalidDialogueArgument");
+    }
+    CHECK(dialogueOf(backend, quest) == snapshot);
+}
+
+TEST_CASE("SetInfo with only flags keeps an existing parent stage subrecord") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root, 0u);
+    const auto quest = freshQuest(backend);
+    const auto topic = freshTopic(backend, quest);
+    const auto info = createdKey(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json{{"setStageOnBegin", 12}, {"setStageOnEnd", 20}}})));
+    REQUIRE(editInfo(backend, info, nlohmann::json{{"flags", 2}}).has_value());
+    const auto edited = firstInfoOf(backend, quest);
+    CHECK(edited.at("flags") == 2);
+    CHECK(edited.at("setStageOnBegin") == 12);
+    CHECK(edited.at("setStageOnEnd") == 20);
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(savedStageBytes(root / "Patch.esp", info) == std::vector<int>{0x0C, 0x00, 0x14, 0x00});
+}
+
+TEST_CASE("SetInfo setStageOnEnd replaces only the end half of the parent stage subrecord") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root, 0u);
+    const auto quest = freshQuest(backend);
+    const auto topic = freshTopic(backend, quest);
+    const auto info = createdKey(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json{{"setStageOnBegin", 12}, {"setStageOnEnd", 20}}})));
+    REQUIRE(editInfo(backend, info, nlohmann::json{{"setStageOnEnd", 30}}).has_value());
+    const auto edited = firstInfoOf(backend, quest);
+    CHECK(edited.at("setStageOnBegin") == 12);
+    CHECK(edited.at("setStageOnEnd") == 30);
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(savedStageBytes(root / "Patch.esp", info) == std::vector<int>{0x0C, 0x00, 0x1E, 0x00});
+}
+
+TEST_CASE("SetInfo setStageOnBegin null clears only the begin half and clearing both removes the subrecord") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root, 0u);
+    const auto quest = freshQuest(backend);
+    const auto topic = freshTopic(backend, quest);
+    const auto info = createdKey(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json{{"setStageOnBegin", 12}, {"setStageOnEnd", 20}}})));
+    REQUIRE(editInfo(backend, info, nlohmann::json{{"setStageOnBegin", nullptr}}).has_value());
+    const auto halfCleared = firstInfoOf(backend, quest);
+    CHECK(halfCleared.at("setStageOnBegin").is_null());
+    CHECK(halfCleared.at("setStageOnEnd") == 20);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    CHECK(savedStageBytes(root / "Patch.esp", info) == std::vector<int>{0xFF, 0xFF, 0x14, 0x00});
+
+    REQUIRE(editInfo(backend, info, nlohmann::json{{"setStageOnEnd", nullptr}}).has_value());
+    const auto bothCleared = firstInfoOf(backend, quest);
+    CHECK_FALSE(bothCleared.contains("setStageOnBegin"));
+    CHECK_FALSE(bothCleared.contains("setStageOnEnd"));
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto saved = fo4::read_plugin_file(root / "Patch.esp");
+    CHECK(subrecordOf(saved, fo4::FormKey::parse(info), "TIQS") == nullptr);
+}
+
+TEST_CASE("INFO created without stage keys has no parent stage keys and no TIQS subrecord") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    openPatch(backend, root, 0u);
+    const auto quest = freshQuest(backend);
+    const auto topic = freshTopic(backend, quest);
+    const auto plain = createdKey(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json::object()})));
+    const auto nullStages = createdKey(backend.invokeBackend("CreateInfo", nlohmann::json::array({
+        "Patch.esp", topic, nlohmann::json{{"setStageOnBegin", nullptr}, {"setStageOnEnd", nullptr}}})));
+    const auto infos = dialogueOf(backend, quest).at("topics").at(0).at("infos");
+    REQUIRE(infos.size() == 2);
+    for (const auto& row : infos) {
+        CHECK_FALSE(row.contains("setStageOnBegin"));
+        CHECK_FALSE(row.contains("setStageOnEnd"));
+    }
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto saved = fo4::read_plugin_file(root / "Patch.esp");
+    CHECK(subrecordOf(saved, fo4::FormKey::parse(plain), "TIQS") == nullptr);
+    CHECK(subrecordOf(saved, fo4::FormKey::parse(nullStages), "TIQS") == nullptr);
 }

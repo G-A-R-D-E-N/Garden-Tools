@@ -93,6 +93,27 @@ const FLOWS = [
     },
   },
   {
+    name: 'wizard-choice-review',
+    label: 'New quest',
+    async pick(page) {
+      await page.getByRole('button', { name: /^Choice with two endings/ }).click();
+      await page.getByLabel('Which plugin should the quest go in?').selectOption('Patch.esp');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await page.getByLabel("What is the quest's internal name?").fill('RaiderDeal');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await chooseRecord(page, 'CourierMother');
+      await page.getByLabel('What is the first choice?').fill('Spare the raiders');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await page.getByLabel('What is the second choice?').fill('Hand the raiders over');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await page.getByLabel('What does the player get for the first choice?').fill('50 caps');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await page.getByLabel('What does the player get for the second choice?').fill('20 caps');
+      await page.locator('.wizard-nav').getByRole('button', { name: 'Next', exact: true }).click();
+      await page.locator('.wizard-review').waitFor();
+    },
+  },
+  {
     name: 'quest-flow-chart',
     label: 'Quest',
     async pick(page) {
