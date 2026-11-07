@@ -160,6 +160,95 @@ RADICLE_API radicle_status radicle_env_cell_landscape(const radicle_env* env,
                                                       radicle_form_key cell,
                                                       const radicle_record** out_record);
 
+typedef struct radicle_cell_view radicle_cell_view;
+
+typedef struct radicle_cell_summary {
+  radicle_form_key key;
+  const char* editor_id;
+  radicle_name_kind name_kind;
+  const char* name_text;
+  uint32_t name_string_id;
+  int32_t interior;
+  int32_t has_grid;
+  int32_t grid_x;
+  int32_t grid_y;
+  int32_t has_worldspace;
+  radicle_form_key worldspace;
+  size_t winning_plugin;
+  int32_t localized;
+} radicle_cell_summary;
+
+typedef struct radicle_scol_part {
+  const char* model_path;
+  const radicle_static_placement* placements;
+  size_t placement_count;
+} radicle_scol_part;
+
+typedef struct radicle_base_object_info {
+  radicle_form_key key;
+  char signature[5];
+  const char* editor_id;
+  const char* type_name;
+  const char* model_path;
+  int32_t editor_marker;
+  int32_t has_decal;
+  const char* decal_diffuse;
+  int32_t has_decal_width;
+  float decal_width;
+  int32_t has_decal_height;
+  float decal_height;
+  const radicle_scol_part* scol_parts;
+  size_t scol_part_count;
+  void* internal;
+} radicle_base_object_info;
+
+typedef struct radicle_cell_reference {
+  radicle_form_key key;
+  const char* record_type;
+  const char* editor_id;
+  int32_t has_base;
+  radicle_form_key base;
+  const radicle_base_object_info* base_info;
+  float position[3];
+  float rotation[3];
+  float scale;
+  int32_t persistent;
+  int32_t initially_disabled;
+  size_t winning_plugin;
+} radicle_cell_reference;
+
+RADICLE_API radicle_status radicle_env_resolve_cell(const radicle_env* env,
+                                                    const char* id,
+                                                    radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_env_resolve_worldspace(const radicle_env* env,
+                                                          const char* id,
+                                                          radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_env_find_cell_at_grid(const radicle_env* env,
+                                                         radicle_form_key world,
+                                                         int32_t x,
+                                                         int32_t y,
+                                                         radicle_form_key* out_key);
+/* The view must be freed with radicle_cell_view_free and must not outlive env; its form_key.plugin pointers borrow from env. */
+RADICLE_API radicle_status radicle_env_cell_view(const radicle_env* env,
+                                                 radicle_form_key cell,
+                                                 radicle_cell_view** out_view);
+RADICLE_API radicle_status radicle_cell_view_summary(const radicle_cell_view* view,
+                                                     radicle_cell_summary* out_summary);
+RADICLE_API size_t radicle_cell_view_reference_count(const radicle_cell_view* view);
+RADICLE_API radicle_status radicle_cell_view_reference(const radicle_cell_view* view,
+                                                       size_t index,
+                                                       radicle_cell_reference* out_reference);
+RADICLE_API radicle_status radicle_cell_view_scol_part(const radicle_cell_view* view,
+                                                       size_t reference_index,
+                                                       size_t part_index,
+                                                       radicle_scol_part* out_part);
+RADICLE_API void radicle_cell_view_free(radicle_cell_view* view);
+/* The info must be freed with radicle_base_object_info_free and must not outlive env; its form_key.plugin pointers borrow from env. */
+RADICLE_API radicle_status radicle_env_base_object_info(const radicle_env* env,
+                                                        radicle_form_key base,
+                                                        radicle_base_object_info** out_info);
+RADICLE_API void radicle_base_object_info_free(radicle_base_object_info* info);
+
 #ifdef __cplusplus
 }
 #endif

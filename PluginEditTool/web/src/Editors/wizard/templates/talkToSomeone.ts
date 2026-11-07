@@ -21,4 +21,13 @@ export const TALK_TO_SOMEONE: QuestTemplate = {
     { slot: 'person', name: 'Person', kind: 'reference' },
     { slot: 'location', name: 'Location', kind: 'location' },
   ],
+  scene: {
+    phases: ['Meet', 'Talk'],
+    actors: ['person'],
+    actions: [{ kind: 'dialogue', phase: 1, actor: 'person' }],
+  },
+  dialogue: {
+    topic: 'Are you {person}? I was sent to speak with you.',
+    replies: ['I have been waiting for you at {location}.', 'Thanks for coming. Your reward is {reward}.'],
+  },
 };
