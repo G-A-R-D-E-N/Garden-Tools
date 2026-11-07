@@ -24,11 +24,18 @@ const FILL_BY_RECORD_TYPE: Record<string, { alias: AliasKind; key: string }> = {
 
 export const fill = (text: string, answers: Answers): string => text.replace(/\{(\w+)\}/g, (_, key: string) => {
   const value = answers[key];
-  if (value === undefined) throw new Error(`No answer for {${key}}.`);
-  return value;
+  if (value === undefined || value.trim() === '') throw new Error(`No answer for {${key}}.`);
+  return value.trim();
 });
 
 export const editorIdFrom = (name: string): string => name.trim().replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+export const questNameError = (name: string): string | null => {
+  const editorId = editorIdFrom(name);
+  if (!editorId) return 'The quest name needs at least one letter or number.';
+  if (/^\d/.test(editorId)) return 'The quest name cannot start with a number.';
+  return null;
+};
 
 export const aliasIndex = (template: QuestTemplate, slot: string): number => {
   const index = template.aliases.findIndex(alias => alias.slot === slot);
@@ -84,15 +91,18 @@ export function buildQuestCalls(template: QuestTemplate, answers: Answers, formK
     id, kind: alias.kind, name: alias.name, flags: null, collectionEntries: [],
     fill: linkFill(template, alias.slot, formKeys),
   }));
-  const editorId = editorIdFrom(answers.name);
-  if (!editorId) throw new Error('The quest name needs at least one letter or number.');
+  const problem = questNameError(answers.name);
+  if (problem) throw new Error(problem);
   return [
-    { method: 'CreateRecord', args: [plugin, 'QUST', { schema: true, editorId }] },
-    { method: 'SetField', args: [plugin, NEW_RECORD, 'QUST\\Flags', START_GAME_ENABLED] },
+    { method: 'CreateRecord', args: [plugin, 'QUST', { schema: true, editorId: editorIdFrom(answers.name) }] },
     { method: 'SetQuestStages', args: [plugin, NEW_RECORD, stagesJson(stages)] },
     { method: 'SetQuestAliases', args: [plugin, NEW_RECORD, aliasesJson(aliases)] },
     { method: 'SetQuestObjectives', args: [plugin, NEW_RECORD, objectivesJson(objectives)] },
   ];
+}
+
+export function startGameCall(plugin: string): BackendCall {
+  return { method: 'SetField', args: [plugin, NEW_RECORD, 'QUST\\Flags', START_GAME_ENABLED] };
 }
 
 const createdKey = (raw: unknown): string | undefined =>

@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { Backend } from '../../backend';
-import { buildQuestCalls, isLinked, NEW_RECORD, runQuestCalls, type Answers, type BackendCall, type QuestRun } from './questCalls';
+import { buildCreateCalls } from './createCalls';
+import { buildQuestCalls, fill, isLinked, NEW_RECORD, questNameError, runQuestCalls, type Answers, type BackendCall, type QuestRun } from './questCalls';
 import { buildSceneCalls, describeSceneAndDialogue, NEW_BRANCH, NEW_SCENE, NEW_TOPIC } from './sceneCalls';
 import type { QuestTemplate } from './templateTypes';
 import { WIZARD_HELP_TOPICS } from './wizardHelpTopics';
@@ -51,10 +52,9 @@ const ANSWERS = {
 it('Detects: a template edit silently changing the quest it creates, because fetch-an-item must keep its exact calls and JSON', () => {
   expect(buildQuestCalls(FETCH_AN_ITEM, ANSWERS, FORM_KEYS)).toEqual([
     { method: 'CreateRecord', args: ['Patch.esp', 'QUST', { schema: true, editorId: 'The_Lost_Locket' }] },
-    { method: 'SetField', args: ['Patch.esp', NEW_RECORD, 'QUST\\Flags', '1'] },
     {
       method: 'SetQuestStages',
-      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Rusty Locket."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You found Rusty Locket. Take it back to Courier Bob."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You gave Rusty Locket to Courier Bob. Reward: 50 caps."}]}]'],
+      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Rusty Locket.","conditions":[]}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You found Rusty Locket. Take it back to Courier Bob.","conditions":[]}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You gave Rusty Locket to Courier Bob. Reward: 50 caps.","conditions":[]}]}]'],
     },
     {
       method: 'SetQuestAliases',
@@ -71,6 +71,18 @@ it('Detects: a quest name with no letters or digits sending an empty editor ID t
   expect(() => buildQuestCalls(FETCH_AN_ITEM, { ...ANSWERS, name: '!!! ' }, FORM_KEYS)).toThrow('at least one letter or number');
 });
 
+it('Detects: a quest name starting with a digit reaching CreateRecord, because the editor ID would be rejected by the game', () => {
+  expect(questNameError('!!! ')).toBe('The quest name needs at least one letter or number.');
+  expect(questNameError('1st Locket')).toBe('The quest name cannot start with a number.');
+  expect(questNameError('The Lost Locket')).toBeNull();
+  expect(() => buildQuestCalls(FETCH_AN_ITEM, { ...ANSWERS, name: '2 Locket' }, FORM_KEYS)).toThrow('cannot start with a number');
+});
+
+it('Detects: stray spaces in an answer reaching a journal line or objective, because the text would show a gap before the punctuation', () => {
+  expect(fill('Find {item} at {location}', { item: '  Rusty Locket ', location: 'Abandoned Mill' })).toBe('Find Rusty Locket at Abandoned Mill');
+  expect(() => fill('Go to {location}.', { location: '   ' })).toThrow('No answer for {location}.');
+});
+
 it('Detects: an unanswered {blank} making the quest say "undefined" in its journal, because the build must stop instead', () => {
   expect(() => buildQuestCalls(FETCH_AN_ITEM, { plugin: 'Patch.esp', name: 'The Lost Locket' }, FORM_KEYS)).toThrow('{location}');
 });
@@ -84,7 +96,7 @@ it('Detects: an item with no location alias to place it at, so the item stays un
   const noLocation = { ...FETCH_AN_ITEM, objectives: [], aliases: FETCH_AN_ITEM.aliases.filter(alias => alias.kind !== 'location') };
   expect(isLinked(noLocation, 'item')).toBe(false);
   expect(isLinked(FETCH_AN_ITEM, 'item')).toBe(true);
-  const aliases = jsonArg<{ name: string; createReference?: unknown }[]>(buildQuestCalls(noLocation, ANSWERS, FORM_KEYS)[3]);
+  const aliases = jsonArg<{ name: string; createReference?: unknown }[]>(buildQuestCalls(noLocation, ANSWERS, FORM_KEYS)[2]);
   expect(aliases.find(alias => alias.name === 'Item')?.createReference).toBeUndefined();
 });
 
@@ -92,10 +104,10 @@ it('Detects: a template whose stages, objectives, aliases or question help ids d
   const helpIds = WIZARD_HELP_TOPICS.map(topic => topic.id);
   for (const template of QUEST_TEMPLATES) {
     const calls = buildQuestCalls(template, sampleAnswers(template), FORM_KEYS);
-    expect(calls.map(call => call.method)).toEqual(['CreateRecord', 'SetField', 'SetQuestStages', 'SetQuestAliases', 'SetQuestObjectives']);
-    const stages = jsonArg<ParsedStage[]>(calls[2]);
-    const aliases = jsonArg<{ id: number }[]>(calls[3]);
-    const objectives = jsonArg<ParsedObjective[]>(calls[4]);
+    expect(calls.map(call => call.method)).toEqual(['CreateRecord', 'SetQuestStages', 'SetQuestAliases', 'SetQuestObjectives']);
+    const stages = jsonArg<ParsedStage[]>(calls[1]);
+    const aliases = jsonArg<{ id: number }[]>(calls[2]);
+    const objectives = jsonArg<ParsedObjective[]>(calls[3]);
     const indexes = stages.map(stage => stage.index);
     expect(indexes.filter((index, i) => i > 0 && index <= indexes[i - 1])).toEqual([]);
     expect(stages.some(stage => stage.logEntries.some(entry => (entry.flags & 1) === 1))).toBe(true);
@@ -111,17 +123,17 @@ it('Detects: a template whose stages, objectives, aliases or question help ids d
   }
 });
 
-it('Detects: the escort failure stage marked as completing the quest (flag 1) instead of failing it (flag 2), so a dead escortee would count as a success', () => {
-  expect(buildQuestCalls(ESCORT, ESCORT_ANSWERS, FORM_KEYS)[2]).toEqual({
+it('Detects: the escort failure stage marked as completing the quest (flag 1) instead of failing it (flag 2), or the report stage completing before the player reports, so a dead escortee would count as a success', () => {
+  expect(buildQuestCalls(ESCORT, ESCORT_ANSWERS, FORM_KEYS)[1]).toEqual({
     method: 'SetQuestStages',
-    args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Find Old Hannah and agree to take them to Sanctuary."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Take Old Hannah to Sanctuary."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"Old Hannah reached Sanctuary. Report to Courier Bob for your reward: 50 caps."}]},{"index":90,"flags":0,"logEntries":[{"flags":2,"logText":"Old Hannah died. The quest failed."}]}]'],
+    args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Find Old Hannah and agree to take them to Sanctuary.","conditions":[]}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Take Old Hannah to Sanctuary.","conditions":[]}]},{"index":30,"flags":0,"logEntries":[{"flags":0,"logText":"Old Hannah reached Sanctuary. Report to Courier Bob for your reward: 50 caps.","conditions":[]}]},{"index":40,"flags":0,"logEntries":[{"flags":1,"logText":"You reported to Courier Bob. Reward: 50 caps.","conditions":[]}]},{"index":90,"flags":0,"logEntries":[{"flags":2,"logText":"Old Hannah died. The quest failed.","conditions":[]}]}]'],
   });
 });
 
 it('Detects: the two-ending template leaving one ending open (stage 40 not completing), so the player who makes the second choice would never finish the quest', () => {
-  expect(buildQuestCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS)[2]).toEqual({
+  expect(buildQuestCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS)[1]).toEqual({
     method: 'SetQuestStages',
-    args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Talk to Courier Bob to hear your choice."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Decide between two options: Spare the raiders or Hand the raiders over."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Spare the raiders. Reward: 50 caps."}]},{"index":40,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Hand the raiders over. Reward: 20 caps."}]}]'],
+    args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Talk to Courier Bob to hear your choice.","conditions":[]}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Decide between two options: Spare the raiders or Hand the raiders over.","conditions":[]}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Spare the raiders. Reward: 50 caps.","conditions":[]}]},{"index":40,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Hand the raiders over. Reward: 20 caps.","conditions":[]}]}]'],
   });
 });
 
@@ -136,10 +148,9 @@ const KILL_ANSWERS = {
 it('Detects: the kill-a-target quest calls changing from what the wizard made before, because that template has no scene and must keep its exact quest calls', () => {
   expect(buildQuestCalls(KILL_A_TARGET, KILL_ANSWERS, FORM_KEYS)).toEqual([
     { method: 'CreateRecord', args: ['Patch.esp', 'QUST', { schema: true, editorId: 'Mill_Bandit' }] },
-    { method: 'SetField', args: ['Patch.esp', NEW_RECORD, 'QUST\\Flags', '1'] },
     {
       method: 'SetQuestStages',
-      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Raider Boss."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You defeated Raider Boss. Report back to Courier Bob."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You reported to Courier Bob. Reward: 50 caps."}]}]'],
+      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Raider Boss.","conditions":[]}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You defeated Raider Boss. Report back to Courier Bob.","conditions":[]}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You reported to Courier Bob. Reward: 50 caps.","conditions":[]}]}]'],
     },
     {
       method: 'SetQuestAliases',
@@ -242,10 +253,9 @@ it('Detects: the runner sending a choice placeholder to the game as text, so the
     madeMethods.includes(name) ? JSON.stringify({ formKey: sequence[issued++] }) : 'ok'
   ))]));
   const run: QuestRun = { formKey: null, made: new Map() };
-  await runQuestCalls(backend as unknown as Backend, [
-    ...buildQuestCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS),
-    ...buildSceneCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS),
-  ], run);
+  await runQuestCalls(backend as unknown as Backend, buildCreateCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS), run);
+  expect(backend.SetField.mock.invocationCallOrder[0]).toBeGreaterThan(backend.SetDialogueBranchStart.mock.invocationCallOrder[1]);
+  expect(backend.SetField).toHaveBeenCalledWith('Patch.esp', '000D00:Patch.esp', 'QUST\\Flags', '1');
   expect(backend.CreateDialogueTopic).toHaveBeenCalledWith('Patch.esp', '000D00:Patch.esp', expect.objectContaining({ branch: '000E00:Patch.esp' }));
   expect(backend.CreateDialogueTopic).toHaveBeenCalledWith('Patch.esp', '000D00:Patch.esp', expect.objectContaining({ branch: '001100:Patch.esp' }));
   expect(backend.CreateInfo).toHaveBeenCalledWith('Patch.esp', '000F00:Patch.esp', expect.objectContaining({
@@ -359,4 +369,59 @@ it('Detects: the review sentences for Talk to someone dropping the scene parts o
     'The player says: "Are you Courier Bob? I was sent to speak with you."',
     'The reply: "I have been waiting for you at Abandoned Mill." "Thanks for coming. Your reward is 50 caps."',
   ]);
+});
+
+it('Detects: the start-game flag written before the objective, alias or scene calls, so a failure later leaves a start-enabled half-built quest', () => {
+  for (const template of QUEST_TEMPLATES) {
+    const calls = buildCreateCalls(template, sampleAnswers(template), FORM_KEYS);
+    expect(calls[calls.length - 1]).toEqual({ method: 'SetField', args: ['Patch.esp', NEW_RECORD, 'QUST\\Flags', '1'] });
+    expect(calls.filter(call => call.method === 'SetField')).toHaveLength(1);
+  }
+});
+
+it('Detects: the start-game flag being sent before the choice dialogue calls, so a failure in them would leave a start-enabled half-built quest', () => {
+  const calls = buildCreateCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS);
+  const methods = calls.map(call => call.method);
+  expect(calls[calls.length - 1]).toEqual({ method: 'SetField', args: ['Patch.esp', NEW_RECORD, 'QUST\\Flags', '1'] });
+  expect(methods.indexOf('SetField')).toBe(methods.length - 1);
+  expect(methods.lastIndexOf('CreateInfo')).toBeLessThan(methods.indexOf('SetField'));
+  expect(methods.lastIndexOf('SetDialogueBranchStart')).toBeLessThan(methods.indexOf('SetField'));
+});
+
+const CREATE_KEYS: Record<string, string> = {
+  CreateRecord: '000D00:Patch.esp', CreateDialogueBranch: '000E00:Patch.esp', CreateDialogueTopic: '000F00:Patch.esp',
+  CreateInfo: '001000:Patch.esp', CreateScene: '001100:Patch.esp',
+};
+const CREATE_METHODS = [
+  'CreateRecord', 'SetField', 'SetQuestStages', 'SetQuestObjectives', 'SetQuestAliases', 'CreateScene', 'AddScenePhase', 'AddSceneActor',
+  'SetSceneActor', 'AddSceneAction', 'SetSceneAction', 'CreateDialogueBranch', 'CreateDialogueTopic', 'CreateInfo',
+];
+
+function createBackend(overrides: Record<string, unknown> = {}) {
+  return {
+    ...Object.fromEntries(CREATE_METHODS.map(name => [name, vi.fn(async () => (
+      name in CREATE_KEYS ? JSON.stringify({ formKey: CREATE_KEYS[name] }) : 'ok'
+    ))])),
+    ...overrides,
+  } as Record<string, ReturnType<typeof vi.fn>>;
+}
+
+it('Detects: the start-game flag is written only after the scene and dialogue calls all succeed, so a late failure leaves the quest not started by the game', async () => {
+  const backend = createBackend();
+  const run: QuestRun = { formKey: null, made: new Map() };
+  await runQuestCalls(backend as unknown as Backend, buildCreateCalls(TALK_TO_SOMEONE, TALK_ANSWERS, FORM_KEYS), run);
+  expect(backend.SetField.mock.invocationCallOrder[0]).toBeGreaterThan(backend.SetSceneAction.mock.invocationCallOrder[0]);
+  expect(backend.SetField).toHaveBeenCalledWith('Patch.esp', CREATE_KEYS.CreateRecord, 'QUST\\Flags', '1');
+});
+
+it('Detects: a dialogue topic failure after the quest was staged never reaches the start-game flag, and the run keeps the made quest key', async () => {
+  const backend = createBackend({
+    CreateDialogueTopic: vi.fn(async () => { throw new Error('Localized plugin refuses dialogue topics.'); }),
+  });
+  const run: QuestRun = { formKey: null, made: new Map() };
+  await expect(runQuestCalls(backend as unknown as Backend, buildCreateCalls(TALK_TO_SOMEONE, TALK_ANSWERS, FORM_KEYS), run))
+    .rejects.toThrow('Localized plugin refuses dialogue topics.');
+  expect(backend.SetQuestObjectives).toHaveBeenCalled();
+  expect(backend.SetField).not.toHaveBeenCalled();
+  expect(run.formKey).toBe(CREATE_KEYS.CreateRecord);
 });

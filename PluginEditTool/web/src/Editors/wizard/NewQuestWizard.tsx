@@ -8,8 +8,9 @@ import HelpDrawer from '../help/HelpDrawer';
 import HelpTip from '../help/HelpTip';
 import { SCREEN_TOPICS } from '../help/helpContent';
 import { ErrorNote } from '../quest/questControls';
-import { buildQuestCalls, isLinked, runQuestCalls, type Answers, type FormKeys, type QuestRun } from './questCalls';
-import { buildSceneCalls, describeSceneAndDialogue } from './sceneCalls';
+import { buildCreateCalls } from './createCalls';
+import { isLinked, questNameError, runQuestCalls, type Answers, type FormKeys, type QuestRun } from './questCalls';
+import { describeSceneAndDialogue } from './sceneCalls';
 import type { PluginQuestion, QuestTemplate, RecordQuestion, WizardStep } from './templateTypes';
 import { QUEST_TEMPLATES } from './templates/registry';
 import './NewQuestWizard.css';
@@ -51,6 +52,13 @@ export default function NewQuestWizard({ onBack, onCreated }: {
   const flow: WizardStep[] = template ? [PLUGIN_QUESTION, ...template.questions] : [];
   const current = flow[step];
   const answered = (question: WizardStep) => (answers[question.id] ?? '').trim() !== '';
+  const placesItems = template !== null && template.questions.some(question =>
+    question.kind === 'record' && question.recordType === 'MISC' && isLinked(template, question.id) && answered(question));
+  const problem = current && current.id === 'name' ? questNameError(answers.name ?? '') : null;
+  const choices = template?.choices;
+  const advanceNote = choices
+    ? `The choices set stage ${choices.options.map(option => option.setsStage).join(' or ')}, which finishes the quest. They are offered from stage ${choices.fromStage}, so the quest works as soon as it starts. Nothing in the wizard moves the quest through any other stage.`
+    : 'Nothing moves the player past the first stage yet. Add the fragments, dialogue results or scripts that set the next stage in the quest editor after you create the quest.';
   const setAnswer = (id: string, value: string) => setAnswers(prev => ({ ...prev, [id]: value }));
 
   const choose = (next: QuestTemplate) => {
@@ -81,17 +89,31 @@ export default function NewQuestWizard({ onBack, onCreated }: {
     setMadeKey(null);
     const run: QuestRun = { formKey: null, made: new Map() };
     try {
-      await runQuestCalls(backend, [...buildQuestCalls(template, answers, formKeys), ...buildSceneCalls(template, answers, formKeys)], run);
-      onCreated({ formKey: run.formKey ?? '', plugin: answers.plugin });
+      await runQuestCalls(backend, buildCreateCalls(template, answers, formKeys), run);
     } catch (e) {
       const failure = friendlyError(errorText(e));
       setError(run.formKey
         ? { ...failure, text: `${failure.text} Part of the quest was made. Open it to see what is there.` }
         : failure);
       setMadeKey(run.formKey);
-    } finally {
       setBusy(false);
+      return;
     }
+    const formKey = run.formKey ?? '';
+    try {
+      await backend.CreateSeqFile(answers.plugin, '');
+    } catch (e) {
+      const failure = friendlyError(errorText(e));
+      setError({
+        ...failure,
+        text: `The quest was made, but its SEQ file was not written. ${failure.text} Create it from the record menu (Create SEQ file) before testing.`,
+      });
+      setMadeKey(formKey);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    onCreated({ formKey, plugin: answers.plugin });
   };
 
   return (
@@ -142,10 +164,11 @@ export default function NewQuestWizard({ onBack, onCreated }: {
               </button>
             </div>
           )}
+          {answered(current) && problem && <p className="editor-purpose" role="note">{problem}</p>}
           <div className="wizard-nav">
             <button type="button" className="sidebar-action-btn"
               onClick={() => (step === 0 ? setTemplate(null) : setStep(step - 1))}>Previous</button>
-            <button type="button" className="sidebar-action-btn" disabled={!answered(current)}
+            <button type="button" className="sidebar-action-btn" disabled={!answered(current) || problem !== null}
               onClick={() => setStep(step + 1)}>Next</button>
           </div>
         </div>
@@ -155,9 +178,14 @@ export default function NewQuestWizard({ onBack, onCreated }: {
         <div className="wizard-body">
           <p className="editor-purpose">
             Check the answers. The wizard writes the internal name, the journal lines, the objectives and the alias
-            names. It makes the quest start by itself with the game, at its first stage. It links each NPC and
-            location you picked to its alias. It places each item you picked at the location as a new copy. A record
-            marked not linked still has to be set in the Creation Kit.
+            names. It sets the quest to start with the game and marks the first stage as the start-up stage. When the
+            quest is made, it also writes the plugin&apos;s SEQ file, the same as the record menu&apos;s Create SEQ file,
+            so the game starts the quest. It links each NPC and location you picked to its alias.
+            {placesItems && ' It places each item you picked at the location as a new copy, so an item you already placed in the world with the mapper will be duplicated.'}
+            {' '}A record marked not linked still has to be set in the Creation Kit.
+          </p>
+          <p className="editor-purpose" role="note">
+            {advanceNote} <HelpTip topicId="wizard-stage-advance" />
           </p>
           <dl className="wizard-review">
             {flow.map(question => (
@@ -178,7 +206,7 @@ export default function NewQuestWizard({ onBack, onCreated }: {
               </ul>
               <p className="editor-purpose">
                 {template.choices
-                  ? `Each choice is offered only by ${answers[template.choices.speaker]}, while the quest is at stage ${template.choices.fromStage} or ${template.choices.toStage}. Picking one sets stage ${template.choices.options.map(option => option.setsStage).join(' or ')}, which finishes the quest. Nothing sets stage ${template.choices.fromStage} or ${template.choices.toStage} yet: the quest only offers the choices once something has started it at one of those stages. The wizard marks the first stage as the start-up stage, but nothing moves the quest from stage ${template.choices.fromStage} to stage ${template.choices.toStage}, and nothing shows the objectives to the player yet.`
+                  ? `Each choice is offered only by ${answers[template.choices.speaker]}, and only while the quest is at a stage from ${template.choices.fromStage} to ${template.choices.toStage}. Nothing shows the objectives to the player yet.`
                   : 'The scene does not start by itself, and the dialogue is not linked to a character.'}
               </p>
             </div>

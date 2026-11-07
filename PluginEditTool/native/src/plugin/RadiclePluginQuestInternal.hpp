@@ -116,7 +116,9 @@ void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
                            std::vector<fo4::CtdaCondition>& conditions);
 bool aliasConditionRun(const fo4::forms::QuestAlias& alias,
                        std::vector<fo4::CtdaCondition>& conditions);
-nlohmann::json questAliasJson(const fo4::Plugin& plugin, const fo4::forms::QuestAlias& alias);
+nlohmann::json questAliasJson(const fo4::Plugin& plugin,
+                              const fo4::forms::QuestAlias& alias,
+                              const fo4::FormLinkTypeLookup& ownerTypes);
 std::optional<Error> nonFiniteConditionError(const fo4::CtdaCondition& condition);
 std::optional<Error> parseQuestStageCondition(const nlohmann::json& row,
                                               const fo4::Plugin& plugin,
@@ -145,7 +147,9 @@ std::optional<Error> adapterConditionUnrepresentable(
 std::optional<Error> existingQuestVmadUnrepresentable(const fo4::Record& record,
                                                       bool aliases,
                                                       bool stages);
-fo4::FormLinkTypeLookup questOwnerTypes(const fo4::Plugin& plugin, const fo4::ConflictGraph& graph);
+fo4::FormLinkTypeLookup questOwnerTypes(const fo4::Plugin& plugin,
+                                        const fo4::ConflictGraph& graph,
+                                        bool refuseUnresolved = true);
 std::optional<Error> existingAliasesUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::FormKey& quest,

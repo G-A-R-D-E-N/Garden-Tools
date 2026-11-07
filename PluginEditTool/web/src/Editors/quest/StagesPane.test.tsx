@@ -16,11 +16,12 @@ it('Detects: a log entry offers no Conditions editor, because native rejects Sta
   expect(screen.queryByRole('button', { name: /Conditions/ })).toBeNull();
 });
 
-it('Detects: the Stages pane says log-entry conditions are kept when you save and that this screen cannot edit them', async () => {
+it('Detects: the Stages pane says conditions stay with their log entry when you save and that this screen cannot edit them', async () => {
   stubBackend();
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
-  expect(await screen.findByText(/Log-entry conditions are kept when you save/)).toBeTruthy();
+  expect(await screen.findByText(/Conditions stay with their log entry when you save/)).toBeTruthy();
+  expect(screen.getByText(/This editor cannot show or edit conditions/)).toBeTruthy();
 });
 
 it('Detects: clicking a flow chart box highlights that stage card, so the chart and the stage list stay in step', async () => {
@@ -144,14 +145,14 @@ it('Detects: a rejected stage save does not drop the stage it tried to remove fr
 
 it('Detects: changing the outcome of a log entry with no journal text does not write an empty log text', async () => {
   const backend = stubBackend({
-    GetQuestStages: vi.fn(async () => JSON.stringify({ stages: [{ index: 10, flags: 0, logEntries: [{ logText: '', note: '', flags: 0 }] }] })),
+    GetQuestStages: vi.fn(async () => JSON.stringify({ stages: [{ index: 10, flags: 0, logEntries: [{ logText: '', note: '', flags: 0, conditions: [] }] }] })),
   });
   render(<QuestEditor onBack={() => {}} />);
   await openQuest();
   const outcome = await screen.findByRole('group', { name: 'Stage 10 log entry 1 outcome' });
   fireEvent.click(within(outcome).getByRole('checkbox', { name: 'Completes the quest' }));
   await waitFor(() => expect(backend.SetQuestStages).toHaveBeenCalledTimes(1));
-  expect(JSON.parse(backend.SetQuestStages.mock.calls[0][2])[0].logEntries[0]).toEqual({ flags: 1 });
+  expect(JSON.parse(backend.SetQuestStages.mock.calls[0][2])[0].logEntries[0]).toEqual({ flags: 1, conditions: [] });
 });
 
 it('Detects: an edited stage log entry is written, and Undo writes the old text back and shows it again', async () => {

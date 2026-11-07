@@ -2231,6 +2231,80 @@ TEST_CASE("Native SetQuestStages keeps log-entry conditions when the payload omi
     CHECK(questMembers(path) == before);
 }
 
+TEST_CASE("Native SetQuestStages keeps each remaining log entry's own conditions when a conditioned log entry is deleted and an entry added with explicit conditions") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, questPlugin());
+    const nlohmann::json threeConditioned{{"index", 10}, {"flags", 0}, {"logEntries", nlohmann::json::array({
+        {{"flags", 0}, {"logText", "First"}, {"conditions", nlohmann::json::array({
+            {{"function", "GetIsID"}, {"operator", "=="}, {"param1", "000800:Patch.esp"}, {"value", 1.0}}
+        })}},
+        {{"flags", 0}, {"logText", "Middle"}, {"conditions", nlohmann::json::array({
+            {{"function", "GetGraphVariableInt"}, {"operator", "=="}, {"cis1", "KeywordOne"}, {"value", 1.0}}
+        })}},
+        {{"flags", 1}, {"logText", "Last"}, {"conditions", nlohmann::json::array({
+            {{"function", "GetIsID"}, {"operator", "!="}, {"param1", "000800:Patch.esp"}, {"value", 0.0}}
+        })}}
+    })}};
+    const auto saveStages = [&path](const nlohmann::json& stages) {
+        fo4ide::plugin::RadiclePluginBackend backend;
+        load(backend, path);
+        REQUIRE(backend.invokeBackend(
+            "SetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages})).has_value());
+        REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    };
+    const auto conditionMembersByEntry = [](const std::filesystem::path& file) {
+        const auto decoded = fo4::forms::decode_quest_stages(
+            fo4::read_plugin_file(file), fo4::FormKey::parse("000800:Patch.esp"));
+        REQUIRE(decoded.stages.size() == 1u);
+        std::vector<std::vector<QuestMember>> entries;
+        for (const auto& entry : decoded.stages[0].log_entries) {
+            std::vector<QuestMember> members;
+            for (const auto& sub : entry.members) {
+                const auto name = sub.signature.to_string();
+                if (name == "CTDA" || name == "CIS1" || name == "CIS2") members.emplace_back(name, sub.data);
+            }
+            entries.push_back(std::move(members));
+        }
+        return entries;
+    };
+    saveStages(nlohmann::json::array({threeConditioned}));
+    const auto before = conditionMembersByEntry(path);
+    REQUIRE(before.size() == 3u);
+    CHECK(std::all_of(before.begin(), before.end(), [](const auto& members) { return !members.empty(); }));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto read = backend.invokeBackend(
+        "GetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE(read.has_value());
+    auto stages = read->at("stages");
+    REQUIRE(stages.size() == 1u);
+    auto& entries = stages[0]["logEntries"];
+    REQUIRE(entries.size() == 3u);
+    entries.erase(entries.begin() + 1);
+    entries.push_back(nlohmann::json{{"flags", 0}, {"logText", "Added"}, {"conditions", nlohmann::json::array()}});
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto after = conditionMembersByEntry(path);
+    REQUIRE(after.size() == 3u);
+    CHECK(after[0] == before[0]);
+    CHECK(after[1] == before[2]);
+    CHECK(after[2].empty());
+    const auto hasCis1 = [](const std::vector<std::vector<QuestMember>>& entriesToScan) {
+        return std::any_of(entriesToScan.begin(), entriesToScan.end(), [](const auto& members) {
+            return std::any_of(members.begin(), members.end(), [](const QuestMember& member) {
+                return member.first == "CIS1";
+            });
+        });
+    };
+    CHECK(hasCis1(before));
+    CHECK_FALSE(hasCis1(after));
+}
+
 TEST_CASE("Native SetQuestStages clears log-entry conditions only for an explicit empty or null conditions value") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

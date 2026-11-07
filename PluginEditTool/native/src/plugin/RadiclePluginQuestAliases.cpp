@@ -144,7 +144,7 @@ bool knownAliasKey(std::string_view key) {
            key == "guardWarnOverridePackageList" ||
            key == "combatOverridePackageList" || key == "displayName" ||
            key == "forcedVoice" || key == "deathItem" || key == "voiceTypes" ||
-           key == "conditions" || key == "entries";
+           key == "conditions" || key == "entries" || key == "extrasUnreadable";
 }
 
 bool knownItemKey(std::string_view key) {

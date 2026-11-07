@@ -9,6 +9,7 @@ const bridge = vi.hoisted(() => ({
   save: vi.fn<Backend['SavePlugin']>(),
   pick: vi.fn(),
   resolve: vi.fn<CellHost['ResolveWorldspace']>(),
+  resolveWorldspaceId: vi.fn<CellHost['ResolveWorldspaceId']>(),
 }));
 
 vi.mock('./backend', () => ({
@@ -18,6 +19,7 @@ vi.mock('./backend', () => ({
     SearchWorldspaces: async () => '[]',
     GetPlacedReferencesAtGrid: bridge.load,
     ResolveWorldspace: bridge.resolve,
+    ResolveWorldspaceId: bridge.resolveWorldspaceId,
     GetCellProperties: async () => '{"values":{},"descriptors":[]}',
   }),
   getBackend: () => ({ CreateRecord: bridge.create, SavePlugin: bridge.save }),
@@ -33,6 +35,7 @@ beforeEach(() => {
   bridge.create.mockResolvedValue('{"formKey":"000900:Patch.esp"}');
   bridge.save.mockResolvedValue('Saved');
   bridge.pick.mockResolvedValue({ target: 'Patch.esp', extra: 'MyCell' });
+  bridge.resolveWorldspaceId.mockResolvedValue('{"worldspaceFormKey":"00003C:Fallout4.esm"}');
 });
 afterEach(() => { cleanup(); localStorage.clear(); });
 
@@ -81,6 +84,17 @@ describe('Cell Viewer exterior grid dispatch', () => {
       worldspace: '00003C:Fallout4.esm', x: -33, y: 32, editorId: 'MyCell',
     });
     expect(bridge.save).toHaveBeenCalledExactlyOnceWith('Patch.esp', '');
+  });
+
+  it('creates under the worldspace key native resolves, even when the web cannot derive it', async () => {
+    localStorage.setItem('cell.worldspace', 'Commonwealth');
+    bridge.resolveWorldspaceId.mockResolvedValue('{"worldspaceFormKey":"0001A2:Fallout4.esm"}');
+    await openGrid('-33', '32');
+    fireEvent.click(screen.getByRole('button', { name: 'Create exterior CELL' }));
+    await waitFor(() => expect(bridge.create).toHaveBeenCalledExactlyOnceWith('Patch.esp', 'CELL', {
+      worldspace: '0001A2:Fallout4.esm', x: -33, y: 32, editorId: 'MyCell',
+    }));
+    expect(bridge.resolveWorldspaceId).toHaveBeenCalledExactlyOnceWith('Commonwealth');
   });
 
   it('shows the worldspace the backend resolves for the loaded cell, not the typed text', async () => {
