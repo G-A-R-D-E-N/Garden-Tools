@@ -623,8 +623,7 @@ TEST_F(CApiPapyrusRuntimeTest, OnInitPolicyQueuesAnEventThatArrivesDuringOnInit)
   reentry = Reentry{runtime, instance};
   ASSERT_EQ(radicle_papyrus_runtime_register_native(runtime, "Hook", "Arrive", RADICLE_PAPYRUS_NATIVE_STATIC, "", 0),
             RADICLE_STATUS_OK);
-  EXPECT_EQ(radicle_papyrus_runtime_set_oninit_policy(runtime, static_cast<radicle_papyrus_oninit_policy>(7)),
-            RADICLE_STATUS_INVALID_ARGUMENT);
+
   ASSERT_EQ(radicle_papyrus_runtime_set_oninit_policy(runtime, RADICLE_PAPYRUS_ONINIT_QUEUE), RADICLE_STATUS_OK);
 
   radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;

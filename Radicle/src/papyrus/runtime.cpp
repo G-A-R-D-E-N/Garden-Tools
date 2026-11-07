@@ -128,6 +128,8 @@ bool Runtime::detach(InstanceId instance) {
     Instance* found = findInstance(instance);
     if (found == nullptr) return false;
     found->detached = true;
+    for (const QueuedCall& call : found->queued) settleCall(call.ticket, CallState::Dropped, Status::HostError);
+    found->queued.clear();
     registrations_.unregisterAll(found->owner);
     return true;
 }
@@ -247,12 +249,12 @@ Status Runtime::initialize(InstanceId instance) {
 
 Status Runtime::sendEvent(InstanceId instance, const std::string& function, std::vector<Value> args) {
     Status status = Status::Ok;
-    submitCall(instance, function, std::move(args), status);
+    submitCall(instance, function, std::move(args), status, false);
     return status;
 }
 
 std::uint64_t Runtime::submitCall(InstanceId instance, const std::string& function, std::vector<Value> args,
-                                  Status& status) {
+                                  Status& status, bool track) {
     Instance* found = findInstance(instance);
     if (found == nullptr || found->detached) {
         refusedEvents_ += 1;
@@ -272,7 +274,7 @@ std::uint64_t Runtime::submitCall(InstanceId instance, const std::string& functi
     if (found->lifecycle == Lifecycle::Initializing) {
         if (gate("vm.lifecycle.event_during_oninit") &&
             onInitPolicy_ == OnInitArrivalPolicy::QueueAsApproximation) {
-            const std::uint64_t queuedTicket = openCall();
+            const std::uint64_t queuedTicket = track ? openCall() : 0;
             found->queued.push_back(QueuedCall{function, std::move(args), queuedTicket});
             queuedDuringOnInit_ += 1;
             status = Status::Ok;
@@ -289,7 +291,7 @@ std::uint64_t Runtime::submitCall(InstanceId instance, const std::string& functi
     OverrideResult overridden = tryOverride(*found, function, args);
     if (overridden.outcome == OverrideOutcome::Handled) {
         completedEvents_ += 1;
-        const std::uint64_t handledTicket = openCall();
+        const std::uint64_t handledTicket = track ? openCall() : 0;
         settleCall(handledTicket, CallState::Done, Status::Ok, std::move(overridden.value));
         status = Status::Ok;
         return handledTicket;
@@ -308,7 +310,7 @@ std::uint64_t Runtime::submitCall(InstanceId instance, const std::string& functi
     execution.instance = instance;
     execution.function = function;
     execution.arguments = std::move(args);
-    execution.ticket = openCall();
+    execution.ticket = track ? openCall() : 0;
     const std::uint64_t ticket = execution.ticket;
     ready_.push_back(std::move(execution));
     status = Status::Ok;
@@ -343,6 +345,7 @@ void Runtime::settleCall(std::uint64_t ticket, CallState state, Status status, V
     if (ticket == 0) return;
     const auto found = results_.find(ticket);
     if (found == results_.end()) return;
+    if (found->second.state != CallState::Pending && found->second.state != CallState::Waiting) return;
     found->second.state = state;
     found->second.status = status;
     found->second.value = std::move(value);

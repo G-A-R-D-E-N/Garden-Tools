@@ -162,7 +162,8 @@ public:
 
     Status initialize(InstanceId instance);
     Status sendEvent(InstanceId instance, const std::string& function, std::vector<Value> args = {});
-    std::uint64_t submitCall(InstanceId instance, const std::string& function, std::vector<Value> args, Status& status);
+    std::uint64_t submitCall(InstanceId instance, const std::string& function, std::vector<Value> args, Status& status,
+                             bool track = true);
     bool takeResult(std::uint64_t ticket, bool consume, CallRecord& out);
     std::vector<InstanceId> instanceIds() const;
     SchedulerStepResult runStep(std::int32_t budget);

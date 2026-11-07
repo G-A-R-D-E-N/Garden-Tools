@@ -24,12 +24,13 @@ SchedulerStepResult Runtime::runStep(std::int32_t budget) {
 
     for (auto it = waiting_.begin(); it != waiting_.end();) {
         Waiting& waiting = it->second;
-        if (!waiting.completion.has_value()) {
+        Instance* instance = findInstance(waiting.execution.instance);
+        if (instance == nullptr || instance->detached) {
+            settleCall(waiting.execution.ticket, CallState::Dropped, Status::HostError);
             ++it;
             continue;
         }
-        Instance* instance = findInstance(waiting.execution.instance);
-        if (instance == nullptr || instance->detached) {
+        if (!waiting.completion.has_value()) {
             ++it;
             continue;
         }

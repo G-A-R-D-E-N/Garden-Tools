@@ -133,7 +133,7 @@ RADICLE_API radicle_status radicle_papyrus_runtime_initialize(radicle_papyrus_ru
 RADICLE_API radicle_status radicle_papyrus_runtime_send_event(radicle_papyrus_runtime* runtime, uint64_t instance, const char* function, const radicle_papyrus_value* const* args, size_t arg_count, radicle_papyrus_status* out_status);
 /* Requires: out_ticket is 0 on a refusal and out_status then carries the refusal; a ticket above zero is read with radicle_papyrus_runtime_call_result. */
 RADICLE_API radicle_status radicle_papyrus_runtime_call_function(radicle_papyrus_runtime* runtime, uint64_t instance, const char* function, const radicle_papyrus_value* const* args, size_t arg_count, uint64_t* out_ticket, radicle_papyrus_status* out_status);
-/* Requires: out_info.struct_size is set by the caller; out_value may be NULL and is set only when the call is DONE; consume releases a terminal record and leaves a PENDING or WAITING one in place; an unknown or consumed ticket is NOT_FOUND. */
+/* Requires: out_info.struct_size is set by the caller; out_value may be NULL and is set only when the call is DONE; consume releases a terminal record and leaves a PENDING or WAITING one in place; an unknown, consumed or evicted ticket is NOT_FOUND. */
 RADICLE_API radicle_status radicle_papyrus_runtime_call_result(radicle_papyrus_runtime* runtime, uint64_t ticket, int32_t consume, radicle_papyrus_call_info* out_info, radicle_papyrus_value** out_value);
 /* Requires: REFUSE refuses an event that arrives during OnInit; QUEUE queues it and drains it once the instance is Ready. */
 RADICLE_API radicle_status radicle_papyrus_runtime_set_oninit_policy(radicle_papyrus_runtime* runtime, radicle_papyrus_oninit_policy policy);

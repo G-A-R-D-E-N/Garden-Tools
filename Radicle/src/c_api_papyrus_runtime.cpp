@@ -278,14 +278,19 @@ radicle_status radicle_papyrus_runtime_call_result(radicle_papyrus_runtime* runt
   }
   return radicle_c_env_detail::guarded("unknown exception while reading a call result", [&] {
     CallRecord record;
-    if (!runtime->runtime.takeResult(ticket, consume != 0, record)) {
-      return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the call ticket is unknown or consumed");
+    if (!runtime->runtime.takeResult(ticket, false, record)) {
+      return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the call ticket is unknown, consumed or evicted");
+    }
+    if (record.state == CallState::Done && out_value != nullptr) {
+      const radicle_status made = make_value(std::move(record.value), out_value);
+      if (made != RADICLE_STATUS_OK) return made;
     }
     out_info->state = callStateFrom(record.state);
     out_info->status = to_c_status(record.status);
     out_info->instructions = static_cast<uint64_t>(record.instructions);
-    if (record.state == CallState::Done && out_value != nullptr) {
-      return make_value(std::move(record.value), out_value);
+    if (consume != 0) {
+      CallRecord released;
+      runtime->runtime.takeResult(ticket, true, released);
     }
     return RADICLE_STATUS_OK;
   });
@@ -845,20 +850,33 @@ radicle_status radicle_papyrus_runtime_set_max_parks(radicle_papyrus_runtime* ru
 int32_t radicle_papyrus_runtime_has_script(const radicle_papyrus_runtime* runtime, const char* name) {
   radicle_c_detail::clear_error();
   if (runtime == nullptr || name == nullptr) return 0;
-  return runtime->runtime.hasScript(name) ? 1 : 0;
+  try {
+    return runtime->runtime.hasScript(name) ? 1 : 0;
+  } catch (...) {
+    return 0;
+  }
 }
 
 int32_t radicle_papyrus_runtime_instance_declares(const radicle_papyrus_runtime* runtime, uint64_t instance,
                                                   const char* function) {
   radicle_c_detail::clear_error();
   if (runtime == nullptr || function == nullptr) return 0;
-  return runtime->runtime.instanceDeclares(instance, function) ? 1 : 0;
+  try {
+    return runtime->runtime.instanceDeclares(instance, function) ? 1 : 0;
+  } catch (...) {
+    return 0;
+  }
 }
 
 const char* radicle_papyrus_runtime_instance_script(const radicle_papyrus_runtime* runtime, uint64_t instance) {
   radicle_c_detail::clear_error();
-  if (runtime == nullptr || !runtime->runtime.instanceOwner(instance).has_value()) return nullptr;
-  return runtime->runtime.instanceScript(instance).c_str();
+  if (runtime == nullptr) return nullptr;
+  try {
+    if (!runtime->runtime.instanceOwner(instance).has_value()) return nullptr;
+    return runtime->runtime.instanceScript(instance).c_str();
+  } catch (...) {
+    return nullptr;
+  }
 }
 
 radicle_status radicle_papyrus_runtime_list_instances(const radicle_papyrus_runtime* runtime, uint64_t* out_ids,
