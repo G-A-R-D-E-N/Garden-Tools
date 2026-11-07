@@ -164,6 +164,12 @@ it('Detects: a semicolon inside a Papyrus string does not drop the rest of its l
     .toEqual([{ from: 10, to: 20, function: 'Fragment_Stage_0010_Item_00' }]);
 });
 
+it('Detects: an escaped quote inside a Papyrus string does not end the string early, so a semicolon after it does not drop the SetStage after it', () => {
+  const source = 'Function Fragment_Stage_0010_Item_00()\n  Debug.Trace("a \\"; b") SetStage(20)\nEndFunction';
+  expect(parseStageJumps([binding(10, 'Fragment_Stage_0010_Item_00')], scripts(source)))
+    .toEqual([{ from: 10, to: 20, function: 'Fragment_Stage_0010_Item_00' }]);
+});
+
 it('Detects: a semicolon-slash inside a Papyrus string does not open a block comment that hides the SetStage after it', () => {
   const source = 'Function Fragment_Stage_0010_Item_00()\n  Debug.Trace("see ;/ here")\n  SetStage(20)\n  ;/ note /;\nEndFunction';
   expect(parseStageJumps([binding(10, 'Fragment_Stage_0010_Item_00')], scripts(source)))
