@@ -775,6 +775,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_reference_move.cpp
     tests/test_placed_reference_move_exterior.cpp
     tests/test_cell_edit.cpp
+    tests/test_cell_cleanup.cpp
     tests/test_edit_history.cpp
     tests/test_cell_cleanup.cpp
     tests/test_record_flags.cpp
