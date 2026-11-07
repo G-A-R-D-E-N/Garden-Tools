@@ -7,6 +7,7 @@
 
 struct radicle_papyrus_runtime {
   radicle_papyrus_runtime_callbacks callbacks{};
+  radicle_papyrus_engine_callbacks engine{};
   std::vector<const radicle_pex*> pex_files;
   fo4::papyrus::Runtime runtime;
 

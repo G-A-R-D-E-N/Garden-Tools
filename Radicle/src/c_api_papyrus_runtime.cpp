@@ -20,7 +20,12 @@
 using fo4::papyrus::ClockSource;
 using fo4::papyrus::InstanceId;
 using fo4::papyrus::Lifecycle;
+using fo4::papyrus::EngineObjectHooks;
+using fo4::papyrus::NativeCall;
 using fo4::papyrus::NativeRegistration;
+using fo4::papyrus::NativeResult;
+using fo4::papyrus::ObjectRef;
+using fo4::papyrus::ValueType;
 using fo4::papyrus::NativeTargetKind;
 using fo4::papyrus::OnInitArrivalPolicy;
 using fo4::papyrus::OwnerId;
@@ -71,6 +76,18 @@ NativeTargetKind nativeKindFrom(radicle_papyrus_native_kind kind) {
   }
   return NativeTargetKind::Static;
 }
+
+struct radicle_papyrus_native_call {
+  radicle_papyrus_runtime* runtime{nullptr};
+  uint32_t flags{0};
+  std::string script;
+  std::string function;
+  std::vector<radicle_papyrus_value> arguments;
+  std::optional<radicle_papyrus_object> self;
+  std::optional<uint64_t> token;
+  std::optional<radicle_papyrus_value> result;
+  radicle_papyrus_status failure{RADICLE_PAPYRUS_STATUS_OK};
+};
 
 }  // namespace
 
@@ -556,6 +573,170 @@ radicle_status radicle_papyrus_runtime_match_remote_event(
     *out_count = matches.size();
     return RADICLE_STATUS_OK;
   });
+}
+
+radicle_status radicle_papyrus_runtime_set_engine_callbacks(radicle_papyrus_runtime* runtime,
+                                                            const radicle_papyrus_engine_callbacks* callbacks) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime is required");
+  }
+  if (callbacks != nullptr && callbacks->struct_size < sizeof(radicle_papyrus_engine_callbacks)) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the engine callbacks struct is too small");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while installing engine callbacks", [&] {
+    runtime->engine = callbacks == nullptr ? radicle_papyrus_engine_callbacks{} : *callbacks;
+    radicle_papyrus_runtime* raw = runtime;
+    EngineObjectHooks hooks;
+    hooks.get = [raw](const ObjectRef& object, const std::string& name, Value& out, Status& status) {
+      if (raw->engine.get_property == nullptr) {
+        status = Status::UnknownIdentifier;
+        return false;
+      }
+      radicle_papyrus_object handle{object};
+      radicle_papyrus_value* produced = nullptr;
+      const int32_t handled = raw->engine.get_property(raw->engine.user, &handle, name.c_str(), &produced);
+      if (handled == 0) {
+        delete produced;
+        status = Status::UnknownIdentifier;
+        return false;
+      }
+      out = produced == nullptr ? fo4::papyrus::noneValue() : produced->value;
+      delete produced;
+      return true;
+    };
+    hooks.set = [raw](const ObjectRef& object, const std::string& name, const Value& value, Status& status) {
+      if (raw->engine.set_property == nullptr) {
+        status = Status::UnknownIdentifier;
+        return false;
+      }
+      radicle_papyrus_object handle{object};
+      radicle_papyrus_value stored{value};
+      if (raw->engine.set_property(raw->engine.user, &handle, name.c_str(), &stored) == 0) {
+        status = Status::UnknownIdentifier;
+        return false;
+      }
+      return true;
+    };
+    raw->runtime.setEngineObjectHooks(std::move(hooks));
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_register_native_ex(radicle_papyrus_runtime* runtime, const char* script,
+                                                          const char* function,
+                                                          radicle_papyrus_native_kind kind,
+                                                          const char* required_script, uint32_t flags) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || script == nullptr || function == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime, script and function are required");
+  }
+  if ((flags & ~static_cast<uint32_t>(RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT)) != 0) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the native flags are not valid");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while registering a native", [&] {
+    NativeRegistration registration;
+    registration.kind = nativeKindFrom(kind);
+    registration.requiredScript = required_script == nullptr ? std::string() : std::string(required_script);
+    const NativeTargetKind targetKind = registration.kind;
+    radicle_papyrus_runtime* raw = runtime;
+    registration.invoke = [raw, flags, targetKind](const NativeCall& call, NativeResult& result) -> bool {
+      result = NativeResult{};
+      if (raw->engine.call_native_ex == nullptr) {
+        result.status = Status::FunctionNotFound;
+        return false;
+      }
+      radicle_papyrus_native_call native;
+      native.runtime = raw;
+      native.flags = flags;
+      native.script = call.script;
+      native.function = call.function;
+      native.arguments.reserve(call.args.size());
+      for (const Value& argument : call.args) native.arguments.push_back(radicle_papyrus_value{argument});
+      if (targetKind != NativeTargetKind::Static && call.self.type == ValueType::Object &&
+          call.self.object != nullptr) {
+        native.self = radicle_papyrus_object{*call.self.object};
+      }
+      const int32_t handled = raw->engine.call_native_ex(raw->engine.user, &native);
+      if (handled == 0) {
+        result.status = native.failure == RADICLE_PAPYRUS_STATUS_OK
+                            ? Status::FunctionNotFound
+                            : radicle_c_papyrus_detail::from_c_status(native.failure);
+        return false;
+      }
+      if (native.token.has_value()) {
+        result.latentToken = *native.token;
+      } else {
+        result.value = native.result.has_value() ? native.result->value : fo4::papyrus::noneValue();
+      }
+      return true;
+    };
+    raw->runtime.registerNative(script, function, std::move(registration));
+    return RADICLE_STATUS_OK;
+  });
+}
+
+const radicle_papyrus_object* radicle_papyrus_native_call_self(const radicle_papyrus_native_call* call) {
+  radicle_c_detail::clear_error();
+  return call == nullptr || !call->self.has_value() ? nullptr : &*call->self;
+}
+
+const char* radicle_papyrus_native_call_script(const radicle_papyrus_native_call* call) {
+  radicle_c_detail::clear_error();
+  return call == nullptr ? nullptr : call->script.c_str();
+}
+
+const char* radicle_papyrus_native_call_function(const radicle_papyrus_native_call* call) {
+  radicle_c_detail::clear_error();
+  return call == nullptr ? nullptr : call->function.c_str();
+}
+
+size_t radicle_papyrus_native_call_arg_count(const radicle_papyrus_native_call* call) {
+  radicle_c_detail::clear_error();
+  return call == nullptr ? 0 : call->arguments.size();
+}
+
+const radicle_papyrus_value* radicle_papyrus_native_call_arg(const radicle_papyrus_native_call* call,
+                                                             size_t index) {
+  radicle_c_detail::clear_error();
+  if (call == nullptr || index >= call->arguments.size()) return nullptr;
+  return &call->arguments[index];
+}
+
+radicle_status radicle_papyrus_native_call_set_result(radicle_papyrus_native_call* call,
+                                                      const radicle_papyrus_value* value) {
+  radicle_c_detail::clear_error();
+  if (call == nullptr || value == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "call and value are required");
+  }
+  call->result = radicle_papyrus_value{value->value};
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_papyrus_native_call_begin_wait(radicle_papyrus_native_call* call, uint64_t* out_token) {
+  radicle_c_detail::clear_error();
+  if (out_token != nullptr) *out_token = 0;
+  if (call == nullptr || out_token == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "call and out_token are required");
+  }
+  if ((call->flags & static_cast<uint32_t>(RADICLE_PAPYRUS_NATIVE_FLAG_MAY_WAIT)) == 0) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the native was not registered with MAY_WAIT");
+  }
+  if (call->token.has_value()) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the call already began a wait");
+  }
+  call->token = call->runtime->runtime.beginWait();
+  *out_token = *call->token;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_papyrus_native_call_fail(radicle_papyrus_native_call* call, radicle_papyrus_status status) {
+  radicle_c_detail::clear_error();
+  if (call == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "call is required");
+  }
+  call->failure = status;
+  return RADICLE_STATUS_OK;
 }
 
 }  // extern "C"
