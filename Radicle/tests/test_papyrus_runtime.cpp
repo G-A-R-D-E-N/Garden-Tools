@@ -652,13 +652,11 @@ TEST_F(RuntimeTest, UntypedEngineHandleFromInstanceNativeStoresIntoTypedLocal) {
   addScript(script("Mod", {state("", {run})}));
   buildRuntime();
   runtime().registerNative("Widget", "Pick",
-                           NativeRegistration{NativeTargetKind::EngineObject, "",
-                                              [](const Value&, const std::vector<Value>&, Value& out, Status&) {
-                                                out = fo4::papyrus::objectValue(kEngineHandleBit | 6, "", "");
+                           NativeRegistration{NativeTargetKind::EngineObject, "", {}, false, {},
+                                              [](const NativeCall&, NativeResult& result) {
+                                                result.value = fo4::papyrus::objectValue(kEngineHandleBit | 6, "", "");
                                                 return true;
-                                              },
-                                              false,
-                                              {}, {}});
+                                              }});
   const auto instance = runtime().attach("Mod", OwnerId::forForm("000819:Mod.esp"));
   ASSERT_TRUE(instance.has_value());
   ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
