@@ -1,0 +1,27 @@
+.swf-panel { position: fixed; inset: 0; z-index: 2000; background: var(--bg-secondary); color: var(--text-primary); display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+.swf-panel [hidden] { display: none; }
+.swf-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border-color, #2b2b2b); }
+.swf-head input { flex: 1 1 240px; }
+.swf-tabs { display: flex; gap: 6px; }
+.swf-dirty { color: #c80; font-weight: 600; }
+.swf-error { color: #c22; display: flex; align-items: center; gap: 6px; }
+.swf-page { display: flex; flex: 1; min-height: 0; }
+.swf-body { display: grid; grid-template-columns: 300px 1fr 340px; grid-template-rows: minmax(0, 1fr); gap: 12px; flex: 1; min-height: 0; }
+.swf-left, .swf-right { overflow: auto; }
+.swf-centre { overflow: auto; }
+.swf-left ul { list-style: none; margin: 0 0 8px; padding: 0; }
+.swf-left li { margin: 2px 0; }
+.swf-centre table { border-collapse: collapse; width: 100%; }
+.swf-centre th, .swf-centre td { border-bottom: 1px solid #4444; padding: 2px 6px; text-align: left; }
+.swf-scrubber { display: flex; gap: 12px; margin-bottom: 8px; }.swf-stage { position: relative; height: 320px; margin-bottom: 8px; border: 1px solid #4444; overflow: hidden; background: #0001; }
+.swf-box { position: absolute; border: 1px dashed #7aa; font-size: 10px; color: #7aa; }
+.swf-abc-page { display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 12px; flex: 1; min-width: 0; min-height: 0; }
+.swf-abc-list { overflow: auto; }
+.swf-abc-list ul { list-style: none; margin: 0 0 4px; padding-left: 12px; }
+.swf-abc-main { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
+.swf-abc-text { flex: 1 0 320px; font-family: Consolas, 'Courier New', monospace; font-size: 13px; resize: none; }
+.swf-abc-actions { display: flex; gap: 8px; }
+.swf-abc-main pre, .swf-inspect pre { max-height: 240px; overflow: auto; font-size: 11px; }
+.swf-shape { max-width: 100%; }
+.swf-bitmap { max-width: 100%; image-rendering: pixelated; }
+.swf-frame-image { max-width: 100%; }

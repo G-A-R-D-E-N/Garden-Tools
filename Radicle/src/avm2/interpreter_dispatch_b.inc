@@ -1,0 +1,742 @@
+      case op::k_getproperty: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "getproperty has an invalid multiname");
+        }
+        status = resolve_runtime_multiname(frame, 0, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        Value object;
+        pop_value(object);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!object.is_object()) {
+          object = box(object);
+        }
+        if (!object.is_object()) {
+          if (limits_.lenient_builtins) {
+            push_value(Value::undefined());
+            break;
+          }
+          return fail(InterpreterStatus::NullReference,
+                      "cannot read " + property_text(*multiname) + " from " +
+                          value_kind_name(object.kind()));
+        }
+        ExecutionResult nested = get_property(frame, object.as_object(), *multiname, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        ExecutionResult initialized = initialize_class_value(nested.value, depth);
+        if (!initialized.ok()) {
+          return initialized;
+        }
+        push_value(nested.value);
+        break;
+      }
+      case op::k_setproperty:
+      case op::k_initproperty: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "setproperty has an invalid multiname");
+        }
+        status = resolve_runtime_multiname(frame, 1, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        Value value;
+        pop_value(value);
+        Value object;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(object);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!object.is_object()) {
+          if (limits_.lenient_builtins) {
+            break;
+          }
+          return fail(InterpreterStatus::NullReference,
+                      "cannot write " + property_text(*multiname) + " on " +
+                          value_kind_name(object.kind()));
+        }
+        ExecutionResult nested =
+            set_property(frame, object.as_object(), *multiname, value,
+                         instruction.opcode == op::k_initproperty, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        break;
+      }
+      case op::k_getlex: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "getlex has an invalid multiname");
+        }
+        std::shared_ptr<Object> owner;
+        bool found = false;
+        status = find_scope_binding(frame, *multiname, false, owner, found, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!found) {
+          push_value(Value::undefined());
+          break;
+        }
+        ExecutionResult nested = get_property(frame, owner, *multiname, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        ExecutionResult initialized = initialize_class_value(nested.value, depth);
+        if (!initialized.ok()) {
+          return initialized;
+        }
+        push_value(nested.value);
+        break;
+      }
+      case op::k_findpropstrict:
+      case op::k_findproperty: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "findproperty has an invalid multiname");
+        }
+        status = resolve_runtime_multiname(frame, 0, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        std::shared_ptr<Object> owner;
+        bool found = false;
+        status = find_scope_binding(frame, *multiname,
+                                    instruction.opcode == op::k_findpropstrict, owner, found,
+                                    message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (found) {
+          push_value(Value::object(owner));
+        } else {
+          push_value(Value::null());
+        }
+        break;
+      }
+      case op::k_getslot: {
+        const std::uint32_t slot = count_operand(instruction);
+        Value object;
+        pop_value(object);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!object.is_object()) {
+          return fail(InterpreterStatus::NullReference, "getslot needs an object");
+        }
+        Object& target = *object.as_object();
+        const std::uint32_t index = slot;
+        if (index >= target.slots().size()) {
+          push_value(Value::undefined());
+        } else {
+          push_value(target.slots()[index]);
+        }
+        break;
+      }
+      case op::k_setslot: {
+        const std::uint32_t slot = count_operand(instruction);
+        Value value;
+        pop_value(value);
+        Value object;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(object);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!object.is_object()) {
+          return fail(InterpreterStatus::NullReference, "setslot needs an object");
+        }
+        if (slot > kMaxSlotIndex) {
+          return fail(InterpreterStatus::ResourceLimit,
+                      "setslot index " + std::to_string(slot) + " exceeds the slot limit " +
+                          std::to_string(kMaxSlotIndex));
+        }
+        Object& target = *object.as_object();
+        if (slot >= target.slots().size()) {
+          target.resize_slots(slot + 1);
+        }
+        target.slots()[slot] = value;
+        break;
+      }
+      case op::k_deleteproperty: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "deleteproperty has an invalid multiname");
+        }
+        status = resolve_runtime_multiname(frame, 0, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        Value object;
+        pop_value(object);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        const bool deleted = object.is_object() && object.as_object()->delete_property(*multiname);
+        push_value(Value::boolean(deleted));
+        break;
+      }
+      case op::k_getsuper:
+      case op::k_setsuper: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "super access has an invalid multiname");
+        }
+        if (frame.owner_class == nullptr || frame.owner_class->super == nullptr) {
+          return fail(InterpreterStatus::TypeError, "super access outside a class hierarchy");
+        }
+        const std::size_t above = instruction.opcode == op::k_setsuper ? 1u : 0u;
+        status = resolve_runtime_multiname(frame, above, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (instruction.opcode == op::k_setsuper) {
+          Value value;
+          pop_value(value);
+          Value object;
+          if (status == InterpreterStatus::Ok) {
+            pop_value(object);
+          }
+          if (status != InterpreterStatus::Ok || !object.is_object()) {
+            break;
+          }
+          Object& target = *object.as_object();
+          PropertyLookup lookup;
+          lookup_class_traits(frame.owner_class->super, false, *multiname, &target.slots(), lookup);
+          if (lookup.kind == LookupKind::Accessor && lookup.setter != nullptr) {
+            ExecutionResult written = invoke(*lookup.setter, object, {value}, {}, depth);
+            if (!written.ok()) {
+              return written;
+            }
+            break;
+          }
+          if (lookup.kind == LookupKind::Slot && lookup.trait != nullptr &&
+              lookup.trait->is_slot_like()) {
+            if (lookup.trait->slot_id >= target.slots().size()) {
+              target.resize_slots(lookup.trait->slot_id + 1);
+            }
+            target.slots()[lookup.trait->slot_id] = value;
+            break;
+          }
+          if (target.kind() == ObjectKind::Display &&
+              write_display_property(static_cast<DisplayObject&>(target), *multiname, value)) {
+            break;
+          }
+          return fail(InterpreterStatus::NoSuchProperty,
+                      "super has no property " + property_text(*multiname));
+        }
+        Value object;
+        pop_value(object);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!object.is_object()) {
+          return fail(InterpreterStatus::NullReference, "getsuper needs an object");
+        }
+        Object& target = *object.as_object();
+        PropertyLookup lookup;
+        lookup_class_traits(frame.owner_class->super, false, *multiname, &target.slots(), lookup);
+        if (lookup.kind == LookupKind::Accessor) {
+          if (lookup.getter == nullptr) {
+            push_value(Value::undefined());
+            break;
+          }
+          ExecutionResult read = invoke(*lookup.getter, object, {}, {}, depth);
+          if (!read.ok()) {
+            return read;
+          }
+          push_value(read.value);
+          break;
+        }
+        if (lookup.kind == LookupKind::Slot) {
+          push_value(lookup.value);
+        } else if (lookup.kind == LookupKind::Method && lookup.trait != nullptr &&
+                   lookup.trait->function != nullptr) {
+          push_value(Value::object(lookup.trait->function));
+        } else {
+          Value out;
+          const bool native = target.kind() == ObjectKind::Display &&
+                              read_display_property(*this, static_cast<DisplayObject&>(target),
+                                                    *multiname, out);
+          push_value(native ? out : Value::undefined());
+        }
+        break;
+      }
+      case op::k_newobject: {
+        const std::uint32_t count = count_operand(instruction);
+        auto object = std::make_shared<Object>();
+        prepare_plain_object(*object);
+        for (std::uint32_t index = 0; index < count; ++index) {
+          Value value;
+          pop_value(value);
+          Value name;
+          if (status == InterpreterStatus::Ok) {
+            pop_value(name);
+          }
+          if (status != InterpreterStatus::Ok) {
+            break;
+          }
+          Key key;
+          key.name = to_string(name);
+          Property& property = object->define_own_property(key);
+          property.kind = PropertyKind::Value;
+          property.value = std::move(value);
+        }
+        if (status == InterpreterStatus::Ok) {
+          push_value(Value::object(std::move(object)));
+        }
+        break;
+      }
+      case op::k_newarray: {
+        const std::uint32_t count = count_operand(instruction);
+        std::vector<Value> elements;
+        status = pop_arguments(frame, count, elements, message);
+        if (status == InterpreterStatus::Ok) {
+          auto array = std::make_shared<ArrayObject>();
+          array->elements() = std::move(elements);
+          if (const Class* array_class = runtime_.find_class("Array")) {
+            array->set_instance_class(const_cast<Class*>(array_class));
+          }
+          push_value(Value::object(std::move(array)));
+        }
+        break;
+      }
+      case op::k_newfunction: {
+        const std::uint32_t method = operand_at(instruction, 0);
+        auto function = std::make_shared<FunctionObject>(frame.file->method_name(method),
+                                                         frame.file, method);
+        function->captured_scope() = frame.scopes;
+        runtime_.bind_function_class(*function);
+        push_value(Value::object(std::move(function)));
+        break;
+      }
+      case op::k_newclass: {
+        const std::uint32_t index = operand_at(instruction, 0);
+        const Class* klass = class_at(*frame.file, index);
+        if (klass == nullptr || klass->class_object == nullptr) {
+          return fail(InterpreterStatus::ClassIndexOutOfRange,
+                      "class index " + std::to_string(index) + " has no linked class");
+        }
+        Value base_class;
+        pop_value(base_class);
+        ExecutionResult initialized =
+            initialize_class_value(Value::object(klass->class_object), depth);
+        if (!initialized.ok()) {
+          return initialized;
+        }
+        push_value(Value::object(klass->class_object));
+        break;
+      }
+      case op::k_call: {
+        const std::uint32_t count = count_operand(instruction);
+        std::vector<Value> arguments;
+        status = pop_arguments(frame, count, arguments, message);
+        Value receiver;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(receiver);
+        }
+        Value function;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(function);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (function.is_object() && function.as_object()->kind() == ObjectKind::Class) {
+          ExecutionResult converted =
+              call_class(static_cast<const ClassObject&>(*function.as_object()), arguments, depth);
+          if (!converted.ok()) {
+            return converted;
+          }
+          push_value(converted.value);
+          break;
+        }
+        if (!function.is_object() || function.as_object()->kind() != ObjectKind::Function) {
+          if (limits_.lenient_builtins) {
+            push_value(Value::undefined());
+            break;
+          }
+          return fail(InterpreterStatus::CannotCall, "call target is not a function");
+        }
+        ExecutionResult nested = invoke(static_cast<const FunctionObject&>(*function.as_object()),
+                                        receiver, std::move(arguments), {}, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        push_value(nested.value);
+        break;
+      }
+      case op::k_construct: {
+        const std::uint32_t count = count_operand(instruction);
+        std::vector<Value> arguments;
+        status = pop_arguments(frame, count, arguments, message);
+        Value target;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(target);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!target.is_object() || target.as_object()->kind() != ObjectKind::Class) {
+          if (limits_.lenient_builtins) {
+            push_value(Value::undefined());
+            break;
+          }
+          return fail(InterpreterStatus::CannotConstruct, "construct target is not a class");
+        }
+        ExecutionResult nested = construct(
+            frame, static_cast<const ClassObject&>(*target.as_object()), arguments, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        push_value(nested.value);
+        break;
+      }
+      case op::k_constructsuper: {
+        const std::uint32_t count = count_operand(instruction);
+        std::vector<Value> arguments;
+        status = pop_arguments(frame, count, arguments, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (frame.owner_class == nullptr || frame.owner_class->super == nullptr) {
+          return fail(InterpreterStatus::TypeError,
+                      "constructsuper outside a class with a superclass");
+        }
+        Class* super = frame.owner_class->super;
+        if (super->iinit == kNoMethod || super->file == nullptr) {
+          break;
+        }
+        auto initializer =
+            std::make_shared<FunctionObject>(super->file->method_name(super->iinit), super->file,
+                                             super->iinit);
+        initializer->set_owner_class(super);
+        ExecutionResult nested = invoke(*initializer, frame.locals.empty() ? Value::undefined()
+                                                                         : frame.locals[0],
+                                        std::move(arguments), {}, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        break;
+      }
+      case op::k_constructprop: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "constructprop has an invalid multiname");
+        }
+        const std::uint32_t count = count_operand(instruction);
+        status = resolve_runtime_multiname(frame, count, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        std::vector<Value> arguments;
+        status = pop_arguments(frame, count, arguments, message);
+        Value target;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(target);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!target.is_object()) {
+          return fail(InterpreterStatus::CannotConstruct,
+                      "constructprop needs an object holding a class");
+        }
+        ExecutionResult class_value = get_property(frame, target.as_object(), *multiname, depth);
+        if (!class_value.ok()) {
+          return class_value;
+        }
+        if (!class_value.value.is_object() ||
+            class_value.value.as_object()->kind() != ObjectKind::Class) {
+          return fail(InterpreterStatus::CannotConstruct,
+                      property_text(*multiname) + " is not a class");
+        }
+        ExecutionResult nested =
+            construct(frame, static_cast<const ClassObject&>(*class_value.value.as_object()),
+                      arguments, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        push_value(nested.value);
+        break;
+      }
+      case op::k_callproperty:
+      case op::k_callpropvoid:
+      case op::k_callproplex: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "callproperty has an invalid multiname");
+        }
+        const std::uint32_t count = count_operand(instruction);
+        status = resolve_runtime_multiname(frame, count, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        std::vector<Value> arguments;
+        status = pop_arguments(frame, count, arguments, message);
+        Value receiver;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(receiver);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!receiver.is_object()) {
+          receiver = box(receiver);
+        }
+        if (!receiver.is_object()) {
+          if (limits_.lenient_builtins || instruction.opcode == op::k_callproplex) {
+            if (instruction.opcode != op::k_callpropvoid) {
+              push_value(Value::undefined());
+            }
+            break;
+          }
+          return fail(InterpreterStatus::NullReference,
+                      "cannot call " + property_text(*multiname) + " on " +
+                          value_kind_name(receiver.kind()));
+        }
+        ExecutionResult nested = call_property(frame, receiver.as_object(), *multiname, arguments,
+                                               depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        if (instruction.opcode != op::k_callpropvoid) {
+          /* A method returning its borrowed this must be replaced by the owning receiver. */
+          if (nested.value.is_object() && nested.value.as_object() == receiver.as_object()) {
+            push_value(receiver);
+          } else {
+            push_value(nested.value);
+          }
+        }
+        break;
+      }
+      case op::k_callsuper:
+      case op::k_callsupervoid: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "callsuper has an invalid multiname");
+        }
+        if (frame.owner_class == nullptr || frame.owner_class->super == nullptr) {
+          return fail(InterpreterStatus::TypeError, "callsuper outside a class hierarchy");
+        }
+        const std::uint32_t count = count_operand(instruction);
+        status = resolve_runtime_multiname(frame, count, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        std::vector<Value> arguments;
+        status = pop_arguments(frame, count, arguments, message);
+        Value receiver;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(receiver);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (!receiver.is_object()) {
+          return fail(InterpreterStatus::NullReference, "callsuper needs an object receiver");
+        }
+        const Trait* trait = frame.owner_class->super->resolve_instance_trait(*multiname);
+        if (trait == nullptr || trait->function == nullptr) {
+          return fail(InterpreterStatus::CannotCall,
+                      "super has no method " + property_text(*multiname));
+        }
+        ExecutionResult nested = invoke(*trait->function, receiver, std::move(arguments),
+                                        frame.scopes, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        if (instruction.opcode == op::k_callsuper) {
+          push_value(nested.value);
+        }
+        break;
+      }
+      case op::k_callmethod:
+      case op::k_callstatic: {
+        ExecutionResult nested = call_indexed(frame, instruction, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        push_value(nested.value);
+        break;
+      }
+      case op::k_applytype: {
+        const std::uint32_t count = count_operand(instruction);
+        std::vector<Value> arguments;
+        status = pop_arguments(frame, count, arguments, message);
+        Value base;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(base);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        Class* base_class = nullptr;
+        if (base.is_object() && base.as_object()->kind() == ObjectKind::Class) {
+          base_class = static_cast<const ClassObject&>(*base.as_object()).represented_class();
+        }
+        if (base_class == nullptr) {
+          push_value(base);
+          break;
+        }
+        Class* element_class = nullptr;
+        if (!arguments.empty() && arguments[0].is_object() &&
+            arguments[0].as_object()->kind() == ObjectKind::Class) {
+          element_class =
+              static_cast<const ClassObject&>(*arguments[0].as_object()).represented_class();
+        }
+        const bool vector_family =
+            base_class->name == "__AS3__.vec::Vector" ||
+            (base_class->super != nullptr && base_class->super->name == "__AS3__.vec::Vector");
+        if (!vector_family) {
+          push_value(base);
+          break;
+        }
+        Class* concrete = runtime_.resolve_vector_class(element_class);
+        if (concrete == nullptr || concrete->class_object == nullptr) {
+          return fail(InterpreterStatus::TypeError,
+                      "cannot resolve the element type of a Vector");
+        }
+        push_value(Value::object(concrete->class_object));
+        break;
+      }
+      case op::k_hasnext2: {
+        const std::uint32_t object_register = count_operand(instruction);
+        const std::uint32_t index_register =
+            instruction.operands.size() > 1 ? instruction.operands[1].value : 0;
+        if (object_register >= frame.locals.size() || index_register >= frame.locals.size()) {
+          return fail(InterpreterStatus::LocalOutOfRange, "hasnext2 register is out of range");
+        }
+        Value object = frame.locals[object_register];
+        if (!object.is_object()) {
+          push_value(Value::boolean(false));
+          break;
+        }
+        const std::vector<Key>& keys = enumeration_keys(frame, *object.as_object());
+        const std::uint32_t cursor = to_uint32(frame.locals[index_register]);
+        if (cursor < keys.size()) {
+          frame.locals[object_register] = object;
+          frame.locals[index_register] = Value::uint32(cursor + 1);
+          push_value(Value::boolean(true));
+        } else {
+          frame.locals[index_register] = Value::uint32(0);
+          push_value(Value::boolean(false));
+        }
+        break;
+      }
+      case op::k_nextname:
+      case op::k_nextvalue: {
+        Value index;
+        pop_value(index);
+        Value object;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(object);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        const std::uint32_t cursor = to_uint32(index);
+        if (cursor == 0 || !object.is_object()) {
+          push_value(Value::undefined());
+          break;
+        }
+        const auto found = frame.iterator_keys.find(object.as_object().get());
+        if (found == frame.iterator_keys.end() || cursor > found->second.size()) {
+          push_value(Value::undefined());
+          break;
+        }
+        const Key& key = found->second[cursor - 1];
+        if (instruction.opcode == op::k_nextname) {
+          push_value(Value::string(key.name));
+        } else {
+          Multiname multiname;
+          multiname.kind = MultinameKind::QName;
+          multiname.name = key.name;
+          multiname.namespaces.push_back(key.name_space);
+          ExecutionResult nested = get_property(frame, object.as_object(), multiname, depth);
+          if (!nested.ok()) {
+            return nested;
+          }
+          push_value(nested.value);
+        }
+        break;
+      }
+      case op::k_returnvalue: {
+        Value value;
+        pop_value(value);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        return finish(std::move(value));
+      }
+      case op::k_returnvoid:
+        return finish(Value::undefined());
+      case op::k_throw: {
+        Value value;
+        pop_value(value);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        const std::uint32_t throw_offset = static_cast<std::uint32_t>(instruction.offset);
+        bool caught = false;
+        for (const abc::AbcException& exception : frame.body->exceptions) {
+          if (throw_offset < exception.from || throw_offset >= exception.to) {
+            continue;
+          }
+          const std::uint32_t target = instruction_index_at(frame, static_cast<std::int32_t>(
+                                                                  exception.target));
+          if (target >= frame.instructions.size()) {
+            continue;
+          }
+          bool type_matches = exception.exc_type == 0;
+          if (!type_matches) {
+            const Multiname* catch_type = resolve_multiname(*frame.file, exception.exc_type);
+            if (catch_type == nullptr) {
+              type_matches = true;
+            } else {
+              const Class* target_class = runtime_.find_class(*catch_type);
+              if (target_class == nullptr || target_class->class_object == nullptr) {
+                type_matches = true;
+              } else {
+                type_matches = is_instance_of(value, Value::object(target_class->class_object));
+              }
+            }
+          }
+          if (!type_matches) {
+            continue;
+          }
+          frame.stack.clear();
+          frame.stack.push_back(value);
+          frame.scopes.resize(frame.entry_scope_count);
+          frame.ip = target;
+          caught = true;
+          break;
+        }
+        if (!caught) {
+          return fail(InterpreterStatus::UncaughtException,
+                      "uncaught exception: " + to_string(value));
+        }
+        break;
+      }
+      case op::k_newcatch: {
+        auto catch_scope = std::make_shared<Object>();
+        prepare_plain_object(*catch_scope);
+        push_value(Value::object(std::move(catch_scope)));
+        break;
+      }
+      case op::k_getouterscope: {
+        ExecutionResult scope = outer_scope_value(frame, operand_at(instruction, 0));
+        if (!scope.ok()) {
+          return scope;
+        }
+        push_value(scope.value);
+        break;
+      }

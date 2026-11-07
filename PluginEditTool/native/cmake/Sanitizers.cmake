@@ -1,0 +1,13 @@
+function(fo4ide_enable_sanitizers target)
+    if(NOT FO4IDE_ENABLE_SANITIZERS)
+        return()
+    endif()
+
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /fsanitize=address)
+        target_link_options(${target} PRIVATE /fsanitize=address)
+    else()
+        target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    endif()
+endfunction()

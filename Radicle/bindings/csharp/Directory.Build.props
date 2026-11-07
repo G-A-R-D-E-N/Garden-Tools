@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <RestoreConfigFile Condition="'$(MSBuildProjectName)' == 'Radicle.Interop.Tests'">$(MSBuildThisFileDirectory)Radicle.Interop.Tests/NuGet.Config</RestoreConfigFile>
+  </PropertyGroup>
+</Project>
