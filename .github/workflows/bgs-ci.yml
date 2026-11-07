@@ -1,0 +1,234 @@
+name: bgs-ci
+
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: BGS build and test (${{ matrix.rid }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    environment: garden-tools-ci
+    env:
+      BUILD_COMMIT: ${{ github.sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            rid: linux-x64
+            shell: bash
+            python: python3
+          - runner: windows-2022
+            rid: win-x64
+            shell: cmd
+            python: python
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+        working-directory: BGS
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+
+      - name: Restore the private test fixtures
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+        run: bash .github/scripts/fetch-private-fixtures.sh
+
+      - name: Install build tools
+        if: matrix.rid == 'linux-x64'
+        working-directory: ${{ github.workspace }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build ccache
+          printf 'CC=gcc-14\nCXX=g++-14\n' >> "$GITHUB_ENV"
+
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 8.0.424
+
+      - name: Find ccache
+        if: matrix.rid == 'linux-x64'
+        run: |
+          for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then
+              echo "CCACHE=$c" >> "$GITHUB_ENV"
+              echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+              "$c" --zero-stats > /dev/null
+              echo "Using $c"
+              exit 0
+            fi
+          done
+          echo "ccache not found; building without a compiler cache"
+
+      - name: Build native Radicle library (linux-x64)
+        if: matrix.rid == 'linux-x64'
+        run: |
+          cmake -S ../Radicle -B ../build/radicle-bgs -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DRADICLE_BUILD_TESTS=OFF -DRADICLE_BUILD_TOOLS=OFF -DRADICLE_WARNINGS_AS_ERRORS=ON \
+            -DCMAKE_CXX_FLAGS=-Wno-error=free-nonheap-object \
+            ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
+          cmake --build ../build/radicle-bgs --target radicle_c
+          mkdir -p ../build/radicle-bgs/native
+          cp ../build/radicle-bgs/libradicle.so ../build/radicle-bgs/native/
+
+      - name: Build native Radicle library (win-x64)
+        if: matrix.rid == 'win-x64'
+        shell: powershell
+        run: |
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          if (-not (Test-Path "$installer\vswhere.exe")) { throw "Visual Studio is not installed on this runner" }
+          $vs = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "No Visual Studio install with the C++ x64 tools on this runner" }
+          $cmakeBin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          $ninjaBin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja"
+          foreach ($tool in "$cmakeBin\cmake.exe", "$ninjaBin\ninja.exe") {
+            if (-not (Test-Path $tool)) { throw "Visual Studio at $vs has no C++ CMake tools component ($tool)" }
+          }
+          $vcvars = cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set"
+          if ($LASTEXITCODE -ne 0) { throw "vcvars64.bat failed" }
+          foreach ($line in $vcvars) {
+            if ($line -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
+          }
+          $env:Path = "$cmakeBin;$ninjaBin;$env:Path"
+
+          $cmakeText = Get-Content -Raw ..\PluginEditTool\native\CMakeLists.txt
+          $revs = @([regex]::Matches($cmakeText, 'GIT_REPOSITORY[ \t]+https://github\.com/madler/zlib\.git\r?\n[ \t]*GIT_TAG[ \t]+([0-9a-f]{40})\r?\n') | ForEach-Object { $_.Groups[1].Value })
+          if ($revs.Count -ne 1) { throw "expected exactly one zlib GIT_TAG in PluginEditTool/native/CMakeLists.txt" }
+          $zlibRev = $revs[0]
+          $base = if ($env:RUNNER_TOOL_CACHE) { Join-Path $env:RUNNER_TOOL_CACHE 'garden-src' } else { Join-Path $env:LOCALAPPDATA 'garden-src' }
+          $cache = Join-Path $base "zlib\$zlibRev"
+          if (-not (Test-Path (Join-Path $cache '.installed'))) {
+            New-Item -ItemType Directory -Force (Split-Path $cache) | Out-Null
+            $tmp = "$cache.tmp.$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+            git init -q $tmp
+            if ($LASTEXITCODE -ne 0) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp; throw "git init failed for $tmp" }
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+              git -C $tmp -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 fetch --depth 1 https://github.com/madler/zlib.git $zlibRev
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -eq 5) { Remove-Item -Recurse -Force $tmp; throw "could not fetch zlib $zlibRev from GitHub after 5 attempts" }
+              Write-Output "::warning::zlib fetch attempt $attempt failed, retrying"
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+            git -C $tmp checkout -q --detach FETCH_HEAD
+            if ($LASTEXITCODE -ne 0) { Remove-Item -Recurse -Force $tmp; throw "git checkout of zlib $zlibRev failed" }
+            $head = git -C $tmp rev-parse HEAD
+            if ($head -ne $zlibRev) { Remove-Item -Recurse -Force $tmp; throw "zlib checkout is $head, not $zlibRev" }
+            New-Item -ItemType File -Path (Join-Path $tmp '.installed') | Out-Null
+            try { [IO.Directory]::Move($tmp, $cache) } catch {
+              Remove-Item -Recurse -Force $tmp
+              if (-not (Test-Path (Join-Path $cache '.installed'))) { throw "zlib cache $cache is incomplete" }
+            }
+          }
+
+          New-Item -ItemType Directory -Force ..\build\zlib-win | Out-Null
+          cmake -S $cache -B ..\build\zlib-win -G Ninja -DCMAKE_BUILD_TYPE=Release -DZLIB_BUILD_EXAMPLES=OFF
+          if ($LASTEXITCODE -ne 0) { throw "zlib configure failed" }
+          cmake --build ..\build\zlib-win --target zlibstatic
+          if ($LASTEXITCODE -ne 0) { throw "zlib build failed" }
+          Copy-Item (Join-Path $cache 'zlib.h') ..\build\zlib-win\zlib.h -Force
+          $zlibWin = (Resolve-Path ..\build\zlib-win).Path
+          $zlibLib = Join-Path $zlibWin 'zlibstatic.lib'
+
+          cmake -S ..\Radicle -B ..\build\radicle-bgs -G Ninja -DCMAKE_BUILD_TYPE=Release -DRADICLE_BUILD_TESTS=OFF -DRADICLE_BUILD_TOOLS=OFF -DRADICLE_WARNINGS_AS_ERRORS=ON "-DZLIB_INCLUDE_DIR=$zlibWin" "-DZLIB_LIBRARY=$zlibLib" "-DZLIB_LIBRARY_RELEASE=$zlibLib" "-DZLIB_LIBRARY_DEBUG=$zlibLib"
+          if ($LASTEXITCODE -ne 0) { throw "Radicle configure failed" }
+          cmake --build ..\build\radicle-bgs --target radicle_c
+          if ($LASTEXITCODE -ne 0) { throw "Radicle build failed" }
+          New-Item -ItemType Directory -Force ..\build\radicle-bgs\native | Out-Null
+          Copy-Item ..\build\radicle-bgs\radicle.dll ..\build\radicle-bgs\native\radicle.dll -Force
+
+      - name: Restore BehaviourGraph.Core
+        run: dotnet restore src/BehaviourGraph.Core.csproj --locked-mode
+
+      - name: Restore BehaviourStudio
+        run: dotnet restore app/BehaviourStudio.csproj --locked-mode
+
+      - name: Restore symrm
+        run: dotnet restore tools/symrm/symrm.csproj --locked-mode
+
+      - name: Restore tests
+        run: dotnet restore tools/tests/BehaviourGraph.Tests.csproj --locked-mode
+
+      - name: Restore uismoke
+        run: dotnet restore tools/uismoke/uismoke.csproj --locked-mode
+
+      - name: Restore MCP host
+        run: dotnet restore tools/mcp/BehaviourGraph.Mcp.csproj --locked-mode
+
+      - name: Build MCP host
+        run: dotnet build tools/mcp/BehaviourGraph.Mcp.csproj --configuration Release --no-restore
+
+      - name: Build app
+        run: dotnet build app/BehaviourStudio.csproj --configuration Release --no-restore
+
+      - name: Run xUnit suite
+        run: dotnet test tools/tests/BehaviourGraph.Tests.csproj --configuration Release --no-restore --logger "console;verbosity=normal"
+
+      - name: Run UI smoke harness
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-restore
+
+      - name: Run assistant smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --assistant
+
+      - name: Run multi-chat smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --multichat
+
+      - name: Run workspace layout smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --layout-smoke
+
+      - name: Run rig authoring and physics smoke
+        run: dotnet run --project tools/uismoke/uismoke.csproj --configuration Release --no-build -- --rig-authoring
+
+      - name: Publish platform package
+        run: >
+          dotnet publish app/BehaviourStudio.csproj --configuration Release
+          --runtime ${{ matrix.rid }} --self-contained true --no-restore
+          --output publish-check -p:DebugType=none -p:DebugSymbols=false
+          -p:BuildCommit=${{ env.BUILD_COMMIT }}
+
+      - name: Test package script
+        run: ${{ matrix.python }} -I -B -m unittest discover -s tools/ci -p "test_package.py"
+
+      - name: Verify package identity and remove symbols
+        run: >
+          ${{ matrix.python }} tools/ci/package.py publish-check
+          --commit ${{ env.BUILD_COMMIT }} --runtime ${{ matrix.rid }}
+
+  report:
+    name: Report to the private PR
+    needs: [verify]
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    environment: garden-tools-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Post the result as a commit status on the private commit
+        env:
+          GH_TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          source=$(git log -1 --format=%B | sed -n 's/^Source-Commit: \([0-9a-f]\{40\}\)$/\1/p')
+          [ -n "$source" ] || { echo "::error::no Source-Commit trailer"; exit 1; }
+          failed=$(jq -r 'to_entries | map(select(.value.result != "success" and .value.result != "skipped") | .key) | join(", ")' <<<"$NEEDS")
+          if [ -n "$failed" ]; then state=failure; description="failed: $failed"; else state=success; description="passed"; fi
+          gh api "repos/G-A-R-D-E-N/GardenTools/statuses/$source" -f state="$state" \
+            -f context="public-ci/bgs-ci" -f target_url="$RUN_URL" -f description="${description:0:140}" >/dev/null
+          echo "$state posted for bgs-ci ($description)"

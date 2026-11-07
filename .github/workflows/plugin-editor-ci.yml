@@ -1,0 +1,119 @@
+name: plugin-editor-ci
+
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Managed tests (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    # GitVersion.MsBuild needs full git history, which the shallow checkout lacks; the tests do not use the version.
+    env:
+      DisableGitVersionTask: "true"
+    defaults:
+      run:
+        shell: cmd
+        working-directory: PluginEditTool
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The 10.0 SDK builds both targets; the 9.0 SDK supplies the exact 9.0.19 runtime the net9.0-windows test host needs.
+      - name: Set up pinned .NET SDKs
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            10.0.401
+            9.0.317
+
+      - name: Restore FO4RecordEditor.Tests
+        run: dotnet restore FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --locked-mode
+
+      - name: Restore FO4RecordEditor.Core.Tests
+        run: dotnet restore FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --locked-mode
+
+      - name: Build FO4RecordEditor.Tests
+        run: dotnet build FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-restore
+
+      - name: Build FO4RecordEditor.Core.Tests
+        run: dotnet build FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-restore
+
+      - name: Test FO4RecordEditor.Tests
+        run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=windows-tests.trx" --results-directory ../TestResults
+
+      - name: Test FO4RecordEditor.Core.Tests
+        if: ${{ !cancelled() }}
+        run: dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=windows-core-tests.trx" --results-directory ../TestResults
+
+      - name: Stop .NET build servers
+        if: always()
+        run: dotnet build-server shutdown
+
+  linux:
+    name: Core managed tests (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # GitVersion.MsBuild needs full git history, which the shallow checkout lacks; the tests do not use the version.
+    env:
+      DisableGitVersionTask: "true"
+    defaults:
+      run:
+        shell: bash
+        working-directory: PluginEditTool
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Restore FO4RecordEditor.Core.Tests
+        run: dotnet restore FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --locked-mode
+
+      - name: Build FO4RecordEditor.Core.Tests
+        run: dotnet build FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-restore
+
+      - name: Test FO4RecordEditor.Core.Tests
+        run: dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=linux-core-tests.trx" --results-directory ../TestResults
+
+      - name: Stop .NET build servers
+        if: always()
+        run: dotnet build-server shutdown
+
+  report:
+    name: Report to the private PR
+    needs: [windows, linux]
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    environment: garden-tools-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Post the result as a commit status on the private commit
+        env:
+          GH_TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          source=$(git log -1 --format=%B | sed -n 's/^Source-Commit: \([0-9a-f]\{40\}\)$/\1/p')
+          [ -n "$source" ] || { echo "::error::no Source-Commit trailer"; exit 1; }
+          failed=$(jq -r 'to_entries | map(select(.value.result != "success" and .value.result != "skipped") | .key) | join(", ")' <<<"$NEEDS")
+          if [ -n "$failed" ]; then state=failure; description="failed: $failed"; else state=success; description="passed"; fi
+          gh api "repos/G-A-R-D-E-N/GardenTools/statuses/$source" -f state="$state" \
+            -f context="public-ci/plugin-editor-ci" -f target_url="$RUN_URL" -f description="${description:0:140}" >/dev/null
+          echo "$state posted for plugin-editor-ci ($description)"
