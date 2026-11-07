@@ -69,7 +69,7 @@ Status is judged from code, tests and docs in the checkout. Nobody ran the app f
 | Feature | Where in UI (file) | Backend | Tests | Status | Notes |
 |---|---|---|---|---|---|
 | Cell viewer (3D, worldspace and cell search, placed references) | `web/src/CellPanel.tsx`, `web/src/CellViewport.tsx` | native `cell` target: `SearchWorldspaces`, `SearchCells`, `GetPlacedReferences`, `GetGeometryBatch`, `GetTexture` | `web/src/CellPanel.test.ts`, `CellPanel.loadOrder.test.tsx`, `CellPanel.searchError.test.tsx`, `CellPanelGrid.test.tsx` | working | The 3D rendering is not covered by the web tests listed. |
-| Move placed references (transform edit) | `web/src/CellViewport.tsx` (uses `TransformControls`) | `SetPlacedReferenceTransform` | `native/tests/unit/RadiclePluginCellTests.cpp` | partial | The activity-bar tooltip calls the viewer "read-only 3D" (`MainShell.tsx`), yet a transform call exists. Which one is right was not checked. |
+| Edit placed references and cell properties (transform, scale, EditorID, duplicate, delete, cell properties, undo and redo) | `web/src/CellViewport.tsx` (`TransformControls`, Delete, Ctrl+D, Ctrl+Z, Ctrl+Y), `web/src/CellEditPanel.tsx`, `web/src/CellPropertiesPanel.tsx` | Radicle through the native `cell` target: `EditPlacedReference`, `SetPlacedReferenceTransform`, `DuplicatePlacedReference`, `DeletePlacedReference`, `GetCellProperties`, `SetCellProperties`, `UndoCellEdit`, `RedoCellEdit`, `GetCellEditHistory` | `web/src/CellEditPanel.test.tsx`, `web/src/CellPropertiesPanel.test.tsx`, `native/tests/unit/RadiclePluginCellTests.cpp` | working | Each edit saves the patch plugin. Cell property edits share the reference undo history. No native test covers `GetCellProperties` or `SetCellProperties` yet. The web tests use a simulated bridge; the live WebView2 host was not run. |
 | Navmesh, LOD, whole-map authoring | none | none | none | planned | `docs/MODKIT21_PULLS.md` lists LOD generation and the 3D world viewer as out of scope. |
 
 ### Conditions
@@ -160,7 +160,7 @@ Status is judged from code, tests and docs in the checkout. Nobody ran the app f
 Taken from code and docs only.
 
 1. SWF has no native target. `web/src/SwfPanel.tsx` uses a `swf` host object, and no `swf` code exists under `PluginEditTool/native`. The only host is C#, in `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs`.
-2. Two UI strings may be out of date. The Localization tooltip says "read-only" and the Cell Viewer tooltip says "read-only 3D" (`web/src/MainShell.tsx`), but both panels have write calls.
+2. The Localization tooltip says "read-only" (`web/src/MainShell.tsx`). It was not checked against the panel's calls. The Cell Viewer tooltip no longer says "read-only".
 3. The AI chat panel is only MCP instructions. Settings still shows AI provider and API key fields.
 4. Raw View (hex or subrecord dump) was not built (`docs/internal/UI_REDESIGN_TASKS.md`).
 5. Copy as wrapper covers only LVLI, LVLN and LVSP. xEdit also covers LVLB, LVLC, LVLP and LVSC (`docs/xedit-copy-workflows.md`).

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDialogs } from './useDialogs';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff, Info, ScrollText } from 'lucide-react';
-import { getCell, getBackend, type CellEditChanges, type CellHost, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
+import { getCell, getBackend, type CellEditChanges, type CellHost, type CellPlacedReference, type CellPropertiesResult, type CellPropertyChanges, type CellReferencesResult, type CellSearchHit } from './backend';
 import { errorText } from './errors';
 import CellViewport, { type CellGeoMap, type CellTextureStats } from './CellViewport';
 import CellEditPanel from './CellEditPanel';
+import CellPropertiesPanel from './CellPropertiesPanel';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 import { parseCellGridCoordinate } from './util/cellGrid';
 import { statusBanner } from './util/cellStatus';
@@ -22,6 +23,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [result, setResult] = useState<CellReferencesResult | null>(null);
+  const [cellProps, setCellProps] = useState<CellPropertiesResult | null>(null);
   const [loadedWorldspace, setLoadedWorldspace] = useState<string | null>(null);
   const [geometry, setGeometry] = useState<CellGeoMap>({});
   const [log, setLog] = useState<string[]>([]);
@@ -287,12 +289,26 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const loadCellProperties = async (cellFormKey: string, live: () => boolean) => {
+    if (!cell) return;
+    try {
+      const parsed = JSON.parse(await cell.GetCellProperties(cellFormKey)) as CellPropertiesResult;
+      if (live()) setCellProps(parsed);
+    } catch (e) {
+      if (live()) {
+        setCellProps(null);
+        appendLog('✗ cell properties: ' + errorText(e));
+      }
+    }
+  };
+
   const runLoad = async (fetchReferences: () => Promise<string>) => {
     if (!cell) return;
     const mine = ++loadSeq.current;
     const live = () => mine === loadSeq.current;
     setBusy(true);
     setResult(null);
+    setCellProps(null);
     setLoadedWorldspace(null);
     setGeometry({});
     setGeoProgress(null);
@@ -313,7 +329,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         return;
       }
       setResult(parsed);
-      if (parsed.cellFormKey) void loadWorldspace(parsed.cellFormKey, live);
+      if (parsed.cellFormKey) {
+        void loadWorldspace(parsed.cellFormKey, live);
+        void loadCellProperties(parsed.cellFormKey, live);
+      }
       const refs = parsed.references ?? [];
       appendLog(`• loaded ${parsed.cellEditorId || parsed.cellFormKey} -- ${refs.length} reference(s), ${parsed.withModelCount ?? 0} with a model`);
 
@@ -444,13 +463,14 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       const key = prev?.formKey === from ? select : (prev?.formKey ?? null);
       return parsed.references?.find(r => r.formKey === key) ?? null;
     });
+    await loadCellProperties(cellKey, () => mine === loadSeq.current);
   };
 
   const mutate = async (label: string, patch: string, from: string | null,
-    act: (c: CellHost) => Promise<string | null>): Promise<boolean> => {
+    act: (c: CellHost) => Promise<string | null>): Promise<string | null> => {
     const c = getCell();
     const backend = getBackend();
-    if (!c || !backend) return false;
+    if (!c || !backend) return 'Cell bridge not available.';
     try {
       const select = await act(c);
       const saveMsg = await backend.SavePlugin(patch, '');
@@ -461,10 +481,11 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       } catch (e) {
         appendLog('✗ reload failed: ' + errorText(e));
       }
-      return true;
+      return null;
     } catch (e) {
-      appendLog(`✗ ${label} failed: ` + errorText(e));
-      return false;
+      const message = errorText(e);
+      appendLog(`✗ ${label} failed: ` + message);
+      return message;
     } finally {
       await refreshEditCounts(patch).catch(e => appendLog('✗ edit counts: ' + errorText(e)));
     }
@@ -474,7 +495,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     act: (c: CellHost, patch: string) => Promise<string | null>): Promise<boolean> => exclusive(async () => {
     const patch = await ensurePatch();
     if (!patch) { appendLog(`x ${label} not saved -- no patch plugin chosen.`); return false; }
-    return mutate(label, patch, from, c => act(c, patch));
+    return (await mutate(label, patch, from, c => act(c, patch))) === null;
   });
 
   const editReference = async (changes: CellEditChanges): Promise<boolean> => {
@@ -509,10 +530,30 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     const patch = gizmoPatchRef.current;
     if (!patch || (undo ? editCounts.undo : editCounts.redo) === 0) return;
     const key = selected?.formKey ?? null;
-    await exclusive(() => mutate(undo ? 'undo edit' : 'redo edit', patch, key, async c => {
+    await exclusive(async () => (await mutate(undo ? 'undo edit' : 'redo edit', patch, key, async c => {
       await (undo ? c.UndoCellEdit(patch) : c.RedoCellEdit(patch));
       return key;
-    }));
+    })) === null);
+  };
+
+  const editCellProperties = async (changes: CellPropertyChanges): Promise<string | null> => {
+    const cellKey = result?.cellFormKey;
+    if (!cellKey) return 'Load a cell first.';
+    let failure: string | null = 'Another edit is running.';
+    await exclusive(async () => {
+      const patch = await ensurePatch();
+      if (!patch) {
+        appendLog('x set cell properties not saved -- no patch plugin chosen.');
+        failure = 'No patch plugin chosen.';
+        return false;
+      }
+      failure = await mutate(`set ${Object.keys(changes).join(', ')}`, patch, null, async c => {
+        await c.SetCellProperties(cellKey, patch, changes);
+        return null;
+      });
+      return failure === null;
+    });
+    return failure;
   };
 
   const moveEnd = useCallback(async (ref: CellPlacedReference) => {
@@ -717,6 +758,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                       <div className="cell-stat cell-stat-warn"><span>Meshes unavailable</span><strong>{failedModelCount}</strong></div>
                     )}
                   </div>
+                )}
+
+                {cellProps && (
+                  <CellPropertiesPanel properties={cellProps} onEdit={editCellProperties} />
                 )}
 
                 {selected && (
