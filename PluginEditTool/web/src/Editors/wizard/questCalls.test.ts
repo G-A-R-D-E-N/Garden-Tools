@@ -54,7 +54,7 @@ it('Detects: a template edit silently changing the quest it creates, because fet
     { method: 'CreateRecord', args: ['Patch.esp', 'QUST', { schema: true, editorId: 'The_Lost_Locket' }] },
     {
       method: 'SetQuestStages',
-      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Rusty Locket."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You found Rusty Locket. Take it back to Courier Bob."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You gave Rusty Locket to Courier Bob. Reward: 50 caps."}]}]'],
+      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Rusty Locket.","conditions":[]}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You found Rusty Locket. Take it back to Courier Bob.","conditions":[]}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You gave Rusty Locket to Courier Bob. Reward: 50 caps.","conditions":[]}]}]'],
     },
     {
       method: 'SetQuestAliases',
@@ -126,14 +126,14 @@ it('Detects: a template whose stages, objectives, aliases or question help ids d
 it('Detects: the escort failure stage marked as completing the quest (flag 1) instead of failing it (flag 2), or the report stage completing before the player reports, so a dead escortee would count as a success', () => {
   expect(buildQuestCalls(ESCORT, ESCORT_ANSWERS, FORM_KEYS)[1]).toEqual({
     method: 'SetQuestStages',
-    args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Find Old Hannah and agree to take them to Sanctuary."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Take Old Hannah to Sanctuary."}]},{"index":30,"flags":0,"logEntries":[{"flags":0,"logText":"Old Hannah reached Sanctuary. Report to Courier Bob for your reward: 50 caps."}]},{"index":40,"flags":0,"logEntries":[{"flags":1,"logText":"You reported to Courier Bob. Reward: 50 caps."}]},{"index":90,"flags":0,"logEntries":[{"flags":2,"logText":"Old Hannah died. The quest failed."}]}]'],
+    args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Find Old Hannah and agree to take them to Sanctuary.","conditions":[]}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Take Old Hannah to Sanctuary.","conditions":[]}]},{"index":30,"flags":0,"logEntries":[{"flags":0,"logText":"Old Hannah reached Sanctuary. Report to Courier Bob for your reward: 50 caps.","conditions":[]}]},{"index":40,"flags":0,"logEntries":[{"flags":1,"logText":"You reported to Courier Bob. Reward: 50 caps.","conditions":[]}]},{"index":90,"flags":0,"logEntries":[{"flags":2,"logText":"Old Hannah died. The quest failed.","conditions":[]}]}]'],
   });
 });
 
 it('Detects: the two-ending template leaving one ending open (stage 40 not completing), so the player who makes the second choice would never finish the quest', () => {
   expect(buildQuestCalls(CHOICE_TWO_ENDINGS, CHOICE_ANSWERS, FORM_KEYS)[1]).toEqual({
     method: 'SetQuestStages',
-    args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Talk to Courier Bob to hear your choice."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Decide between two options: Spare the raiders or Hand the raiders over."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Spare the raiders. Reward: 50 caps."}]},{"index":40,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Hand the raiders over. Reward: 20 caps."}]}]'],
+    args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Talk to Courier Bob to hear your choice.","conditions":[]}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Decide between two options: Spare the raiders or Hand the raiders over.","conditions":[]}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Spare the raiders. Reward: 50 caps.","conditions":[]}]},{"index":40,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Hand the raiders over. Reward: 20 caps.","conditions":[]}]}]'],
   });
 });
 
@@ -150,7 +150,7 @@ it('Detects: the kill-a-target quest calls changing from what the wizard made be
     { method: 'CreateRecord', args: ['Patch.esp', 'QUST', { schema: true, editorId: 'Mill_Bandit' }] },
     {
       method: 'SetQuestStages',
-      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Raider Boss."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You defeated Raider Boss. Report back to Courier Bob."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You reported to Courier Bob. Reward: 50 caps."}]}]'],
+      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Raider Boss.","conditions":[]}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You defeated Raider Boss. Report back to Courier Bob.","conditions":[]}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You reported to Courier Bob. Reward: 50 caps.","conditions":[]}]}]'],
     },
     {
       method: 'SetQuestAliases',

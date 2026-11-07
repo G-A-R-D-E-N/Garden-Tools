@@ -43,7 +43,8 @@ export function setStageText(stages: QuestStage[], index: number, text: string):
 function clearOutcome(entries: StageLogEntry[], bit: number): StageLogEntry[] {
   return entries.flatMap(entry => {
     const cleared = { ...entry, flags: toggleBit(entry.flags, bit, false) };
-    const emptied = (entry.flags & bit) !== 0 && cleared.flags === 0 && cleared.logText === '' && cleared.note === '';
+    const emptied = (entry.flags & bit) !== 0 && cleared.flags === 0 && cleared.logText === '' && cleared.note === ''
+      && (cleared.conditions ?? []).length === 0 && cleared.conditionsUnreadable !== true;
     return emptied ? [] : [cleared];
   });
 }

@@ -198,6 +198,15 @@ nlohmann::json itemsJson(const std::vector<fo4::forms::QuestAliasItem>& items) {
     return out;
 }
 
+bool itemExtraOwnerUnresolved(const std::vector<fo4::forms::QuestAliasItem>& items,
+                              const fo4::FormLinkTypeLookup& ownerTypes) {
+    return std::any_of(
+        items.begin(), items.end(), [&ownerTypes](const fo4::forms::QuestAliasItem& item) {
+            return item.extra.has_value() && item.extra->owner.has_value() &&
+                   !ownerTypes(*item.extra->owner).has_value();
+        });
+}
+
 nlohmann::json linkedAliasesJson(const std::vector<fo4::forms::QuestLinkedAlias>& links) {
     nlohmann::json out = nlohmann::json::array();
     for (const auto& link : links) {
@@ -307,7 +316,9 @@ bool aliasConditionRun(const fo4::forms::QuestAlias& alias,
     return true;
 }
 
-nlohmann::json questAliasJson(const fo4::Plugin& plugin, const fo4::forms::QuestAlias& alias) {
+nlohmann::json questAliasJson(const fo4::Plugin& plugin,
+                              const fo4::forms::QuestAlias& alias,
+                              const fo4::FormLinkTypeLookup& ownerTypes) {
     nlohmann::json out = nlohmann::json::object();
     if (alias.kind == fo4::forms::QuestAliasKind::collection) {
         out["kind"] = "collection";
@@ -348,6 +359,7 @@ nlohmann::json questAliasJson(const fo4::Plugin& plugin, const fo4::forms::Quest
         out["forcedVoice"] = optionalKeyJson(alias.forced_voice);
         out["deathItem"] = optionalKeyJson(alias.death_item);
         out["voiceTypes"] = optionalKeyJson(alias.voice_types);
+        if (itemExtraOwnerUnresolved(alias.items, ownerTypes)) out["extrasUnreadable"] = true;
     }
     if (auto conditions = aliasConditionPayload(plugin, alias)) {
         out["conditions"] = std::move(*conditions);

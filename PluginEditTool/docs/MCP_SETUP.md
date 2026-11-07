@@ -5,8 +5,8 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **194 tools**: 75 hand-written tools (73 `if (!add(` registrations in `McpTools.cpp` plus `material_set_fields` and `archive_pack`) and 119 catalog
-tools. The 119 catalog tools are the editor parity set: 30 read-side (`McpCatalogRead.cpp`), 57 edit-side
+It advertises **228 tools**: 81 hand-written tools (79 `if (!add(` registrations in `McpTools.cpp` plus `material_set_fields` and `archive_pack`) and 147 catalog
+tools. The 147 catalog tools are the editor parity set: 36 read-side (`McpCatalogRead.cpp`), 79 edit-side
 (`McpCatalogEdit.cpp`) and 32 service-side (`McpCatalogService.cpp`: Papyrus source, string tables, archives,
 blueprint graphs and `load_script`).
 
