@@ -84,6 +84,14 @@ public unsafe struct FormKey
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct StaticPlacement
+{
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public float Scale;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct EnvPluginInfo
 {
     public IntPtr Filename;
@@ -608,14 +616,6 @@ public unsafe struct WeatherInfo
     public int HasParameters;
     public WeatherParameters Parameters;
     public IntPtr Internal;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct StaticPlacement
-{
-    public fixed float Position[3];
-    public fixed float Rotation[3];
-    public float Scale;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2191,6 +2191,69 @@ public unsafe struct CellChild
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellSummary
+{
+    public FormKey Key;
+    public IntPtr EditorId;
+    public NameKind NameKind;
+    public IntPtr NameText;
+    public uint NameStringId;
+    public int Interior;
+    public int HasGrid;
+    public int GridX;
+    public int GridY;
+    public int HasWorldspace;
+    public FormKey Worldspace;
+    public nuint WinningPlugin;
+    public int Localized;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScolPart
+{
+    public IntPtr ModelPath;
+    public IntPtr Placements;
+    public nuint PlacementCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct BaseObjectInfo
+{
+    public FormKey Key;
+    public fixed byte Signature[5];
+    public IntPtr EditorId;
+    public IntPtr TypeName;
+    public IntPtr ModelPath;
+    public int EditorMarker;
+    public int HasDecal;
+    public IntPtr DecalDiffuse;
+    public int HasDecalWidth;
+    public float DecalWidth;
+    public int HasDecalHeight;
+    public float DecalHeight;
+    public IntPtr ScolParts;
+    public nuint ScolPartCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellReference
+{
+    public FormKey Key;
+    public IntPtr RecordType;
+    public IntPtr EditorId;
+    public int HasBase;
+    public FormKey Base;
+    public IntPtr BaseInfo;
+    public fixed float Position[3];
+    public fixed float Rotation[3];
+    public float Scale;
+    public int Persistent;
+    public int InitiallyDisabled;
+    public nuint WinningPlugin;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct DeltaPatchCounts
 {
     public nuint Kept;
@@ -3219,7 +3282,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 409u;
+    public const uint CompiledAbiVersion = 413u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4240,6 +4303,39 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_landscape")]
     public static extern Status EnvCellLandscape(IntPtr env, FormKey cell, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_resolve_cell")]
+    public static extern Status EnvResolveCell(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_resolve_worldspace")]
+    public static extern Status EnvResolveWorldspace(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_cell_at_grid")]
+    public static extern Status EnvFindCellAtGrid(IntPtr env, FormKey world, int x, int y, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_view")]
+    public static extern Status EnvCellView(IntPtr env, FormKey cell, IntPtr* out_view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_summary")]
+    public static extern Status CellViewSummary(IntPtr view, CellSummary* out_summary);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_reference_count")]
+    public static extern nuint CellViewReferenceCount(IntPtr view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_reference")]
+    public static extern Status CellViewReference(IntPtr view, nuint index, CellReference* out_reference);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_scol_part")]
+    public static extern Status CellViewScolPart(IntPtr view, nuint reference_index, nuint part_index, ScolPart* out_part);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_view_free")]
+    public static extern void CellViewFree(IntPtr view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_base_object_info")]
+    public static extern Status EnvBaseObjectInfo(IntPtr env, FormKey @base, BaseObjectInfo** out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_base_object_info_free")]
+    public static extern void BaseObjectInfoFree(BaseObjectInfo* info);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_delta_patch")]
     public static extern Status EnvBuildDeltaPatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? older_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? newer_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, DeltaPatchCounts* out_counts);

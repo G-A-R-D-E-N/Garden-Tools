@@ -15,6 +15,12 @@ typedef struct radicle_form_key {
   uint32_t local_id;
 } radicle_form_key;
 
+typedef struct radicle_static_placement {
+  float position[3];
+  float rotation[3];
+  float scale;
+} radicle_static_placement;
+
 typedef struct radicle_env_plugin_info {
   const char* filename;
   const char* path;

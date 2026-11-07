@@ -550,7 +550,7 @@ set(RADICLE_C_SOURCES
   src/c_api_dialogue.cpp src/c_api_dialogue_author.cpp
   src/c_api_scene_author.cpp
   src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp
-  src/c_api_cell.cpp
+  src/c_api_cell.cpp src/c_api_cell_view.cpp
   src/c_api_patch.cpp
   src/c_api_conflict.cpp
   src/c_api_nif.cpp src/c_api_dds.cpp
