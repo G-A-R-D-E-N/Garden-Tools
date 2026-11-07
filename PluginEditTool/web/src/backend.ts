@@ -740,6 +740,24 @@ export interface CellEditChanges {
   scale?: number | null;
   editorId?: string;
 }
+export type CellPropertyKind = 'scalar' | 'link' | 'colour' | 'flags';
+export type CellPropertyValue = number | string | number[] | string[] | null;
+export interface CellPropertyDescriptor {
+  name: string;
+  label: string;
+  kind: CellPropertyKind;
+  minimum: number;
+  maximum: number;
+  multiple: boolean;
+  targets: string[];
+}
+export type CellPropertyChanges = Record<string, CellPropertyValue>;
+export interface CellPropertiesResult {
+  cellFormKey: string;
+  cellEditorId: string;
+  values: Record<string, CellPropertyValue>;
+  descriptors: CellPropertyDescriptor[];
+}
 export interface CellReferencesResult {
   cellFormKey?: string;
   cellEditorId?: string;
@@ -794,6 +812,8 @@ export interface CellHost {
   UndoCellEdit(patchPlugin: string): Promise<string>;
   RedoCellEdit(patchPlugin: string): Promise<string>;
   GetCellEditHistory(patchPlugin: string): Promise<string>;
+  GetCellProperties(cellFormKey: string): Promise<string>;
+  SetCellProperties(cellFormKey: string, patchPlugin: string, changes: CellPropertyChanges): Promise<string>;
 }
 
 

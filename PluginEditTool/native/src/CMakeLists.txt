@@ -53,6 +53,7 @@ add_library(
     plugin/RadiclePluginQuestFragments.cpp
     plugin/RadiclePluginQuestScriptEdit.cpp
     plugin/RadiclePluginQuestReads.cpp
+    plugin/RadiclePluginQuestStageSetters.cpp
     plugin/RadiclePluginDialogue.cpp
     plugin/RadiclePluginDialogueRead.cpp
     plugin/RadiclePluginScene.cpp
@@ -89,6 +90,7 @@ add_library(
     plugin/RadiclePluginEsl.cpp
     plugin/RadiclePluginCell.cpp
     plugin/RadiclePluginCellProperties.cpp
+    plugin/RadiclePluginCellCleanup.cpp
     plugin/RadiclePluginTypedRecords.cpp
     plugin/RadiclePluginSound.cpp
     plugin/RadiclePluginPackage.cpp

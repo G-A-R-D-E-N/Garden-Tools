@@ -10,7 +10,7 @@ export const QUEST_HELP_TOPICS: readonly HelpTopic[] = [
   {
     id: 'quest-stage-log',
     title: 'Log entry',
-    body: 'A log entry is the journal line the player reads when the quest reaches this stage. Write it as a short sentence, such as "Find the courier at the docks". Leave it empty if the stage should not show anything. Saving the stages rewrites every log entry, and this editor cannot show log-entry conditions yet, so saving can remove them. Check the conditions in the Creation Kit after you save.',
+    body: 'A log entry is the journal line the player reads when the quest reaches this stage. Write it as a short sentence, such as "Find the courier at the docks". Leave it empty if the stage should not show anything. Saving the stages rewrites every log entry. Log-entry conditions are kept when you save, but this editor cannot show or edit them.',
     related: ['quest-stage'],
   },
   {

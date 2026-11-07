@@ -246,6 +246,12 @@ public:
     virtual Result<nlohmann::json> setCellProperties(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Cell property writes are unavailable"});
     }
+    virtual Result<nlohmann::json> planCellCleanup(const nlohmann::json&) const {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell cleanup is unavailable"});
+    }
+    virtual Result<nlohmann::json> applyCellCleanup(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Cell cleanup writes are unavailable"});
+    }
     virtual Result<nlohmann::json> createPlacedObject(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference creation is unavailable"});
     }

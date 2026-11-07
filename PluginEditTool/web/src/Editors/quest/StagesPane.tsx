@@ -37,8 +37,8 @@ export default function StagesPane({ stages, selected, onCommit }: Props) {
       </header>
       <div className="quest-row">
         <p className="quest-warning">
-          Saving rewrites every stage and log entry on this quest. This editor cannot show log-entry conditions yet,
-          so saving can remove them. Check the conditions in the Creation Kit after you save.
+          Saving rewrites every stage and log entry on this quest. Log-entry conditions are kept when you save,
+          but this editor cannot show or edit them.
         </p>
         <HelpTip topicId="quest-stage-log" />
       </div>

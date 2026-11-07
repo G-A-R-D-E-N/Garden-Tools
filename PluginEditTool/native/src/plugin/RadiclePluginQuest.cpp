@@ -61,11 +61,12 @@ namespace {
 bool knownStageKey(std::string_view key) {
     return key == "index" || key == "flags" || key == "logEntry" ||
            key == "logEntries" || key == "complete" || key == "fail" ||
-           key == "startUp";
+           key == "startUp" || key == "flagNames" || key == "unknownFlagBits";
 }
 
 bool knownLogEntryKey(std::string_view key) {
-    return key == "flags" || key == "note" || key == "logText" || key == "conditions";
+    return key == "flags" || key == "note" || key == "logText" || key == "conditions" ||
+           key == "logTextId" || key == "conditionsUnreadable";
 }
 
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
@@ -101,6 +102,7 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
                         adapterConditionUnrepresentable(plugin, graph, condition)) {
                     return error;
                 }
+                if (const auto error = nonFiniteConditionError(condition)) return error;
             }
             bool sawNam2 = false;
             bool sawCnam = false;
@@ -333,6 +335,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
     fo4::forms::QuestStages stages;
     std::vector<std::vector<std::vector<PendingQuestCondition>>> pendingConditions;
     std::vector<fo4::FormKey> conditionKeys;
+    bool rawConditionsPresent = false;
     std::set<std::uint16_t> indexes;
 
     for (const auto& element : *stagesJson) {
@@ -459,6 +462,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
             entries.push_back(std::move(one));
         }
 
+        std::vector<bool> omittedConditions;
         for (const auto& entryJson : entries) {
             if (!entryJson.is_object()) {
                 return std::unexpected(Error{
@@ -531,8 +535,15 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 cnam.data = fo4::schema::write_localized_string(value);
                 entry.members.push_back(std::move(cnam));
             }
+            if (localized && entryJson.contains("logTextId") && !logText.has_value()) {
+                return std::unexpected(Error{
+                    "InvalidQuestStagePayload",
+                    "a localized log entry with logTextId must also send logText, or drop logTextId; omitting logText would drop the CNAM"
+                });
+            }
             std::vector<PendingQuestCondition> parsedConditions;
-            if (entryJson.contains("conditions") && !entryJson["conditions"].is_null()) {
+            const bool conditionsGiven = entryJson.contains("conditions");
+            if (conditionsGiven && !entryJson["conditions"].is_null()) {
                 if (!entryJson["conditions"].is_array()) {
                     return std::unexpected(Error{
                         "InvalidQuestStagePayload",
@@ -541,17 +552,34 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 }
                 for (const auto& conditionJson : entryJson["conditions"]) {
                     PendingQuestCondition pending;
-                    if (const auto error = parseQuestCondition(
-                            conditionJson, graph_, pending, conditionKeys)) {
+                    if (const auto error = parseQuestStageCondition(
+                            conditionJson, loaded->plugin, graph_, pending, conditionKeys)) {
                         return std::unexpected(*error);
                     }
+                    rawConditionsPresent = rawConditionsPresent || pending.preserved;
                     parsedConditions.push_back(std::move(pending));
                 }
             }
+            omittedConditions.push_back(!conditionsGiven);
             stage.log_entries.push_back(std::move(entry));
             pendingConditions.back().push_back(std::move(parsedConditions));
         }
+        if (const auto error = checkOmittedStageConditions(
+                previousStages, stage.index, stage.log_entries.size(), omittedConditions)) {
+            return std::unexpected(*error);
+        }
+        for (std::size_t entryIndex = 0; entryIndex < omittedConditions.size(); ++entryIndex) {
+            if (!omittedConditions[entryIndex]) continue;
+            auto carried = carriedStageConditionRun(
+                previousStages, stage.index, entryIndex, stage.log_entries.size());
+            rawConditionsPresent = rawConditionsPresent || !carried.empty();
+            auto& members = stage.log_entries[entryIndex].members;
+            members.insert(members.begin(), carried.begin(), carried.end());
+        }
         stages.stages.push_back(std::move(stage));
+    }
+    if (const auto error = refuseOwnerMasterShift(loaded->plugin, conditionKeys, rawConditionsPresent)) {
+        return std::unexpected(*error);
     }
 
     try {
@@ -629,26 +657,38 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 const auto& pending = pendingConditions[stageIndex][entryIndex];
                 if (pending.empty()) continue;
                 std::vector<fo4::CtdaCondition> encoded;
+                std::vector<fo4::CtdaCondition> fresh;
+                std::vector<std::size_t> freshPositions;
                 encoded.reserve(pending.size());
-                for (auto condition : pending) {
-                    if (condition.param1.has_value()) {
-                        condition.condition.param1 =
-                            static_cast<std::int32_t>(encodeKey(condition.param1));
-                    }
-                    if (condition.param2.has_value()) {
-                        condition.condition.param2 =
-                            static_cast<std::int32_t>(encodeKey(condition.param2));
-                    }
-                    if (condition.reference.has_value()) {
-                        condition.condition.reference = encodeKey(condition.reference);
-                    }
-                    if (condition.compareGlobal.has_value()) {
-                        condition.condition.comparison_raw = encodeKey(condition.compareGlobal);
+                for (std::size_t position = 0; position < pending.size(); ++position) {
+                    auto condition = pending[position];
+                    if (!condition.preserved) {
+                        if (condition.param1.has_value()) {
+                            condition.condition.param1 =
+                                static_cast<std::int32_t>(encodeKey(condition.param1));
+                        }
+                        if (condition.param2.has_value()) {
+                            condition.condition.param2 =
+                                static_cast<std::int32_t>(encodeKey(condition.param2));
+                        }
+                        if (condition.reference.has_value()) {
+                            condition.condition.reference = encodeKey(condition.reference);
+                        }
+                        if (condition.compareGlobal.has_value()) {
+                            condition.condition.comparison_raw = encodeKey(condition.compareGlobal);
+                        }
+                        freshPositions.push_back(position);
+                        fresh.push_back(condition.condition);
                     }
                     encoded.push_back(std::move(condition.condition));
                 }
                 carryConditionPadding(
-                    previousLogEntryConditions(previousStages, stage.index, entryIndex), encoded);
+                    previousConditionsNotPreserved(
+                        previousLogEntryConditions(previousStages, stage.index, entryIndex), pending),
+                    fresh);
+                for (std::size_t j = 0; j < freshPositions.size(); ++j) {
+                    encoded[freshPositions[j]].padding = fresh[j].padding;
+                }
                 auto run = fo4::serialize_ctda_run(encoded);
                 auto& members = stage.log_entries[entryIndex].members;
                 members.insert(members.begin(), run.begin(), run.end());

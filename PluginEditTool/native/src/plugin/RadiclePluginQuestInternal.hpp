@@ -34,6 +34,7 @@ struct PendingQuestCondition {
     std::optional<fo4::FormKey> param2;
     std::optional<fo4::FormKey> reference;
     std::optional<fo4::FormKey> compareGlobal;
+    bool preserved{false};
 };
 
 struct LocalizedQuestTables {
@@ -113,6 +114,26 @@ std::optional<Error> parseQuestCondition(
     std::string_view surface = "quest log entries");
 void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
                            std::vector<fo4::CtdaCondition>& conditions);
+std::optional<Error> nonFiniteConditionError(const fo4::CtdaCondition& condition);
+std::optional<Error> parseQuestStageCondition(const nlohmann::json& row,
+                                              const fo4::Plugin& plugin,
+                                              const fo4::ConflictGraph& graph,
+                                              PendingQuestCondition& out,
+                                              std::vector<fo4::FormKey>& conditionKeys);
+std::optional<Error> refuseOwnerMasterShift(const fo4::Plugin& plugin,
+                                            const std::vector<fo4::FormKey>& conditionKeys,
+                                            bool rawConditionsPresent);
+std::vector<fo4::CtdaCondition> previousConditionsNotPreserved(
+    const std::vector<fo4::CtdaCondition>& previous,
+    const std::vector<PendingQuestCondition>& pending);
+std::optional<Error> checkOmittedStageConditions(const fo4::forms::QuestStages& previous,
+                                                 std::uint16_t index,
+                                                 std::size_t entryCount,
+                                                 const std::vector<bool>& omitted);
+std::vector<fo4::Subrecord> carriedStageConditionRun(const fo4::forms::QuestStages& previous,
+                                                     std::uint16_t index,
+                                                     std::size_t ordinal,
+                                                     std::size_t entryCount);
 std::optional<Error> adapterConditionUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::ConflictGraph& graph,

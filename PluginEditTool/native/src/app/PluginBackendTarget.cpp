@@ -550,6 +550,8 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "DeletePlacedReference") return backend_.deletePlacedReference(args);
         if (method == "GetCellProperties") return backend_.getCellProperties(args);
         if (method == "SetCellProperties") return backend_.setCellProperties(args);
+        if (method == "PlanCellCleanup") return backend_.planCellCleanup(args);
+        if (method == "ApplyCellCleanup") return backend_.applyCellCleanup(args);
     }
     return backend_.invoke(targetNamespace_ + "." + std::string(method), args);
 }

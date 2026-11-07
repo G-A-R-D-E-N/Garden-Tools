@@ -20,6 +20,7 @@ vi.mock('./backend', () => ({
     GetPlacedReferencesAtGrid: bridge.load,
     ResolveWorldspace: bridge.resolve,
     ResolveWorldspaceId: bridge.resolveWorldspaceId,
+    GetCellProperties: async () => '{"values":{},"descriptors":[]}',
   }),
   getBackend: () => ({ CreateRecord: bridge.create, SavePlugin: bridge.save }),
 }));

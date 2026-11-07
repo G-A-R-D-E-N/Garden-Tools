@@ -292,6 +292,7 @@
 .cell-edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
 .cell-edit-field { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--muted, #9aa0aa); }
 .cell-edit-field input { width: 6em; min-width: 0; }
+.cell-prop-wide input { width: 12em; }
 
 
 .cell-layers { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
