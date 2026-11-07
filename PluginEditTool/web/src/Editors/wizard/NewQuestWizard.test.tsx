@@ -42,7 +42,13 @@ function sceneStubs() {
   };
 }
 
-function wizardBackend(overrides: Record<string, unknown> = {}) {
+type WizardBackend = ReturnType<typeof stubBackend> & {
+  CreateRecord: ReturnType<typeof vi.fn>;
+  SetField: ReturnType<typeof vi.fn>;
+  CreateSeqFile: ReturnType<typeof vi.fn>;
+};
+
+function wizardBackend(overrides: Record<string, unknown> = {}): WizardBackend {
   return stubBackend({
     GetActivePlugins: vi.fn(async () => JSON.stringify(PLUGINS)),
     SearchRecords: vi.fn(async (_query: string, typeFilter: string) => JSON.stringify([HITS[typeFilter]])),
@@ -52,7 +58,7 @@ function wizardBackend(overrides: Record<string, unknown> = {}) {
     CreateSeqFile: vi.fn(async () => 'Wrote Patch.esp.seq.'),
     ...sceneStubs(),
     ...overrides,
-  });
+  }) as WizardBackend;
 }
 
 async function pickRecord(row: string, label: string) {
