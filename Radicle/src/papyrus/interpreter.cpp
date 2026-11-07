@@ -1,6 +1,7 @@
 #include "fo4/papyrus/interpreter.hpp"
 
 #include "fo4/papyrus/array_ops.hpp"
+#include "fo4/papyrus/runtime.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -445,6 +446,7 @@ Status Interpreter::storeResult(Frame& frame, const pex::PexValue& destination,
 
 bool Interpreter::isObjectOfType(const Value& value, const std::string& typeName) const {
     if (value.type != ValueType::Object || value.object == nullptr) return false;
+    if (value.object->type.empty() && (value.object->handle & kEngineHandleBit) != 0) return true;
     const pex::PexObject* current = host_.findObject(value.object->type);
     if (current == nullptr) return sameName(value.object->type, typeName);
     for (int hop = 0; current != nullptr && hop < kMaxInheritanceHops; ++hop) {

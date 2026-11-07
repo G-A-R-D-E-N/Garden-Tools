@@ -613,6 +613,128 @@ TEST_F(RuntimeTest, EngineObjectNativeWithFlagStillAcceptsEngineHandle) {
   EXPECT_EQ(runtime().nativeTargetRefusals(), 0);
 }
 
+TEST_F(RuntimeTest, UntypedEngineHandleStoresIntoFormTemp) {
+  PexFunction run = method("Run", "Form", {},
+                           {ins("callstatic", {literal("PerkSource"), literal("Get"), id("temp0")}),
+                            ins("return", {id("temp0")})});
+  run.locals = {PexTypedName{"temp0", "Form"}};
+  addScript(script("Mod", {state("", {run})}));
+  buildRuntime();
+  runtime().registerNative("PerkSource", "Get",
+                           NativeRegistration{NativeTargetKind::Static, "",
+                                              [](const Value&, const std::vector<Value>&, Value& out, Status&) {
+                                                out = fo4::papyrus::objectValue(kEngineHandleBit | 5, "", "");
+                                                return true;
+                                              },
+                                              false,
+                                              {}, {}});
+  const auto instance = runtime().attach("Mod", OwnerId::forForm("000818:Mod.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  Status status = Status::HostError;
+  const std::uint64_t ticket = runtime().submitCall(*instance, "Run", {}, status);
+  ASSERT_EQ(status, Status::Ok);
+  runtime().runStep(512);
+  CallRecord record;
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Done);
+  EXPECT_EQ(record.status, Status::Ok);
+  ASSERT_EQ(record.value.type, fo4::papyrus::ValueType::Object);
+  ASSERT_NE(record.value.object, nullptr);
+  EXPECT_EQ(record.value.object->handle, kEngineHandleBit | 5);
+}
+
+TEST_F(RuntimeTest, UntypedEngineHandleFromInstanceNativeStoresIntoTypedLocal) {
+  PexFunction run = method("Run", "Form", {PexTypedName{"target", "Var"}},
+                           {ins("callmethod", {literal("Pick"), id("target"), id("temp0")}),
+                            ins("return", {id("temp0")})});
+  run.locals = {PexTypedName{"temp0", "Form"}};
+  addScript(script("Mod", {state("", {run})}));
+  buildRuntime();
+  runtime().registerNative("Widget", "Pick",
+                           NativeRegistration{NativeTargetKind::EngineObject, "",
+                                              [](const Value&, const std::vector<Value>&, Value& out, Status&) {
+                                                out = fo4::papyrus::objectValue(kEngineHandleBit | 6, "", "");
+                                                return true;
+                                              },
+                                              false,
+                                              {}, {}});
+  const auto instance = runtime().attach("Mod", OwnerId::forForm("000819:Mod.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  Status status = Status::HostError;
+  const std::uint64_t ticket = runtime().submitCall(
+      *instance, "Run", {fo4::papyrus::objectValue(kEngineHandleBit | 5, "Widget", "")}, status);
+  ASSERT_EQ(status, Status::Ok);
+  runtime().runStep(512);
+  CallRecord record;
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Done);
+  EXPECT_EQ(record.status, Status::Ok);
+  ASSERT_EQ(record.value.type, fo4::papyrus::ValueType::Object);
+  ASSERT_NE(record.value.object, nullptr);
+  EXPECT_EQ(record.value.object->handle, kEngineHandleBit | 6);
+}
+
+TEST_F(RuntimeTest, EngineHandleWithOtherTypeStillMismatchesDeclaredType) {
+  PexFunction run = method("Run", "None", {},
+                           {ins("callstatic", {literal("PerkSource"), literal("Get"), id("temp0")}),
+                            ins("return", {id("::NoneVar")})});
+  run.locals = {PexTypedName{"temp0", "Gadget"}};
+  addScript(script("Widget", {}));
+  addScript(script("Gadget", {}));
+  addScript(script("Mod", {state("", {run})}));
+  buildRuntime();
+  runtime().registerNative("PerkSource", "Get",
+                           NativeRegistration{NativeTargetKind::Static, "",
+                                              [](const Value&, const std::vector<Value>&, Value& out, Status&) {
+                                                out = fo4::papyrus::objectValue(kEngineHandleBit | 5, "Widget", "");
+                                                return true;
+                                              },
+                                              false,
+                                              {}, {}});
+  const auto instance = runtime().attach("Mod", OwnerId::forForm("000820:Mod.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  Status status = Status::HostError;
+  const std::uint64_t ticket = runtime().submitCall(*instance, "Run", {}, status);
+  ASSERT_EQ(status, Status::Ok);
+  runtime().runStep(512);
+  CallRecord record;
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Failed);
+  EXPECT_EQ(record.status, Status::TypeMismatch);
+}
+
+TEST_F(RuntimeTest, NonEngineObjectOfUnrelatedTypeStillMismatchesDeclaredType) {
+  PexFunction run = method("Run", "None", {},
+                           {ins("callstatic", {literal("PerkSource"), literal("Get"), id("temp0")}),
+                            ins("return", {id("::NoneVar")})});
+  run.locals = {PexTypedName{"temp0", "Form"}};
+  addScript(script("Other", {}));
+  addScript(script("Mod", {state("", {run})}));
+  buildRuntime();
+  runtime().registerNative("PerkSource", "Get",
+                           NativeRegistration{NativeTargetKind::Static, "",
+                                              [](const Value&, const std::vector<Value>&, Value& out, Status&) {
+                                                out = fo4::papyrus::objectValue(5, "Other", "");
+                                                return true;
+                                              },
+                                              false,
+                                              {}, {}});
+  const auto instance = runtime().attach("Mod", OwnerId::forForm("000821:Mod.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  Status status = Status::HostError;
+  const std::uint64_t ticket = runtime().submitCall(*instance, "Run", {}, status);
+  ASSERT_EQ(status, Status::Ok);
+  runtime().runStep(512);
+  CallRecord record;
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Failed);
+  EXPECT_EQ(record.status, Status::TypeMismatch);
+}
+
 TEST_F(RuntimeTest, NativeStartsWaitAtCallTime) {
   addScript(script("Actor", {state("", {method("Early", "None", {},
                                                {ins("callstatic", {literal("Waiter"), literal("Wait"), id("result"), number(1)}),
