@@ -499,6 +499,120 @@ TEST_F(RuntimeTest, EngineObjectNativeNeedsBit63) {
   EXPECT_GT(runtime().nativeTargetRefusals(), 0);
 }
 
+TEST_F(RuntimeTest, EngineObjectNativeRefusesScriptInstanceWithoutFlag) {
+  PexObject widget = script("Widget", {});
+  PexObject gadget = script("Gadget", {state("", {method("Run", "None", {},
+                                                         {ins("callmethod", {literal("Touch"), id("self"), id("::nonevar")}),
+                                                          ins("return", {id("::NoneVar")})})})});
+  gadget.parentClassName = "Widget";
+  addScript(widget);
+  addScript(gadget);
+  buildRuntime();
+  int accepted = 0;
+  runtime().registerNative("Widget", "Touch",
+                           NativeRegistration{NativeTargetKind::EngineObject, "", {}, false, {},
+                                              [&accepted](const NativeCall&, NativeResult& result) {
+                                                accepted += 1;
+                                                result.value = fo4::papyrus::noneValue();
+                                                return true;
+                                              }});
+  const auto instance = runtime().attach("Gadget", OwnerId::forForm("000813:Gadget.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  EXPECT_EQ(runtime().sendEvent(*instance, "Run"), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(accepted, 0);
+  EXPECT_EQ(runtime().nativeTargetRefusals(), 1);
+}
+
+TEST_F(RuntimeTest, EngineObjectNativeWithFlagAcceptsDerivedScriptInstance) {
+  PexObject widget = script("Widget", {});
+  PexObject gadget = script("Gadget", {state("", {method("Run", "None", {},
+                                                         {ins("callmethod", {literal("Touch"), id("self"), id("::nonevar")}),
+                                                          ins("return", {id("::NoneVar")})})})});
+  gadget.parentClassName = "Widget";
+  addScript(widget);
+  addScript(gadget);
+  buildRuntime();
+  int accepted = 0;
+  std::uint64_t seen = 0;
+  runtime().registerNative("Widget", "Touch",
+                           NativeRegistration{NativeTargetKind::EngineObject, "", {}, false, {},
+                                              [&accepted, &seen](const NativeCall& call, NativeResult& result) {
+                                                accepted += 1;
+                                                seen = call.self.object == nullptr ? 0 : call.self.object->handle;
+                                                result.value = fo4::papyrus::noneValue();
+                                                return true;
+                                              },
+                                              true});
+  const auto instance = runtime().attach("Gadget", OwnerId::forForm("000814:Gadget.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  EXPECT_EQ(runtime().sendEvent(*instance, "Run"), Status::Ok);
+  EXPECT_EQ(runtime().runStep(512).completed, 1);
+  EXPECT_EQ(accepted, 1);
+  EXPECT_EQ(seen, *instance);
+  EXPECT_EQ(seen & kEngineHandleBit, 0u);
+  EXPECT_EQ(runtime().nativeTargetRefusals(), 0);
+}
+
+TEST_F(RuntimeTest, EngineObjectNativeWithFlagRefusesUnrelatedScriptInstance) {
+  PexObject widget = script("Widget", {});
+  PexObject gadget = script("Gadget", {});
+  gadget.parentClassName = "Widget";
+  addScript(widget);
+  addScript(gadget);
+  addScript(script("Other", {}));
+  addScript(script("Mod", {state("", {method("Poke", "None", {PexTypedName{"target", "Var"}},
+                                              {ins("callmethod", {literal("Touch"), id("target"), id("::nonevar")}),
+                                               ins("return", {id("::NoneVar")})})})}));
+  buildRuntime();
+  int accepted = 0;
+  runtime().registerNative("Widget", "Touch",
+                           NativeRegistration{NativeTargetKind::EngineObject, "", {}, false, {},
+                                              [&accepted](const NativeCall&, NativeResult& result) {
+                                                accepted += 1;
+                                                result.value = fo4::papyrus::noneValue();
+                                                return true;
+                                              },
+                                              true});
+  const auto other = runtime().attach("Other", OwnerId::forForm("000815:Other.esp"));
+  ASSERT_TRUE(other.has_value());
+  ASSERT_EQ(runtime().initialize(*other), Status::Ok);
+  const auto mod = runtime().attach("Mod", OwnerId::forForm("000817:Mod.esp"));
+  ASSERT_TRUE(mod.has_value());
+  ASSERT_EQ(runtime().initialize(*mod), Status::Ok);
+  EXPECT_EQ(runtime().sendEvent(*mod, "Poke", {fo4::papyrus::objectValue(*other, "Gadget", "")}), Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(accepted, 0);
+  EXPECT_EQ(runtime().nativeTargetRefusals(), 1);
+}
+
+TEST_F(RuntimeTest, EngineObjectNativeWithFlagStillAcceptsEngineHandle) {
+  addScript(script("Mod", {state("", {method("Poke", "None", {PexTypedName{"target", "Var"}},
+                                              {ins("callmethod", {literal("Touch"), id("target"), id("::nonevar")}),
+                                               ins("return", {id("::NoneVar")})})})}));
+  buildRuntime();
+  int accepted = 0;
+  runtime().registerNative("Widget", "Touch",
+                           NativeRegistration{NativeTargetKind::EngineObject, "", {}, false, {},
+                                              [&accepted](const NativeCall&, NativeResult& result) {
+                                                accepted += 1;
+                                                result.value = fo4::papyrus::noneValue();
+                                                return true;
+                                              },
+                                              true});
+  const auto instance = runtime().attach("Mod", OwnerId::forForm("000816:Mod.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  EXPECT_EQ(runtime().sendEvent(*instance, "Poke",
+                                {fo4::papyrus::objectValue(fo4::papyrus::kEngineHandleBit | 5, "Widget", "")}),
+            Status::Ok);
+  runtime().runStep(512);
+  EXPECT_EQ(accepted, 1);
+  EXPECT_EQ(runtime().nativeTargetRefusals(), 0);
+}
+
 TEST_F(RuntimeTest, NativeStartsWaitAtCallTime) {
   addScript(script("Actor", {state("", {method("Early", "None", {},
                                                {ins("callstatic", {literal("Waiter"), literal("Wait"), id("result"), number(1)}),

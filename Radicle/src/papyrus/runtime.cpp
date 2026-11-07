@@ -562,7 +562,7 @@ bool Runtime::callNativeEx(const NativeCall& call, NativeResult& result) {
             return true;
         }
     }
-    const bool accepted = registration->invoke ? nativeTargetAccepted(*registration, call.self)
+    const bool accepted = registration->invoke ? nativeTargetAccepted(*registration, owner, call.self)
                                               : registration->kind == NativeTargetKind::Static;
     if (!accepted) {
         nativeTargetRefusals_ += 1;
@@ -586,13 +586,20 @@ bool Runtime::callNativeEx(const NativeCall& call, NativeResult& result) {
     return true;
 }
 
-bool Runtime::nativeTargetAccepted(const NativeRegistration& registration, const Value& self) const {
+bool Runtime::nativeTargetAccepted(const NativeRegistration& registration, const std::string& declaringScript,
+                                   const Value& self) const {
     if (registration.kind == NativeTargetKind::Static) return true;
     if (self.type != ValueType::Object || self.object == nullptr || self.object->handle == 0) return false;
     const std::uint64_t handle = self.object->handle;
     if (registration.kind == NativeTargetKind::EngineObject) {
-        if ((handle & kEngineHandleBit) == 0) return false;
-        return registration.requiredScript.empty() || scriptInherits(self.object->type, registration.requiredScript);
+        if ((handle & kEngineHandleBit) != 0) {
+            return registration.requiredScript.empty() || scriptInherits(self.object->type, registration.requiredScript);
+        }
+        if (!registration.acceptScriptInstance) return false;
+        const Instance* instance = findInstance(handle);
+        if (instance == nullptr || instance->detached || !sameName(instance->script, self.object->type)) return false;
+        if (!scriptInherits(instance->script, declaringScript)) return false;
+        return registration.requiredScript.empty() || scriptInherits(instance->script, registration.requiredScript);
     }
     if ((handle & kEngineHandleBit) != 0) return false;
     const Instance* instance = findInstance(handle);

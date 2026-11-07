@@ -69,6 +69,7 @@ struct NativeRegistration {
     bool latent{false};
     std::function<std::uint64_t(const std::vector<Value>& args, Status& status)> begin;
     std::function<bool(const NativeCall& call, NativeResult& result)> invoke;
+    bool acceptScriptInstance{false};
 };
 
 inline constexpr std::uint64_t kEngineHandleBit = std::uint64_t{1} << 63;
@@ -253,7 +254,8 @@ private:
     Instance* findInstance(InstanceId instance);
     const Instance* findInstance(InstanceId instance) const;
     Instance* instanceFor(const ObjectRef& object);
-    bool nativeTargetAccepted(const NativeRegistration& registration, const Value& self) const;
+    bool nativeTargetAccepted(const NativeRegistration& registration, const std::string& declaringScript,
+                              const Value& self) const;
     bool scriptInherits(const std::string& script, const std::string& ancestor) const;
     OverrideResult tryOverride(const Instance& instance, const std::string& function,
                                const std::vector<Value>& args);

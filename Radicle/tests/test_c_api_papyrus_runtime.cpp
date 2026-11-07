@@ -422,6 +422,29 @@ TEST_F(CApiPapyrusRuntimeTest, EngineNativeGetsSelfAndRequiredScript) {
   radicle_papyrus_value_destroy(gadget);
 }
 
+TEST_F(CApiPapyrusRuntimeTest, AcceptScriptInstanceFlagNeedsAnEngineObjectNative) {
+  EXPECT_EQ(radicle_papyrus_runtime_register_native_ex(runtime_, "Hook", "Hit", RADICLE_PAPYRUS_NATIVE_STATIC, "",
+                                                       RADICLE_PAPYRUS_NATIVE_FLAG_ACCEPT_SCRIPT_INSTANCE),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_papyrus_runtime_register_native_ex(runtime_, "Actor", "Run",
+                                                       RADICLE_PAPYRUS_NATIVE_SCRIPT_INSTANCE, "",
+                                                       RADICLE_PAPYRUS_NATIVE_FLAG_ACCEPT_SCRIPT_INSTANCE),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_papyrus_runtime_register_native_ex(runtime_, "Widget", "Touch",
+                                                       RADICLE_PAPYRUS_NATIVE_ENGINE_OBJECT, "",
+                                                       RADICLE_PAPYRUS_NATIVE_FLAG_ACCEPT_SCRIPT_INSTANCE),
+            RADICLE_STATUS_OK);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, NativeFlagsRejectUnknownBits) {
+  EXPECT_EQ(radicle_papyrus_runtime_register_native_ex(runtime_, "Hook", "Hit", RADICLE_PAPYRUS_NATIVE_STATIC, "", 4),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_papyrus_runtime_register_native_ex(runtime_, "Widget", "Touch",
+                                                       RADICLE_PAPYRUS_NATIVE_ENGINE_OBJECT, "",
+                                                       RADICLE_PAPYRUS_NATIVE_FLAG_ACCEPT_SCRIPT_INSTANCE | 4),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
 TEST_F(CApiPapyrusRuntimeTest, NativeStartsWaitFromCallAndCompleteResumes) {
   load(actorModel());
   radicle_papyrus_engine_callbacks engine{};
