@@ -93,6 +93,21 @@ struct AttachResult {
     std::string reason;
 };
 
+enum class CallState : std::uint8_t {
+    Pending = 0,
+    Waiting = 1,
+    Done = 2,
+    Failed = 3,
+    Dropped = 4,
+};
+
+struct CallRecord {
+    CallState state{CallState::Pending};
+    Status status{Status::Ok};
+    Value value;
+    std::size_t instructions{0};
+};
+
 struct SchedulerStepResult {
     std::int32_t spent{0};
     std::int32_t completed{0};
@@ -147,6 +162,9 @@ public:
 
     Status initialize(InstanceId instance);
     Status sendEvent(InstanceId instance, const std::string& function, std::vector<Value> args = {});
+    std::uint64_t submitCall(InstanceId instance, const std::string& function, std::vector<Value> args, Status& status);
+    bool takeResult(std::uint64_t ticket, bool consume, CallRecord& out);
+    std::vector<InstanceId> instanceIds() const;
     SchedulerStepResult runStep(std::int32_t budget);
     bool completeLatent(std::uint64_t token, const Value& value);
     std::uint64_t beginWait();
@@ -178,6 +196,12 @@ public:
     std::int32_t overridesRefused() const { return overridesRefused_; }
 
 private:
+    struct QueuedCall {
+        std::string function;
+        std::vector<Value> arguments;
+        std::uint64_t ticket{0};
+    };
+
     struct Instance {
         InstanceId id{0};
         OwnerId owner;
@@ -188,7 +212,7 @@ private:
         Lifecycle lifecycle{Lifecycle::NotInitialized};
         std::string failure;
         bool detached{false};
-        std::vector<std::pair<std::string, std::vector<Value>>> queued;
+        std::vector<QueuedCall> queued;
     };
 
     struct Execution {
@@ -200,6 +224,7 @@ private:
         std::size_t lastInstructions{0};
         std::optional<std::uint64_t> resumeToken;
         std::optional<Value> resumeValue;
+        std::uint64_t ticket{0};
     };
 
     struct Waiting {
@@ -234,6 +259,11 @@ private:
     const NativeRegistration* findNative(const std::string& script, const std::string& function,
                                          std::string& ownerScript) const;
     void drainQueued(Instance& instance);
+    void refuseQueued(Instance& instance);
+    std::uint64_t openCall();
+    void settleCall(std::uint64_t ticket, CallState state, Status status, Value value = Value{},
+                    std::size_t instructions = 0);
+    void trimResults();
     void fanOutOwner(FanOutReport& report, const OwnerId& owner, const std::vector<Value>& args);
 
     std::vector<const pex::PexObject*> scripts_;
@@ -255,6 +285,8 @@ private:
     std::uint64_t nextToken_{1};
     std::set<std::uint64_t> issued_;
     std::map<std::uint64_t, Value> early_;
+    std::map<std::uint64_t, CallRecord> results_;
+    std::uint64_t nextTicket_{1};
     EngineObjectHooks engineHooks_;
     RegistrationRegistry registrations_;
     OwnerRegistry owners_;

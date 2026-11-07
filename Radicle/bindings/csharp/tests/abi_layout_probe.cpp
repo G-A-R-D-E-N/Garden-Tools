@@ -2010,6 +2010,11 @@ int main() {
   printf("PapyrusStepResult.Refused %zu\n", offsetof(radicle_papyrus_step_result, refused));
   printf("PapyrusStepResult.Dropped %zu\n", offsetof(radicle_papyrus_step_result, dropped));
   printf("PapyrusStepResult.Waiting %zu\n", offsetof(radicle_papyrus_step_result, waiting));
+  printf("PapyrusCallInfo %zu\n", sizeof(radicle_papyrus_call_info));
+  printf("PapyrusCallInfo.StructSize %zu\n", offsetof(radicle_papyrus_call_info, struct_size));
+  printf("PapyrusCallInfo.State %zu\n", offsetof(radicle_papyrus_call_info, state));
+  printf("PapyrusCallInfo.Status %zu\n", offsetof(radicle_papyrus_call_info, status));
+  printf("PapyrusCallInfo.Instructions %zu\n", offsetof(radicle_papyrus_call_info, instructions));
   printf("PapyrusRuntimeCallbacks %zu\n", sizeof(radicle_papyrus_runtime_callbacks));
   printf("PapyrusRuntimeCallbacks.User %zu\n", offsetof(radicle_papyrus_runtime_callbacks, user));
   printf("PapyrusRuntimeCallbacks.Gate %zu\n", offsetof(radicle_papyrus_runtime_callbacks, gate));

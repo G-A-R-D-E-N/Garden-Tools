@@ -12,6 +12,7 @@ namespace fo4::papyrus {
 namespace {
 
 constexpr int kMaxInheritanceHops = 64;
+constexpr std::size_t kMaxCallRecords = 4096;
 
 std::string fold(const std::string& text) { return lowerAscii(text); }
 
@@ -218,8 +219,7 @@ Status Runtime::initialize(InstanceId instance) {
     if (overridden.outcome == OverrideOutcome::Refused) {
         found->lifecycle = Lifecycle::Failed;
         found->failure = overridden.reason;
-        refusedEvents_ += static_cast<std::int32_t>(found->queued.size());
-        found->queued.clear();
+        refuseQueued(*found);
         return Status::HostError;
     }
 
@@ -237,8 +237,7 @@ Status Runtime::initialize(InstanceId instance) {
     if (result.status != Status::Ok) {
         found->lifecycle = Lifecycle::Failed;
         found->failure = statusName(result.status);
-        refusedEvents_ += static_cast<std::int32_t>(found->queued.size());
-        found->queued.clear();
+        refuseQueued(*found);
         return result.status;
     }
     found->lifecycle = Lifecycle::Ready;
@@ -247,64 +246,136 @@ Status Runtime::initialize(InstanceId instance) {
 }
 
 Status Runtime::sendEvent(InstanceId instance, const std::string& function, std::vector<Value> args) {
+    Status status = Status::Ok;
+    submitCall(instance, function, std::move(args), status);
+    return status;
+}
+
+std::uint64_t Runtime::submitCall(InstanceId instance, const std::string& function, std::vector<Value> args,
+                                  Status& status) {
     Instance* found = findInstance(instance);
     if (found == nullptr || found->detached) {
         refusedEvents_ += 1;
-        return Status::HostError;
+        status = Status::HostError;
+        return 0;
     }
     if (found->lifecycle == Lifecycle::Failed) {
         refusedEvents_ += 1;
-        return Status::HostError;
+        status = Status::HostError;
+        return 0;
     }
     if (found->lifecycle == Lifecycle::NotInitialized) {
         refusedEvents_ += 1;
-        return Status::HostError;
+        status = Status::HostError;
+        return 0;
     }
     if (found->lifecycle == Lifecycle::Initializing) {
         if (gate("vm.lifecycle.event_during_oninit") &&
             onInitPolicy_ == OnInitArrivalPolicy::QueueAsApproximation) {
-            found->queued.emplace_back(function, std::move(args));
+            const std::uint64_t queuedTicket = openCall();
+            found->queued.push_back(QueuedCall{function, std::move(args), queuedTicket});
             queuedDuringOnInit_ += 1;
-            return Status::Ok;
+            status = Status::Ok;
+            return queuedTicket;
         }
         refusedEvents_ += 1;
-        return Status::GateRefused;
+        status = Status::GateRefused;
+        return 0;
     }
 
     const pex::PexObject* object = findObject(found->script);
     const pex::PexFunction* declared =
         object == nullptr ? nullptr : findInStates(*object, found->state, function);
-    const OverrideResult overridden = tryOverride(*found, function, args);
+    OverrideResult overridden = tryOverride(*found, function, args);
     if (overridden.outcome == OverrideOutcome::Handled) {
         completedEvents_ += 1;
-        return Status::Ok;
+        const std::uint64_t handledTicket = openCall();
+        settleCall(handledTicket, CallState::Done, Status::Ok, std::move(overridden.value));
+        status = Status::Ok;
+        return handledTicket;
     }
     if (overridden.outcome == OverrideOutcome::Refused) {
         refusedEvents_ += 1;
-        return Status::HostError;
+        status = Status::HostError;
+        return 0;
     }
     if (declared == nullptr) {
         refusedEvents_ += 1;
-        return Status::FunctionNotFound;
+        status = Status::FunctionNotFound;
+        return 0;
     }
     Execution execution;
     execution.instance = instance;
     execution.function = function;
     execution.arguments = std::move(args);
+    execution.ticket = openCall();
+    const std::uint64_t ticket = execution.ticket;
     ready_.push_back(std::move(execution));
-    return Status::Ok;
+    status = Status::Ok;
+    return ticket;
+}
+
+bool Runtime::takeResult(std::uint64_t ticket, bool consume, CallRecord& out) {
+    const auto found = results_.find(ticket);
+    if (found == results_.end()) return false;
+    out = found->second;
+    const bool terminal = found->second.state != CallState::Pending && found->second.state != CallState::Waiting;
+    if (consume && terminal) results_.erase(found);
+    return true;
+}
+
+std::vector<InstanceId> Runtime::instanceIds() const {
+    std::vector<InstanceId> ids;
+    ids.reserve(instances_.size());
+    for (const auto& entry : instances_) ids.push_back(entry.first);
+    return ids;
+}
+
+std::uint64_t Runtime::openCall() {
+    const std::uint64_t ticket = nextTicket_++;
+    results_[ticket] = CallRecord{};
+    trimResults();
+    return ticket;
+}
+
+void Runtime::settleCall(std::uint64_t ticket, CallState state, Status status, Value value,
+                         std::size_t instructions) {
+    if (ticket == 0) return;
+    const auto found = results_.find(ticket);
+    if (found == results_.end()) return;
+    found->second.state = state;
+    found->second.status = status;
+    found->second.value = std::move(value);
+    found->second.instructions = instructions;
+}
+
+void Runtime::trimResults() {
+    for (auto it = results_.begin(); it != results_.end() && results_.size() > kMaxCallRecords;) {
+        if (it->second.state == CallState::Pending || it->second.state == CallState::Waiting) {
+            ++it;
+            continue;
+        }
+        it = results_.erase(it);
+    }
 }
 
 void Runtime::drainQueued(Instance& instance) {
-    std::vector<std::pair<std::string, std::vector<Value>>> queued = std::move(instance.queued);
+    std::vector<QueuedCall> queued = std::move(instance.queued);
     instance.queued.clear();
-    for (auto& [function, arguments] : queued) {
+    for (QueuedCall& call : queued) {
         Execution execution;
         execution.instance = instance.id;
-        execution.function = std::move(function);
-        execution.arguments = std::move(arguments);
+        execution.function = std::move(call.function);
+        execution.arguments = std::move(call.arguments);
+        execution.ticket = call.ticket;
         ready_.push_back(std::move(execution));
     }
+}
+
+void Runtime::refuseQueued(Instance& instance) {
+    refusedEvents_ += static_cast<std::int32_t>(instance.queued.size());
+    for (const QueuedCall& call : instance.queued) settleCall(call.ticket, CallState::Failed, Status::HostError);
+    instance.queued.clear();
 }
 
 void Runtime::registerNative(std::string script, std::string function, NativeRegistration registration) {

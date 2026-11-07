@@ -512,4 +512,65 @@ TEST_F(CApiPapyrusRuntimeTest, V1RegistrationStillStaticOnly) {
   radicle_papyrus_value_destroy(widget);
 }
 
+TEST_F(CApiPapyrusRuntimeTest, CallFunctionReadsItsReturnValueAfterStep) {
+  PexFile model;
+  model.majorVersion = 3;
+  model.minorVersion = 9;
+  model.gameId = 2;
+  model.sourceFileName = "Give.psc";
+  PexObject give;
+  give.name = "Give";
+  give.autoStateName = "";
+  PexState entry;
+  entry.name = "";
+  entry.functions.push_back(method("OnInit", "None", {ins("return", {id("::NoneVar")})}));
+  entry.functions.push_back(method("Give", "Int", {ins("return", {number(41)})}));
+  give.states.push_back(std::move(entry));
+  model.objects.push_back(std::move(give));
+  model.rebuildStringTable();
+  load(model);
+
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Give", RADICLE_PAPYRUS_OWNER_FORM, "000830:Give.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+  ASSERT_EQ(status, RADICLE_PAPYRUS_STATUS_OK);
+
+  uint64_t ticket = 1;
+  ASSERT_EQ(radicle_papyrus_runtime_call_function(runtime_, instance, "Give", nullptr, 0, &ticket, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_PAPYRUS_STATUS_OK);
+  ASSERT_NE(ticket, 0u);
+
+  radicle_papyrus_call_info info{};
+  info.struct_size = sizeof(info);
+  radicle_papyrus_value* value = nullptr;
+  ASSERT_EQ(radicle_papyrus_runtime_call_result(runtime_, ticket, 0, &info, &value), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.state, RADICLE_PAPYRUS_CALL_PENDING);
+  EXPECT_EQ(value, nullptr);
+
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(step.completed, 1);
+
+  ASSERT_EQ(radicle_papyrus_runtime_call_result(runtime_, ticket, 1, &info, &value), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.state, RADICLE_PAPYRUS_CALL_DONE);
+  EXPECT_EQ(info.status, RADICLE_PAPYRUS_STATUS_OK);
+  ASSERT_NE(value, nullptr);
+  EXPECT_EQ(radicle_papyrus_value_int_of(value), 41);
+  radicle_papyrus_value_destroy(value);
+
+  value = nullptr;
+  EXPECT_EQ(radicle_papyrus_runtime_call_result(runtime_, ticket, 1, &info, &value), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(value, nullptr);
+
+  ticket = 1;
+  ASSERT_EQ(radicle_papyrus_runtime_call_function(runtime_, 999, "Give", nullptr, 0, &ticket, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(ticket, 0u);
+  EXPECT_NE(status, RADICLE_PAPYRUS_STATUS_OK);
+}
+
 }  // namespace
