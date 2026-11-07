@@ -16,6 +16,6 @@ Answers synthesized from shipped vanilla 1.11.240 data (PR #1066 real-data gates
 ## Native pipeline (this PR)
 
 1. `precombine_plan` (C#) — eligibility and model groups.
-2. `bake_oc_single_source*` (C++) — copies a measured source NIF to the OC path (placeholder until Shared geom encoder lands).
+2. `bake_oc_single_source*` (C++) — pass-through bake for sources that already contain `BSPackedCombinedSharedGeomDataExtra` (until Shared geom encoder lands).
 3. `stamp_cell_previs` (C++) — writes PCMB, VISI, XCRI on a CELL override.
 4. `write_cdx` / `write_csg` / `write_uvd` — container encoders round-trip with readers.
