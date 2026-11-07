@@ -1,0 +1,42 @@
+import { useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
+import RecordPicker, { type PickedRecord } from '../RecordPicker';
+import HelpDrawer from './help/HelpDrawer';
+import { SCREEN_TOPICS } from './help/helpContent';
+import QuestWorkspace from './quest/QuestWorkspace';
+import WritableScope from './WritableScope';
+
+export default function QuestEditor({ onBack, initialQuest = null }: {
+  onBack: () => void;
+  initialQuest?: PickedRecord | null;
+}) {
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [quest, setQuest] = useState<PickedRecord | null>(initialQuest);
+  return (
+    <section className="editor-screen" aria-labelledby="quest-editor-title">
+      <div className="editor-screen-body">
+        <header className="editor-screen-header">
+          <button type="button" className="sidebar-action-btn" onClick={onBack}><ChevronLeft size={14} /> Back</button>
+          <h3 id="quest-editor-title">Quest</h3>
+          <button type="button" className="sidebar-action-btn" onClick={() => setPicking(true)}>Choose quest</button>
+          <button type="button" className="sidebar-action-btn" aria-expanded={helpOpen}
+            onClick={() => setHelpOpen(open => !open)}>Help</button>
+        </header>
+        <p className="editor-purpose">Choose a quest, then edit its stages, objectives, aliases and script fragments.</p>
+        <WritableScope plugin={quest?.plugin ?? ''} formKey={quest?.formKey ?? ''}
+          onCopied={target => { if (quest) setQuest({ formKey: quest.formKey, plugin: target }); }}>
+          {quest === null
+            ? <div className="editor-empty">Choose a quest to start editing it. Nothing changes until you edit a field.</div>
+            : <QuestWorkspace key={`${quest.plugin}|${quest.formKey}`} formKey={quest.formKey} plugin={quest.plugin} />}
+        </WritableScope>
+        {picking && (
+          <RecordPicker title="Quest" refType="Quest" refTypes="QUST"
+            onPick={(formKey, plugin) => { setQuest({ formKey, plugin }); setPicking(false); }}
+            onClose={() => setPicking(false)} />
+        )}
+      </div>
+      {helpOpen && <HelpDrawer topicIds={SCREEN_TOPICS.quest} onClose={() => setHelpOpen(false)} />}
+    </section>
+  );
+}

@@ -1,0 +1,114 @@
+name: pet-web-ci
+
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web lint, build and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: PluginEditTool/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: PluginEditTool/web/package-lock.json
+
+      - name: Install dependencies
+        id: install
+        run: npm ci
+
+      # The steps below run even after an earlier failure so one run reports lint, type and test results together.
+      - name: Lint
+        if: (success() || failure()) && steps.install.outcome == 'success'
+        run: npm run lint
+
+      # The build script is `tsc -b && vite build`.
+      - name: Type-check and build
+        if: (success() || failure()) && steps.install.outcome == 'success'
+        run: npm run build
+
+      - name: Unit tests
+        if: (success() || failure()) && steps.install.outcome == 'success'
+        run: npm test
+
+  screenshots:
+    name: Editor screen screenshots
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: PluginEditTool/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: PluginEditTool/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Install the screenshot browser
+        run: npm install --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+
+      - name: Take screenshots with sample data
+        run: node screenshots/editor-screens.mjs
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: editor-screenshots
+          path: PluginEditTool/web/screenshots/out
+          if-no-files-found: error
+
+  report:
+    name: Report to the private PR
+    needs: [web]
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    environment: garden-tools-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Post the result as a commit status on the private commit
+        env:
+          GH_TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          source=$(git log -1 --format=%B | sed -n 's/^Source-Commit: \([0-9a-f]\{40\}\)$/\1/p')
+          [ -n "$source" ] || { echo "::error::no Source-Commit trailer"; exit 1; }
+          failed=$(jq -r 'to_entries | map(select(.value.result != "success" and .value.result != "skipped") | .key) | join(", ")' <<<"$NEEDS")
+          if [ -n "$failed" ]; then state=failure; description="failed: $failed"; else state=success; description="passed"; fi
+          gh api "repos/G-A-R-D-E-N/GardenTools/statuses/$source" -f state="$state" \
+            -f context="public-ci/pet-web-ci" -f target_url="$RUN_URL" -f description="${description:0:140}" >/dev/null
+          echo "$state posted for pet-web-ci ($description)"
