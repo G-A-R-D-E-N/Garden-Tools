@@ -1,11 +1,15 @@
-import { expect, it } from 'vitest';
-import { buildQuestCalls, isLinked, NEW_RECORD, type Answers, type BackendCall } from './questCalls';
+import { expect, it, vi } from 'vitest';
+import type { Backend } from '../../backend';
+import { buildQuestCalls, isLinked, NEW_RECORD, runQuestCalls, type Answers, type BackendCall, type QuestRun } from './questCalls';
+import { buildSceneCalls, describeSceneAndDialogue, NEW_BRANCH, NEW_SCENE, NEW_TOPIC } from './sceneCalls';
 import type { QuestTemplate } from './templateTypes';
 import { WIZARD_HELP_TOPICS } from './wizardHelpTopics';
 import { CHOICE_TWO_ENDINGS } from './templates/choiceTwoEndings';
 import { ESCORT } from './templates/escort';
 import { FETCH_AN_ITEM } from './templates/fetchAnItem';
+import { KILL_A_TARGET } from './templates/killATarget';
 import { QUEST_TEMPLATES } from './templates/registry';
+import { TALK_TO_SOMEONE } from './templates/talkToSomeone';
 
 interface ParsedStage { index: number; logEntries: { flags: number; logText: string }[]; }
 interface ParsedObjective { displayText: string; targets: { alias: number }[]; }
@@ -119,4 +123,127 @@ it('Detects: the two-ending template leaving one ending open (stage 40 not compl
     method: 'SetQuestStages',
     args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Talk to Courier Bob to hear your choice."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"Decide between two options: Spare the raiders or Hand the raiders over."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Spare the raiders. Reward: 50 caps."}]},{"index":40,"flags":0,"logEntries":[{"flags":1,"logText":"You chose: Hand the raiders over. Reward: 20 caps."}]}]'],
   });
+});
+
+const TALK_ANSWERS = {
+  plugin: 'Patch.esp', name: 'The Old Friend', person: 'Courier Bob', location: 'Abandoned Mill', reward: '50 caps',
+};
+
+const KILL_ANSWERS = {
+  plugin: 'Patch.esp', name: 'Mill Bandit', questGiver: 'Courier Bob', target: 'Raider Boss', location: 'Abandoned Mill', reward: '50 caps',
+};
+
+it('Detects: the kill-a-target quest calls changing from what the wizard made before, because that template has no scene and must keep its exact quest calls', () => {
+  expect(buildQuestCalls(KILL_A_TARGET, KILL_ANSWERS, FORM_KEYS)).toEqual([
+    { method: 'CreateRecord', args: ['Patch.esp', 'QUST', { schema: true, editorId: 'Mill_Bandit' }] },
+    { method: 'SetField', args: ['Patch.esp', NEW_RECORD, 'QUST\\Flags', '1'] },
+    {
+      method: 'SetQuestStages',
+      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":2,"logEntries":[{"flags":0,"logText":"Go to Abandoned Mill and find Raider Boss."}]},{"index":20,"flags":0,"logEntries":[{"flags":0,"logText":"You defeated Raider Boss. Report back to Courier Bob."}]},{"index":30,"flags":0,"logEntries":[{"flags":1,"logText":"You reported to Courier Bob. Reward: 50 caps."}]}]'],
+    },
+    {
+      method: 'SetQuestAliases',
+      args: ['Patch.esp', NEW_RECORD, '[{"kind":"reference","id":0,"name":"QuestGiver","uniqueActor":"000900:Patch.esp"},{"kind":"reference","id":1,"name":"Target","uniqueActor":"000E00:Patch.esp"},{"kind":"location","id":2,"name":"Location","specificLocation":"000A00:Patch.esp"}]'],
+    },
+    {
+      method: 'SetQuestObjectives',
+      args: ['Patch.esp', NEW_RECORD, '[{"index":10,"flags":0,"displayText":"Find Raider Boss at Abandoned Mill","targets":[{"alias":2,"flags":0},{"alias":1,"flags":0}]},{"index":20,"flags":0,"displayText":"Report back to Courier Bob","targets":[{"alias":0,"flags":0}]}]'],
+    },
+  ]);
+});
+
+it('Detects: a fetch, kill or choice template gaining a scene or starter dialogue, which would make the quest contain content its template never asked for', () => {
+  for (const template of [FETCH_AN_ITEM, KILL_A_TARGET, CHOICE_TWO_ENDINGS]) {
+    expect(buildSceneCalls(template, sampleAnswers(template))).toEqual([]);
+  }
+});
+
+it('Detects: the talk-to-someone scene and dialogue calls changing fields, order or the topic link, so the scene is written with fields the game does not read or a link to a topic not yet made', () => {
+  expect(buildSceneCalls(TALK_TO_SOMEONE, TALK_ANSWERS)).toEqual([
+    { method: 'CreateDialogueBranch', args: ['Patch.esp', NEW_RECORD, { editorId: 'The_Old_Friend_Branch' }], produces: NEW_BRANCH },
+    {
+      method: 'CreateDialogueTopic',
+      args: ['Patch.esp', NEW_RECORD, { editorId: 'The_Old_Friend_Topic', name: 'Are you Courier Bob? I was sent to speak with you.', priority: 50, branch: NEW_BRANCH }],
+      produces: NEW_TOPIC,
+    },
+    {
+      method: 'CreateInfo',
+      args: ['Patch.esp', NEW_TOPIC, { responses: [{ text: 'I have been waiting for you at Abandoned Mill.' }, { text: 'Thanks for coming. Your reward is 50 caps.' }] }],
+    },
+    { method: 'CreateScene', args: ['Patch.esp', NEW_RECORD, { editorId: 'The_Old_Friend_Scene' }], produces: NEW_SCENE },
+    { method: 'AddScenePhase', args: ['Patch.esp', NEW_SCENE, 0, { name: 'Meet' }] },
+    { method: 'AddScenePhase', args: ['Patch.esp', NEW_SCENE, 1, { name: 'Talk' }] },
+    { method: 'AddSceneActor', args: ['Patch.esp', NEW_SCENE, 0] },
+    { method: 'SetSceneActor', args: ['Patch.esp', NEW_SCENE, 0, { alias: 0 }] },
+    { method: 'AddSceneAction', args: ['Patch.esp', NEW_SCENE, 0, 0] },
+    { method: 'SetSceneAction', args: ['Patch.esp', NEW_SCENE, 0, { actorAlias: 0, startPhase: 1, endPhase: 1, topic: NEW_TOPIC }] },
+  ]);
+});
+
+it('Detects: the escort scene and dialogue calls pointing the escortee action at the wrong alias or phase, so the scene would make the wrong character speak', () => {
+  expect(buildSceneCalls(ESCORT, ESCORT_ANSWERS)).toEqual([
+    { method: 'CreateDialogueBranch', args: ['Patch.esp', NEW_RECORD, { editorId: 'Safe_Passage_Branch' }], produces: NEW_BRANCH },
+    {
+      method: 'CreateDialogueTopic',
+      args: ['Patch.esp', NEW_RECORD, { editorId: 'Safe_Passage_Topic', name: 'Do you need an escort to Sanctuary?', priority: 50, branch: NEW_BRANCH }],
+      produces: NEW_TOPIC,
+    },
+    {
+      method: 'CreateInfo',
+      args: ['Patch.esp', NEW_TOPIC, { responses: [{ text: 'Yes. I will walk with you to Sanctuary.' }, { text: 'Stay close, and do not let me get hurt.' }] }],
+    },
+    { method: 'CreateScene', args: ['Patch.esp', NEW_RECORD, { editorId: 'Safe_Passage_Scene' }], produces: NEW_SCENE },
+    { method: 'AddScenePhase', args: ['Patch.esp', NEW_SCENE, 0, { name: 'Meet' }] },
+    { method: 'AddScenePhase', args: ['Patch.esp', NEW_SCENE, 1, { name: 'Walk' }] },
+    { method: 'AddScenePhase', args: ['Patch.esp', NEW_SCENE, 2, { name: 'Arrive' }] },
+    { method: 'AddSceneActor', args: ['Patch.esp', NEW_SCENE, 0] },
+    { method: 'SetSceneActor', args: ['Patch.esp', NEW_SCENE, 0, { alias: 1 }] },
+    { method: 'AddSceneAction', args: ['Patch.esp', NEW_SCENE, 0, 0] },
+    { method: 'SetSceneAction', args: ['Patch.esp', NEW_SCENE, 0, { actorAlias: 1, startPhase: 0, endPhase: 0, topic: NEW_TOPIC }] },
+  ]);
+});
+
+it('Detects: a scene skeleton whose actor slot is not a quest alias, whose action phase is past the last part, or whose line has an unfilled {blank}, so the scene is written broken', () => {
+  for (const template of QUEST_TEMPLATES) {
+    const scene = template.scene;
+    if (!scene) continue;
+    const slots = template.aliases.map(alias => alias.slot);
+    expect(scene.actors.filter(slot => !slots.includes(slot))).toEqual([]);
+    expect(scene.actions.filter(action => !scene.actors.includes(action.actor))).toEqual([]);
+    expect(scene.actions.filter(action => action.phase < 0 || action.phase >= scene.phases.length)).toEqual([]);
+    expect(scene.actions.some(action => action.kind === 'dialogue') && !template.dialogue).toBe(false);
+    const calls = buildSceneCalls(template, sampleAnswers(template));
+    expect(calls.map(call => call.method)).toContain('CreateScene');
+    expect(JSON.stringify(calls)).not.toMatch(/\{\w+\}/);
+  }
+});
+
+it('Detects: the runner sending a scene or topic placeholder to the game as text instead of the form key the game returned, so the scene and its dialogue link would point at nothing', async () => {
+  const keys: Record<string, string> = {
+    CreateRecord: '000D00:Patch.esp', CreateDialogueBranch: '000E00:Patch.esp', CreateDialogueTopic: '000F00:Patch.esp',
+    CreateInfo: '001000:Patch.esp', CreateScene: '001100:Patch.esp',
+  };
+  const methods = [
+    'CreateRecord', 'SetField', 'SetQuestStages', 'SetQuestObjectives', 'SetQuestAliases', 'CreateScene', 'AddScenePhase', 'AddSceneActor',
+    'SetSceneActor', 'AddSceneAction', 'SetSceneAction', 'CreateDialogueBranch', 'CreateDialogueTopic', 'CreateInfo',
+  ];
+  const backend = Object.fromEntries(methods.map(name => [name, vi.fn(async () => (
+    name in keys ? JSON.stringify({ formKey: keys[name] }) : 'ok'
+  ))]));
+  const run: QuestRun = { formKey: null, made: new Map() };
+  await runQuestCalls(backend as unknown as Backend, [
+    ...buildQuestCalls(TALK_TO_SOMEONE, TALK_ANSWERS, FORM_KEYS), ...buildSceneCalls(TALK_TO_SOMEONE, TALK_ANSWERS),
+  ], run);
+  expect(backend.CreateDialogueTopic).toHaveBeenCalledWith('Patch.esp', '000D00:Patch.esp', expect.objectContaining({ branch: '000E00:Patch.esp' }));
+  expect(backend.CreateInfo).toHaveBeenCalledWith('Patch.esp', '000F00:Patch.esp', expect.anything());
+  expect(backend.SetSceneAction).toHaveBeenCalledWith('Patch.esp', '001100:Patch.esp', 0, { actorAlias: 0, startPhase: 1, endPhase: 1, topic: '000F00:Patch.esp' });
+});
+
+it('Detects: the review sentences for Talk to someone dropping the scene parts or the reply lines, so the user is not shown what the wizard will create', () => {
+  expect(describeSceneAndDialogue(TALK_TO_SOMEONE, TALK_ANSWERS)).toEqual([
+    'A scene with 2 parts: Meet, then Talk.',
+    'Courier Bob speaks in the Talk part.',
+    'The player says: "Are you Courier Bob? I was sent to speak with you."',
+    'The reply: "I have been waiting for you at Abandoned Mill." "Thanks for coming. Your reward is 50 caps."',
+  ]);
 });
