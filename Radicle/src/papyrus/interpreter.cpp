@@ -1,6 +1,7 @@
 #include "fo4/papyrus/interpreter.hpp"
 
 #include "fo4/papyrus/array_ops.hpp"
+#include "fo4/papyrus/runtime.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,11 @@ namespace fo4::papyrus {
 namespace {
 
 constexpr int kMaxInheritanceHops = 64;
+
+bool isUntypedEngineHandle(const Value& value) {
+    return value.object != nullptr && value.object->type.empty() &&
+           (value.object->handle & kEngineHandleBit) != 0;
+}
 
 const pex::PexFunction* findInState(const pex::PexState& state, const std::string& name) {
     for (const pex::PexFunction& function : state.functions) {
@@ -477,7 +483,8 @@ Status Interpreter::coerce(const Value& value, const std::string& declaredType, 
             return Status::Ok;
         case ValueType::Object:
             if (value.type != ValueType::Object) return Status::TypeMismatch;
-            if (!sameName(declaredType, "ScriptObject") && !isObjectOfType(value, declaredType)) {
+            if (!sameName(declaredType, "ScriptObject") && !isUntypedEngineHandle(value) &&
+                !isObjectOfType(value, declaredType)) {
                 return Status::TypeMismatch;
             }
             out = value;
@@ -532,7 +539,8 @@ Status Interpreter::castTo(const Value& source, const std::string& sourceType,
             return Status::Ok;
         case ValueType::Object:
             if (source.type != ValueType::Object) return Status::TypeMismatch;
-            if (!sameName(targetType, "ScriptObject") && !isObjectOfType(source, targetType)) {
+            if (!sameName(targetType, "ScriptObject") && !isUntypedEngineHandle(source) &&
+                !isObjectOfType(source, targetType)) {
                 out = noneValue();
                 return Status::Ok;
             }
