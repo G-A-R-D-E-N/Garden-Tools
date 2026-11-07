@@ -22,6 +22,7 @@
 
 #include "RadiclePluginSupport.hpp"
 #include "RadiclePluginQuestInternal.hpp"
+#include "RadiclePluginReadJson.hpp"
 
 namespace fo4ide::plugin {
 
@@ -94,7 +95,7 @@ const char* aliasKindName(fo4::forms::QuestAliasKind kind) {
 }
 
 nlohmann::json logTextJson(const std::optional<fo4::schema::LocalizedString>& text) {
-    nlohmann::json out{{"logText", std::string{}}};
+    nlohmann::json out = nlohmann::json::object();
     if (!text.has_value()) return out;
     if (text->localized()) {
         out["logTextId"] = *text->id;
@@ -216,7 +217,24 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestStages(const nlohmann::json
                     row["logText"] = *text;
                 }
                 row["flags"] = entry.flags;
-                row["note"] = fo4::text::windows1252_to_utf8(entry.note.value_or(std::string{}));
+                if (entry.note.has_value()) {
+                    row["note"] = fo4::text::windows1252_to_utf8(*entry.note);
+                }
+                std::vector<fo4::CtdaCondition> conditions;
+                std::size_t consumed = 0;
+                bool unreadable = !fo4::forms::lossless_quest_log_entry_conditions(
+                    entry.members, conditions, consumed);
+                if (!unreadable) {
+                    unreadable = std::any_of(conditions.begin(), conditions.end(),
+                                             [](const fo4::CtdaCondition& condition) {
+                                                 return nonFiniteConditionError(condition).has_value();
+                                             });
+                }
+                if (unreadable) {
+                    row["conditionsUnreadable"] = true;
+                } else {
+                    row["conditions"] = readjson::conditionsJson(loaded->plugin, conditions);
+                }
                 entries.push_back(std::move(row));
             }
             nlohmann::json row{{"index", stage.index}, {"flags", stage.flags},
