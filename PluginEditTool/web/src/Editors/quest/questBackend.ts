@@ -33,7 +33,7 @@ export interface FragmentBinding {
 
 const unwrap = (raw: string | object): unknown => (typeof raw === 'string' ? JSON.parse(raw) : raw);
 
-const CODE_TOKEN = /"[^"\n]*"|;\/[\s\S]*?(?:\/;|$)|;[^\n]*/g;
+const CODE_TOKEN = /"(?:\\.|[^"\\\n])*"|;\/[\s\S]*?(?:\/;|$)|;[^\n]*/g;
 const FUNCTION_BODY = /\bFunction\s+(\w+)\s*\([^)]*\)(?![^\n]*\bnative\b)([\s\S]*?)\bEndFunction\b/gi;
 const SET_STAGE = /\b(?:SetStage|SetCurrentStageID)\s*\(\s*(\d+)\s*\)/gi;
 

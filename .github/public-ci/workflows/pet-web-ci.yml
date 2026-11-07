@@ -85,7 +85,7 @@ jobs:
         with:
           name: editor-screenshots
           path: PluginEditTool/web/screenshots/out
-          if-no-files-found: warn
+          if-no-files-found: error
 
   report:
     name: Report to the private PR
