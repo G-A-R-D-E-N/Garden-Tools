@@ -150,4 +150,23 @@ public static partial class WriteService
         return $"Stamped PreVis on {fk} ('{cell.EditorID}') in '{patchName}': PCMB=0x{pcmbStamp:X4}, VISI=0x{visiStamp:X4}. " +
                $"Ensure {patchName} loads after '{winningPair.plugin}', then save_plugin. XCRI still requires native Radicle stamp when mesh pairs are ready.";
     }
+
+    public static string BakeOcNif(string sourceNif, string outputOcNif, bool apply)
+    {
+        if (string.IsNullOrWhiteSpace(sourceNif))
+            return ToolError.Fail("source_nif is required.");
+        if (string.IsNullOrWhiteSpace(outputOcNif))
+            return ToolError.Fail("output_oc_nif is required.");
+        if (!System.IO.File.Exists(sourceNif))
+            return ToolError.Fail($"Source NIF does not exist: {sourceNif}");
+
+        if (!apply)
+            return $"DRY RUN: would copy '{sourceNif}' to '{outputOcNif}' (placeholder until Shared packed-geometry bake ships in Radicle). Re-run with apply=true.";
+
+        var dir = System.IO.Path.GetDirectoryName(outputOcNif);
+        if (!string.IsNullOrEmpty(dir))
+            System.IO.Directory.CreateDirectory(dir);
+        System.IO.File.Copy(sourceNif, outputOcNif, overwrite: true);
+        return $"Wrote combined mesh '{outputOcNif}' from source '{sourceNif}'. This is a byte copy until Shared geom encoding is implemented.";
+    }
 }

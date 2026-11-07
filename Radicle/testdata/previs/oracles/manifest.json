@@ -1,5 +1,23 @@
 {
-  "build": "synthetic-1",
-  "description": "Pinned hashes for previs write-path regression; replace entries after CK capture.",
-  "files": []
+  "build": "fo4-exe-present",
+  "files": [
+    {
+      "archive": "DLCCoast - Main.ba2",
+      "bytes": 9606,
+      "path": "Meshes/PreCombined/00000FEC_01B8656E_OC.NIF",
+      "sha256": "fd2dac464097f7fe92d882e4861e74ae4d3f35a90c2a47b925bee68904d4c405"
+    },
+    {
+      "archive": "DLCCoast - Main.ba2",
+      "bytes": 3519,
+      "path": "Meshes/PreCombined/00000FEC_0A722D3C_OC.NIF",
+      "sha256": "3fd526dfe86a67cb5929cef5ab5d0e70d957722477159af68cd3849fa6c679d2"
+    },
+    {
+      "archive": "DLCCoast - Main.ba2",
+      "bytes": 2017,
+      "path": "Meshes/PreCombined/00000FEC_0A82376A_OC.NIF",
+      "sha256": "b11e9902fb786649014c27281ae4306bea3df44ab02ee7f59f73d5f2c393cedc"
+    }
+  ]
 }

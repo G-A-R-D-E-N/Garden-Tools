@@ -650,6 +650,10 @@ if(RADICLE_BUILD_TOOLS)
   target_link_libraries(fo4inspect PRIVATE fo4)
   fo4_apply_warnings(fo4inspect)
   fo4_apply_sanitizers(fo4inspect)
+  add_executable(previs_oracle_extract tools/previs_oracle_extract/main.cpp)
+  target_link_libraries(previs_oracle_extract PRIVATE fo4)
+  fo4_apply_warnings(previs_oracle_extract)
+  fo4_apply_sanitizers(previs_oracle_extract)
   add_executable(radicle_env_bench tools/env_bench/main.cpp tools/env_bench/env_bench.cpp)
   target_include_directories(radicle_env_bench PRIVATE tools)
   target_link_libraries(radicle_env_bench PRIVATE fo4)
@@ -1233,6 +1237,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_stat_lod_rows.cpp
     tests/test_previs.cpp
     tests/test_previs_units.cpp
+    tests/test_previs_oracle.cpp
     tests/test_previs_real.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp

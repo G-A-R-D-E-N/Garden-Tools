@@ -55,7 +55,7 @@ public class PluginToolExecutorTests
             "scan_conflicts", "create_mod_group", "update_mod_group", "delete_mod_group",
             "list_mod_groups", "resolve_asset", "get_referenced_by", "get_problems", "scan_broken_refs",
             "scan_all_plugins", "open_plugin", "create_plugin", "create_record", "create_cell",
-            "create_placed_object", "disable_previs", "set_field", "add_list_item", "attach_script",
+            "create_placed_object", "disable_previs", "stamp_previs", "bake_oc_nif", "set_field", "add_list_item", "attach_script",
             "set_script_property", "check_plugin", "compact_to_esl", "check_esl_eligibility",
             "renumber_formid",
             "clean_plugin", "backup_plugin", "save_plugin", "copy_as_override", "copy_as_new_record",

@@ -407,6 +407,35 @@ public sealed class PluginToolExecutor
                 },
                 required = new[] { "cell", "patch_plugin" }
             }),
+        new("stamp_previs",
+            "Stamp PCMB and VISI timestamps on a CELL override in a patch plugin (Mutagen path). Does not write XCRI yet — " +
+            "use native Radicle stamp when mesh pairs are ready. Dry-run by default.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    cell = new { type = "string", description = "EditorID or FormKey of the cell." },
+                    patch_plugin = new { type = "string" },
+                    pcmb_stamp = new { type = "integer", description = "16-bit precombine stamp (default 0)." },
+                    visi_stamp = new { type = "integer", description = "16-bit previs stamp (default 0)." },
+                    apply = new { type = "boolean", description = "Default false (preview only)." }
+                },
+                required = new[] { "cell", "patch_plugin" }
+            }),
+        new("bake_oc_nif",
+            "Copy a source NIF to a Meshes\\\\PreCombined\\\\..._OC.NIF path. Placeholder until Radicle writes Shared packed geometry. Dry-run by default.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    source_nif = new { type = "string", description = "Path to an existing measured NIF." },
+                    output_oc_nif = new { type = "string", description = "Destination _OC.NIF path." },
+                    apply = new { type = "boolean", description = "Default false (preview only)." }
+                },
+                required = new[] { "source_nif", "output_oc_nif" }
+            }),
         new("set_field",
             "Set a field on a record. Supports scalar/text fields (Name, Value, Weight, Description), booleans " +
             "(pass 'true'/'false' to check/UNCHECK a flag), enums (pass the value name), FormLink references " +
@@ -1841,7 +1870,7 @@ public sealed class PluginToolExecutor
 
         bool isWrite = toolName is "set_field" or "set_conditions" or "set_components" or
             "add_list_item" or "remove_list_item" or "open_plugin" or "save_plugin" or "backup_plugin" or
-            "create_record" or "create_cell" or "create_placed_object" or "disable_previs" or "cleanup_placed_references" or
+            "create_record" or "create_cell" or "create_placed_object" or "disable_previs" or "stamp_previs" or "bake_oc_nif" or "cleanup_placed_references" or
             "delete_record" or "copy_as_override" or "copy_as_new_record" or "clean_plugin" or
             "remove_identical_to_master" or "create_merged_patch" or "add_masters" or "set_conditions_at" or
             "element_add" or "element_remove" or "element_move" or "element_clear" or
@@ -2094,6 +2123,11 @@ public sealed class PluginToolExecutor
                     env);
             case "disable_previs":
                 return WriteService.DisablePrevis(env, Str("cell"), Str("patch_plugin"), Bool("apply"));
+            case "stamp_previs":
+                return WriteService.StampPrevis(env, Str("cell"), Str("patch_plugin"),
+                    (ushort)(Int("pcmb_stamp", 0) & 0xFFFF), (ushort)(Int("visi_stamp", 0) & 0xFFFF), Bool("apply"));
+            case "bake_oc_nif":
+                return WriteService.BakeOcNif(Str("source_nif"), Str("output_oc_nif"), Bool("apply"));
             case "set_field":
                 return WriteService.SetField(Str("plugin"), Str("record"), Str("field"), Str("value"), env);
             case "add_list_item":

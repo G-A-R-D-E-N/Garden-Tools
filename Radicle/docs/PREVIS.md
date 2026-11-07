@@ -228,4 +228,4 @@ CK-free generation is `precombine_plan` → native bake → native stamp → con
 | Stamp CELL | `stamp_cell_previs`, C# `StampPrevis` | PCMB, VISI, XCRI (`write_xcri_bytes`); Mutagen path sets PCMB/VISI timestamps. |
 | CDX / CSG / UVD | `write_cdx`, `write_csg`, `write_uvd` | Round-trip with readers; CSG row semantics still opaque. |
 
-Oracle manifests live in `Radicle/testdata/previs/oracles/`; capture with `tools/previs/oracle_capture.ps1`. See `Radicle/docs/re-answers/2026-11-previs-generation.md`.
+Oracle manifests live in `Radicle/testdata/previs/oracles/` (flat `_OC.NIF` filenames, manifest `path` keeps the archive path). Capture from BA2 with `previs_oracle_extract` (`RADICLE_BUILD_TOOLS=ON`) or `tools/previs/oracle_capture.ps1`. See `Radicle/docs/re-answers/2026-11-previs-generation.md`.
