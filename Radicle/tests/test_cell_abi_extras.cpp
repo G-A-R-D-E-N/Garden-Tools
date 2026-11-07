@@ -1,4 +1,5 @@
 #include "fo4/c_api_cell.h"
+#include "fo4/c_api_cell_edit.h"
 
 #include "env_node_fixture.hpp"
 #include "plugin_bytes.hpp"
@@ -6,12 +7,18 @@
 
 #include <gtest/gtest.h>
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -59,7 +66,7 @@ std::vector<std::byte> make_extras() {
                                {grp(0x804, 9,
                                     {rec("REFR", 0x2001,
                                          {{"NAME", bytes_of({0x2100})},
-                                          {"DATA", floats({10.0f, 20.0f, 30.0f, 0.0f, 0.0f, 0.0f})}}),
+                                          {"DATA", floats({10.0f, 20.0f, 30.0f, 0.0f, 0.0f, 0.0f})}, {"XTEL", bytes_of({0x2100, 0, 0, 0, 0, 0, 0, 0})}}),
                                      rec("REFR", 0x2002,
                                          {{"NAME", bytes_of({0x2200})},
                                           {"DATA", floats({40.0f, 50.0f, 60.0f, 0.0f, 0.0f, 0.0f})}})})});
@@ -88,7 +95,19 @@ std::vector<std::byte> make_extras() {
   const auto world_children = grp(0x803, 1, {grp(0, 4, {grp(0, 5, {field, field_children})})});
   return make_plugin({}, {top("CELL", {grp(0, 2, {grp(0, 3, {cell, short_tail, bad_regions, merged, merged_refs})})}),
                           top("WRLD", {world, world_children}), top("STAT", {stat, marker}),
-                          top("SCOL", {scol}), top("TXST", {decal})});
+                          top("SCOL", {scol}), top("TXST", {decal}),
+                          top("LGTM", {rec("LGTM", 0x3001, {{"EDID", zstring("TestLighting")}})}),
+                          top("WATR", {rec("WATR", 0x3002, {{"EDID", zstring("TestWater")}})}),
+                          top("IMGS", {rec("IMGS", 0x3003, {{"EDID", zstring("TestImageSpace")}})}),
+                          top("ECZN", {rec("ECZN", 0x3004, {{"EDID", zstring("TestZone")}})}),
+                          top("LCTN", {rec("LCTN", 0x3005, {{"EDID", zstring("TestLocation")}})}),
+                          top("ASPC", {rec("ASPC", 0x3006, {{"EDID", zstring("TestAcoustic")}})}),
+                          top("MUSC", {rec("MUSC", 0x3007, {{"EDID", zstring("TestMusic")}})}),
+                          top("REGN", {rec("REGN", 0x3008, {{"EDID", zstring("TestRegionA")}}),
+                                       rec("REGN", 0x3009, {{"EDID", zstring("TestRegionB")}})}),
+                          top("GDRY", {rec("GDRY", 0x300A, {{"EDID", zstring("TestRays")}})}),
+                          top("FACT", {rec("FACT", 0x300B, {{"EDID", zstring("TestFaction")}})}),
+                          top("FLST", {rec("FLST", 0x300C, {{"EDID", zstring("TestList")}})})});
 }
 
 std::vector<std::byte> make_patch() {
@@ -116,6 +135,36 @@ void write_file(const std::filesystem::path& path, const std::vector<std::byte>&
                static_cast<std::streamsize>(bytes.size()));
 }
 
+std::string utf8_text(const std::filesystem::path& path) {
+  const auto text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
+
+using PluginHandle = std::unique_ptr<radicle_plugin, void (*)(radicle_plugin*)>;
+
+std::vector<std::uint8_t> patch_bytes(const radicle_plugin* patch) {
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  EXPECT_EQ(radicle_plugin_write_bytes(patch, &bytes, &size), RADICLE_STATUS_OK) << radicle_last_error();
+  std::vector<std::uint8_t> copy(bytes, bytes + size);
+  radicle_free_bytes(bytes);
+  return copy;
+}
+
+bool find_reference(const radicle_cell_view* view, std::string_view plugin, std::uint32_t local_id,
+                    radicle_cell_reference& out) {
+  const auto count = radicle_cell_view_reference_count(view);
+  for (size_t index = 0; index < count; ++index) {
+    radicle_cell_reference reference{};
+    if (radicle_cell_view_reference(view, index, &reference) != RADICLE_STATUS_OK) return false;
+    if (reference.key.local_id == local_id && plugin == reference.key.plugin) {
+      out = reference;
+      return true;
+    }
+  }
+  return false;
+}
+
 class CellAbiTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -124,18 +173,35 @@ protected:
     std::filesystem::create_directories(root_);
     write_file(root_ / "Extras.esp", make_extras());
     write_file(root_ / "Patch.esp", make_patch());
-    const auto base = (root_ / "Extras.esp").u8string();
-    const auto patch = (root_ / "Patch.esp").u8string();
-    const std::string base_utf8(base.begin(), base.end());
-    const std::string patch_utf8(patch.begin(), patch.end());
-    const char* raw[] = {base_utf8.c_str(), patch_utf8.c_str()};
-    ASSERT_EQ(radicle_env_load(raw, 2, &env_), RADICLE_STATUS_OK) << radicle_last_error();
+    load_env();
   }
 
   void TearDown() override {
     if (env_ != nullptr) radicle_env_destroy(env_);
     std::error_code ec;
     std::filesystem::remove_all(root_, ec);
+  }
+
+  void load_env() {
+    const auto base = utf8_text(root_ / "Extras.esp");
+    const auto patch = utf8_text(root_ / "Patch.esp");
+    const char* raw[] = {base.c_str(), patch.c_str()};
+    ASSERT_EQ(radicle_env_load(raw, 2, &env_), RADICLE_STATUS_OK) << radicle_last_error();
+  }
+
+  void open_patch(PluginHandle& handle) {
+    radicle_plugin* patch = nullptr;
+    ASSERT_EQ(radicle_plugin_read_file(utf8_text(root_ / "Patch.esp").c_str(), &patch), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    handle.reset(patch);
+  }
+
+  void reload_env(radicle_plugin* patch) {
+    radicle_env_destroy(env_);
+    env_ = nullptr;
+    ASSERT_EQ(radicle_plugin_write_file(patch, utf8_text(root_ / "Patch.esp").c_str()), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    load_env();
   }
 
   const radicle_record* winner(std::uint32_t local_id) {
@@ -469,6 +535,459 @@ TEST_F(CellAbiTest, CellViewFreeIsNullSafe) {
   radicle_scol_part part{};
   EXPECT_EQ(radicle_cell_view_scol_part(view, 2, 0, &part), RADICLE_STATUS_INVALID_ARGUMENT);
   radicle_cell_view_free(view);
+}
+
+TEST_F(CellAbiTest, EditPlacedReferenceWritesOverrideAndReadsBack) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  const auto before = patch_bytes(patch.get());
+
+  radicle_placed_edit edit{};
+  edit.has_transform = 1;
+  edit.position[0] = 11.0f;
+  edit.position[1] = 21.0f;
+  edit.position[2] = 31.0f;
+  edit.has_editor_id = 1;
+  edit.editor_id = "Edited";
+  radicle_placed_edit_result result{};
+  ASSERT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, &edit, &result),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(result.status, RADICLE_PLACED_EDIT_EDITED);
+  EXPECT_STREQ(result.copied_from, "Extras.esp");
+  EXPECT_EQ(result.relocated, 0);
+  EXPECT_NE(patch_bytes(patch.get()), before);
+
+  reload_env(patch.get());
+  radicle_cell_view* view = nullptr;
+  ASSERT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x804}, &view), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_cell_reference reference{};
+  ASSERT_TRUE(find_reference(view, "Extras.esp", 0x2001, reference));
+  EXPECT_STREQ(reference.editor_id, "Edited");
+  EXPECT_EQ(reference.position[0], 11.0f);
+  EXPECT_EQ(reference.position[2], 31.0f);
+  radicle_cell_view_free(view);
+}
+
+TEST_F(CellAbiTest, EditPlacedReferenceRefusalLeavesPatchUnchanged) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  const auto before = patch_bytes(patch.get());
+
+  radicle_placed_edit edit{};
+  edit.has_transform = 1;
+  edit.position[0] = 500.0f;
+  radicle_placed_edit_result result{};
+  EXPECT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {"Extras.esp", 0x9999}, &edit, &result),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(result.status, RADICLE_PLACED_EDIT_REFERENCE_MISSING);
+  EXPECT_EQ(result.copied_from, nullptr);
+  EXPECT_EQ(patch_bytes(patch.get()), before);
+
+  edit.has_primitive = 1;
+  EXPECT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, &edit, &result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(result.status, RADICLE_PLACED_EDIT_FIELD_ABSENT);
+  EXPECT_EQ(result.copied_from, nullptr);
+  EXPECT_EQ(patch_bytes(patch.get()), before);
+}
+
+TEST_F(CellAbiTest, DuplicatePlacedReferenceReturnsPatchKeyInSourceCell) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  radicle_duplicate_options options{};
+  options.offset_position[0] = 5.0f;
+  radicle_duplicate_status status = RADICLE_DUPLICATE_REFERENCE_MISSING;
+  radicle_form_key created{};
+  ASSERT_EQ(radicle_plugin_duplicate_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, &options,
+                                                      &status, &created),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(status, RADICLE_DUPLICATE_DUPLICATED);
+  ASSERT_NE(created.plugin, nullptr);
+  EXPECT_STREQ(created.plugin, "Patch.esp");
+  EXPECT_NE(created.local_id, 0x2001u);
+  const std::string created_plugin = created.plugin;
+  const auto created_id = created.local_id;
+
+  reload_env(patch.get());
+  radicle_cell_view* view = nullptr;
+  ASSERT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x804}, &view), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(radicle_cell_view_reference_count(view), 4u);
+  radicle_cell_reference copy{};
+  ASSERT_TRUE(find_reference(view, created_plugin, created_id, copy));
+  EXPECT_EQ(copy.position[0], 15.0f);
+  EXPECT_EQ(copy.position[1], 20.0f);
+  radicle_cell_view_free(view);
+}
+
+TEST_F(CellAbiTest, DeleteReportsStatusAndDropsReferenceAfterReload) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  radicle_delete_status status = RADICLE_DELETE_REFERENCE_MISSING;
+  ASSERT_EQ(radicle_plugin_delete_placed_reference(patch.get(), env_, {"Extras.esp", 0x2002}, &status),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(status, RADICLE_DELETE_MARKED_DELETED);
+  const auto after_mark = patch_bytes(patch.get());
+
+  EXPECT_EQ(radicle_plugin_delete_placed_reference(patch.get(), env_, {"Extras.esp", 0x2002}, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(status, RADICLE_DELETE_ALREADY_DELETED);
+  EXPECT_EQ(radicle_plugin_delete_placed_reference(patch.get(), env_, {"Extras.esp", 0x9999}, &status),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(status, RADICLE_DELETE_REFERENCE_MISSING);
+  EXPECT_EQ(patch_bytes(patch.get()), after_mark);
+
+  ASSERT_EQ(radicle_plugin_delete_placed_reference(patch.get(), env_, {"Patch.esp", 3}, &status),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(status, RADICLE_DELETE_DELETED);
+
+  reload_env(patch.get());
+  radicle_cell_view* view = nullptr;
+  ASSERT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x804}, &view), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_cell_view_reference_count(view), 1u);
+  radicle_cell_reference remaining{};
+  ASSERT_EQ(radicle_cell_view_reference(view, 0, &remaining), RADICLE_STATUS_OK);
+  EXPECT_EQ(remaining.key.local_id, 0x2001u);
+  radicle_cell_view_free(view);
+}
+
+TEST_F(CellAbiTest, CopyCellOverrideReportsStatusAndRefusals) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  radicle_plugin* source_plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(utf8_text(root_ / "Extras.esp").c_str(), &source_plugin),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  PluginHandle source(source_plugin, &radicle_plugin_destroy);
+  const auto before = patch_bytes(patch.get());
+
+  radicle_cell_override_status status = RADICLE_CELL_OVERRIDE_INSERTED;
+  EXPECT_EQ(radicle_plugin_copy_cell_override(patch.get(), source.get(), {"Extras.esp", 0x804}, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_CELL_OVERRIDE_ALREADY_EXISTS);
+  EXPECT_EQ(radicle_plugin_copy_cell_override(patch.get(), source.get(), {"Extras.esp", 0x803}, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(status, RADICLE_CELL_OVERRIDE_NOT_A_CELL);
+  EXPECT_EQ(radicle_plugin_copy_cell_override(patch.get(), source.get(), {"Extras.esp", 0x9999}, &status),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(status, RADICLE_CELL_OVERRIDE_SOURCE_MISSING);
+  EXPECT_EQ(patch_bytes(patch.get()), before);
+
+  ASSERT_EQ(radicle_plugin_copy_cell_override(patch.get(), source.get(), {"Extras.esp", 0x800}, &status),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(status, RADICLE_CELL_OVERRIDE_INSERTED);
+  EXPECT_NE(patch_bytes(patch.get()), before);
+}
+
+TEST_F(CellAbiTest, EditCellWritesOverrideAndRefusesNonCells) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  radicle_cell_edit edit{};
+  edit.has_water_height = 1;
+  edit.water_height = 12.5f;
+  radicle_cell_edit_status status = RADICLE_CELL_EDIT_CELL_MISSING;
+  ASSERT_EQ(radicle_plugin_edit_cell(patch.get(), env_, {"Extras.esp", 0x800}, &edit, &status),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(status, RADICLE_CELL_EDIT_EDITED);
+  const auto after = patch_bytes(patch.get());
+
+  EXPECT_EQ(radicle_plugin_edit_cell(patch.get(), env_, {"Extras.esp", 0x803}, &edit, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(status, RADICLE_CELL_EDIT_NOT_A_CELL);
+  EXPECT_EQ(radicle_plugin_edit_cell(patch.get(), env_, {"Extras.esp", 0x9999}, &edit, &status),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(status, RADICLE_CELL_EDIT_CELL_MISSING);
+  EXPECT_EQ(patch_bytes(patch.get()), after);
+
+  reload_env(patch.get());
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env_, {"Extras.esp", 0x800}, &record), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_cell_info info{};
+  ASSERT_EQ(radicle_cell_get_info(env_, record, &info), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(info.has_water_height, 1);
+  EXPECT_EQ(info.water_height, 12.5f);
+  EXPECT_EQ(info.lighting.fog_far, 4096.0f);
+}
+
+TEST_F(CellAbiTest, EditCallsRejectNullArgumentsAndInvalidKeys) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  const auto before = patch_bytes(patch.get());
+
+  radicle_placed_edit placed{};
+  radicle_placed_edit_result placed_result{};
+  EXPECT_EQ(radicle_plugin_edit_placed_reference(nullptr, env_, {"Extras.esp", 0x2001}, &placed, &placed_result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, nullptr, &placed_result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {nullptr, 0}, &placed, &placed_result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  placed.has_ownership = 1;
+  placed.owner = {"Extras.esp", 0x1000000};
+  EXPECT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, &placed, &placed_result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  radicle_form_key created{};
+  EXPECT_EQ(radicle_plugin_duplicate_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, nullptr, nullptr,
+                                                      &created),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_delete_status delete_status = RADICLE_DELETE_DELETED;
+  EXPECT_EQ(radicle_plugin_delete_placed_reference(patch.get(), env_, {nullptr, 0}, &delete_status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_cell_override_status override_status = RADICLE_CELL_OVERRIDE_INSERTED;
+  EXPECT_EQ(radicle_plugin_copy_cell_override(patch.get(), patch.get(), {"Extras.esp", 0x800}, &override_status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_cell_edit_status cell_status = RADICLE_CELL_EDIT_EDITED;
+  EXPECT_EQ(radicle_plugin_edit_cell(patch.get(), env_, {"Extras.esp", 0x800}, nullptr, &cell_status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(patch_bytes(patch.get()), before);
+}
+
+TEST_F(CellAbiTest, DuplicateIntoPatchOutsideEnvReturnsItsOwnName) {
+  radicle_plugin* fresh = nullptr;
+  ASSERT_EQ(radicle_plugin_create("Fresh.esp", &fresh), RADICLE_STATUS_OK) << radicle_last_error();
+  PluginHandle patch(fresh, &radicle_plugin_destroy);
+  radicle_duplicate_status status = RADICLE_DUPLICATE_REFERENCE_MISSING;
+  radicle_form_key created{};
+  ASSERT_EQ(radicle_plugin_duplicate_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, nullptr, &status,
+                                                      &created),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(status, RADICLE_DUPLICATE_DUPLICATED);
+  ASSERT_NE(created.plugin, nullptr);
+  EXPECT_STREQ(created.plugin, "Fresh.esp");
+  EXPECT_NE(created.local_id, 0u);
+}
+
+TEST_F(CellAbiTest, EditPlacedReferenceRoundTripsOwnershipLinksTeleportAndFlags) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  const radicle_linked_reference_edit links[] = {{{"Extras.esp", 0x910}, {"Extras.esp", 0x2002}},
+                                                 {{"Extras.esp", 0x911}, {"Extras.esp", 0x2001}}};
+  const radicle_placed_edit edit{
+      .has_transform = 1,
+      .position = {11.0f, 21.0f, 31.0f},
+      .rotation = {1.0f, 2.0f, 3.0f},
+      .has_scale = 1,
+      .has_scale_value = 1,
+      .scale = 2.5f,
+      .has_editor_id = 1,
+      .editor_id = "Edited",
+      .has_record_flags = 1,
+      .record_flags = 0x800,
+      .has_comments = 1,
+      .comments = "Round trip",
+      .has_location_reference = 1,
+      .location_reference = {"Extras.esp", 0x3005},
+      .has_ownership = 1,
+      .owner = {"Extras.esp", 0xA00},
+      .no_crime = 1,
+      .has_faction_rank = 1,
+      .faction_rank = 7,
+      .has_enable_parent = 1,
+      .enable_parent = {"Extras.esp", 0x2002},
+      .enable_parent_flags = 1,
+      .has_linked_references = 1,
+      .linked_references = links,
+      .linked_reference_count = 2,
+      .has_teleport = 1,
+      .teleport_door = {"Extras.esp", 0x2200},
+      .teleport_position = {100.0f, 200.0f, 300.0f},
+      .teleport_rotation = {0.5f, 0.25f, 0.125f},
+  };
+  radicle_placed_edit_result result{};
+  ASSERT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, &edit, &result),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(result.status, RADICLE_PLACED_EDIT_EDITED);
+
+  reload_env(patch.get());
+  radicle_placed_ref* ref = nullptr;
+  ASSERT_EQ(radicle_placed_ref_decode(env_, winner(0x2001), &ref), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(ref->has_ownership, 1);
+  EXPECT_STREQ(ref->owner.plugin, "Extras.esp");
+  EXPECT_EQ(ref->owner.local_id, 0xA00u);
+  EXPECT_EQ(ref->has_no_crime, 1);
+  EXPECT_EQ(ref->no_crime, 1);
+  EXPECT_EQ(ref->has_faction_rank, 1);
+  EXPECT_EQ(ref->faction_rank, 7);
+  EXPECT_EQ(ref->has_enable_parent, 1);
+  EXPECT_EQ(ref->enable_parent.local_id, 0x2002u);
+  EXPECT_EQ(ref->has_enable_parent_flags, 1);
+  EXPECT_EQ(ref->enable_parent_flags, 1);
+  ASSERT_EQ(ref->linked_ref_count, 2u);
+  EXPECT_EQ(ref->linked_refs[0].keyword.local_id, 0x910u);
+  EXPECT_EQ(ref->linked_refs[0].reference.local_id, 0x2002u);
+  EXPECT_EQ(ref->linked_refs[1].keyword.local_id, 0x911u);
+  EXPECT_EQ(ref->linked_refs[1].reference.local_id, 0x2001u);
+  EXPECT_EQ(ref->has_teleport, 1);
+  EXPECT_EQ(ref->teleport_door.local_id, 0x2200u);
+  EXPECT_EQ(ref->teleport_position[0], 100.0f);
+  EXPECT_EQ(ref->teleport_position[2], 300.0f);
+  EXPECT_EQ(ref->teleport_rotation[0], 0.5f);
+  EXPECT_STREQ(ref->comments, "Round trip");
+  EXPECT_EQ(ref->location_reference.local_id, 0x3005u);
+  radicle_placed_ref_free(ref);
+
+  radicle_cell_view* view = nullptr;
+  ASSERT_EQ(radicle_env_cell_view(env_, {"Extras.esp", 0x804}, &view), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_cell_reference reference{};
+  ASSERT_TRUE(find_reference(view, "Extras.esp", 0x2001, reference));
+  EXPECT_STREQ(reference.editor_id, "Edited");
+  EXPECT_EQ(reference.position[1], 21.0f);
+  EXPECT_EQ(reference.rotation[2], 3.0f);
+  EXPECT_EQ(reference.scale, 2.5f);
+  EXPECT_EQ(reference.initially_disabled, 1);
+  radicle_cell_view_free(view);
+}
+
+TEST_F(CellAbiTest, EditPlacedReferenceZeroScaleValueAndNullLinksClear) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  const radicle_placed_edit set{.has_scale = 1,
+                                .has_scale_value = 1,
+                                .scale = 2.5f,
+                                .has_location_reference = 1,
+                                .location_reference = {"Extras.esp", 0x3005},
+                                .has_enable_parent = 1,
+                                .enable_parent = {"Extras.esp", 0x2002},
+                                .enable_parent_flags = 1};
+  radicle_placed_edit_result result{};
+  ASSERT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, &set, &result),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  reload_env(patch.get());
+
+  const radicle_placed_edit clear{.has_scale = 1, .has_location_reference = 1, .has_enable_parent = 1};
+  ASSERT_EQ(radicle_plugin_edit_placed_reference(patch.get(), env_, {"Extras.esp", 0x2001}, &clear, &result),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  reload_env(patch.get());
+
+  radicle_placed_ref* ref = nullptr;
+  ASSERT_EQ(radicle_placed_ref_decode(env_, winner(0x2001), &ref), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(ref->has_scale, 0);
+  EXPECT_EQ(ref->has_enable_parent, 0);
+  EXPECT_EQ(ref->enable_parent.plugin, nullptr);
+  EXPECT_EQ(ref->location_reference.plugin, nullptr);
+  radicle_placed_ref_free(ref);
+}
+
+TEST_F(CellAbiTest, EditCellRoundTripsEveryLightingFieldLinksAndRegions) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  const radicle_form_key regions[] = {{"Extras.esp", 0x3008}, {"Extras.esp", 0x3009}};
+  const radicle_cell_edit edit{
+      .has_flags = 1,
+      .flags = 0x0003,
+      .has_lighting = 1,
+      .lighting = {1, {1, 2, 3}, 1, {4, 5, 6}, 1, {7, 8, 9}, 1, 10.5f, 1, 2048.5f, 1, 45, 1, 90, 1, 0.25f, 1, 512.0f,
+                   1, 1.5f},
+      .has_lighting_template = 1,
+      .lighting_template = {"Extras.esp", 0x3001},
+      .has_water_height = 1,
+      .water_height = 12.5f,
+      .has_water = 1,
+      .water = {"Extras.esp", 0x3002},
+      .has_image_space = 1,
+      .image_space = {"Extras.esp", 0x3003},
+      .has_encounter_zone = 1,
+      .encounter_zone = {"Extras.esp", 0x3004},
+      .has_location = 1,
+      .location = {"Extras.esp", 0x3005},
+      .has_acoustic_space = 1,
+      .acoustic_space = {"Extras.esp", 0x3006},
+      .has_music_type = 1,
+      .music_type = {"Extras.esp", 0x3007},
+      .has_sky_weather_region = 1,
+      .sky_weather_region = {"Extras.esp", 0x3008},
+      .has_god_rays = 1,
+      .god_rays = {"Extras.esp", 0x300A},
+      .has_lock_list = 1,
+      .lock_list = {"Extras.esp", 0x300C},
+      .has_owner = 1,
+      .owner = {"Extras.esp", 0x300B},
+      .has_owner_rank = 1,
+      .owner_rank = 4,
+      .has_regions = 1,
+      .regions = regions,
+      .region_count = 2,
+  };
+  radicle_cell_edit_status status = RADICLE_CELL_EDIT_CELL_MISSING;
+  ASSERT_EQ(radicle_plugin_edit_cell(patch.get(), env_, {"Extras.esp", 0x800}, &edit, &status), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(status, RADICLE_CELL_EDIT_EDITED);
+
+  reload_env(patch.get());
+  radicle_cell_info info{};
+  ASSERT_EQ(radicle_cell_get_info(env_, winner(0x800), &info), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(info.flags, 3u);
+  ASSERT_EQ(info.has_lighting, 1);
+  EXPECT_EQ(info.lighting.ambient.red, 1);
+  EXPECT_EQ(info.lighting.ambient.blue, 3);
+  EXPECT_EQ(info.lighting.directional.green, 5);
+  EXPECT_EQ(info.lighting.fog_near_color.red, 7);
+  EXPECT_EQ(info.lighting.fog_near, 10.5f);
+  EXPECT_EQ(info.lighting.fog_far, 2048.5f);
+  EXPECT_EQ(info.lighting.directional_rotation_xy, 45);
+  EXPECT_EQ(info.lighting.directional_rotation_z, 90);
+  EXPECT_EQ(info.lighting.directional_fade, 0.25f);
+  EXPECT_EQ(info.lighting.fog_clip_distance, 512.0f);
+  EXPECT_EQ(info.lighting.fog_power, 1.5f);
+  EXPECT_STREQ(info.lighting_template.plugin, "Extras.esp");
+  EXPECT_EQ(info.lighting_template.local_id, 0x3001u);
+  EXPECT_EQ(info.water.local_id, 0x3002u);
+  EXPECT_EQ(info.image_space.local_id, 0x3003u);
+  EXPECT_EQ(info.encounter_zone.local_id, 0x3004u);
+  EXPECT_EQ(info.location.local_id, 0x3005u);
+  EXPECT_EQ(info.acoustic_space.local_id, 0x3006u);
+  EXPECT_EQ(info.music_type.local_id, 0x3007u);
+  EXPECT_EQ(info.sky_weather_region.local_id, 0x3008u);
+  EXPECT_EQ(info.god_rays.local_id, 0x300Au);
+  EXPECT_EQ(info.lock_list.local_id, 0x300Cu);
+  EXPECT_EQ(info.owner.local_id, 0x300Bu);
+  EXPECT_EQ(info.owner_rank, 4);
+  EXPECT_EQ(info.water_height, 12.5f);
+
+  radicle_form_key* keys = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_cell_get_regions(env_, winner(0x800), &keys, &count), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(count, 2u);
+  EXPECT_EQ(keys[0].local_id, 0x3008u);
+  EXPECT_EQ(keys[1].local_id, 0x3009u);
+  radicle_free_form_keys(keys);
+}
+
+TEST_F(CellAbiTest, EditCellNullPluginClearsLinkAndRegions) {
+  PluginHandle patch(nullptr, &radicle_plugin_destroy);
+  open_patch(patch);
+  const radicle_cell_edit edit{.has_acoustic_space = 1,
+                               .acoustic_space = {nullptr, 0},
+                               .has_regions = 1,
+                               .regions = nullptr,
+                               .region_count = 0};
+  radicle_cell_edit_status status = RADICLE_CELL_EDIT_CELL_MISSING;
+  ASSERT_EQ(radicle_plugin_edit_cell(patch.get(), env_, {"Extras.esp", 0x800}, &edit, &status), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(status, RADICLE_CELL_EDIT_EDITED);
+
+  reload_env(patch.get());
+  radicle_cell_info info{};
+  ASSERT_EQ(radicle_cell_get_info(env_, winner(0x800), &info), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(info.acoustic_space.plugin, nullptr);
+  EXPECT_EQ(info.acoustic_space.local_id, 0u);
+  EXPECT_EQ(info.music_type.local_id, 0xF00u);
+  radicle_form_key* keys = nullptr;
+  size_t count = 7;
+  ASSERT_EQ(radicle_cell_get_regions(env_, winner(0x800), &keys, &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(count, 0u);
+  EXPECT_EQ(keys, nullptr);
 }
 
 }  // namespace
