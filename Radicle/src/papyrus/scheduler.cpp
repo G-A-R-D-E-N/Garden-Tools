@@ -16,6 +16,7 @@ SchedulerStepResult Runtime::runStep(std::int32_t budget) {
     if (!gate("vm.scheduler.instruction_budget")) {
         step.refused = static_cast<std::int32_t>(ready_.size());
         refusedEvents_ += step.refused;
+        for (const Execution& execution : ready_) settleCall(execution.ticket, CallState::Failed, Status::GateRefused);
         ready_.clear();
         step.waiting = static_cast<std::int32_t>(waiting_.size());
         return step;
@@ -23,12 +24,13 @@ SchedulerStepResult Runtime::runStep(std::int32_t budget) {
 
     for (auto it = waiting_.begin(); it != waiting_.end();) {
         Waiting& waiting = it->second;
-        if (!waiting.completion.has_value()) {
+        Instance* instance = findInstance(waiting.execution.instance);
+        if (instance == nullptr || instance->detached) {
+            settleCall(waiting.execution.ticket, CallState::Dropped, Status::HostError);
             ++it;
             continue;
         }
-        Instance* instance = findInstance(waiting.execution.instance);
-        if (instance == nullptr || instance->detached) {
+        if (!waiting.completion.has_value()) {
             ++it;
             continue;
         }
@@ -46,6 +48,7 @@ SchedulerStepResult Runtime::runStep(std::int32_t budget) {
         ready_.erase(ready_.begin());
         Instance* instance = findInstance(execution.instance);
         if (instance == nullptr || instance->detached) {
+            settleCall(execution.ticket, CallState::Dropped, Status::HostError);
             ready_.push_back(std::move(execution));
             continue;
         }
@@ -84,10 +87,12 @@ SchedulerStepResult Runtime::runStep(std::int32_t budget) {
                 if (token == 0 || usedTokens_.count(token) != 0) {
                     step.refused += 1;
                     refusedEvents_ += 1;
+                    settleCall(execution.ticket, CallState::Failed, Status::HostError);
                     early_.erase(token);
                     break;
                 }
                 usedTokens_[token] = true;
+                settleCall(execution.ticket, CallState::Waiting, Status::Ok);
                 Waiting waiting;
                 waiting.execution = std::move(execution);
                 const auto early = early_.find(token);
@@ -103,6 +108,7 @@ SchedulerStepResult Runtime::runStep(std::int32_t budget) {
             case Status::Ok:
                 step.completed += 1;
                 completedEvents_ += 1;
+                settleCall(execution.ticket, CallState::Done, Status::Ok, std::move(result.value), total);
                 break;
             case Status::Paused: {
                 step.paused += 1;
@@ -111,6 +117,7 @@ SchedulerStepResult Runtime::runStep(std::int32_t budget) {
                 if (execution.parks >= maxParksPerEvent_) {
                     step.dropped += 1;
                     droppedEvents_ += 1;
+                    settleCall(execution.ticket, CallState::Dropped, Status::Paused);
                 } else {
                     step.parked += 1;
                     parkedEvents_ += 1;
@@ -121,6 +128,7 @@ SchedulerStepResult Runtime::runStep(std::int32_t budget) {
             default:
                 step.refused += 1;
                 refusedEvents_ += 1;
+                settleCall(execution.ticket, CallState::Failed, result.status, Value{}, total);
                 break;
         }
     }

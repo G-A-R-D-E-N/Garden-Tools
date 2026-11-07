@@ -17,6 +17,8 @@
 #include <utility>
 #include <vector>
 
+using fo4::papyrus::CallRecord;
+using fo4::papyrus::CallState;
 using fo4::papyrus::ClockSource;
 using fo4::papyrus::InstanceId;
 using fo4::papyrus::Lifecycle;
@@ -63,6 +65,22 @@ std::optional<OwnerId> ownerFrom(radicle_papyrus_owner_kind kind, const char* ba
       return OwnerId::forRuntimeInstance(baseKey, std::strtoll(disc.c_str(), nullptr, 10));
   }
   return std::nullopt;
+}
+
+radicle_papyrus_call_state callStateFrom(CallState state) {
+  switch (state) {
+    case CallState::Pending:
+      return RADICLE_PAPYRUS_CALL_PENDING;
+    case CallState::Waiting:
+      return RADICLE_PAPYRUS_CALL_WAITING;
+    case CallState::Done:
+      return RADICLE_PAPYRUS_CALL_DONE;
+    case CallState::Failed:
+      return RADICLE_PAPYRUS_CALL_FAILED;
+    case CallState::Dropped:
+      return RADICLE_PAPYRUS_CALL_DROPPED;
+  }
+  return RADICLE_PAPYRUS_CALL_FAILED;
 }
 
 NativeTargetKind nativeKindFrom(radicle_papyrus_native_kind kind) {
@@ -214,6 +232,66 @@ radicle_status radicle_papyrus_runtime_send_event(radicle_papyrus_runtime* runti
       values.push_back(args[i]->value);
     }
     *out_status = to_c_status(runtime->runtime.sendEvent(instance, function, std::move(values)));
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_call_function(radicle_papyrus_runtime* runtime, uint64_t instance,
+                                                     const char* function,
+                                                     const radicle_papyrus_value* const* args,
+                                                     size_t arg_count, uint64_t* out_ticket,
+                                                     radicle_papyrus_status* out_status) {
+  radicle_c_detail::clear_error();
+  if (out_ticket != nullptr) *out_ticket = 0;
+  if (out_status != nullptr) *out_status = RADICLE_PAPYRUS_STATUS_OK;
+  if (runtime == nullptr || function == nullptr || out_ticket == nullptr || out_status == nullptr ||
+      (args == nullptr && arg_count != 0)) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, function, out_ticket, out_status and args are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while calling a script function", [&] {
+    std::vector<Value> values;
+    values.reserve(arg_count);
+    for (size_t i = 0; i < arg_count; ++i) {
+      if (args[i] == nullptr) {
+        return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "argument handles must not be null");
+      }
+      values.push_back(args[i]->value);
+    }
+    fo4::papyrus::Status status = fo4::papyrus::Status::Ok;
+    *out_ticket = runtime->runtime.submitCall(instance, function, std::move(values), status);
+    *out_status = to_c_status(status);
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_call_result(radicle_papyrus_runtime* runtime, uint64_t ticket,
+                                                   int32_t consume, radicle_papyrus_call_info* out_info,
+                                                   radicle_papyrus_value** out_value) {
+  radicle_c_detail::clear_error();
+  if (out_value != nullptr) *out_value = nullptr;
+  if (runtime == nullptr || out_info == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out_info are required");
+  }
+  if (out_info->struct_size < sizeof(radicle_papyrus_call_info)) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the call info struct is too small");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while reading a call result", [&] {
+    CallRecord record;
+    if (!runtime->runtime.takeResult(ticket, false, record)) {
+      return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the call ticket is unknown, consumed or evicted");
+    }
+    if (record.state == CallState::Done && out_value != nullptr) {
+      const radicle_status made = make_value(std::move(record.value), out_value);
+      if (made != RADICLE_STATUS_OK) return made;
+    }
+    out_info->state = callStateFrom(record.state);
+    out_info->status = to_c_status(record.status);
+    out_info->instructions = static_cast<uint64_t>(record.instructions);
+    if (consume != 0) {
+      CallRecord released;
+      runtime->runtime.takeResult(ticket, true, released);
+    }
     return RADICLE_STATUS_OK;
   });
 }
@@ -734,6 +812,117 @@ radicle_status radicle_papyrus_native_call_fail(radicle_papyrus_native_call* cal
   }
   call->failure = status;
   return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_papyrus_runtime_set_oninit_policy(radicle_papyrus_runtime* runtime,
+                                                         radicle_papyrus_oninit_policy policy) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime is required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while setting the OnInit policy", [&] {
+    switch (policy) {
+      case RADICLE_PAPYRUS_ONINIT_REFUSE:
+        runtime->runtime.setOnInitArrivalPolicy(OnInitArrivalPolicy::Refuse);
+        return RADICLE_STATUS_OK;
+      case RADICLE_PAPYRUS_ONINIT_QUEUE:
+        runtime->runtime.setOnInitArrivalPolicy(OnInitArrivalPolicy::QueueAsApproximation);
+        return RADICLE_STATUS_OK;
+    }
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the OnInit policy is not valid");
+  });
+}
+
+radicle_status radicle_papyrus_runtime_set_max_parks(radicle_papyrus_runtime* runtime, int32_t parks) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime is required");
+  }
+  if (parks < 1) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the park limit must be at least 1");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while setting the park limit", [&] {
+    runtime->runtime.setMaxParksPerEvent(parks);
+    return RADICLE_STATUS_OK;
+  });
+}
+
+int32_t radicle_papyrus_runtime_has_script(const radicle_papyrus_runtime* runtime, const char* name) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || name == nullptr) return 0;
+  try {
+    return runtime->runtime.hasScript(name) ? 1 : 0;
+  } catch (...) {
+    return 0;
+  }
+}
+
+int32_t radicle_papyrus_runtime_instance_declares(const radicle_papyrus_runtime* runtime, uint64_t instance,
+                                                  const char* function) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || function == nullptr) return 0;
+  try {
+    return runtime->runtime.instanceDeclares(instance, function) ? 1 : 0;
+  } catch (...) {
+    return 0;
+  }
+}
+
+const char* radicle_papyrus_runtime_instance_script(const radicle_papyrus_runtime* runtime, uint64_t instance) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) return nullptr;
+  try {
+    if (!runtime->runtime.instanceOwner(instance).has_value()) return nullptr;
+    return runtime->runtime.instanceScript(instance).c_str();
+  } catch (...) {
+    return nullptr;
+  }
+}
+
+radicle_status radicle_papyrus_runtime_list_instances(const radicle_papyrus_runtime* runtime, uint64_t* out_ids,
+                                                      size_t capacity, size_t* out_count) {
+  radicle_c_detail::clear_error();
+  if (out_count != nullptr) *out_count = 0;
+  if (runtime == nullptr || out_count == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out_count are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while listing instances", [&] {
+    const std::vector<InstanceId> ids = runtime->runtime.instanceIds();
+    *out_count = ids.size();
+    if (out_ids != nullptr) {
+      for (size_t i = 0; i < ids.size() && i < capacity; ++i) out_ids[i] = ids[i];
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_get_stats(const radicle_papyrus_runtime* runtime,
+                                                 radicle_papyrus_runtime_stats* out) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || out == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out are required");
+  }
+  if (out->struct_size < sizeof(radicle_papyrus_runtime_stats)) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the stats struct is too small");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while reading the runtime statistics", [&] {
+    const Runtime& source = runtime->runtime;
+    out->ready = static_cast<int32_t>(source.readyCount());
+    out->waiting = static_cast<int32_t>(source.waitingCount());
+    out->completed = source.completedEvents();
+    out->parked = source.parkedEvents();
+    out->paused = source.pausedEvents();
+    out->refused = source.refusedEvents();
+    out->dropped = source.droppedEvents();
+    out->waiting_events = source.waitingEvents();
+    out->refused_completions = source.refusedCompletions();
+    out->queued_during_oninit = source.queuedDuringOnInit();
+    out->native_target_refusals = source.nativeTargetRefusals();
+    out->overrides_handled = source.overridesHandled();
+    out->overrides_declined = source.overridesDeclined();
+    out->overrides_refused = source.overridesRefused();
+    return RADICLE_STATUS_OK;
+  });
 }
 
 }  // extern "C"

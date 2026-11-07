@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -510,6 +511,258 @@ TEST_F(CApiPapyrusRuntimeTest, V1RegistrationStillStaticOnly) {
   EXPECT_EQ(state_.hits, 0);
   EXPECT_EQ(step.refused, 1);
   radicle_papyrus_value_destroy(widget);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, CallFunctionReadsItsReturnValueAfterStep) {
+  PexFile model;
+  model.majorVersion = 3;
+  model.minorVersion = 9;
+  model.gameId = 2;
+  model.sourceFileName = "Give.psc";
+  PexObject give;
+  give.name = "Give";
+  give.autoStateName = "";
+  PexState entry;
+  entry.name = "";
+  entry.functions.push_back(method("OnInit", "None", {ins("return", {id("::NoneVar")})}));
+  entry.functions.push_back(method("Give", "Int", {ins("return", {number(41)})}));
+  give.states.push_back(std::move(entry));
+  model.objects.push_back(std::move(give));
+  model.rebuildStringTable();
+  load(model);
+
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Give", RADICLE_PAPYRUS_OWNER_FORM, "000830:Give.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+  ASSERT_EQ(status, RADICLE_PAPYRUS_STATUS_OK);
+
+  uint64_t ticket = 1;
+  ASSERT_EQ(radicle_papyrus_runtime_call_function(runtime_, instance, "Give", nullptr, 0, &ticket, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_PAPYRUS_STATUS_OK);
+  ASSERT_NE(ticket, 0u);
+
+  radicle_papyrus_call_info info{};
+  info.struct_size = sizeof(info);
+  radicle_papyrus_value* value = nullptr;
+  ASSERT_EQ(radicle_papyrus_runtime_call_result(runtime_, ticket, 0, &info, &value), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.state, RADICLE_PAPYRUS_CALL_PENDING);
+  EXPECT_EQ(value, nullptr);
+
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(step.completed, 1);
+
+  ASSERT_EQ(radicle_papyrus_runtime_call_result(runtime_, ticket, 1, &info, &value), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.state, RADICLE_PAPYRUS_CALL_DONE);
+  EXPECT_EQ(info.status, RADICLE_PAPYRUS_STATUS_OK);
+  ASSERT_NE(value, nullptr);
+  EXPECT_EQ(radicle_papyrus_value_int_of(value), 41);
+  radicle_papyrus_value_destroy(value);
+
+  value = nullptr;
+  EXPECT_EQ(radicle_papyrus_runtime_call_result(runtime_, ticket, 1, &info, &value), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(value, nullptr);
+
+  ticket = 1;
+  ASSERT_EQ(radicle_papyrus_runtime_call_function(runtime_, 999, "Give", nullptr, 0, &ticket, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(ticket, 0u);
+  EXPECT_NE(status, RADICLE_PAPYRUS_STATUS_OK);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, OnInitPolicyQueuesAnEventThatArrivesDuringOnInit) {
+  PexFile model;
+  model.majorVersion = 3;
+  model.minorVersion = 9;
+  model.gameId = 2;
+  model.sourceFileName = "Queued.psc";
+  PexObject queued;
+  queued.name = "Queued";
+  queued.autoStateName = "";
+  PexState entry;
+  entry.name = "";
+  entry.functions.push_back(method("OnInit", "None",
+                                   {ins("callstatic", {literal("Hook"), literal("Arrive"), id("::nonevar")}),
+                                    ins("return", {id("::NoneVar")})}));
+  entry.functions.push_back(method("Ping", "None", {ins("return", {id("::NoneVar")})}));
+  queued.states.push_back(std::move(entry));
+  model.objects.push_back(std::move(queued));
+  model.rebuildStringTable();
+  load(model);
+
+  struct Reentry {
+    radicle_papyrus_runtime* runtime;
+    uint64_t instance;
+  };
+  Reentry reentry{nullptr, 0};
+  radicle_papyrus_runtime_callbacks callbacks{};
+  callbacks.user = &reentry;
+  callbacks.call_native = [](void* user, const char*, const char*, const radicle_papyrus_value* const*, size_t,
+                             radicle_papyrus_value**) -> int32_t {
+    auto* state = static_cast<Reentry*>(user);
+    radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_OK;
+    return radicle_papyrus_runtime_send_event(state->runtime, state->instance, "Ping", nullptr, 0, &status) ==
+                   RADICLE_STATUS_OK
+               ? 1
+               : 0;
+  };
+  radicle_papyrus_runtime* runtime = nullptr;
+  ASSERT_EQ(radicle_papyrus_runtime_create(&callbacks, &runtime), RADICLE_STATUS_OK);
+  std::unique_ptr<radicle_papyrus_runtime, void (*)(radicle_papyrus_runtime*)> guard(runtime,
+                                                                                     radicle_papyrus_runtime_destroy);
+  ASSERT_EQ(radicle_papyrus_runtime_add_pex(runtime, pex_.back()), RADICLE_STATUS_OK);
+
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime, "Queued", RADICLE_PAPYRUS_OWNER_FORM, "000840:Queued.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  reentry = Reentry{runtime, instance};
+  ASSERT_EQ(radicle_papyrus_runtime_register_native(runtime, "Hook", "Arrive", RADICLE_PAPYRUS_NATIVE_STATIC, "", 0),
+            RADICLE_STATUS_OK);
+
+  ASSERT_EQ(radicle_papyrus_runtime_set_oninit_policy(runtime, RADICLE_PAPYRUS_ONINIT_QUEUE), RADICLE_STATUS_OK);
+
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime, instance, &status), RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_PAPYRUS_STATUS_OK);
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime, 512, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(step.completed, 1);
+
+  radicle_papyrus_runtime_stats stats{};
+  stats.struct_size = sizeof(stats);
+  ASSERT_EQ(radicle_papyrus_runtime_get_stats(runtime, &stats), RADICLE_STATUS_OK);
+  EXPECT_EQ(stats.queued_during_oninit, 1);
+  EXPECT_EQ(stats.completed, 1);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, MaxParksDropsASliceThatParksTooOften) {
+  PexFile model;
+  model.majorVersion = 3;
+  model.minorVersion = 9;
+  model.gameId = 2;
+  model.sourceFileName = "Loop.psc";
+  PexObject loop;
+  loop.name = "Loop";
+  loop.autoStateName = "";
+  PexState entry;
+  entry.name = "";
+  entry.functions.push_back(method("OnInit", "None", {ins("return", {id("::NoneVar")})}));
+  entry.functions.push_back(method("Spin", "None", {ins("jmp", {number(0)})}));
+  loop.states.push_back(std::move(entry));
+  model.objects.push_back(std::move(loop));
+  model.rebuildStringTable();
+  load(model);
+
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Loop", RADICLE_PAPYRUS_OWNER_FORM, "000841:Loop.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_papyrus_runtime_set_max_parks(runtime_, 0), RADICLE_STATUS_INVALID_ARGUMENT);
+  ASSERT_EQ(radicle_papyrus_runtime_set_max_parks(runtime_, 2), RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Spin", nullptr, 0, &status), RADICLE_STATUS_OK);
+
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 4, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(step.paused, 1);
+  EXPECT_EQ(step.parked, 1);
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 4, &step), RADICLE_STATUS_OK);
+  EXPECT_EQ(step.paused, 1);
+  EXPECT_EQ(step.dropped, 1);
+
+  radicle_papyrus_runtime_stats stats{};
+  stats.struct_size = sizeof(stats);
+  ASSERT_EQ(radicle_papyrus_runtime_get_stats(runtime_, &stats), RADICLE_STATUS_OK);
+  EXPECT_EQ(stats.dropped, 1);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, HasScriptReportsLoadedScripts) {
+  load(actorModel());
+  EXPECT_EQ(radicle_papyrus_runtime_has_script(runtime_, "Actor"), 1);
+  EXPECT_EQ(radicle_papyrus_runtime_has_script(runtime_, "Missing"), 0);
+  EXPECT_EQ(radicle_papyrus_runtime_has_script(runtime_, nullptr), 0);
+  EXPECT_EQ(radicle_papyrus_runtime_has_script(nullptr, "Actor"), 0);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, InstanceDeclaresReportsItsOwnScriptsFunctions) {
+  load(actorModel());
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM, "000842:Actor.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_papyrus_runtime_instance_declares(runtime_, instance, "Ping"), 1);
+  EXPECT_EQ(radicle_papyrus_runtime_instance_declares(runtime_, instance, "Missing"), 0);
+  EXPECT_EQ(radicle_papyrus_runtime_instance_declares(runtime_, 999, "Ping"), 0);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, InstanceScriptNamesTheScriptAndAnUnknownInstanceHasNone) {
+  load(actorModel());
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM, "000843:Actor.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  const char* name = radicle_papyrus_runtime_instance_script(runtime_, instance);
+  ASSERT_NE(name, nullptr);
+  EXPECT_STREQ(name, "Actor");
+  EXPECT_EQ(radicle_papyrus_runtime_instance_script(runtime_, 999), nullptr);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, ListInstancesReportsCountAndTruncatesToCapacity) {
+  load(actorModel());
+  uint64_t first = 0;
+  uint64_t second = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM, "000844:Actor.esp", "",
+                                           &first),
+            RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM, "000845:Actor.esp", "",
+                                           &second),
+            RADICLE_STATUS_OK);
+  size_t count = 99;
+  ASSERT_EQ(radicle_papyrus_runtime_list_instances(runtime_, nullptr, 0, &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(count, 2u);
+  uint64_t ids[2] = {0, 0};
+  ASSERT_EQ(radicle_papyrus_runtime_list_instances(runtime_, ids, 1, &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(count, 2u);
+  EXPECT_EQ(ids[0], first);
+  EXPECT_EQ(ids[1], 0u);
+  ASSERT_EQ(radicle_papyrus_runtime_list_instances(runtime_, ids, 2, &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(ids[0], first);
+  EXPECT_EQ(ids[1], second);
+  EXPECT_EQ(radicle_papyrus_runtime_list_instances(runtime_, ids, 2, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, GetStatsCountsCompletedEventsAndRejectsASmallStruct) {
+  load(actorModel());
+  ASSERT_EQ(radicle_papyrus_runtime_register_native(runtime_, "Hook", "Hit", RADICLE_PAPYRUS_NATIVE_STATIC, "", 0),
+            RADICLE_STATUS_OK);
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM, "000846:Actor.esp", "",
+                                           &instance),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+
+  radicle_papyrus_runtime_stats stats{};
+  EXPECT_EQ(radicle_papyrus_runtime_get_stats(runtime_, &stats), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_papyrus_runtime_get_stats(runtime_, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Ping", nullptr, 0, &status), RADICLE_STATUS_OK);
+  radicle_papyrus_step_result step{};
+  ASSERT_EQ(radicle_papyrus_runtime_step(runtime_, 512, &step), RADICLE_STATUS_OK);
+
+  stats = radicle_papyrus_runtime_stats{};
+  stats.struct_size = sizeof(stats);
+  ASSERT_EQ(radicle_papyrus_runtime_get_stats(runtime_, &stats), RADICLE_STATUS_OK);
+  EXPECT_EQ(stats.completed, 1);
+  EXPECT_EQ(stats.ready, 0);
+  EXPECT_EQ(stats.waiting, 0);
+  EXPECT_EQ(stats.refused, 0);
 }
 
 }  // namespace

@@ -12,6 +12,8 @@
 
 namespace {
 
+using fo4::papyrus::CallRecord;
+using fo4::papyrus::CallState;
 using fo4::papyrus::ClockSource;
 using fo4::papyrus::InstanceId;
 using fo4::papyrus::Lifecycle;
@@ -620,6 +622,118 @@ TEST_F(RuntimeTest, HandleCollisionDoesNotReadAnInstance) {
   EXPECT_EQ(runtime().sendEvent(*probe, "Poke", {fo4::papyrus::objectValue(*actor, "Probe", "")}), Status::Ok);
   runtime().runStep(512);
   EXPECT_EQ(runtime().instanceState(*actor), "");
+}
+
+TEST_F(RuntimeTest, ReturnValueCapturedAfterStep) {
+  addScript(script("Actor", {state("", {method("OnInit", "None", {}, {ins("return", {id("::NoneVar")})}),
+                                        method("Give", "Int", {}, {ins("return", {number(41)})})})}));
+  buildRuntime();
+  const auto instance = runtime().attach("Actor", OwnerId::forForm("000820:Actor.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  Status status = Status::HostError;
+  const std::uint64_t ticket = runtime().submitCall(*instance, "Give", {}, status);
+  ASSERT_EQ(status, Status::Ok);
+  ASSERT_NE(ticket, 0u);
+  CallRecord record;
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Pending);
+  runtime().runStep(512);
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Done);
+  EXPECT_EQ(record.status, Status::Ok);
+  ASSERT_EQ(record.value.type, fo4::papyrus::ValueType::Integer);
+  EXPECT_EQ(record.value.integer, 41);
+  EXPECT_GT(record.instructions, 0u);
+  ASSERT_TRUE(runtime().takeResult(ticket, true, record));
+  EXPECT_FALSE(runtime().takeResult(ticket, false, record));
+}
+
+TEST_F(RuntimeTest, ResultSurvivesLatentWait) {
+  addScript(script("Actor", {state("", {method("OnInit", "None", {}, {ins("return", {id("::NoneVar")})}),
+                                        method("Run", "Int", {},
+                                               {ins("callstatic", {literal("Waiter"), literal("Wait"), id("result")}),
+                                                ins("return", {number(13)})})})}));
+  buildRuntime();
+  runtime().registerNative(
+      "Waiter", "Wait",
+      NativeRegistration{NativeTargetKind::Static, "", {},
+                         true,
+                         [](const std::vector<Value>&, Status&) { return std::uint64_t{7}; }, {}});
+  const auto instance = runtime().attach("Actor", OwnerId::forForm("000821:Actor.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  Status status = Status::HostError;
+  const std::uint64_t ticket = runtime().submitCall(*instance, "Run", {}, status);
+  ASSERT_EQ(status, Status::Ok);
+  runtime().runStep(512);
+  CallRecord record;
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Waiting);
+  EXPECT_TRUE(runtime().completeLatent(7, fo4::papyrus::integerValue(42)));
+  runtime().runStep(512);
+  ASSERT_TRUE(runtime().takeResult(ticket, false, record));
+  EXPECT_EQ(record.state, CallState::Done);
+  ASSERT_EQ(record.value.type, fo4::papyrus::ValueType::Integer);
+  EXPECT_EQ(record.value.integer, 13);
+}
+
+TEST_F(RuntimeTest, QueuedDuringOnInitKeepsTicket) {
+  addScript(script("Actor", {state("", {method("OnInit", "None", {},
+                                               {ins("callstatic", {literal("Hook"), literal("Arrive"), id("::nonevar")}),
+                                                ins("return", {id("::NoneVar")})}),
+                                        method("Ping", "Int", {}, {ins("return", {number(5)})})})}));
+  buildRuntime();
+  Runtime* rt = &runtime();
+  const auto instance = rt->attach("Actor", OwnerId::forForm("000822:Actor.esp"));
+  ASSERT_TRUE(instance.has_value());
+  const InstanceId self = *instance;
+  std::uint64_t queued = 0;
+  Status queuedStatus = Status::HostError;
+  rt->registerNative("Hook", "Arrive",
+                     NativeRegistration{NativeTargetKind::Static, "",
+                                        [&](const Value&, const std::vector<Value>&, Value& out, Status&) {
+                                          queued = rt->submitCall(self, "Ping", {}, queuedStatus);
+                                          out = fo4::papyrus::noneValue();
+                                          return true;
+                                        },
+                                        false,
+                                        {}, {}});
+  rt->setOnInitArrivalPolicy(OnInitArrivalPolicy::QueueAsApproximation);
+  ASSERT_EQ(rt->initialize(self), Status::Ok);
+  EXPECT_EQ(queuedStatus, Status::Ok);
+  ASSERT_NE(queued, 0u);
+  CallRecord record;
+  ASSERT_TRUE(rt->takeResult(queued, false, record));
+  EXPECT_EQ(record.state, CallState::Pending);
+  rt->runStep(512);
+  ASSERT_TRUE(rt->takeResult(queued, false, record));
+  EXPECT_EQ(record.state, CallState::Done);
+  ASSERT_EQ(record.value.type, fo4::papyrus::ValueType::Integer);
+  EXPECT_EQ(record.value.integer, 5);
+}
+
+TEST_F(RuntimeTest, OverrideHandledResultHasValue) {
+  addScript(script("Actor", {state("", {method("OnInit", "None", {}, {ins("return", {id("::NoneVar")})}),
+                                        method("Ping", "Int", {}, {ins("return", {number(1)})})})}));
+  buildRuntime();
+  const auto instance = runtime().attach("Actor", OwnerId::forForm("000823:Actor.esp"));
+  ASSERT_TRUE(instance.has_value());
+  ASSERT_EQ(runtime().initialize(*instance), Status::Ok);
+  runtime().registerOverride("Actor", "Ping", -1,
+                             [](const Value&, const std::string&, const std::vector<Value>&) {
+                               return OverrideResult::handled(fo4::papyrus::integerValue(99));
+                             });
+  Status status = Status::HostError;
+  const std::uint64_t ticket = runtime().submitCall(*instance, "Ping", {}, status);
+  EXPECT_EQ(status, Status::Ok);
+  ASSERT_NE(ticket, 0u);
+  CallRecord record;
+  ASSERT_TRUE(runtime().takeResult(ticket, true, record));
+  EXPECT_EQ(record.state, CallState::Done);
+  ASSERT_EQ(record.value.type, fo4::papyrus::ValueType::Integer);
+  EXPECT_EQ(record.value.integer, 99);
+  EXPECT_EQ(runtime().readyCount(), 0u);
 }
 
 }  // namespace
