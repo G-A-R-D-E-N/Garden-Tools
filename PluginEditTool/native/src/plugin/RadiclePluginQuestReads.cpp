@@ -67,19 +67,18 @@ const fo4::env::PluginStringTable* findTable(
     return found == tables.end() ? nullptr : &*found;
 }
 
-Result<std::string> resolveQuestText(const std::vector<fo4::env::PluginStringTable>& tables,
-                                     fo4::env::StringSource source, std::uint32_t id,
-                                     std::string_view language) {
+constexpr std::uint32_t kNoLocalizedText = 0;
+
+Result<std::optional<std::string>> resolveQuestText(const std::vector<fo4::env::PluginStringTable>& tables,
+                                                    fo4::env::StringSource source, std::uint32_t id,
+                                                    std::string_view language) {
     const auto* table = findTable(tables, source);
     if (table == nullptr) {
         return std::unexpected(Error{"StringTableUnavailable", "localized quest text table is unavailable"});
     }
     const auto* entry = fo4::localization::find_string(table->table, id);
-    if (entry == nullptr) {
-        return std::unexpected(Error{"StringEntryMissing", "localized quest text ID is missing: " +
-                                                             std::to_string(id)});
-    }
-    return support::displayText(language, entry->text);
+    if (entry == nullptr) return std::optional<std::string>{};
+    return std::optional<std::string>{support::displayText(language, entry->text)};
 }
 
 nlohmann::json logTextJson(const std::optional<fo4::schema::LocalizedString>& text) {
@@ -185,7 +184,7 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestStages(const nlohmann::json
         std::vector<fo4::env::PluginStringTable> tables;
         const bool needsLocalizedText = std::any_of(stages.stages.begin(), stages.stages.end(), [](const auto& stage) {
             return std::any_of(stage.log_entries.begin(), stage.log_entries.end(), [](const auto& entry) {
-                return entry.log_text && entry.log_text->id;
+                return entry.log_text && entry.log_text->id && *entry.log_text->id != kNoLocalizedText;
             });
         });
         if (context && needsLocalizedText) {
@@ -199,10 +198,14 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestStages(const nlohmann::json
             for (const auto& entry : stage.log_entries) {
                 auto row = logTextJson(entry.log_text);
                 if (context && entry.log_text && entry.log_text->id) {
-                    auto text = resolveQuestText(tables, fo4::env::StringSource::dl,
-                                                 *entry.log_text->id, context->language);
-                    if (!text) return std::unexpected(text.error());
-                    row["logText"] = *text;
+                    row["logText"] = std::string{};
+                    if (*entry.log_text->id != kNoLocalizedText) {
+                        auto text = resolveQuestText(tables, fo4::env::StringSource::dl,
+                                                     *entry.log_text->id, context->language);
+                        if (!text) return std::unexpected(text.error());
+                        if (text->has_value()) row["logText"] = std::move(**text);
+                        else row["textMissing"] = true;
+                    }
                 }
                 row["flags"] = entry.flags;
                 if (entry.note.has_value()) {
@@ -273,7 +276,8 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestObjectives(const nlohmann::
         const bool needsLocalizedText = std::any_of(objectives.objectives.begin(), objectives.objectives.end(),
                                                      [](const auto& objective) {
                                                          return objective.display_text &&
-                                                                objective.display_text->id;
+                                                                objective.display_text->id &&
+                                                                *objective.display_text->id != kNoLocalizedText;
                                                      });
         if (context && needsLocalizedText) {
             auto read = readQuestStringTables(*loaded, context->language, context->stringsDirectory);
@@ -300,10 +304,13 @@ Result<nlohmann::json> RadiclePluginBackend::getQuestObjectives(const nlohmann::
                 if (objective.display_text->id) {
                     if (context) {
                         row["displayTextId"] = *objective.display_text->id;
-                        auto resolved = resolveQuestText(tables, fo4::env::StringSource::normal,
-                                                         *objective.display_text->id, context->language);
-                        if (!resolved) return std::unexpected(resolved.error());
-                        text = std::move(*resolved);
+                        if (*objective.display_text->id != kNoLocalizedText) {
+                            auto resolved = resolveQuestText(tables, fo4::env::StringSource::normal,
+                                                             *objective.display_text->id, context->language);
+                            if (!resolved) return std::unexpected(resolved.error());
+                            if (resolved->has_value()) text = std::move(**resolved);
+                            else row["textMissing"] = true;
+                        }
                     }
                 } else {
                     text = fo4::text::windows1252_to_utf8(objective.display_text->inline_text());

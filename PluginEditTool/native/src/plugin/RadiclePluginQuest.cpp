@@ -66,7 +66,7 @@ bool knownStageKey(std::string_view key) {
 
 bool knownLogEntryKey(std::string_view key) {
     return key == "flags" || key == "note" || key == "logText" || key == "conditions" ||
-           key == "logTextId" || key == "conditionsUnreadable";
+           key == "logTextId" || key == "textMissing" || key == "conditionsUnreadable";
 }
 
 std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
@@ -337,6 +337,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
     std::vector<fo4::FormKey> conditionKeys;
     bool rawConditionsPresent = false;
     std::set<std::uint16_t> indexes;
+    std::vector<std::vector<bool>> textMissingLogs;
 
     for (const auto& element : *stagesJson) {
         if (!element.is_object()) {
@@ -350,6 +351,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
         }
         fo4::forms::QuestStage stage;
         pendingConditions.emplace_back();
+        textMissingLogs.emplace_back();
         std::uint32_t index = 0;
         std::uint32_t flags = 0;
         if (!questUnsigned(element, "index", 0, index) ||
@@ -541,6 +543,19 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     "a localized log entry with logTextId must also send logText, or drop logTextId; omitting logText would drop the CNAM"
                 });
             }
+            bool textMissing = false;
+            if (const auto field = entryJson.find("textMissing"); field != entryJson.end() && !field->is_null()) {
+                if (!field->is_boolean()) {
+                    return std::unexpected(Error{"InvalidQuestStagePayload", "log entry textMissing must be a boolean"});
+                }
+                textMissing = field->get<bool>();
+            }
+            if (textMissing && !logText.has_value()) {
+                return std::unexpected(Error{
+                    "InvalidQuestStagePayload",
+                    "a log entry with textMissing must also send logText (empty) so its existing ID is kept"
+                });
+            }
             std::vector<PendingQuestCondition> parsedConditions;
             const bool conditionsGiven = entryJson.contains("conditions");
             if (conditionsGiven && !entryJson["conditions"].is_null()) {
@@ -561,6 +576,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 }
             }
             omittedConditions.push_back(!conditionsGiven);
+            textMissingLogs.back().push_back(textMissing);
             stage.log_entries.push_back(std::move(entry));
             pendingConditions.back().push_back(std::move(parsedConditions));
         }
@@ -612,17 +628,23 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                             localizedTables->language, *entry.log_text->text, text)) {
                         return std::unexpected(*error);
                     }
+                    const bool textMissing = textMissingLogs[stageIndex][entryIndex];
+                    if (textMissing && !previousId.has_value()) {
+                        return std::unexpected(Error{
+                            "InvalidQuestStagePayload",
+                            "a log entry with textMissing has no existing CNAM ID to keep; reload the quest"
+                        });
+                    }
                     if (previousId.has_value()) {
                         const auto* previousText = fo4::localization::find_string(
                             localizedTables->dlstrings, *previousId);
-                        if (previousText == nullptr) {
-                            return std::unexpected(Error{
-                                "LocalizedLogTableInvalid",
-                                "DLSTRINGS is missing existing QUST CNAM ID " +
-                                    std::to_string(*previousId)
-                            });
+                        if (text.empty() && previousText == nullptr) {
+                            id = *previousId;
+                        } else if (previousText != nullptr && previousText->text == text) {
+                            id = *previousId;
+                        } else if (text.empty()) {
+                            id = 0u;
                         }
-                        if (previousText->text == text) id = *previousId;
                     }
                     if (!id.has_value()) {
                         if (localizedTables->nextId == std::numeric_limits<std::uint32_t>::max()) {

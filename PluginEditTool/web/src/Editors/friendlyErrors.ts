@@ -47,7 +47,14 @@ export interface FriendlyMessage {
   details?: string;
 }
 
+export const readOnlySentence = (plugin: string) =>
+  `${plugin} is a game file and cannot be changed. Copy the record into your own plugin first (the Copy as override button above, or the record menu), then edit the copy.`;
+
 export function friendlyError(message: string): FriendlyMessage {
+  if (message.includes('PluginReadOnly')) {
+    const plugin = /plugin:\s*(.+?)\s*$/.exec(message)?.[1] ?? 'This plugin';
+    return { text: readOnlySentence(plugin), details: message };
+  }
   const known = FRIENDLY_ERRORS.find(entry => message.includes(entry.match));
   return known ? { text: `${known.message} ${known.fix}`, details: message } : { text: message };
 }

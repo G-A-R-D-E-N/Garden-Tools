@@ -6,13 +6,15 @@ export interface StageLogEntry {
   flags: number;
   conditions?: unknown[];
   conditionsUnreadable?: boolean;
+  textMissing?: boolean;
+  logTextId?: number;
 }
 export interface QuestStage { index: number; flags: number; logEntries: StageLogEntry[]; }
 export interface StageSelection { index: number; }
 export interface StageJump { from: number; to: number; function: string; }
 export type StageEdit = (current: QuestStage[]) => QuestStage[];
 export interface ObjectiveTarget { alias: number; aliasName: string; flags: number; }
-export interface QuestObjective { index: number; flags: number; displayText: string; targets: ObjectiveTarget[]; }
+export interface QuestObjective { index: number; flags: number; displayText: string; targets: ObjectiveTarget[]; textMissing?: boolean; }
 export interface CollectionEntry { id: number; maxInitialFillCount: number | null; }
 export interface QuestAlias {
   id: number;
@@ -43,10 +45,10 @@ export const OBJECTIVE_FLAG_OPTIONS: readonly FlagOption[] = [
 
 export const ALIAS_KINDS: readonly AliasKind[] = ['reference', 'location', 'collection'];
 
-interface RawLogEntry { logText?: string; note?: string; flags: number; conditions?: unknown; conditionsUnreadable?: boolean; }
+interface RawLogEntry { logText?: string | null; logTextId?: number | null; note?: string | null; flags: number; conditions?: unknown; conditionsUnreadable?: boolean; textMissing?: boolean; }
 interface RawStage { index: number; flags: number; logEntries?: RawLogEntry[]; }
 interface RawTarget { alias: number; aliasName?: string; flags: number; }
-interface RawObjective { index: number; flags: number; displayText?: string; targets?: RawTarget[]; }
+interface RawObjective { index: number; flags: number; displayText?: string | null; targets?: RawTarget[]; textMissing?: boolean; }
 interface RawCollectionEntry { id: number; maxInitialFillCount?: number; }
 interface RawAlias {
   id?: number;
@@ -58,7 +60,13 @@ interface RawAlias {
 }
 
 function parseLogEntry(entry: RawLogEntry): StageLogEntry {
-  const base = { logText: entry.logText ?? '', note: entry.note ?? '', flags: entry.flags };
+  const base = {
+    logText: entry.logText ?? '',
+    note: entry.note ?? '',
+    flags: entry.flags,
+    ...(typeof entry.logTextId === 'number' ? { logTextId: entry.logTextId } : {}),
+    ...(entry.textMissing === true ? { textMissing: true } : {}),
+  };
   return Array.isArray(entry.conditions) && entry.conditionsUnreadable !== true
     ? { ...base, conditions: entry.conditions }
     : { ...base, conditionsUnreadable: true };
@@ -84,6 +92,7 @@ export function parseObjectives(raw: unknown): QuestObjective[] {
       aliasName: target.aliasName ?? '',
       flags: target.flags,
     })),
+    ...(row.textMissing === true ? { textMissing: true } : {}),
   }));
 }
 
@@ -110,7 +119,9 @@ export function stagesJson(stages: QuestStage[]): string {
     flags: stage.flags,
     logEntries: stage.logEntries.map(entry => ({
       flags: entry.flags,
-      ...(entry.logText ? { logText: entry.logText } : {}),
+      ...(entry.logText || entry.textMissing || entry.logTextId !== undefined ? { logText: entry.logText } : {}),
+      ...(entry.logTextId !== undefined ? { logTextId: entry.logTextId } : {}),
+      ...(entry.textMissing ? { textMissing: true } : {}),
       ...(entry.note ? { note: entry.note } : {}),
       ...(entry.conditionsUnreadable ? {} : { conditions: entry.conditions ?? [] }),
     })),
@@ -123,6 +134,7 @@ export function objectivesJson(objectives: QuestObjective[]): string {
     flags: objective.flags,
     displayText: objective.displayText,
     targets: objective.targets.map(target => ({ alias: target.alias, flags: target.flags })),
+    ...(objective.textMissing ? { textMissing: true } : {}),
   })));
 }
 
@@ -143,6 +155,14 @@ export function aliasesJson(aliases: QuestAlias[]): string {
     if (alias.fill) Object.assign(row, alias.fill);
     return row;
   }));
+}
+
+export function afterTextEdit<T extends { textMissing?: boolean }>(row: T, text: string): T {
+  return text === '' ? row : { ...row, textMissing: undefined };
+}
+
+export function renumberObjective(objective: QuestObjective, index: number): QuestObjective {
+  return index === objective.index ? objective : { ...objective, index, textMissing: undefined };
 }
 
 export function toggleBit(flags: number, bit: number, on: boolean): number {

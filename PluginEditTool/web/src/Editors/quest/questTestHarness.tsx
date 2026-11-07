@@ -33,6 +33,7 @@ export function stubBackend(overrides: Record<string, unknown> = {}) {
     GetReferencedBy: vi.fn(async () => '[]'),
     CheckQuest: vi.fn(async () => '[]'),
     CheckForErrors: vi.fn(async () => '[]'),
+    GetEditablePlugins: vi.fn(async () => '["Patch.esp"]'),
     ...overrides,
   };
   vi.stubGlobal('chrome', { webview: { hostObjects: { backend } } });
