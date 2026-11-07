@@ -8,6 +8,7 @@ const bridge = vi.hoisted(() => ({
   create: vi.fn<Backend['CreateRecord']>(),
   save: vi.fn<Backend['SavePlugin']>(),
   pick: vi.fn(),
+  resolve: vi.fn<CellHost['ResolveWorldspace']>(),
 }));
 
 vi.mock('./backend', () => ({
@@ -16,6 +17,7 @@ vi.mock('./backend', () => ({
     SearchCells: async () => '[]',
     SearchWorldspaces: async () => '[]',
     GetPlacedReferencesAtGrid: bridge.load,
+    ResolveWorldspace: bridge.resolve,
   }),
   getBackend: () => ({ CreateRecord: bridge.create, SavePlugin: bridge.save }),
 }));
@@ -78,5 +80,27 @@ describe('Cell Viewer exterior grid dispatch', () => {
       worldspace: '00003C:Fallout4.esm', x: -33, y: 32, editorId: 'MyCell',
     });
     expect(bridge.save).toHaveBeenCalledExactlyOnceWith('Patch.esp', '');
+  });
+
+  it('shows the worldspace the backend resolves for the loaded cell, not the typed text', async () => {
+    localStorage.setItem('cell.worldspace', 'Commonwealth');
+    bridge.load.mockResolvedValue('{"cellFormKey":"0000ABCD:Fallout4.esm","cellEditorId":"MyCell","references":[]}');
+    bridge.resolve.mockResolvedValue('{"cellFormKey":"0000ABCD:Fallout4.esm","worldspaceFormKey":"00003C:Fallout4.esm"}');
+    await openGrid('1', '0');
+    fireEvent.click(screen.getByRole('button', { name: 'Load Cell' }));
+    const stat = (await screen.findByText('Worldspace')).closest('.cell-stat');
+    expect(stat?.querySelector('strong')?.textContent).toBe('00003C:Fallout4.esm');
+    expect(bridge.resolve).toHaveBeenCalledExactlyOnceWith('0000ABCD:Fallout4.esm');
+  });
+
+  it('keeps the loaded cell when the worldspace lookup fails', async () => {
+    bridge.load.mockResolvedValue('{"cellFormKey":"0000ABCD:Fallout4.esm","cellEditorId":"MyCell","references":[]}');
+    bridge.resolve.mockRejectedValue(new Error('CellReadFailed'));
+    await openGrid('1', '0');
+    fireEvent.click(screen.getByRole('button', { name: 'Load Cell' }));
+    expect(await screen.findByText('MyCell')).toBeTruthy();
+    expect(await screen.findByText('Loaded -- no placeable meshes in this cell.')).toBeTruthy();
+    expect(screen.queryByText('Worldspace')).toBeNull();
+    expect(bridge.resolve).toHaveBeenCalledExactlyOnceWith('0000ABCD:Fallout4.esm');
   });
 });
