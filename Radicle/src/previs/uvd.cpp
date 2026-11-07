@@ -65,4 +65,30 @@ std::vector<std::string> validate_uvd(std::span<const std::byte> data) {
   return issues;
 }
 
+std::vector<std::byte> write_uvd(const UvdWriteRequest& req) {
+  const std::size_t body = 8 + req.payload.size();
+  std::size_t size = body;
+  if (size < k_uvd_header_min) size = k_uvd_header_min;
+  if (k_uvd_banner_offset + req.banner.size() + 1 > size) {
+    size = k_uvd_banner_offset + req.banner.size() + 1;
+  }
+  size = (size + 15) & ~std::size_t{15};
+  std::vector<std::byte> out(size, std::byte{0});
+  out[0] = static_cast<std::byte>(k_uvd_magic & 0xFFu);
+  out[1] = static_cast<std::byte>((k_uvd_magic >> 8) & 0xFFu);
+  out[2] = static_cast<std::byte>((k_uvd_magic >> 16) & 0xFFu);
+  out[3] = static_cast<std::byte>((k_uvd_magic >> 24) & 0xFFu);
+  if (!req.payload.empty()) {
+    std::memcpy(out.data() + 8, req.payload.data(), req.payload.size());
+  }
+  std::memcpy(out.data() + k_uvd_banner_offset, req.banner.data(), req.banner.size());
+  out[k_uvd_banner_offset + req.banner.size()] = std::byte{0};
+  const auto crc = crc32c(std::span<const std::byte>{out}.subspan(8));
+  out[4] = static_cast<std::byte>(crc & 0xFFu);
+  out[5] = static_cast<std::byte>((crc >> 8) & 0xFFu);
+  out[6] = static_cast<std::byte>((crc >> 16) & 0xFFu);
+  out[7] = static_cast<std::byte>((crc >> 24) & 0xFFu);
+  return out;
+}
+
 }  // namespace fo4::previs

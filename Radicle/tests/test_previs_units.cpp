@@ -1,9 +1,13 @@
 #include "fo4/error.hpp"
+#include "fo4/previs/bake_oc.hpp"
 #include "fo4/previs/cdx.hpp"
 #include "fo4/previs/csg.hpp"
 #include "fo4/previs/detect.hpp"
+#include "fo4/previs/stamp.hpp"
 #include "fo4/previs/uvd.hpp"
 #include "fo4/previs/xcri.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "env_node_fixture.hpp"
 #include "plugin_bytes.hpp"
 #include "previs_test_support.hpp"
 
@@ -13,6 +17,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <span>
 #include <string>
 #include <vector>
@@ -314,6 +320,72 @@ TEST(PrevisDetect, EveryIssueCodeHasAName) {
     const auto name = fo4::previs::to_string(static_cast<fo4::previs::PrevisIssue>(code));
     EXPECT_FALSE(name.empty()) << code;
     EXPECT_NE(name, "unknown") << code;
+  }
+}
+
+// Regression: native UVD writer must preserve magic, alignment, banner and CRC-32C.
+TEST(PrevisUvd, WriteRoundTripsThroughValidate) {
+  const auto raw = make_uvd_bytes("TUMBRA umbrella compiler 3.3.17", 0x120);
+  fo4::previs::UvdWriteRequest req{.banner = "TUMBRA umbrella compiler 3.3.17",
+                                   .payload = std::span<const std::byte>(raw).subspan(8)};
+  const auto out = fo4::previs::write_uvd(req);
+  ASSERT_GE(out.size(), fo4::previs::k_uvd_header_min);
+  EXPECT_TRUE(fo4::previs::validate_uvd(out).empty());
+  EXPECT_EQ(fo4::previs::parse_uvd(out).banner, "TUMBRA umbrella compiler 3.3.17");
+}
+
+// Regression: stamping PCMB/VISI/XCRI must round-trip through the CELL parser.
+TEST(PrevisStamp, WritesPrevisSubrecords) {
+  namespace en = fo4::test::envnode;
+  const auto bytes = en::make_plugin(
+      {},
+      {en::top("CELL", {en::grp(0, 2, {en::grp(0, 3, {en::rec(
+                               "CELL", 0x801,
+                               {{"EDID", en::zstring("TestCell")},
+                                {"DATA", {std::byte{0x01}, std::byte{0}}}})})})})});
+  auto plugin = fo4::read_plugin(bytes);
+  const fo4::FormKey cell{plugin.key, fo4::LocalFormId{0x801u}};
+  fo4::previs::StampRequest req{.pcmb_stamp = 0x5678,
+                                .visi_stamp = 0x1234,
+                                .xcri = fo4::previs::XcriRaw{.mesh_ids = {1}, .refs = {{0x55, 1}}}};
+  ASSERT_EQ(fo4::previs::stamp_cell_previs(plugin, cell, req), fo4::previs::StampStatus::ok);
+  const auto* record = fo4::find_record(plugin, cell);
+  ASSERT_NE(record, nullptr);
+  const auto sig_pcmb = fo4::Signature::from_string("PCMB");
+  const auto sig_visi = fo4::Signature::from_string("VISI");
+  const auto sig_xcri = fo4::Signature::from_string("XCRI");
+  const fo4::Subrecord* pcmb = nullptr;
+  const fo4::Subrecord* visi = nullptr;
+  const fo4::Subrecord* xcri = nullptr;
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature == sig_pcmb) pcmb = &sub;
+    if (sub.signature == sig_visi) visi = &sub;
+    if (sub.signature == sig_xcri) xcri = &sub;
+  }
+  ASSERT_NE(pcmb, nullptr);
+  ASSERT_NE(visi, nullptr);
+  ASSERT_NE(xcri, nullptr);
+  ASSERT_EQ(pcmb->data.size(), 2u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(pcmb->data[0]), 0x78);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(pcmb->data[1]), 0x56);
+  ASSERT_EQ(visi->data.size(), 2u);
+  EXPECT_EQ(fo4::previs::parse_xcri_bytes(xcri->data).mesh_ids, req.xcri.mesh_ids);
+}
+
+// Regression: bake step must copy a measured source NIF to the OC output path unchanged.
+TEST(PrevisBake, CopiesSourceBytes) {
+  namespace en = fo4::test::envnode;
+  const std::vector<std::byte> source{std::byte{0x4E}, std::byte{0x49}, std::byte{0x46},
+                                      std::byte{0x20}, std::byte{0x01}};
+  const auto dir = std::filesystem::temp_directory_path() / "previs_bake_test";
+  std::filesystem::remove_all(dir);
+  const auto out = dir / "00001234_00005678_OC.NIF";
+  ASSERT_EQ(fo4::previs::bake_oc_single_source_bytes(source, out), fo4::previs::BakeOcStatus::ok);
+  std::ifstream in(out, std::ios::binary);
+  const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+  ASSERT_EQ(chars.size(), source.size());
+  for (std::size_t i = 0; i < source.size(); ++i) {
+    EXPECT_EQ(static_cast<unsigned char>(chars[i]), static_cast<unsigned char>(source[i]));
   }
 }
 

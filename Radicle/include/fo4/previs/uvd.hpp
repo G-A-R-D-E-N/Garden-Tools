@@ -36,4 +36,12 @@ std::uint32_t crc32c(std::span<const std::byte> data) noexcept;
 // A bad magic, size, alignment, CRC or banner must be reported.
 std::vector<std::string> validate_uvd(std::span<const std::byte> data);
 
+struct UvdWriteRequest {
+  std::string_view banner;
+  // Payload after the 8-byte header (bytes [8,end)); padded to 16-byte alignment.
+  std::span<const std::byte> payload;
+};
+
+std::vector<std::byte> write_uvd(const UvdWriteRequest& req);
+
 }  // namespace fo4::previs

@@ -293,6 +293,8 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/previs/xcri.cpp
   src/previs/detect.cpp
   src/previs/previs_data.cpp
+  src/previs/stamp.cpp
+  src/previs/bake_oc.cpp
   src/environment/region.cpp
   src/environment/placed.cpp
   src/environment/terrain.cpp

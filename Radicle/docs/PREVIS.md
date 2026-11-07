@@ -216,3 +216,16 @@ returns the same field. Scanning the in-memory plugins instead would need every
 loaded `Plugin` copied out of the backend (`Environment::from_plugins` takes
 them by value) and the backend's operation lock held for the whole scan, so it
 is not done. All verdict logic stays in Radicle C++; the panel only renders.
+
+## Write pipeline (Phases 2–4)
+
+CK-free generation is `precombine_plan` → native bake → native stamp → container writers → optional Umbra tome.
+
+| Step | API | Notes |
+|------|-----|-------|
+| Plan | C# `precombine_plan` | Model groups and skip reasons only. |
+| Bake `_OC.NIF` | `bake_oc_single_source*` | Copies a measured source mesh to the OC path until Shared packed-geometry encoding ships in Radicle NIF. |
+| Stamp CELL | `stamp_cell_previs`, C# `StampPrevis` | PCMB, VISI, XCRI (`write_xcri_bytes`); Mutagen path sets PCMB/VISI timestamps. |
+| CDX / CSG / UVD | `write_cdx`, `write_csg`, `write_uvd` | Round-trip with readers; CSG row semantics still opaque. |
+
+Oracle manifests live in `Radicle/testdata/previs/oracles/`; capture with `tools/previs/oracle_capture.ps1`. See `Radicle/docs/re-answers/2026-11-previs-generation.md`.

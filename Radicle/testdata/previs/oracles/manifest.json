@@ -1,0 +1,5 @@
+{
+  "build": "synthetic-1",
+  "description": "Pinned hashes for previs write-path regression; replace entries after CK capture.",
+  "files": []
+}
