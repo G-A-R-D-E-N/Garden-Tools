@@ -82,6 +82,7 @@ add_library(
     plugin/RadiclePluginSeq.cpp
     plugin/RadiclePluginCompare.cpp
     plugin/RadiclePluginDisabledOverride.cpp
+    plugin/RadiclePluginPrevisPatch.cpp
     plugin/RadiclePluginCopyAsWrapper.cpp
     plugin/RadiclePluginCheck.cpp
     plugin/RadiclePluginBatchMutation.cpp

@@ -28,6 +28,8 @@ public:
 private:
     Result<nlohmann::json> scan(const nlohmann::json& args);
     Result<nlohmann::json> dataFolder() const;
+    Result<nlohmann::json> patchWorkflow() const;
+    Result<nlohmann::json> callBackend(std::string_view method, const nlohmann::json& args);
 
     std::filesystem::path resolveDataFolder(const nlohmann::json& args) const;
 

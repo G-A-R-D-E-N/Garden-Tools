@@ -340,6 +340,10 @@ private:
     std::vector<std::string> archivePluginNamesLocked() const;
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
+    Result<void> ensureCellOverrideLocked(LoadedPlugin& patch,
+                                          const fo4::Plugin& source,
+                                          const fo4::FormKey& key);
+    static void clearPrevisSubrecordsOnCell(fo4::Plugin& plugin, const fo4::FormKey& key);
     bool stageQuestFragmentMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated,
                                           StagedQuestFragments fragments);
     std::vector<std::string> laterOverridesLocked(const LoadedPlugin& target,
@@ -457,6 +461,10 @@ private:
     Result<nlohmann::json> copyElementToSelected(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeElementFromSelected(const nlohmann::json& arguments) override;
 
+    Result<nlohmann::json> stampCellPrevis(const nlohmann::json& arguments);
+    Result<nlohmann::json> disableCellPrevis(const nlohmann::json& arguments);
+    Result<nlohmann::json> bakeOcNif(const nlohmann::json& arguments);
+    Result<nlohmann::json> writePrevisContainer(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideLocked(const nlohmann::json& arguments, bool initiallyDisabled);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);

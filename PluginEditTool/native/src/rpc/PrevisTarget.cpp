@@ -104,8 +104,45 @@ Result<nlohmann::json> PrevisTarget::invoke(std::string_view method,
                                             const nlohmann::json& args) {
     if (method == "Scan") return scan(args);
     if (method == "GetDataFolder") return dataFolder();
+    if (method == "PatchWorkflow") return patchWorkflow();
+    if (method == "PatchStamp") return callBackend("StampCellPrevis", args);
+    if (method == "PatchDisable") return callBackend("DisableCellPrevis", args);
+    if (method == "PatchBake") return callBackend("BakeOcNif", args);
+    if (method == "PatchWriteContainer") return callBackend("WritePrevisContainer", args);
+    if (method == "PatchSave") return callBackend("SavePlugin", args);
     return std::unexpected(Error{"UnknownMethod",
                                  "Unknown previs RPC method: " + std::string(method)});
+}
+
+Result<nlohmann::json> PrevisTarget::callBackend(std::string_view method, const nlohmann::json& args) {
+    const auto response = backend_.invokeBackend(method, args);
+    if (!response) return std::unexpected(response.error());
+    return *response;
+}
+
+Result<nlohmann::json> PrevisTarget::patchWorkflow() const {
+    return nlohmann::json::array({
+        {{"id", "scan"}, {"title", "Scan"}, {"detail", "Find broken or stale cells in the saved load order."},
+         {"status", "done"}},
+        {{"id", "pick"}, {"title", "Pick cells"}, {"detail", "Choose rows from broken/outdated tables."},
+         {"status", "done"}},
+        {{"id", "disable"},
+         {"title", "Disable stale previs"},
+         {"detail", "Clear PCMB/VISI/XCRI on superseded exterior cells (native backend)."},
+         {"status", "done"}},
+        {{"id", "bake"},
+         {"title", "Bake _OC.NIF"},
+         {"detail", "Pass-through measured _OC.NIF with SharedGeom (#34 encoder from placements still open)."},
+         {"status", "partial"}},
+        {{"id", "stamp"}, {"title", "Stamp patch CELL"}, {"detail", "PCMB, VISI, XCRI (+ RVIS on exteriors)."},
+         {"status", "done"}},
+        {{"id", "containers"},
+         {"title", "CDX / CSG / UVD"},
+         {"detail", "WritePrevisContainer / write_previs_container round-trip rewrite (native writers)."},
+         {"status", "done"}},
+        {{"id", "save"}, {"title", "Save + archive"}, {"detail", "save_plugin then pack Main/Vis BA2."},
+         {"status", "done"}},
+    });
 }
 
 std::filesystem::path PrevisTarget::resolveDataFolder(const nlohmann::json& args) const {

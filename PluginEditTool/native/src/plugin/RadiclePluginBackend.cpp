@@ -215,6 +215,10 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     // Scalar-schema aware on every entry path; setFieldValue falls back to
     // setField for non-schema fields.
     if (operation == "backend.SetField") return setFieldValue(arguments);
+    if (operation == "backend.StampCellPrevis") return stampCellPrevis(arguments);
+    if (operation == "backend.DisableCellPrevis") return disableCellPrevis(arguments);
+    if (operation == "backend.BakeOcNif") return bakeOcNif(arguments);
+    if (operation == "backend.WritePrevisContainer") return writePrevisContainer(arguments);
     if (operation == "backend.CopyAsOverride") return copyAsOverride(arguments);
     if (operation == "backend.CopyAsOverrideMany") return copyAsOverrideMany(arguments);
     if (operation == "backend.AddMasters") return addMasters(arguments);

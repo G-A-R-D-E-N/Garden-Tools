@@ -9,7 +9,9 @@ const bridge = vi.hoisted(() => ({
 }));
 
 vi.mock('./backend', () => ({
-  getPrevis: () => (bridge.enabled ? { Scan: bridge.scan, GetDataFolder: bridge.folder } : undefined),
+  getPrevis: () => (bridge.enabled
+    ? { Scan: bridge.scan, GetDataFolder: bridge.folder, PatchWorkflow: async () => [] }
+    : undefined),
 }));
 
 const report = {

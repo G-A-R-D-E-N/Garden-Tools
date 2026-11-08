@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, X, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { getPrevis, type PrevisCellReport, type PrevisScanResult } from './backend';
+import PrevisPatchWizard from './PrevisPatchWizard';
 import './PapyrusPanel.css';
 import './PrevisPanel.css';
 
@@ -19,7 +20,12 @@ function matches(row: PrevisCellReport, filter: string): boolean {
     || reasons(row).toLowerCase().includes(needle);
 }
 
-function Findings({ rows, empty }: { rows: PrevisCellReport[]; empty: string }) {
+function Findings({ rows, empty, selected, onSelect }: {
+  rows: PrevisCellReport[];
+  empty: string;
+  selected?: string;
+  onSelect?: (row: PrevisCellReport) => void;
+}) {
   if (rows.length === 0) return <div className="nif-view-empty">{empty}</div>;
   return (
     <table className="previs-table">
@@ -32,7 +38,8 @@ function Findings({ rows, empty }: { rows: PrevisCellReport[]; empty: string }) 
       </thead>
       <tbody>
         {rows.map(row => (
-          <tr key={row.cell}>
+          <tr key={row.cell} className={selected === row.cell ? 'previs-row-selected' : ''}
+              onClick={() => onSelect?.(row)}>
             <td className="previs-cell">{row.cell}</td>
             <td className="previs-plugin">{row.plugin}</td>
             <td className="previs-reasons">
@@ -61,6 +68,8 @@ export default function PrevisPanel({ onClose }: { onClose: () => void }) {
   const [scan, setScan] = useState<PrevisScanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [log, setLog] = useState('');
+  const [pick, setPick] = useState<PrevisCellReport | null>(null);
 
   const previs = getPrevis();
   const unavailable = !previs;
@@ -125,13 +134,14 @@ export default function PrevisPanel({ onClose }: { onClose: () => void }) {
 
         <div className="previs-body">
           <div className="previs-hint">
-            Read-only. Scans the saved load order and every previs container in the Data folder; the first run can take a minute.
+            Scan uses saved plugins on disk. Click a broken or outdated row, then use the patch wizard below (no Creation Kit).
           </div>
           <div className="previs-hint">
             The base game itself reports cells here; a non-zero count is not automatically a mod problem.
           </div>
 
           {error && <div className="papyrus-banner error"><XCircle size={15} /><span className="papyrus-banner-text">{error}</span></div>}
+          {log && <div className="papyrus-banner"><span className="papyrus-banner-text">{log}</span></div>}
           {!scan && !error && <div className="nif-view-empty">{busy ? 'Reading the Data folder…' : 'Press Scan to build the previs report.'}</div>}
 
           {scan && summary && (
@@ -166,18 +176,24 @@ export default function PrevisPanel({ onClose }: { onClose: () => void }) {
 
               <div className="previs-section">
                 <div className="previs-section-head">Broken cells ({summary.broken.toLocaleString()})</div>
-                <Findings rows={broken} empty={summary.broken === 0 ? 'No broken cells in this load order.' : 'No broken cells match the filter.'} />
+                <Findings rows={broken} selected={pick?.cell}
+                  onSelect={setPick}
+                  empty={summary.broken === 0 ? 'No broken cells in this load order.' : 'No broken cells match the filter.'} />
               </div>
 
               <div className="previs-section">
                 <div className="previs-section-head">Outdated cells ({summary.outdated.toLocaleString()})</div>
-                <Findings rows={outdated} empty={summary.outdated === 0 ? 'No stale previs stamps.' : 'No outdated cells match the filter.'} />
+                <Findings rows={outdated} selected={pick?.cell}
+                  onSelect={setPick}
+                  empty={summary.outdated === 0 ? 'No stale previs stamps.' : 'No outdated cells match the filter.'} />
               </div>
 
               <div className="previs-section">
                 <div className="previs-section-head">Skipped cells ({summary.skipped.toLocaleString()})</div>
                 <Findings rows={skipped} empty={summary.skipped === 0 ? 'No unmeasured cells in this load order.' : 'No skipped cells match the filter.'} />
               </div>
+
+              <PrevisPatchWizard selectedCell={pick?.cell} selectedPlugin={pick?.plugin} onLog={setLog} />
             </>
           )}
         </div>

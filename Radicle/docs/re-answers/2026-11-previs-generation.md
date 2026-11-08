@@ -18,4 +18,18 @@ Answers synthesized from shipped vanilla 1.11.240 data (PR #1066 real-data gates
 1. `precombine_plan` (C#) — eligibility and model groups.
 2. `bake_oc_single_source*` (C++) — pass-through bake for sources that already contain `BSPackedCombinedSharedGeomDataExtra` (until Shared geom encoder lands).
 3. `stamp_cell_previs` (C++) — writes PCMB, VISI, XCRI on a CELL override.
-4. `write_cdx` / `write_csg` / `write_uvd` — container encoders round-trip with readers.
+4. `write_cdx` / `write_csg` / `write_uvd` — container encoders round-trip with readers; FO4IDE exposes `WritePrevisContainer` / MCP `write_previs_container`.
+
+## Target author workflow (CK-free, better than PJM)
+
+| PJM pain | Garden approach |
+|----------|------------------|
+| Separate check script + seed ESP | **Previs scan** in FO4IDE; broken/outdated rows are the worklist |
+| CK generate + merge esp | **Single patch plugin**; overrides and assets stay in the editor journal until `save_plugin` |
+| Missing `_OC` found at merge time | **Plan → bake → verify SharedGeom** before `stamp_cell_previs`; scan re-runs show zero broken |
+| Manual PCMB/VISI from CK dates | Stamps from **output file mtimes** (same rule as `is_precalc_stale`) |
+| CK CDX/CSG/UVD | **`write_cdx` / `write_csg` / `write_uvd`**; `.psg` never used (vanilla ships `.csg` only) |
+| PleaseRemove REFRs | **No scaffolding** — plan operates on real STAT placements only |
+| 8-step bat | **Wizard actions per cell or batch**: disable stale → plan → bake → stamp → update containers → pack BA2 |
+
+Open engineering for “complete” patching: **#34** encode `BSPackedCombinedSharedGeomDataExtra` from placements (not pass-through copy); **#1093** Umbra tome payload generation beyond header/CRC validation. Oracles under `testdata/previs/oracles/` pin format, not CK as a runtime dependency.

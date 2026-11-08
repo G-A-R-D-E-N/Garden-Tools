@@ -697,9 +697,30 @@ export interface PrevisDataFolder {
   source?: string;
 }
 
+export interface PrevisPatchStep {
+  id: string;
+  title: string;
+  detail: string;
+  status: 'done' | 'partial' | 'manual' | 'blocked';
+}
+
 export interface PrevisHost {
   Scan(dataDir: string): Promise<PrevisScanResult>;
   GetDataFolder(): Promise<PrevisDataFolder>;
+  PatchWorkflow?(): Promise<PrevisPatchStep[]>;
+  PatchStamp?(
+    patchPlugin: string,
+    cell: string,
+    sourcePlugin: string,
+    pcmb: string,
+    visi: string,
+    xcriJson: string,
+    apply: boolean,
+  ): Promise<unknown>;
+  PatchDisable?(cell: string, patchPlugin: string, sourcePlugin: string, apply: boolean): Promise<unknown>;
+  PatchBake?(sourceNif: string, outputOc: string): Promise<unknown>;
+  PatchWriteContainer?(kind: string, sourcePath: string, outputPath: string): Promise<unknown>;
+  PatchSave?(patchPlugin: string): Promise<unknown>;
 }
 
 

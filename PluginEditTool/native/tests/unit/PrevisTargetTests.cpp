@@ -156,6 +156,19 @@ TEST_CASE("previs target refuses a second concurrent scan") {
 }
 
 // Detects: a scan that hides a loaded plugin with unsaved edits, instead of naming it as not reflected, must fail.
+// Regression: panel wizard must expose a CK-free workflow list without calling Creation Kit.
+TEST_CASE("previs patch workflow lists native steps") {
+    FakeBackend backend;
+    fo4ide::settings::SharedSettings settings;
+    fo4ide::rpc::PrevisTarget target(backend, settings);
+
+    const auto workflow = target.invoke("PatchWorkflow", nlohmann::json::array());
+    REQUIRE(workflow.has_value());
+    REQUIRE(workflow->is_array());
+    CHECK(workflow->size() >= 5);
+    CHECK((*workflow)[0]["id"].get<std::string>() == "scan");
+}
+
 TEST_CASE("previs scan names the loaded plugins with unsaved edits that it does not read") {
     TemporaryDirectory directory;
     const auto plugin = directory.path() / "Pending.esp";

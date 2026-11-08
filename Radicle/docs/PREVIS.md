@@ -226,6 +226,6 @@ CK-free generation is `precombine_plan` → native bake → native stamp → con
 | Plan | C# `precombine_plan` | Model groups and skip reasons only. |
 | Bake `_OC.NIF` | `bake_oc_single_source*` | Copies a measured source mesh to the OC path until Shared packed-geometry encoding ships in Radicle NIF. |
 | Stamp CELL | `stamp_cell_previs`, C# `StampPrevis` | PCMB, VISI, XCRI (`write_xcri_bytes`); Mutagen path sets PCMB/VISI timestamps. |
-| CDX / CSG / UVD | `write_cdx`, `write_csg`, `write_uvd` | Round-trip with readers; CSG row semantics still opaque. |
+| CDX / CSG / UVD | `write_cdx`, `write_csg`, `write_uvd`, `WritePrevisContainer` | Round-trip with readers; MCP `write_previs_container` rewrites an existing file. CSG row semantics still opaque. |
 
 Oracle manifests live in `Radicle/testdata/previs/oracles/` (flat `_OC.NIF` filenames, manifest `path` keeps the archive path). Capture from BA2 with `previs_oracle_extract` (`RADICLE_BUILD_TOOLS=ON`) or `tools/previs/oracle_capture.ps1`. See `Radicle/docs/re-answers/2026-11-previs-generation.md`.

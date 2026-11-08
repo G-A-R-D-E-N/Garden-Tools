@@ -37,6 +37,54 @@
   font-size: 12.5px;
 }
 
+.previs-wizard {
+  margin: 12px 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color, #2b2b2b);
+}
+
+.previs-wizard-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 6px 10px;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.previs-wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.previs-wizard-steps {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-muted, #aaa);
+}
+
+.previs-wizard-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+.previs-wizard-badge-done { background: #1e3d2b; color: #8fd9a8; }
+.previs-wizard-badge-partial { background: #3d361e; color: #e6d48f; }
+.previs-wizard-badge-manual { background: #2b2b2b; color: #ccc; }
+.previs-wizard-badge-blocked { background: #3d1e1e; color: #e69b9b; }
+
+.previs-row-selected {
+  background: rgba(120, 170, 255, 0.12);
+}
+
+.previs-table tbody tr {
+  cursor: pointer;
+}
+
 .previs-path-input:focus,
 .previs-filter:focus {
   outline: none;
