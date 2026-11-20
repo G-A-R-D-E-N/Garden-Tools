@@ -31,7 +31,7 @@ jobs:
           mkdir private && cd private
           git init --quiet .
           git remote add origin https://github.com/G-A-R-D-E-N/GardenTools.git
-          git fetch --quiet --no-tags --depth=1 origin refs/heads/nomad/dev >/dev/null 2>&1 || { echo "::error::cannot fetch the integration branch"; exit 1; }
+          git fetch --quiet --no-tags --depth=1 origin refs/heads/main >/dev/null 2>&1 || { echo "::error::cannot fetch the integration branch"; exit 1; }
           git checkout --quiet --detach FETCH_HEAD >/dev/null 2>&1 || { echo "::error::cannot check out the integration branch"; exit 1; }
 
       - name: Export, check and report
