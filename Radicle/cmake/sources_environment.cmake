@@ -1,0 +1,26 @@
+set(FO4_SOURCES_ENVIRONMENT
+  src/environment/environment.cpp
+  src/environment/cell_view.cpp
+  src/environment/cell_references.cpp
+  src/environment/world.cpp
+  src/environment/region.cpp
+  src/environment/placed.cpp
+  src/environment/terrain.cpp
+  src/environment/terrain_writer.cpp
+  src/environment/strings.cpp
+  src/environment/vegetation.cpp
+  src/environment/navmesh.cpp
+  src/environment/navmesh_rules.cpp
+  src/environment/navmesh_path.cpp
+  src/environment/navmesh_walk.cpp
+  src/environment/behavior.cpp
+  src/environment/furniture.cpp
+  src/environment/package_create.cpp
+  src/environment/package_procedure.cpp
+  src/environment/package_procedure_tree.cpp
+  src/environment/package_rules.cpp
+  src/environment/dialogue.cpp
+  src/environment/base_records.cpp
+  src/environment/sound.cpp
+  src/environment/material_swap.cpp
+)

@@ -1,0 +1,7 @@
+.tp-error { color: #f44747; padding: 4px 0 8px; }
+.tp-heading { font-size: 12px; font-weight: 600; margin: 14px 0 6px; color: var(--text-primary); }
+.tp-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.tp-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
+.tp-form label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-muted); }
+.tp-form input { width: 110px; }
+.tp-picked td { background: var(--bg-tertiary); }

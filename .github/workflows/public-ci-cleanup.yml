@@ -1,0 +1,56 @@
+name: Public CI cleanup
+
+on:
+  push:
+    branches: ["ci/**"]
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete superseded and expired runs
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      deployments: write
+    steps:
+      - name: Delete completed ci/* runs that are superseded or over three days old
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          CURRENT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d '3 days ago' +%FT%TZ)
+          declare -A latest=(["$BRANCH"]="$CURRENT")
+          gh api "repos/$REPO/actions/runs?status=completed&per_page=100" --paginate \
+            --jq '.workflow_runs[] | select(.head_branch | startswith("ci/")) | "\(.id) \(.head_branch) \(.head_sha) \(.created_at)"' > runs.txt
+          while read -r id branch sha created; do
+            latest[$branch]=${latest[$branch]:-$sha}
+            [ "$sha" = "${latest[$branch]}" ] && [[ "$created" > "$cutoff" ]] && continue
+            for attempt in 1 2 3; do
+              if gh api -X DELETE "repos/$REPO/actions/runs/$id"; then break; fi
+              if [ "$attempt" -eq 3 ]; then exit 1; fi
+              sleep "$attempt"
+            done
+            echo "deleted run $id ($branch ${sha:0:8})"
+          done < runs.txt
+
+      - name: Delete garden-tools-ci deployments over three days old
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d '3 days ago' +%FT%TZ)
+          list="repos/$REPO/deployments?environment=garden-tools-ci&per_page=100"
+          last=$(gh api -i "$list" | sed -n 's/^[Ll]ink:.*[?&]page=\([0-9]*\)>; rel="last".*/\1/p')
+          gh api "$list&page=${last:-1}" --jq ".[] | select(.created_at < \"$cutoff\") | .id" > deployments.txt
+          while read -r id; do
+            gh api -X POST "repos/$REPO/deployments/$id/statuses" -f state=inactive > /dev/null
+            gh api -X DELETE "repos/$REPO/deployments/$id"
+            echo "deleted deployment $id"
+          done < <(tail -n 25 deployments.txt)

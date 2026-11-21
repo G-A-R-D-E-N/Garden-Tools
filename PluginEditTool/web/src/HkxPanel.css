@@ -1,0 +1,55 @@
+.hkx-output {
+  gap: 8px;
+  padding: 8px;
+}
+
+.hkx-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hkx-timeline input[type='range'] { width: 100%; }
+
+.hkx-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hkx-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted, #9aa0aa);
+}
+
+.hkx-bones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.hkx-bones button {
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-color, #ccc);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.hkx-bones button:hover { background: rgba(255, 255, 255, 0.06); }
+.hkx-bones button.active { background: rgba(78, 201, 176, 0.14); color: var(--accent-color, #4ec9b0); }
+
+.hkx-bone-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+  color: var(--text-color, #ccc);
+}
