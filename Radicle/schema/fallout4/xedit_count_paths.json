@@ -1,0 +1,348 @@
+{
+ "version": 1,
+ "source": "wbDefinitionsFO4.pas",
+ "xedit_revision": "93cc0bc5a1251936c3c7859eee3150eda12a62d7",
+ "entries": [
+  {
+   "line": 3144,
+   "declaration": "])).SetCountPath(MPPC),",
+   "array_line": 3137,
+   "array_kind": "wbRArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "MPPC"
+   }
+  },
+  {
+   "line": 3285,
+   "declaration": "wbSPLOs := wbRArrayS('Actor Effects', wbSPLO).SetCountPath(SPCT);",
+   "array_line": 3285,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "SPCT"
+   }
+  },
+  {
+   "line": 3316,
+   "declaration": "wbCNTOs := wbRArrayS('Items', wbCNTO).SetCountPath(COCT);",
+   "array_line": 3316,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "COCT"
+   }
+  },
+  {
+   "line": 4007,
+   "declaration": ").SetCountPath('FragmentCount', True)",
+   "array_line": 3993,
+   "array_kind": "wbArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "FragmentCount"
+   }
+  },
+  {
+   "line": 4590,
+   "declaration": ").SetCountPathOnValue(XWCN, False)",
+   "array_line": 4585,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "XWCN"
+   }
+  },
+  {
+   "line": 5254,
+   "declaration": ").SetCountPath(CITC);",
+   "array_line": null,
+   "array_kind": null,
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "CITC"
+   }
+  },
+  {
+   "line": 5497,
+   "declaration": "])).SetCountPath('Property Count', True);",
+   "array_line": 5459,
+   "array_kind": "wbArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "Property Count"
+   }
+  },
+  {
+   "line": 5516,
+   "declaration": "])).SetCountPath('Include Count', True),",
+   "array_line": 5511,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "Include Count"
+   }
+  },
+  {
+   "line": 5528,
+   "declaration": ").SetCountPath(OBTE),",
+   "array_line": 5522,
+   "array_kind": "wbRArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "OBTE"
+   }
+  },
+  {
+   "line": 6059,
+   "declaration": ").SetCountPathOnValue(XWCN, False)",
+   "array_line": 6054,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "XWCN"
+   }
+  },
+  {
+   "line": 6093,
+   "declaration": ").SetCountPath('Meshes Count', True),",
+   "array_line": 6091,
+   "array_kind": "wbArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "Meshes Count"
+   }
+  },
+  {
+   "line": 8704,
+   "declaration": ").SetCountPath('..\\XCNT\\Swimming Count', True),",
+   "array_line": 8702,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "..\\XCNT\\Swimming Count"
+   }
+  },
+  {
+   "line": 8707,
+   "declaration": ").SetCountPath('..\\XCNT\\Sneaking Count', True),",
+   "array_line": 8705,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "..\\XCNT\\Sneaking Count"
+   }
+  },
+  {
+   "line": 8710,
+   "declaration": ").SetCountPath('..\\XCNT\\Sprinting Count', True),",
+   "array_line": 8708,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "..\\XCNT\\Sprinting Count"
+   }
+  },
+  {
+   "line": 8713,
+   "declaration": ").SetCountPath('..\\XCNT\\Running Count', True),",
+   "array_line": 8711,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "..\\XCNT\\Running Count"
+   }
+  },
+  {
+   "line": 8716,
+   "declaration": ").SetCountPath('..\\XCNT\\Walking Count', True)",
+   "array_line": 8714,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "..\\XCNT\\Walking Count"
+   }
+  },
+  {
+   "line": 8759,
+   "declaration": ").SetCountPath(QNAM)",
+   "array_line": 8754,
+   "array_kind": "wbRArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "QNAM"
+   }
+  },
+  {
+   "line": 9449,
+   "declaration": ").SetCountPath(ITMC)",
+   "array_line": 9442,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "ITMC"
+   }
+  },
+  {
+   "line": 10004,
+   "declaration": ").SetCountPath(LLCT),",
+   "array_line": 9998,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "LLCT"
+   }
+  },
+  {
+   "line": 10027,
+   "declaration": ").SetCountPath(LLCT),",
+   "array_line": 10021,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "LLCT"
+   }
+  },
+  {
+   "line": 10049,
+   "declaration": ").SetCountPath(LLCT)",
+   "array_line": 10044,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "LLCT"
+   }
+  },
+  {
+   "line": 10206,
+   "declaration": ").SetCountPath('DATA\\Counter Effect Count'),",
+   "array_line": 10204,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "DATA\\Counter Effect Count"
+   }
+  },
+  {
+   "line": 10393,
+   "declaration": ").SetCountPath(PRKZ),",
+   "array_line": 10385,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "PRKZ"
+   }
+  },
+  {
+   "line": 11513,
+   "declaration": ").SetCountPath('XRMR\\Linked Rooms Count')",
+   "array_line": 11511,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "XRMR\\Linked Rooms Count"
+   }
+  },
+  {
+   "line": 11575,
+   "declaration": ").SetCountPathOnValue(XWCN, False)",
+   "array_line": 11570,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "XWCN"
+   }
+  },
+  {
+   "line": 12382,
+   "declaration": ").SetCountPath(VNAM)",
+   "array_line": 12350,
+   "array_kind": "wbRArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "VNAM"
+   }
+  },
+  {
+   "line": 12426,
+   "declaration": "])).SetCountPath(LFSP)",
+   "array_line": 12410,
+   "array_kind": "wbRArrayS",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "LFSP"
+   }
+  },
+  {
+   "line": 12536,
+   "declaration": "])).SetCountPath('Include Count', True),",
+   "array_line": 12531,
+   "array_kind": "wbArray",
+   "model": "counted",
+   "count": {
+    "kind": "named_path",
+    "path": "Include Count"
+   }
+  },
+  {
+   "line": 12709,
+   "declaration": ").SetCountPath(COCT),",
+   "array_line": 12700,
+   "array_kind": "wbRArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "COCT"
+   }
+  },
+  {
+   "line": 12725,
+   "declaration": ").SetCountPath(BSIZ),",
+   "array_line": 12715,
+   "array_kind": "wbRArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "BSIZ"
+   }
+  },
+  {
+   "line": 12763,
+   "declaration": ").SetCountPath(ISIZ)",
+   "array_line": 12727,
+   "array_kind": "wbRArray",
+   "model": "counted",
+   "count": {
+    "kind": "subrecord",
+    "subrecord": "ISIZ"
+   }
+  }
+ ]
+}

@@ -1,0 +1,32 @@
+set(FO4_SOURCES_CORE
+  src/plugin_key.cpp
+  src/text/encoding.cpp
+  src/text/bounded_regex.cpp
+  src/save/save_header.cpp
+  src/actor_state/actor_state.cpp
+  src/loadorder/plugin_list.cpp
+  src/loadorder/assemble.cpp
+  src/loadorder/mo2_profile.cpp
+  src/formid.cpp
+  src/binary/cursor.cpp
+  src/io/atomic_write.cpp
+  src/io/path_alias.cpp
+  src/io/sha256.cpp
+  src/localization/strings.cpp
+  src/checks/conflict_graph.cpp
+  src/checks/conflict_kind.cpp
+  src/checks/check_errors.cpp
+  src/checks/check_errors_records.cpp
+  src/checks/check_dialogue.cpp
+  src/checks/check_quest.cpp
+  src/checks/plugin_diff.cpp
+  src/graph/record_search.cpp
+  src/graph/record_json.cpp
+  src/checks/reachability.cpp
+  src/checks/duplicate_formid.cpp
+  src/seq/seq.cpp
+  src/quest/runtime.cpp
+  src/quest/structure.cpp
+  src/patch/delta_patch.cpp
+  src/patch/list_merge.cpp
+)
