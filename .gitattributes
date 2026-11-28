@@ -1,0 +1,10 @@
+Radicle/generated/fo4/schema/generated_*.inc text eol=lf
+Radicle/src/schema/generated/*.inc text eol=lf
+docs/code-notes/*.md merge=union
+Radicle/docs/code-notes/*.md merge=union
+*.md text eol=lf
+Radicle/testdata/swf/*.txt text eol=lf
+Radicle/include/fo4/schema/ctda_functions.inc text eol=lf
+Radicle/schema/fallout4/xedit_count_paths.json text eol=lf
+Radicle/schema/fallout4/xedit_sorted_arrays.json text eol=lf
+Radicle/schema/fallout4/xedit_conflict_marks.json text eol=lf

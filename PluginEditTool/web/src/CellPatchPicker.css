@@ -1,0 +1,47 @@
+.cell-patch-error {
+  flex: 1 1 100%;
+  font-size: 11px;
+  color: #e06c75;
+}
+.cell-patch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid rgba(89, 208, 255, 0.35);
+  border-radius: 6px;
+  background: rgba(89, 208, 255, 0.06);
+  font-size: 12px;
+}
+.cell-patch-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-muted, #9a9a9a);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.cell-patch-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent-color, #4ec9b0);
+}
+.cell-patch-name.cell-patch-none {
+  color: var(--text-muted, #9a9a9a);
+  font-style: italic;
+}
+.cell-patch-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px dashed rgba(215, 165, 92, 0.6);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #d7a55c;
+}
