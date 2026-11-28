@@ -1,0 +1,24 @@
+bin/
+obj/
+*.user
+
+# Publish output
+/dist/
+/out/
+/BehaviourGraphStudio-*/
+/*.zip
+/downloads/*.zip
+
+# Local tooling config
+
+# Test results
+[Tt]est[Rr]esults/
+.avalonia-build-tasks/
+/BehaviourGraphStudio/
+/.worktrees/
+
+# Local docs and planning notes. docs/research/ holds committed measured results, so it stays
+# visible to git while everything else under docs/ is local.
+/docs/*
+!/docs/research/
+!/docs/research/**
