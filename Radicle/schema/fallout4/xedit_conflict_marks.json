@@ -1,0 +1,1184 @@
+{
+ "version": 1,
+ "source": "wbDefinitionsFO4.pas",
+ "xedit_revision": "93cc0bc5a1251936c3c7859eee3150eda12a62d7",
+ "total": 146,
+ "definitions": 145,
+ "runtime": 1,
+ "priorities": {
+  "cpBenign": 109,
+  "cpBenignIfAdded": 3,
+  "cpCritical": 1,
+  "cpIgnore": 32,
+  "cpOverride": 1
+ },
+ "rows": [
+  {
+   "line": 3136,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "MPPC",
+   "label": "Count",
+   "declaration": "wbInteger(MPPC, 'Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 3260,
+   "priority": "cpBenignIfAdded",
+   "element": "wbFormIDCk",
+   "signature": "XLRL",
+   "label": "Location Reference",
+   "declaration": "wbFormIDCk(XLRL, 'Location Reference', [LCRT, LCTN, NULL], False, cpBenignIfAdded),"
+  },
+  {
+   "line": 3278,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "LLCT",
+   "label": "Count",
+   "declaration": "wbLLCT := wbInteger(LLCT, 'Count', itU8, nil, cpBenign);"
+  },
+  {
+   "line": 3279,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "CITC",
+   "label": "Condition Count",
+   "declaration": "wbCITC := wbInteger(CITC, 'Condition Count', itU32, nil, cpBenign);"
+  },
+  {
+   "line": 3280,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "CITC",
+   "label": "Condition Count",
+   "declaration": "wbCITCReq := wbInteger(CITC, 'Condition Count', itU32, nil, cpBenign, True);"
+  },
+  {
+   "line": 3283,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "SPCT",
+   "label": "Count",
+   "declaration": "wbSPCT := wbInteger(SPCT, 'Count', itU32, nil, cpBenign);"
+  },
+  {
+   "line": 3315,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "COCT",
+   "label": "Count",
+   "declaration": "wbCOCT := wbInteger(COCT, 'Count', itU32, nil, cpBenign);"
+  },
+  {
+   "line": 3691,
+   "priority": "cpOverride",
+   "element": "wbStringKC",
+   "signature": "EDID",
+   "label": "Editor ID",
+   "declaration": "wbEDID := wbStringKC(EDID, 'Editor ID', 0, cpOverride);"
+  },
+  {
+   "line": 3874,
+   "priority": "cpIgnore",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Version",
+   "declaration": "wbInteger('Version', itS16, nil, cpIgnore)"
+  },
+  {
+   "line": 3879,
+   "priority": "cpIgnore",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Object Format",
+   "declaration": "wbInteger('Object Format', itS16, nil, cpIgnore)"
+  },
+  {
+   "line": 3983,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "FragmentCount",
+   "declaration": "wbInteger('FragmentCount', itU16, nil, cpBenign),"
+  },
+  {
+   "line": 4182,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "Near Package Start Location",
+   "declaration": "{2} wbByteArray('Near Package Start Location', 4, cpIgnore),"
+  },
+  {
+   "line": 4183,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "Near Editor Location",
+   "declaration": "{3} wbByteArray('Near Editor Location', 4, cpIgnore),"
+  },
+  {
+   "line": 4192,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "Unknown",
+   "declaration": "{12} wbByteArray('Unknown', 4, cpIgnore),"
+  },
+  {
+   "line": 4205,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "Near Package Start Location",
+   "declaration": "{2} wbByteArray('Near Package Start Location', 4, cpIgnore),"
+  },
+  {
+   "line": 4206,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "Near Editor Location",
+   "declaration": "{3} wbByteArray('Near Editor Location', 4, cpIgnore),"
+  },
+  {
+   "line": 4215,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "Unknown",
+   "declaration": "{12} wbByteArray('Unknown', 4, cpIgnore),"
+  },
+  {
+   "line": 4243,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "Unknown",
+   "declaration": "{6} wbByteArray('Unknown', 4, cpIgnore),"
+  },
+  {
+   "line": 4245,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "Unknown",
+   "declaration": "{8} wbByteArray('Unknown', 4, cpIgnore)"
+  },
+  {
+   "line": 4410,
+   "priority": "cpIgnore",
+   "element": "wbStruct",
+   "signature": null,
+   "label": "Edge Link",
+   "declaration": "], cpIgnore),"
+  },
+  {
+   "line": 4411,
+   "priority": "cpIgnore",
+   "element": "wbArray",
+   "signature": null,
+   "label": "Edge Links",
+   "declaration": "-1, cpIgnore).IncludeFlag(dfNotAlignable),"
+  },
+  {
+   "line": 4580,
+   "priority": "cpBenignIfAdded",
+   "element": "wbFormIDCk",
+   "signature": "XLRL",
+   "label": "Location Reference",
+   "declaration": "wbFormIDCk(XLRL, 'Location Reference', [LCRT, LCTN, NULL], False, cpBenignIfAdded),"
+  },
+  {
+   "line": 4584,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "XWCN",
+   "label": "Velocity Count",
+   "declaration": "wbInteger(XWCN, 'Velocity Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 5127,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": null,
+   "label": "None",
+   "declaration": "{1} wbByteArray('None', 4, cpIgnore).IncludeFlag(dfZeroSortKey),"
+  },
+  {
+   "line": 5130,
+   "priority": "cpIgnore",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "String",
+   "declaration": "{4} wbInteger('String', itU32, wbConditionStringToStr, wbConditionStringToInt, cpIgnore),"
+  },
+  {
+   "line": 5212,
+   "priority": "cpIgnore",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Unused",
+   "declaration": "{0} wbInteger('Unused', itU32, nil, cpIgnore),"
+  },
+  {
+   "line": 5500,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Include Count",
+   "declaration": "wbInteger('Include Count', itU32, nil, cpBenign).IncludeFlag(dfSkipImplicitEdit),  // fixed name for wbOMOD* handlers"
+  },
+  {
+   "line": 5501,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Property Count",
+   "declaration": "wbInteger('Property Count', itU32, nil, cpBenign).IncludeFlag(dfSkipImplicitEdit), // fixed name for wbOMOD* handlers"
+  },
+  {
+   "line": 5521,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "OBTE",
+   "label": "Count",
+   "declaration": "wbInteger(OBTE, 'Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 5685,
+   "priority": "cpIgnore",
+   "element": "wbUnknown",
+   "signature": "PNAM",
+   "label": "Looping Sound",
+   "declaration": "wbUnknown(PNAM, cpIgnore, True),"
+  },
+  {
+   "line": 5687,
+   "priority": "cpIgnore",
+   "element": "wbUnknown",
+   "signature": "FNAM",
+   "label": "Voice Type",
+   "declaration": "wbUnknown(FNAM, cpIgnore, True),"
+  },
+  {
+   "line": 6053,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "XWCN",
+   "label": "Velocity Count",
+   "declaration": "wbInteger(XWCN, 'Velocity Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 6252,
+   "priority": "cpIgnore",
+   "element": "wbUnknown",
+   "signature": "CSMD",
+   "label": "Melee",
+   "declaration": "wbUnknown(CSMD, cpIgnore),"
+  },
+  {
+   "line": 6472,
+   "priority": "cpIgnore",
+   "element": "wbInteger",
+   "signature": "TIFC",
+   "label": "Info Count",
+   "declaration": "wbInteger(TIFC, 'Info Count', itU32, nil, cpIgnore),"
+  },
+  {
+   "line": 6937,
+   "priority": "cpCritical",
+   "element": "wbString",
+   "signature": "EDID",
+   "label": "Editor ID",
+   "declaration": "wbString(EDID, 'Editor ID', 0, cpCritical, True).SetAfterSet(wbGMSTEDIDAfterSet),"
+  },
+  {
+   "line": 7121,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": "DATA",
+   "label": "Unused",
+   "declaration": "wbByteArray(DATA, 'Unused', 0, cpIgnore),"
+  },
+  {
+   "line": 7575,
+   "priority": "cpBenign",
+   "element": "wbString",
+   "signature": "EDID",
+   "label": "Editor ID",
+   "declaration": "wbString(EDID, 'Editor ID', 0, cpBenign, True).SetAfterSet(wbFLSTEDIDAfterSet),"
+  },
+  {
+   "line": 7640,
+   "priority": "cpIgnore",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Perk Condition Tab Count",
+   "declaration": "wbInteger('Perk Condition Tab Count', itU8, nil, cpIgnore)"
+  },
+  {
+   "line": 7689,
+   "priority": "cpIgnore",
+   "element": "wbEmpty",
+   "signature": "PRKF",
+   "label": "End Marker",
+   "declaration": "wbEmpty(PRKF, 'End Marker', cpIgnore).SetRequired"
+  },
+  {
+   "line": 7934,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Parent",
+   "declaration": "wbFormIDCk('Parent', [CPTH, NULL], False, cpBenign),"
+  },
+  {
+   "line": 7935,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Previous",
+   "declaration": "wbFormIDCk('Previous', [CPTH, NULL], False, cpBenign)"
+  },
+  {
+   "line": 8047,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Ref",
+   "declaration": "wbFormIDCk('Ref', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8048,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "World/Cell",
+   "declaration": "wbFormIDCk('World/Cell', [WRLD, CELL], False, cpBenign),"
+  },
+  {
+   "line": 8049,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid Y",
+   "declaration": "wbInteger('Grid Y', itS16, nil, cpBenign).SetDontShow(wbLCTNCellDontShow),"
+  },
+  {
+   "line": 8050,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid X",
+   "declaration": "wbInteger('Grid X', itS16, nil, cpBenign).SetDontShow(wbLCTNCellDontShow)"
+  },
+  {
+   "line": 8051,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Reference",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8052,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "ACPR",
+   "label": "Added Persist Location References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8055,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Ref",
+   "declaration": "wbFormIDCk('Ref', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8056,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "World/Cell",
+   "declaration": "wbFormIDCk('World/Cell', [WRLD, CELL], False, cpBenign),"
+  },
+  {
+   "line": 8057,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid Y",
+   "declaration": "wbInteger('Grid Y', itS16, nil, cpBenign).SetDontShow(wbLCTNCellDontShow),"
+  },
+  {
+   "line": 8058,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid X",
+   "declaration": "wbInteger('Grid X', itS16, nil, cpBenign).SetDontShow(wbLCTNCellDontShow)"
+  },
+  {
+   "line": 8059,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Reference",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8060,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "LCPR",
+   "label": "Master Persist Location References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8062,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Reference",
+   "declaration": "wbFormIDCk('Reference', [ACHR, REFR], False, cpBenign),"
+  },
+  {
+   "line": 8063,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "RCPR",
+   "label": "Removed Persist Location References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8066,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "NPC",
+   "declaration": "wbFormIDCk('NPC', [NPC_], False, cpBenign),"
+  },
+  {
+   "line": 8067,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Actor Ref",
+   "declaration": "wbFormIDCk('Actor Ref', [ACHR], False, cpBenign),"
+  },
+  {
+   "line": 8068,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Location",
+   "declaration": "wbFormIDCk('Location', [LCTN, NULL], False, cpBenign)"
+  },
+  {
+   "line": 8069,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Actor",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8070,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "ACUN",
+   "label": "Added Unique NPCs",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8073,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "NPC",
+   "declaration": "wbFormIDCk('NPC', [NPC_], False, cpBenign),"
+  },
+  {
+   "line": 8074,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Actor Ref",
+   "declaration": "wbFormIDCk('Actor Ref', [ACHR], False, cpBenign),"
+  },
+  {
+   "line": 8075,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Location",
+   "declaration": "wbFormIDCk('Location', [LCTN, NULL], False, cpBenign)"
+  },
+  {
+   "line": 8076,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Actor",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8077,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "LCUN",
+   "label": "Master Unique NPCs",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8079,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Actor",
+   "declaration": "wbFormIDCk('Actor', [NPC_], False, cpBenign),"
+  },
+  {
+   "line": 8080,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "RCUN",
+   "label": "Removed Unique NPCs",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8083,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Loc Ref Type",
+   "declaration": "wbFormIDCk('Loc Ref Type', [LCRT], False, cpBenign),"
+  },
+  {
+   "line": 8084,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Ref",
+   "declaration": "wbFormIDCk('Ref', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8085,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "World/Cell",
+   "declaration": "wbFormIDCk('World/Cell', [WRLD, CELL], False, cpBenign),"
+  },
+  {
+   "line": 8086,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid Y",
+   "declaration": "wbInteger('Grid Y', itS16, nil, cpBenign).SetDontShow(wbLCTNCellDontShow),"
+  },
+  {
+   "line": 8087,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid X",
+   "declaration": "wbInteger('Grid X', itS16, nil, cpBenign).SetDontShow(wbLCTNCellDontShow)"
+  },
+  {
+   "line": 8088,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Reference",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8089,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "ACSR",
+   "label": "Added Special References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8092,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Loc Ref Type",
+   "declaration": "wbFormIDCk('Loc Ref Type', [LCRT], False, cpBenign),"
+  },
+  {
+   "line": 8093,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Ref",
+   "declaration": "wbFormIDCk('Ref', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8094,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "World/Cell",
+   "declaration": "wbFormIDCk('World/Cell', [WRLD, CELL], False, cpBenign),"
+  },
+  {
+   "line": 8095,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid Y",
+   "declaration": "wbInteger('Grid Y', itS16, nil, cpBenign).SetDontShow(wbLCTNCellDontShow),"
+  },
+  {
+   "line": 8096,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid X",
+   "declaration": "wbInteger('Grid X', itS16, nil, cpBenign).SetDontShow(wbLCTNCellDontShow)"
+  },
+  {
+   "line": 8097,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Reference",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8098,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "LCSR",
+   "label": "Master Special References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8100,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Reference",
+   "declaration": "wbFormIDCk('Reference', [ACHR, REFR], False, cpBenign),"
+  },
+  {
+   "line": 8101,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "RCSR",
+   "label": "Removed Special References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8104,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "World",
+   "declaration": "wbFormIDCk('World', [WRLD], False, cpBenign),"
+  },
+  {
+   "line": 8107,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid Y",
+   "declaration": "wbInteger('Grid Y', itS16, nil, cpBenign),"
+  },
+  {
+   "line": 8108,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid X",
+   "declaration": "wbInteger('Grid X', itS16, nil, cpBenign)"
+  },
+  {
+   "line": 8109,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Coords",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8110,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": null,
+   "label": "Cells",
+   "declaration": "0, cpBenign)"
+  },
+  {
+   "line": 8111,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": "ACEC",
+   "label": "Worldspace",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8112,
+   "priority": "cpBenign",
+   "element": "wbRArrayS",
+   "signature": null,
+   "label": "Added Worldspace Cells",
+   "declaration": "cpBenign),"
+  },
+  {
+   "line": 8115,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "World",
+   "declaration": "wbFormIDCk('World', [WRLD], False, cpBenign),"
+  },
+  {
+   "line": 8118,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid Y",
+   "declaration": "wbInteger('Grid Y', itS16, nil, cpBenign),"
+  },
+  {
+   "line": 8119,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid X",
+   "declaration": "wbInteger('Grid X', itS16, nil, cpBenign)"
+  },
+  {
+   "line": 8120,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Coords",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8121,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": null,
+   "label": "Cells",
+   "declaration": "0, cpBenign)"
+  },
+  {
+   "line": 8122,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": "LCEC",
+   "label": "Worldspace",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8123,
+   "priority": "cpBenign",
+   "element": "wbRArrayS",
+   "signature": null,
+   "label": "Master Worldspace Cells",
+   "declaration": "cpBenign),"
+  },
+  {
+   "line": 8126,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "World",
+   "declaration": "wbFormIDCk('World', [WRLD], False, cpBenign),"
+  },
+  {
+   "line": 8129,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid Y",
+   "declaration": "wbInteger('Grid Y', itS16, nil, cpBenign),"
+  },
+  {
+   "line": 8130,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Grid X",
+   "declaration": "wbInteger('Grid X', itS16, nil, cpBenign)"
+  },
+  {
+   "line": 8131,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": null,
+   "label": "Coords",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8132,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": null,
+   "label": "Cells",
+   "declaration": "0, cpBenign)"
+  },
+  {
+   "line": 8133,
+   "priority": "cpBenign",
+   "element": "wbStructSK",
+   "signature": "RCEC",
+   "label": "Worldspace",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8134,
+   "priority": "cpBenign",
+   "element": "wbRArrayS",
+   "signature": null,
+   "label": "Removed Worldspace Cells",
+   "declaration": "cpBenign),"
+  },
+  {
+   "line": 8136,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Ref",
+   "declaration": "wbFormIDCk('Ref', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8137,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "ACID",
+   "label": "Added Initially Disabled References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8139,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Ref",
+   "declaration": "wbFormIDCk('Ref', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8140,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "LCID",
+   "label": "Master Initially Disabled References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8143,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Ref",
+   "declaration": "wbFormIDCk('Ref', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8144,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Enable Parent",
+   "declaration": "wbFormIDCk('Enable Parent', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8150,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Flags",
+   "declaration": "cpBenign).IncludeFlag(dfCollapsed, wbCollapseFlags),"
+  },
+  {
+   "line": 8152,
+   "priority": "cpBenign",
+   "element": "wbStruct",
+   "signature": null,
+   "label": "Reference",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8153,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "ACEP",
+   "label": "Added Enable Parent References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8156,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Ref",
+   "declaration": "wbFormIDCk('Ref', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8157,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Enable Parent",
+   "declaration": "wbFormIDCk('Enable Parent', sigReferences, False, cpBenign),"
+  },
+  {
+   "line": 8163,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Flags",
+   "declaration": "cpBenign).IncludeFlag(dfCollapsed, wbCollapseFlags),"
+  },
+  {
+   "line": 8165,
+   "priority": "cpBenign",
+   "element": "wbStruct",
+   "signature": null,
+   "label": "Reference",
+   "declaration": "], cpBenign),"
+  },
+  {
+   "line": 8166,
+   "priority": "cpBenign",
+   "element": "wbArrayS",
+   "signature": "LCEP",
+   "label": "Master Enable Parent References",
+   "declaration": "0, cpBenign),"
+  },
+  {
+   "line": 8183,
+   "priority": "cpIgnore",
+   "element": "wbFormIDCk",
+   "signature": "INAM",
+   "label": "Icon (unused)",
+   "declaration": "wbFormIDCk(INAM, 'Icon (unused)', [NULL], False, cpIgnore).SetRequired, // leftover"
+  },
+  {
+   "line": 8723,
+   "priority": "cpBenign",
+   "element": "wbFormIDCkNoReach",
+   "signature": "SNAM",
+   "label": "Previous Node",
+   "declaration": "wbFormIDCkNoReach(SNAM, 'Previous Node', [SMQN, SMBN, SMEN, NULL], False, cpBenign),"
+  },
+  {
+   "line": 8738,
+   "priority": "cpBenign",
+   "element": "wbFormIDCkNoReach",
+   "signature": "SNAM",
+   "label": "Previous Node",
+   "declaration": "wbFormIDCkNoReach(SNAM, 'Previous Node', [SMQN, SMBN, SMEN, NULL], False, cpBenign),"
+  },
+  {
+   "line": 8753,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "QNAM",
+   "label": "Quest Count",
+   "declaration": "wbInteger(QNAM, 'Quest Count', itU32, nil, cpBenign, True),"
+  },
+  {
+   "line": 8765,
+   "priority": "cpBenign",
+   "element": "wbFormIDCkNoReach",
+   "signature": "SNAM",
+   "label": "Previous Node",
+   "declaration": "wbFormIDCkNoReach(SNAM, 'Previous Node', [SMQN, SMBN, SMEN, NULL], False, cpBenign),"
+  },
+  {
+   "line": 9379,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": "DNAM",
+   "label": "Data",
+   "declaration": "wbByteArray(DNAM, 'Data', 0, cpIgnore)"
+  },
+  {
+   "line": 9441,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "ITMC",
+   "label": "Count",
+   "declaration": "wbInteger(ITMC, 'Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 9652,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Parent",
+   "declaration": "wbFormIDCk('Parent', [AACT, IDLE, NULL], False, cpBenign),"
+  },
+  {
+   "line": 9653,
+   "priority": "cpBenign",
+   "element": "wbFormIDCk",
+   "signature": null,
+   "label": "Previous",
+   "declaration": "wbFormIDCk('Previous', [AACT, IDLE, NULL], False, cpBenign)"
+  },
+  {
+   "line": 9726,
+   "priority": "cpBenign",
+   "element": "wbFormIDCkNoReach",
+   "signature": "PNAM",
+   "label": "Previous INFO",
+   "declaration": "wbFormIDCkNoReach(PNAM, 'Previous INFO', [INFO,NULL], False, cpBenign),"
+  },
+  {
+   "line": 10384,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "PRKZ",
+   "label": "Perk Count",
+   "declaration": "wbInteger(PRKZ, 'Perk Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 10433,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "CS2H",
+   "label": "Count",
+   "declaration": "wbInteger(CS2H, 'Count', itU32, nil, cpBenign, True),"
+  },
+  {
+   "line": 10634,
+   "priority": "cpIgnore",
+   "element": "wbRArray",
+   "signature": null,
+   "label": "Unknown",
+   "declaration": "wbRArray('Unknown', wbUnknown(PFOR), cpIgnore)"
+  },
+  {
+   "line": 11515,
+   "priority": "cpIgnore",
+   "element": "wbEmpty",
+   "signature": "XMBP",
+   "label": "MultiBound Primitive Marker",
+   "declaration": "wbEmpty(XMBP, 'MultiBound Primitive Marker', cpIgnore),"
+  },
+  {
+   "line": 11569,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "XWCN",
+   "label": "Velocity Count",
+   "declaration": "wbInteger(XWCN, 'Velocity Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 11683,
+   "priority": "cpBenignIfAdded",
+   "element": "wbFormIDCk",
+   "signature": "XLRL",
+   "label": "Location Reference",
+   "declaration": "wbFormIDCk(XLRL, 'Location Reference', [LCRT, LCTN, NULL], False, cpBenignIfAdded),"
+  },
+  {
+   "line": 12100,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": "OFST",
+   "label": "Unknown",
+   "declaration": "wbByteArray(OFST, 'Unknown', 0, cpIgnore),            // If possible then ignored by the runtime. Neither from the CK"
+  },
+  {
+   "line": 12101,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": "DELE",
+   "label": "Unknown",
+   "declaration": "wbByteArray(DELE, 'Unknown', 0, cpIgnore),            // If possible then ignored by the runtime. Neither from the CK"
+  },
+  {
+   "line": 12106,
+   "priority": "cpIgnore",
+   "element": "wbInteger",
+   "signature": "DATA",
+   "label": "Filesize",
+   "declaration": "// wbInteger(DATA, 'Filesize', itU64, nil, nil, cpIgnore, True)  // Should be set by CK but usually null"
+  },
+  {
+   "line": 12107,
+   "priority": "cpIgnore",
+   "element": "wbByteArray",
+   "signature": "DATA",
+   "label": "Unknown",
+   "declaration": "wbByteArray(DATA, 'Unknown', 8, cpIgnore, True)"
+  },
+  {
+   "line": 12348,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "VNAM",
+   "label": "Count",
+   "declaration": "wbInteger(VNAM, 'Count', itU32, nil, cpBenign).IncludeFlag(dfSkipImplicitEdit),"
+  },
+  {
+   "line": 12409,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "LFSP",
+   "label": "Count",
+   "declaration": "wbInteger(LFSP, 'Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 12511,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Include Count",
+   "declaration": "wbInteger('Include Count', itU32, nil, cpBenign).IncludeFlag(dfSkipImplicitEdit),"
+  },
+  {
+   "line": 12512,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": null,
+   "label": "Property Count",
+   "declaration": "wbInteger('Property Count', itU32, nil, cpBenign).IncludeFlag(dfSkipImplicitEdit),"
+  },
+  {
+   "line": 12714,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "BSIZ",
+   "label": "Count",
+   "declaration": "wbInteger(BSIZ, 'Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 12726,
+   "priority": "cpBenign",
+   "element": "wbInteger",
+   "signature": "ISIZ",
+   "label": "Count",
+   "declaration": "wbInteger(ISIZ, 'Count', itU32, nil, cpBenign),"
+  },
+  {
+   "line": 13170,
+   "priority": "cpIgnore",
+   "element": "wbString",
+   "signature": "NNAM",
+   "label": "Canopy Shadow (unused)",
+   "declaration": "wbString(NNAM, 'Canopy Shadow (unused)', 0, cpIgnore),"
+  }
+ ],
+ "runtime_rows": [
+  {
+   "line": 2121,
+   "priority": "cpIgnore",
+   "declaration": "aCP := cpIgnore;"
+  }
+ ]
+}
