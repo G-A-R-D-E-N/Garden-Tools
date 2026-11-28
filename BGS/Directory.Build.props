@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RadicleNativeDir Condition="'$(RadicleNativeDir)' == ''">$(MSBuildThisFileDirectory)../build/radicle-bgs/native</RadicleNativeDir>
+    <RadicleNativeFileName Condition="$([MSBuild]::IsOSPlatform('Windows'))">radicle.dll</RadicleNativeFileName>
+    <RadicleNativeFileName Condition="!$([MSBuild]::IsOSPlatform('Windows'))">libradicle.so</RadicleNativeFileName>
+  </PropertyGroup>
+</Project>
