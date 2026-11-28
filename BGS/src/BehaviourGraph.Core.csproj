@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>BehaviourGraph.Core</AssemblyName>
+    <RootNamespace>OpenCommonwealth.Services</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="InputFilePolicy.cs" />
+    <Compile Include="McpPathPolicy.cs" />
+    <Compile Include="Archive/*.cs" />
+    <Compile Include="Hkx/*.cs" />
+    <Compile Include="Nif/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BepuPhysics" Version="2.4.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Radicle/bindings/csharp/Radicle.Interop/Radicle.Interop.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Constraint: the layout tables are Radicle-owned; Link keeps the resource names HavokClasses and HavokClassTypes match on. -->
+    <EmbeddedResource Include="../../Radicle/data/hkx/HavokClassLayouts.json" Link="Hkx/HavokClassLayouts.json" />
+    <EmbeddedResource Include="../../Radicle/data/hkx/HavokClassTypes.json" Link="Hkx/HavokClassTypes.json" Condition="Exists('../../Radicle/data/hkx/HavokClassTypes.json')" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="symrm" />
+    <InternalsVisibleTo Include="BehaviourGraphStudio" />
+    <InternalsVisibleTo Include="BehaviourGraph.Tests" />
+    <InternalsVisibleTo Include="uismoke" />
+  </ItemGroup>
+</Project>
