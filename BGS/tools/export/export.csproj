@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <StartupObject>BehaviourStudio.Tools.Export.Program</StartupObject>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RootNamespace>BehaviourStudio.Tools.Export</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="ExportRunner.cs" />
+    <Compile Include="ExportJson.cs" />
+    <Compile Include="ExportFormats.cs" />
+    <Compile Include="SkeletonExport.cs" />
+    <Compile Include="AnimationExport.cs" />
+    <Compile Include="GraphPlan.cs" />
+    <Compile Include="GraphExport.cs" />
+    <Compile Include="CollisionExport.cs" />
+    <Compile Include="SchemaDocument.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BehaviourGraph.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/BehaviourGraph.Core.csproj" />
+  </ItemGroup>
+</Project>

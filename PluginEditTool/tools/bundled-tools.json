@@ -1,0 +1,16 @@
+{
+  "tools": [
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg (BtbN/FFmpeg-Builds win64-lgpl static build)",
+      "version": "n9.0.2-39-g7adfbe40dc",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0.zip",
+      "sha256": "9d37c564e0d01c18cde184a079fa6ef04d7d2783ada41da81d04165cc8f1a650",
+      "member": "bin/ffmpeg.exe",
+      "file": "tools/audio/ffmpeg.exe",
+      "license": "LGPL-3.0-or-later",
+      "licenseUrl": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/7adfbe40dcde598f93a6963d2f7b22cd75202ccc/COPYING.LGPLv3",
+      "pinNote": "BtbN prunes autobuild releases (newest ~14, then one month-end build per month for about two years). This pin is the 2026-10 month-end build, so expect it to 404 around late 2028; a daily autobuild tag lasts only about two weeks. The fetch fails closed. Re-pin url, sha256, version and licenseUrl together from the newest month-end autobuild (sha256 is in that release's checksums.sha256) and update this note."
+    }
+  ]
+}
