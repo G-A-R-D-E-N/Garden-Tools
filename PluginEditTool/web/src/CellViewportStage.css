@@ -1,0 +1,23 @@
+.cell-popout-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+.cell-popout-error {
+  position: absolute;
+  top: 40px;
+  right: 8px;
+  z-index: 2;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(200, 60, 60, 0.85);
+  color: #fff;
+  font-size: 12px;
+}
+.cell-view-popped .nif-view-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}

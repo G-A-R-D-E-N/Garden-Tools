@@ -1,0 +1,40 @@
+.cell-popout-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #17181c;
+  color: var(--text-color, #d4d4d4);
+}
+.cell-popout-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color, #2b2b2b);
+  font-size: 12px;
+}
+.cell-popout-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cell-popout-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted, #9aa0aa);
+}
+.cell-popout-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.cell-popout-stage > * {
+  flex: 1;
+  min-width: 0;
+}
