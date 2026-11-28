@@ -1,0 +1,26 @@
+set(FO4_SOURCES_SCHEMA
+  src/schema/condition_functions.cpp
+  src/schema/condition_scope_path.cpp
+  src/schema/condition_scopes.cpp
+  src/schema/ctda.cpp
+  src/schema/form_links.cpp
+  src/schema/form_links_ctda.cpp
+  src/schema/form_link_mixed.cpp
+  src/schema/form_link_records.cpp
+  src/schema/form_link_schema.cpp
+  src/schema/behavior_layout.cpp
+  src/schema/localized_fields.cpp
+  src/schema/formlink_lists.cpp
+  src/schema/formlink_segments.cpp
+  src/schema/formlink_list_read.cpp
+  src/schema/nested_formlink_lists.cpp
+  src/schema/nested_formlink_list_null.cpp
+  src/schema/preflight.cpp
+  src/schema/non_formid_slots.cpp
+  src/schema/scalar.cpp
+  src/schema/field_address.cpp
+  src/schema/record_flags.cpp
+  src/schema/formlink_slots.cpp
+  src/schema/vmad.cpp
+  src/schema/scene_start_entries.cpp
+)

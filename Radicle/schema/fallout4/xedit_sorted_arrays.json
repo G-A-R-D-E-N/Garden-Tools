@@ -1,0 +1,1992 @@
+{
+ "version": 1,
+ "source": "wbDefinitionsFO4.pas",
+ "xedit_revision": "93cc0bc5a1251936c3c7859eee3150eda12a62d7",
+ "entries": [
+  {
+   "line": 3109,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Textures', wbString(TTET, 'Texture')),",
+   "subrecord": "TTET",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3111,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(TTEC, 'Template Colors', wbStruct('Template Color', [",
+   "subrecord": "TTEC",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3123,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Options', wbTintTemplateOption),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3127,
+   "array_kind": "wbRArray",
+   "declaration": "Result := wbRArray(aName, wbTintTemplateGroup);",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3133,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray(aName,",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3137,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Morph Presets',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3165,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(MPGS, 'Morph Group Sliders', wbInteger('Index', itU32, wbIntToHexStr, wbHexStrToInt))",
+   "subrecord": "MPGS",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3173,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray(aName,",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3217,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Reflected/Refracted By',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 3226,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Linked References',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 3233,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Activate Parent Refs',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 3259,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(XLRT, 'Location Ref Type', wbFormIDCk('Ref', [LCRT, NULL])),",
+   "subrecord": "XLRT",
+   "model": "formid"
+  },
+  {
+   "line": 3285,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbSPLOs := wbRArrayS('Actor Effects', wbSPLO).SetCountPath(SPCT);",
+   "subrecord": "SPCT",
+   "model": "formid"
+  },
+  {
+   "line": 3316,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbCNTOs := wbRArrayS('Items', wbCNTO).SetCountPath(COCT);",
+   "subrecord": "COCT",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3756,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Struct',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 3777,
+   "array_kind": "wbArray",
+   "declaration": "{11} wbArray('Array of Object', wbScriptPropertyObject, -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3778,
+   "array_kind": "wbArray",
+   "declaration": "{12} wbArray('Array of String', wbLenString('Element', 2).OverrideEncoding(wbEncodingVMAD), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3779,
+   "array_kind": "wbArray",
+   "declaration": "{13} wbArray('Array of Int32', wbInteger('Element', itS32), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3780,
+   "array_kind": "wbArray",
+   "declaration": "{14} wbArray('Array of Float', wbFloat('Element'), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3781,
+   "array_kind": "wbArray",
+   "declaration": "{15} wbArray('Array of Bool', wbInteger('Element', itU8, wbBoolEnum), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3783,
+   "array_kind": "wbArray",
+   "declaration": "{17} wbArray('Array of Struct', wbRecursive('Struct', 4), -1)",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3809,
+   "array_kind": "wbArray",
+   "declaration": "{11} wbArray('Array of Object', wbScriptPropertyObject, -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3810,
+   "array_kind": "wbArray",
+   "declaration": "{12} wbArray('Array of String', wbLenString('Element', 2).OverrideEncoding(wbEncodingVMAD), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3811,
+   "array_kind": "wbArray",
+   "declaration": "{13} wbArray('Array of Int32', wbInteger('Element', itS32), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3812,
+   "array_kind": "wbArray",
+   "declaration": "{14} wbArray('Array of Float', wbFloat('Element'), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3813,
+   "array_kind": "wbArray",
+   "declaration": "{15} wbArray('Array of Bool', wbInteger('Element', itU8, wbBoolEnum), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3815,
+   "array_kind": "wbArray",
+   "declaration": "{17} wbArray('Array of Struct', wbScriptPropertyStruct, -1)",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3824,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Properties',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 3845,
+   "array_kind": "wbArray",
+   "declaration": "{11} wbArray('Array of Object', wbScriptPropertyObject, -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3846,
+   "array_kind": "wbArray",
+   "declaration": "{12} wbArray('Array of String', wbLenString('Element', 2).OverrideEncoding(wbEncodingVMAD), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3847,
+   "array_kind": "wbArray",
+   "declaration": "{13} wbArray('Array of Int32', wbInteger('Element', itS32), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3848,
+   "array_kind": "wbArray",
+   "declaration": "{14} wbArray('Array of Float', wbFloat('Element'), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3849,
+   "array_kind": "wbArray",
+   "declaration": "{15} wbArray('Array of Bool', wbInteger('Element', itU8, wbBoolEnum), -1),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3851,
+   "array_kind": "wbArray",
+   "declaration": "{17} wbArray('Array of Struct', wbScriptPropertyStruct, -1)",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3884,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Scripts', wbScriptEntry, -2)",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 3906,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Fragments',  // Do NOT sort, ordered OnBegin, OnEnd",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3936,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Fragments',  // Do NOT sort, ordered OnBegin, OnEnd, OnChange",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 3959,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Fragments',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 3993,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Fragments',",
+   "model": "unsupported",
+   "reason": "sort key is member index 0,1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 4010,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Aliases',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 4015,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Alias Scripts', wbScriptEntry, -2)",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 4037,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Fragments',  // Do NOT sort, ordered OnBegin, OnEnd",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4048,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Phase Fragments',",
+   "model": "unsupported",
+   "reason": "sort key is member index 1,0, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 4288,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(DAMC, 'Resistances', wbStructSK([0], 'Resistance', [",
+   "subrecord": "DAMC",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 4292,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Stages',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4351,
+   "array_kind": "wbRArray",
+   "declaration": "wbPDTOs := wbRArray('Topic', wbPDTO);",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4376,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Vertices',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4379,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Vertices',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4384,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Triangles',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4387,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Triangles',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4404,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Edge Links',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4412,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Door Links',",
+   "model": "unsupported",
+   "reason": "sort key is member index 0,2, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 4420,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Cover Array',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4423,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Cover Array',  // if navmesh version gt 12",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4432,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Cover Triangle Mappings',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4435,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Cover Triangle Mappings',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4443,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Waypoints',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4446,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Waypoints',  // if navmesh version gt 11",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4467,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Cells',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4468,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Cell',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4473,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Cells',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4474,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Cell',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4524,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Lit Water',",
+   "model": "formid"
+  },
+  {
+   "line": 4527,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Reflected/Refracted By',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 4553,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Linked References',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 4562,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Activate Parent Refs',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 4581,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(XLRT, 'Location Ref Type', wbFormIDCk('Ref', [LCRT, NULL])),",
+   "subrecord": "XLRT",
+   "model": "formid"
+  },
+  {
+   "line": 4585,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(XWCU, 'Velocities',",
+   "subrecord": "XWCU",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 4597,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Spline Connection', wbStruct(XPLK, 'Link', [",
+   "subrecord": "XPLK",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5184,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Conditions',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5272,
+   "array_kind": "wbArrayS",
+   "declaration": "wbPRPS := wbArrayS(PRPS, 'Properties', wbObjectProperty);",
+   "subrecord": "PRPS",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 5275,
+   "array_kind": "wbArrayS",
+   "declaration": "wbAPPR := wbArrayS(APPR, 'Attach Parent Slots', wbFormIDCk('Keyword', [KYWD]));",
+   "subrecord": "APPR",
+   "model": "formid"
+  },
+  {
+   "line": 5315,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(SNAM, 'Marker Parameters', wbStruct('Marker', [",
+   "subrecord": "SNAM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5459,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Properties', wbStructSK([4], 'Property', [",
+   "model": "unsupported",
+   "reason": "sort key is member index 4, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 5508,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Keywords', wbFormIDCk('Keyword', [KYWD, NULL]), -4).IncludeFlag(dfCollapsed, wbCollapseKeywords),",
+   "subrecord": "KYWD",
+   "model": "formid"
+  },
+  {
+   "line": 5511,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Includes', wbStruct('Include', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5522,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Combinations',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5537,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Bone Weight Scales',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5558,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Bone Range Modifiers',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5584,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Bone Scale Modifiers',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5595,
+   "array_kind": "wbRArray",
+   "declaration": "wbBSMPSequence := wbRArray('Bone Scale Data', wbBoneDataItem);",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5597,
+   "array_kind": "wbRArray",
+   "declaration": "wbArmorAddonBSMPSequence := wbRArray('Sculpt Data', wbArmorAddonBoneDataItem);",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5609,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Effects', wbEffect, cpNormal, True);",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5822,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Models',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 5885,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Additional Races', wbFormIDCK(MODL, 'Race', [RACE, NULL])),",
+   "subrecord": "MODL",
+   "model": "formid"
+  },
+  {
+   "line": 6046,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(XCLR, 'Regions',",
+   "subrecord": "XCLR",
+   "model": "formid"
+  },
+  {
+   "line": 6054,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(XWCU, 'Velocities',",
+   "subrecord": "XWCU",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 6087,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(XPRI, 'PreVis Reference Index', wbFormIDCk('Reference', [REFR, PGRE, PHZD, PMIS, PARW, PBAR, PBEA, PCON, PFLA])),",
+   "subrecord": "XPRI",
+   "model": "formid"
+  },
+  {
+   "line": 6091,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Meshes',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 6094,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('References',  wbStructSK([0], 'Reference', [",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 6117,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(WLST, 'Weather Types', wbStructSK([0], 'Weather Type', [",
+   "subrecord": "WLST",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 6507,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Random teleport destinations', wbFormIDCk(TNAM, 'Destination', [CELL, WRLD]))",
+   "subrecord": "TNAM",
+   "model": "formid"
+  },
+  {
+   "line": 6830,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Ranks', wbFactionRank),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 6902,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Markers', wbRStruct('Marker', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 6910,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Marker Entry Points', wbStruct(FNPR, 'Marker', [",
+   "subrecord": "FNPR",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7038,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Extra Parts',",
+   "model": "formid"
+  },
+  {
+   "line": 7041,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Parts',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7221,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(ONAM,'Base Objects',",
+   "subrecord": "ONAM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7223,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(PNAM, 'Preferred Connectors',",
+   "subrecord": "PNAM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7225,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(NNAM, 'Non Connectors',",
+   "subrecord": "NNAM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7229,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(MNAM, 'PreCut Map Entries',",
+   "subrecord": "MNAM",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 7232,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Triangles',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7243,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Navmesh Infos',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 7254,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Edge Links', wbFormIDCk('Navmesh', [NAVM]), -1).IncludeFlag(dfCollapsed, wbCollapseNavmesh),",
+   "subrecord": "NAVM",
+   "model": "formid"
+  },
+  {
+   "line": 7255,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Preferred Edge Links', wbFormIDCk('Navmesh', [NAVM]), -1).IncludeFlag(dfCollapsed, wbCollapseNavmesh),",
+   "subrecord": "NAVM",
+   "model": "formid"
+  },
+  {
+   "line": 7256,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Door Links',",
+   "model": "unsupported",
+   "reason": "sort key is member index 1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 7273,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Triangles',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7281,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Vertices',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7319,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Precomputed Paths',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7320,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Path',",
+   "model": "formid"
+  },
+  {
+   "line": 7324,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Road Marker Index',",
+   "model": "unsupported",
+   "reason": "sort key is member index 1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 7331,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(NVSI, 'Deleted Navmeshes', wbFormIDCk('Navmesh', [NAVM])).IncludeFlag(dfCollapsed, wbCollapseNavmesh)",
+   "subrecord": "NVSI",
+   "model": "formid"
+  },
+  {
+   "line": 7390,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Models', wbDebrisModel(wbModelInfo(MODT)), cpNormal, True)",
+   "subrecord": "MODT",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7530,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(TNAM, 'Tint Color', wbColorInterpolator).SetRequired,",
+   "subrecord": "TNAM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7531,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(NAM3, 'Fade Color', wbColorInterpolator).SetRequired,",
+   "subrecord": "NAM3",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7577,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('FormIDs',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7606,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Effects',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7643,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Perk Conditions',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7696,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Body Parts',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 7947,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Camera Shots', wbFormIDCk(SNAM, 'Camera Shot', [CAMS]))",
+   "subrecord": "SNAM",
+   "model": "formid"
+  },
+  {
+   "line": 8016,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Data', wbStructSK(PNAM, [0], '', [",
+   "subrecord": "PNAM",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 8045,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(ACPR, 'Added Persist Location References',",
+   "subrecord": "ACPR",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 8053,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(LCPR, 'Master Persist Location References',",
+   "subrecord": "LCPR",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 8061,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(RCPR, 'Removed Persist Location References',",
+   "subrecord": "RCPR",
+   "model": "formid"
+  },
+  {
+   "line": 8064,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(ACUN, 'Added Unique NPCs',",
+   "subrecord": "ACUN",
+   "model": "unsupported",
+   "reason": "sort key is member index 1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 8071,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(LCUN, 'Master Unique NPCs',",
+   "subrecord": "LCUN",
+   "model": "unsupported",
+   "reason": "sort key is member index 1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 8078,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(RCUN, 'Removed Unique NPCs',",
+   "subrecord": "RCUN",
+   "model": "formid"
+  },
+  {
+   "line": 8081,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(ACSR, 'Added Special References',",
+   "subrecord": "ACSR",
+   "model": "unsupported",
+   "reason": "sort key is member index 1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 8090,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(LCSR, 'Master Special References',",
+   "subrecord": "LCSR",
+   "model": "unsupported",
+   "reason": "sort key is member index 1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 8099,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(RCSR, 'Removed Special References',",
+   "subrecord": "RCSR",
+   "model": "formid"
+  },
+  {
+   "line": 8102,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Added Worldspace Cells',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 8105,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Cells',",
+   "model": "unsupported",
+   "reason": "sort key is member index 0,1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 8113,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Master Worldspace Cells',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 8116,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Cells',",
+   "model": "unsupported",
+   "reason": "sort key is member index 0,1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 8124,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Removed Worldspace Cells',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 8127,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS('Cells',",
+   "model": "unsupported",
+   "reason": "sort key is member index 0,1, whose byte offset is not derivable from the declaration"
+  },
+  {
+   "line": 8135,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(ACID, 'Added Initially Disabled References',",
+   "subrecord": "ACID",
+   "model": "formid"
+  },
+  {
+   "line": 8138,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(LCID, 'Master Initially Disabled References',",
+   "subrecord": "LCID",
+   "model": "formid"
+  },
+  {
+   "line": 8141,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(ACEP, 'Added Enable Parent References',",
+   "subrecord": "ACEP",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 8154,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(LCEP, 'Master Enable Parent References',",
+   "subrecord": "LCEP",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 8199,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Menu Buttons',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 8620,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(DNAM, 'Objects',",
+   "subrecord": "DNAM",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 8683,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(TNAM, 'Music Tracks', wbFormIDCk('Track', [MUST, NULL]))",
+   "subrecord": "TNAM",
+   "model": "formid"
+  },
+  {
+   "line": 8702,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Swimming Footsteps',",
+   "model": "formid"
+  },
+  {
+   "line": 8705,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Sneaking Footsteps',",
+   "model": "formid"
+  },
+  {
+   "line": 8708,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Sprinting Footsteps',",
+   "model": "formid"
+  },
+  {
+   "line": 8711,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Running Footsteps',",
+   "model": "formid"
+  },
+  {
+   "line": 8714,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Walking Footsteps',",
+   "model": "formid"
+  },
+  {
+   "line": 8754,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Quests',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 8813,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(FNAM, 'Cue Points', wbFloat('Point')).IncludeFlag(dfNotAlignable),",
+   "subrecord": "FNAM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 8816,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(SNAM, 'Tracks', wbFormIDCk('Track', [MUST, NULL]))",
+   "subrecord": "SNAM",
+   "model": "formid"
+  },
+  {
+   "line": 8837,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(PNAM, 'Slot Parents', wbFormIDCk('Parent', [EQUP])),",
+   "subrecord": "PNAM",
+   "model": "formid"
+  },
+  {
+   "line": 8899,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Phases',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 8924,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Actors',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 8954,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Actions',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9023,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(HTID, 'Player Headtracking',",
+   "subrecord": "HTID",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9033,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Packages', wbFormIDCk(PNAM, 'Package', [PACK]))",
+   "subrecord": "PNAM",
+   "model": "formid"
+  },
+  {
+   "line": 9049,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(DTID, 'NPC Headtracking',",
+   "subrecord": "DTID",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9069,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Start Scenes', wbRStruct('Start Scene', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9088,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(DTID, 'NPC Headtracking',",
+   "subrecord": "DTID",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9359,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(INAM, 'Items', wbFormIDCk('Item', [ARMO, LVLI]))",
+   "subrecord": "INAM",
+   "model": "formid"
+  },
+  {
+   "line": 9378,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Property Data',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9440,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Descriptors', wbFormIDCk(DNAM, 'Descriptor', [SNDR])),",
+   "subrecord": "DNAM",
+   "model": "formid"
+  },
+  {
+   "line": 9442,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Rates of Fire',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9511,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Channels', wbStruct('', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9559,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(CNAM, 'Collides With', wbFormIDCk('Forms', [COLL]), 0, cpNormal, False)",
+   "subrecord": "CNAM",
+   "model": "formid"
+  },
+  {
+   "line": 9730,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Responses',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9867,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Hi-Res Heightfield',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 9976,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Grasses', wbFormIDCk(GNAM, 'Grass', [GRAS]))",
+   "subrecord": "GNAM",
+   "model": "formid"
+  },
+  {
+   "line": 9980,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(LLKC, 'Filter Keyword Chances',",
+   "subrecord": "LLKC",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 9998,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Leveled List Entries',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10021,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Leveled List Entries',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10044,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Leveled List Entries',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10204,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Counter Effects',",
+   "model": "formid"
+  },
+  {
+   "line": 10235,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(CVPA, 'Components',",
+   "subrecord": "CVPA",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 10248,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(CDIX, 'Component Display Indices', wbInteger('Display Index', itU8))",
+   "subrecord": "CDIX",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10264,
+   "array_kind": "wbArrayS",
+   "declaration": "wbComponents := wbArrayS(FVPA, 'Components', wbComponent);",
+   "subrecord": "FVPA",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 10279,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(FNAM, 'Category', wbFormIDCk('Keyword', [KYWD])),",
+   "subrecord": "FNAM",
+   "model": "formid"
+  },
+  {
+   "line": 10347,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Factions', wbFaction),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10377,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Attacks', wbAttackData),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10385,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Perks',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 10400,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Packages',",
+   "model": "formid"
+  },
+  {
+   "line": 10417,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Head Parts', wbFormIDCk(PNAM, 'Head Part', [HDPT])),",
+   "subrecord": "PNAM",
+   "model": "formid"
+  },
+  {
+   "line": 10446,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(MSDK, 'Morph Keys', wbInteger('Key', itU32, wbMorphValueToStr, wbHexStrToInt)),",
+   "subrecord": "MSDK",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10447,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(MSDV, 'Morph Values', wbFloat('Value')),",
+   "subrecord": "MSDV",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10448,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Face Tinting Layers',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10471,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Face Morphs',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10518,
+   "array_kind": "wbRArray",
+   "declaration": "wbUNAMs := wbRArray('Data Inputs', wbRStruct('Data Input', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10582,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Data Input Values',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10604,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Branches', wbRStruct('Branch', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10617,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Data Input Indexes', wbInteger(PKC2, 'Index', itU8)),",
+   "subrecord": "PKC2",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10619,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Flags Override',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10634,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Unknown', wbUnknown(PFOR), cpIgnore)",
+   "subrecord": "PFOR",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10735,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Text Display Globals', wbFormIDCk(QTGL, 'Global', [GLOB])),",
+   "subrecord": "QTGL",
+   "model": "formid"
+  },
+  {
+   "line": 10740,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Stages', wbRStructSK([0], 'Stage', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10751,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Log Entries', wbRStruct('Log Entry', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10772,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Objectives', wbRStruct('Objective', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10779,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Targets', wbRStruct('Target', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10806,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Aliases',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10877,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(ALLA, 'Linked Aliases',",
+   "subrecord": "ALLA",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 10885,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Alias Spells', wbFormIDCk(ALSP, 'Spell', [SPEL])),",
+   "subrecord": "ALSP",
+   "model": "formid"
+  },
+  {
+   "line": 10886,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Alias Factions', wbFormIDCk(ALFC, 'Faction', [FACT])),",
+   "subrecord": "ALFC",
+   "model": "formid"
+  },
+  {
+   "line": 10887,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Alias Package Data', wbFormIDCk(ALPC, 'Package', [PACK])),",
+   "subrecord": "ALPC",
+   "model": "formid"
+  },
+  {
+   "line": 11015,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(RBPC, 'Biped Object Conditions',",
+   "subrecord": "RBPC",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11023,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Biped Object Conditions', wbInteger('Condition AV', itU32)),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11024,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Biped Object Conditions', wbStruct('Condition AV', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11041,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Parts',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11202,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Movement Type Names', wbString(MTNM, 'Name', 4)),",
+   "subrecord": "MTNM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11203,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(VTCK, 'Voices', wbFormIDCk('Voice', [VTYP]), ['Male', 'Female'], cpNormal, True),",
+   "subrecord": "VTCK",
+   "model": "formid"
+  },
+  {
+   "line": 11205,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(HCLF, 'Default Hair Colors', wbFormIDCk('Default Hair Color', [NULL, CLFM]), ['Male', 'Female'], cpNormal, False),",
+   "subrecord": "HCLF",
+   "model": "formid"
+  },
+  {
+   "line": 11211,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Attacks', wbAttackData),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11248,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Biped Object Names', wbString(NAME, 'Name')),",
+   "subrecord": "NAME",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11250,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Movement Data Overrides', wbRStructSK([0], 'Override', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11255,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Equip Slots', wbEquipSlot),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11258,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Phoneme Target Names', wbString(PHTN, 'Name')),",
+   "subrecord": "PHTN",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11274,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Male Head Parts', wbHeadPart),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11275,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Male Race Presets', wbFormIDCk(RPRM, 'Preset NPC', [NPC_, NULL])),",
+   "subrecord": "RPRM",
+   "model": "formid"
+  },
+  {
+   "line": 11276,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Male Hair Colors', wbFormIDCk(AHCM, 'Hair Color', [CLFM, NULL])),",
+   "subrecord": "AHCM",
+   "model": "formid"
+  },
+  {
+   "line": 11277,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Male Face Details', wbFormIDCk(FTSM, 'Texture Set', [TXST, NULL])),",
+   "subrecord": "FTSM",
+   "model": "formid"
+  },
+  {
+   "line": 11292,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Female Head Parts', wbHeadPart),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11293,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Female Race Presets', wbFormIDCk(RPRF, 'Preset NPC', [NPC_, NULL])),",
+   "subrecord": "RPRF",
+   "model": "formid"
+  },
+  {
+   "line": 11294,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Female Hair Colors', wbFormIDCk(AHCF, 'Hair Color', [CLFM, NULL])),",
+   "subrecord": "AHCF",
+   "model": "formid"
+  },
+  {
+   "line": 11295,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Female Face Details', wbFormIDCk(FTSF, 'Texture Set', [TXST, NULL])),",
+   "subrecord": "FTSF",
+   "model": "formid"
+  },
+  {
+   "line": 11306,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Subgraph Data',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11308,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Actor Keywords', wbFormIDCk(SAKD, 'Keyword', [KYWD])).IncludeFlag(dfCollapsed, wbCollapseKeywords),",
+   "subrecord": "SAKD",
+   "model": "formid"
+  },
+  {
+   "line": 11310,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Animation Paths', wbString(SAPT, 'Path'), cpNormal, True),",
+   "subrecord": "SAPT",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11311,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Target Keywords', wbFormIDCk(STKD, 'Keyword', [KYWD])).IncludeFlag(dfCollapsed, wbCollapseKeywords),",
+   "subrecord": "STKD",
+   "model": "formid"
+  },
+  {
+   "line": 11332,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Morph Values',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11476,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(XPOD, 'Portal Data', wbStruct('References', [",
+   "subrecord": "XPOD",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11485,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(XORD, 'Linked Occlusion References', wbFormIDCk('Reference', [REFR, NULL]), [",
+   "subrecord": "XORD",
+   "model": "formid"
+  },
+  {
+   "line": 11511,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Linked Rooms',",
+   "model": "formid"
+  },
+  {
+   "line": 11533,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Lit Water',",
+   "model": "formid"
+  },
+  {
+   "line": 11536,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Reflected/Refracted By',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 11570,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(XWCU, 'Velocities',",
+   "subrecord": "XWCU",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11620,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Activate Parent Refs',",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 11684,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(XLRT, 'Location Ref Type', wbFormIDCk('Ref', [LCRT, NULL])),",
+   "subrecord": "XLRT",
+   "model": "formid"
+  },
+  {
+   "line": 11694,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Linked References', wbStruct(XLKR, 'Linked Reference', [",
+   "subrecord": "XLKR",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11699,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Patrol', wbRStruct('Data', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11836,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Spline Connection', wbStruct(XPLK, 'Link', [",
+   "subrecord": "XPLK",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11843,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Connections', wbStruct(XWPN, 'Connection', [",
+   "subrecord": "XWPN",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11852,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Water Current Data',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11878,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Region Data Entries', wbRStructSK([0], 'Region Data Entry', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11909,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(RDOT, 'Objects', wbStruct('Object', [",
+   "subrecord": "RDOT",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 11944,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(RDGS, 'Grasses', wbStructSK([0], 'Grass', [",
+   "subrecord": "RDGS",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 11950,
+   "array_kind": "wbArrayS",
+   "declaration": "wbArrayS(RDWT, 'Weather Types', wbStructSK([0], 'Weather Type', [",
+   "subrecord": "RDWT",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 12104,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Master Files', wbRStruct('Master File', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12109,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(ONAM, 'Overridden Forms',                     // Valid in CK",
+   "subrecord": "ONAM",
+   "model": "formid"
+  },
+  {
+   "line": 12114,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Transient Types (CK only)',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12121,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('References',",
+   "model": "formid"
+  },
+  {
+   "line": 12208,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Effects',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12314,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Damage Types', wbInteger('Actor Value Index', itU32)),",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12315,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Damage Types', wbStruct('Damage Type', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12346,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Naming Rules',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12350,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Names',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12393,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Keywords', wbFormIDCk(KNAM, 'Keyword', [KYWD])).IncludeFlag(dfCollapsed, wbCollapseKeywords),",
+   "subrecord": "KNAM",
+   "model": "formid"
+  },
+  {
+   "line": 12394,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Sounds', wbStructSK(RNAM, [0], 'Sound', [",
+   "subrecord": "RNAM",
+   "model": "struct_first_member",
+   "key_index": 0
+  },
+  {
+   "line": 12410,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Lens Flare Sprites',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12443,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Material Substitutions',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12458,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Unknown',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12460,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Unknown',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12463,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Unknown Datas', wbUnknown(DATA)),",
+   "subrecord": "DATA",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12524,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Attach Parent Slots', wbFormIDCk('Keyword', [KYWD, NULL]), -1),",
+   "subrecord": "KYWD",
+   "model": "formid"
+  },
+  {
+   "line": 12526,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Items', wbStruct('Item', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12531,
+   "array_kind": "wbArray",
+   "declaration": "wbArray('Includes', wbStruct('Include', [",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12539,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(MNAM, 'Target OMOD Keywords', wbFormIDCk('Keyword', [KYWD])).IncludeFlag(dfCollapsed, wbCollapseKeywords),",
+   "subrecord": "MNAM",
+   "model": "formid"
+  },
+  {
+   "line": 12540,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(FNAM, 'Filter Keywords', wbFormIDCk('Keyword', [KYWD])).IncludeFlag(dfCollapsed, wbCollapseKeywords),",
+   "subrecord": "FNAM",
+   "model": "formid"
+  },
+  {
+   "line": 12548,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Unknown',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12596,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Scene Layout',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12610,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Original Coordinates?',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12647,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Parts', wbStaticPart, cpNormal, True)",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12653,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Category Multipliers', wbStruct(CNAM, 'Category Multiplier', [",
+   "subrecord": "CNAM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12665,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Sounds', wbStruct(TNAM, 'Sound', [",
+   "subrecord": "TNAM",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12700,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Holotapes',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12715,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Body Text',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 12727,
+   "array_kind": "wbRArray",
+   "declaration": "wbRArray('Menu Items',",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 13051,
+   "array_kind": "wbArray",
+   "declaration": "wbArray(NAM4, 'Unknown',",
+   "subrecord": "NAM4",
+   "model": "unsupported",
+   "reason": "element is not a FormID or a first-member-keyed struct"
+  },
+  {
+   "line": 13090,
+   "array_kind": "wbRArrayS",
+   "declaration": "wbRArrayS('Sky Statics',",
+   "model": "formid"
+  }
+ ]
+}
