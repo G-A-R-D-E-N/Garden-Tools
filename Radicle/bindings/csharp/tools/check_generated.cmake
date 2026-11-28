@@ -1,0 +1,15 @@
+# Regenerates the C# interop and the layout probe into OUT_DIR and compares them with the committed copies.
+file(MAKE_DIRECTORY ${OUT_DIR})
+execute_process(COMMAND ${PYTHON} ${GENERATOR} ${INCLUDE_DIR} ${OUT_DIR}/RadicleNative.g.cs ${OUT_DIR}/abi_layout_probe.cpp
+                RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+  message(FATAL_ERROR "generate_interop.py failed")
+endif()
+foreach(pair "RadicleNative.g.cs;${COMMITTED_CS}" "abi_layout_probe.cpp;${COMMITTED_PROBE}")
+  list(GET pair 0 name)
+  list(GET pair 1 committed)
+  execute_process(COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol ${OUT_DIR}/${name} ${committed} RESULT_VARIABLE differs)
+  if(NOT differs EQUAL 0)
+    message(FATAL_ERROR "${committed} is stale; run Radicle/bindings/csharp/tools/generate_interop.py")
+  endif()
+endforeach()
