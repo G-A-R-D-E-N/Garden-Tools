@@ -1,0 +1,12 @@
+PluginEditTool/docs/MODKIT21_PULLS.md
+__pycache__/
+*.pyc
+build/
+node_modules/
+bin/
+obj/
+.vs/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
