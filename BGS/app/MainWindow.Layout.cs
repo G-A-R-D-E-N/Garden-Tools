@@ -1,0 +1,138 @@
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+
+namespace BehaviourStudio.App;
+
+public partial class MainWindow : Window
+{
+    private readonly System.Collections.Generic.Dictionary<string, Control> _toolbars = new(StringComparer.Ordinal);
+
+    private void RegisterToolbar(string tab, params Control[] groups)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Ux.Space };
+        foreach (var group in groups) row.Children.Add(group);
+        _toolbars.Add(tab, row);
+    }
+
+    private static Border ToolbarGroup(string name, params Control[] controls)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        foreach (var control in controls) row.Children.Add(control);
+        return new Border
+        {
+            BorderBrush = Ux.BorderBrush, BorderThickness = new Thickness(0, 0, 1, 0),
+            Padding = new Thickness(4, 2, 12, 2),
+            Child = new StackPanel { Spacing = 4, Children = { Ux.SectionTitle(name), row } },
+        };
+    }
+
+    private Border GraphToolbarGroup(string name, params Control[] controls)
+    {
+        var label = new TextBlock
+        {
+            Text = name.ToUpperInvariant(),
+            Foreground = Ux.MutedBrush,
+            FontSize = 10,
+            FontWeight = FontWeight.Bold,
+            LineHeight = 14,
+            Height = 20,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+        };
+        var tag = new Border
+        {
+            Background = Ux.BaseBrush,
+            BorderBrush = Ux.BorderBrush,
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Padding = new Thickness(8, 2),
+            Child = label,
+        };
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 5,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        row.Children.Add(tag);
+        foreach (var control in controls)
+        {
+            control.VerticalAlignment = VerticalAlignment.Center;
+            if (control is Button or ComboBox) control.MinHeight = 28;
+            row.Children.Add(control);
+        }
+
+        _graphToolbarGroups.Add(name);
+        _graphToolbarGroupLabelsHaveFixedLineHeight = true;
+        return new Border
+        {
+            Background = Ux.CardBrush,
+            BorderBrush = Ux.BorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(1, 1, 6, 1),
+            Child = row,
+        };
+    }
+
+    private static Control Bar(params Control[] controls)
+    {
+        var panel = new DockPanel { LastChildFill = true };
+        for (int i = controls.Length - 1; i >= 1; i--)
+        {
+            controls[i].Margin = new Thickness(8, 0, 0, 0);
+            DockPanel.SetDock(controls[i], Dock.Right);
+            panel.Children.Add(controls[i]);
+        }
+        panel.Children.Add(controls[0]);
+        return panel;
+    }
+
+    private static Control ToolRow(string title, params Control[] controls)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, ToolGroupGap, 0),
+        };
+        if (title.Length > 0) row.Children.Add(Ux.RowTitle(title));
+        foreach (var control in controls)
+        {
+            control.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(control);
+        }
+        return row;
+    }
+
+    private static Control ToolCount(Control count)
+    {
+        count.VerticalAlignment = VerticalAlignment.Center;
+        count.Margin = new Thickness(10, 0, 0, 0);
+        return count;
+    }
+
+    private static Control Rows(params (Control Control, bool Fill)[] rows)
+    {
+        var grid = new Grid();
+        for (int i = 0; i < rows.Length; i++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition(rows[i].Fill ? GridLength.Star : GridLength.Auto));
+            rows[i].Control.Margin = new Thickness(0, i == 0 ? 0 : 10, 0, 0);
+            Grid.SetRow(rows[i].Control, i);
+            grid.Children.Add(rows[i].Control);
+        }
+        return grid;
+    }
+
+    private static void AddTop(DockPanel panel, Control control)
+    {
+        control.Margin = new Thickness(0, 0, 0, Ux.Space);
+        DockPanel.SetDock(control, Dock.Top);
+        panel.Children.Add(control);
+    }
+
+}

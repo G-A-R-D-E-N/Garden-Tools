@@ -1,0 +1,212 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Radicle.Interop.Native;
+
+namespace Radicle.Interop;
+
+public sealed record ItemAmount(FormKey Item, int Count);
+
+public sealed record ActivatorRecord(FormKey Record, UiText FullName, UiText ActivateText, ushort? Flags,
+                                     FormKey? InteractionKeyword, FormKey? LoopingSound, FormKey? ActivationSound,
+                                     FormKey? WaterType);
+
+public sealed record ContainerRecord(FormKey Record, UiText FullName, byte? Flags, float? Weight,
+                                     IReadOnlyList<ItemAmount> Items, FormKey? OpenSound, FormKey? CloseSound,
+                                     FormKey? TakeAllSound, FormKey? FilterList);
+
+public sealed record DoorRecord(FormKey Record, UiText FullName, byte? Flags, FormKey? OpenSound, FormKey? CloseSound,
+                                FormKey? LoopSound, UiText OpenText, UiText CloseText,
+                                IReadOnlyList<FormKey> RandomDestinations);
+
+public sealed record FurnitureMarkerSlot(int Index, ushort? DisabledEntryPoints)
+{
+    public FurnitureEntryTypes? DisabledEntries => DisabledEntryPoints is { } points ? (FurnitureEntryTypes)points : null;
+}
+
+public sealed record FurnitureEntry(ushort AnimType, ushort EntryPoints)
+{
+    public FurnitureAnimType Animation => (FurnitureAnimType)AnimType;
+    public FurnitureEntryTypes Entries => (FurnitureEntryTypes)EntryPoints;
+}
+
+public sealed record FurnitureMarkerParam((float X, float Y, float Z) Offset, float RotationZ, FormKey? Keyword,
+                                          byte EntryTypes)
+{
+    public FurnitureMarkerSides Sides => (FurnitureMarkerSides)EntryTypes;
+}
+
+// Constraint: EntryTypes is 0 for marker params below record form version 125; MarkerModel is null when XMRK is absent.
+public sealed record FurnitureRecord(FormKey Record, UiText FullName, UiText ActivateText, ushort? Flags,
+                                     uint? MarkerFlags, byte? BenchType, FormKey? DrinkingWaterType,
+                                     FormKey? AssociatedForm, IReadOnlyList<ItemAmount> Items,
+                                     IReadOnlyList<FurnitureMarkerSlot> Markers,
+                                     IReadOnlyList<FurnitureEntry> EntryPoints,
+                                     IReadOnlyList<FurnitureMarkerParam> MarkerParams, string? MarkerModel)
+{
+    public FurnitureRecordFlag RecordFlagSet { get; init; }
+    public FurnitureMarkerFlag? MarkerFlagSet => MarkerFlags is { } flags ? (FurnitureMarkerFlag)flags : null;
+    public FurnitureBenchType? BenchKind => BenchType is { } bench ? (FurnitureBenchType)bench : null;
+    public bool IsSleepFurniture => MarkerFlagSet is { } flags && (flags & FurnitureMarkerFlag.IsSleepFurniture) != 0;
+    public bool IsPowerArmor => (RecordFlagSet & FurnitureRecordFlag.PowerArmor) != 0;
+}
+
+public sealed unsafe partial class RadicleEnvironment
+{
+    private static ItemAmount[] ItemAmounts(IntPtr items, nuint count) =>
+        Call.Copy<Native.ItemCount>(items, count).Select(i => new ItemAmount(Required(i.Item), i.Count)).ToArray();
+
+    private static FurnitureMarkerParam MarkerParam(Native.FurnitureMarkerParams p) =>
+        new((p.Offset[0], p.Offset[1], p.Offset[2]), p.RotationZ, FormKey.FromNative(p.Keyword), p.EntryTypes);
+
+    public ActivatorRecord Activator(Record record, StringTables? strings = null)
+    {
+        var index = Info(record).PluginIndex;
+        using var use = Use(record);
+        Native.ActivatorInfo* a;
+        Call.Check(RadicleNative.ActivatorDecode(use.Pointer, record.Handle, &a));
+        try
+        {
+            return new ActivatorRecord(Required(a->Record), UiTextOf(a->FullName, index, "ACTI", "FULL", strings),
+                UiTextOf(a->ActivateText, index, "ACTI", "ATTX", strings), a->HasFlags == 0 ? null : a->Flags,
+                FormKey.FromNative(a->InteractionKeyword), FormKey.FromNative(a->LoopingSound),
+                FormKey.FromNative(a->ActivationSound), FormKey.FromNative(a->WaterType));
+        }
+        finally { RadicleNative.ActivatorFree(a); }
+    }
+
+    public ContainerRecord ContainerDefinition(Record record, StringTables? strings = null)
+    {
+        var index = Info(record).PluginIndex;
+        using var use = Use(record);
+        Native.ContainerInfo* c;
+        Call.Check(RadicleNative.ContainerDecode(use.Pointer, record.Handle, &c));
+        try
+        {
+            return new ContainerRecord(Required(c->Record), UiTextOf(c->FullName, index, "CONT", "FULL", strings),
+                c->HasData == 0 ? null : c->Flags, c->HasData == 0 ? null : c->Weight, ItemAmounts(c->Items, c->ItemCount),
+                FormKey.FromNative(c->OpenSound), FormKey.FromNative(c->CloseSound),
+                FormKey.FromNative(c->TakeAllSound), FormKey.FromNative(c->FilterList));
+        }
+        finally { RadicleNative.ContainerFree(c); }
+    }
+
+    public DoorRecord Door(Record record, StringTables? strings = null)
+    {
+        var index = Info(record).PluginIndex;
+        using var use = Use(record);
+        Native.DoorInfo* d;
+        Call.Check(RadicleNative.DoorDecode(use.Pointer, record.Handle, &d));
+        try
+        {
+            return new DoorRecord(Required(d->Record), UiTextOf(d->FullName, index, "DOOR", "FULL", strings),
+                d->HasFlags == 0 ? null : d->Flags, FormKey.FromNative(d->OpenSound), FormKey.FromNative(d->CloseSound),
+                FormKey.FromNative(d->LoopSound), UiTextOf(d->OpenText, index, "DOOR", "ONAM", strings),
+                UiTextOf(d->CloseText, index, "DOOR", "CNAM", strings),
+                Call.Copy<Native.FormKey>(d->RandomDestinations, d->RandomDestinationCount).Select(Required).ToArray());
+        }
+        finally { RadicleNative.DoorFree(d); }
+    }
+
+    public FurnitureRecord Furniture(Record record, StringTables? strings = null)
+    {
+        var header = Info(record);
+        var index = header.PluginIndex;
+        using var use = Use(record);
+        Native.FurnitureInfo* f;
+        Call.Check(RadicleNative.FurnitureDecode(use.Pointer, record.Handle, &f));
+        try
+        {
+            return new FurnitureRecord(Required(f->Record), UiTextOf(f->FullName, index, "FURN", "FULL", strings),
+                UiTextOf(f->ActivateText, index, "FURN", "ATTX", strings), f->HasFlags == 0 ? null : f->Flags,
+                f->HasMarkerFlags == 0 ? null : f->MarkerFlags, f->HasBenchType == 0 ? null : f->BenchType,
+                FormKey.FromNative(f->DrinkingWaterType), FormKey.FromNative(f->AssociatedForm),
+                ItemAmounts(f->Items, f->ItemCount),
+                Call.Copy<Native.FurnitureMarker>(f->Markers, f->MarkerCount).Select(m =>
+                    new FurnitureMarkerSlot(m.Index, m.HasDisabledEntryPoints == 0 ? null : m.DisabledEntryPoints)).ToArray(),
+                Call.Copy<Native.FurnitureEntryPoint>(f->EntryPoints, f->EntryPointCount)
+                    .Select(e => new FurnitureEntry(e.AnimType, e.EntryPoints)).ToArray(),
+                Call.Copy<Native.FurnitureMarkerParams>(f->MarkerParams, f->MarkerParamCount).Select(MarkerParam).ToArray(),
+                Utf8.Read(f->MarkerModel)) { RecordFlagSet = (FurnitureRecordFlag)header.RecordFlags };
+        }
+        finally { RadicleNative.FurnitureFree(f); }
+    }
+}
+
+public enum FurnitureAnimType : ushort
+{
+    None = 0,
+    Sit = 1,
+    Lay = 2,
+    Lean = 4,
+}
+
+// Invariant: bits 0 to 21 enable interaction point i (InteractionPointMask); bits 22 to 31 are the named flags.
+[Flags]
+public enum FurnitureMarkerFlag : uint
+{
+    None = 0,
+    InteractionPointMask = 0x003F_FFFF,
+    AllowAwakeSound = 0x0040_0000,
+    EnterWithWeaponDrawn = 0x0080_0000,
+    PlayAnimWhenFull = 0x0100_0000,
+    DisablesActivation = 0x0200_0000,
+    IsPerch = 0x0400_0000,
+    MustExitToTalk = 0x0800_0000,
+    UseStaticAvoidNode = 0x1000_0000,
+    Unknown29 = 0x2000_0000,
+    HasModel = 0x4000_0000,
+    IsSleepFurniture = 0x8000_0000,
+}
+
+// Invariant: these are record header flags (RecordInfo.RecordFlags), not the FNAM word.
+[Flags]
+public enum FurnitureRecordFlag : uint
+{
+    None = 0,
+    HasContainer = 0x0000_0004,
+    IsPerch = 0x0000_0080,
+    HasDistantLod = 0x0000_8000,
+    RandomAnimStart = 0x0001_0000,
+    IsMarker = 0x0080_0000,
+    PowerArmor = 0x0200_0000,
+    MustExitToTalk = 0x1000_0000,
+    ChildCanUse = 0x2000_0000,
+}
+
+[Flags]
+public enum FurnitureEntryTypes : ushort
+{
+    None = 0,
+    Front = 1,
+    Behind = 2,
+    Right = 4,
+    Left = 8,
+    Up = 16,
+}
+
+// Invariant: same bit positions as FurnitureEntryTypes; SNAM marker parameter rows name bit 1 Rear and bit 4 Other.
+[Flags]
+public enum FurnitureMarkerSides : byte
+{
+    None = 0,
+    Front = 1,
+    Rear = 2,
+    Right = 4,
+    Left = 8,
+    Other = 16,
+}
+
+public enum FurnitureBenchType : byte
+{
+    None = 0,
+    CreateObject = 1,
+    Weapons = 2,
+    Enchanting = 3,
+    EnchantingExperiment = 4,
+    Alchemy = 5,
+    AlchemyExperiment = 6,
+    Armor = 7,
+    PowerArmor = 8,
+    RobotMod = 9,
+}
