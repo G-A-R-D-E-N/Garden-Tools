@@ -1,0 +1,12 @@
+<Project>
+  <ItemGroup Condition="Exists('$(RadicleNativeDir)/$(RadicleNativeFileName)')">
+    <None Include="$(RadicleNativeDir)/$(RadicleNativeFileName)" Link="$(RadicleNativeFileName)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux')) and Exists('$(RadicleNativeDir)/radicle-regex-worker')">
+    <None Include="$(RadicleNativeDir)/radicle-regex-worker" Link="radicle-regex-worker" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="$(RadicleNativeDir)/libradicle-regex-runtime.so" Link="libradicle-regex-runtime.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+  <Target Name="WarnMissingRadicleNative" BeforeTargets="BeforeBuild" Condition="!Exists('$(RadicleNativeDir)/$(RadicleNativeFileName)')">
+    <Warning Text="Radicle native library $(RadicleNativeFileName) was not found in $(RadicleNativeDir). Set RadicleNativeDir to the folder that holds it; BA2 reads fail at runtime without it." />
+  </Target>
+</Project>

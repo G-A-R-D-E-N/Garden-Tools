@@ -1,0 +1,19 @@
+.scalar-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.scalar-flag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.scalar-flags-cell summary {
+  cursor: pointer;
+}
