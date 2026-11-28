@@ -1,0 +1,100 @@
+name: previs-tools-ci
+
+# The previs JavaScript tools carry their own self-tests, and build_cell validates every container it writes. None of it
+# needs game data. This lives in the public CI set because private-repo Actions are off and the export drops .github/workflows.
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  previs:
+    name: Previs self-tests and build_cell validation (ubuntu, Node)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Print Node version
+        run: node --version
+
+      # uvd_layout prints the bound-site self-test, then the writer page against the retail detector, before it reads a tome.
+      - name: Bound-site and writer-page self-tests
+        run: node tools/previs/uvd_layout.mjs --self-test
+
+      # uvd_search recovers fields from a tome it builds itself before any retail tome is read.
+      - name: Field-model self-test
+        run: node tools/previs/uvd_search.mjs --self-test
+
+      # uvd_geometry proves its page-layout discriminator on a page it builds before any retail tome is read.
+      - name: Page-layout discriminator self-test
+        run: node tools/previs/uvd_geometry.mjs --self-test
+
+      # build_cell runs the tile-model acceptance it applies to a generated tome on one the JS conservative builder writes, and rejects a corrupted one.
+      - name: build_cell container validation
+        run: node tools/previs/build_cell.mjs --self-test
+
+      # patch_cell writes a built tome into a previs root and proves placement, casing, tile-model read-back and refusal to drop a larger or unreadable tome on tomes it writes.
+      - name: patch_cell placement and casing
+        run: node tools/previs/patch_cell.mjs --self-test
+
+      # patch_page locates, rewrites and re-reads one page of a tome it builds, and rejects four corrupted variants of it.
+      - name: patch_page locator and page patch
+        run: node tools/previs/patch_page.mjs --self-test
+
+      # uvd_tiles builds a three-tile tome with its own writer, round-trips all three stages byte for byte, and rejects fifteen corrupted variants of it.
+      - name: Tile-model parse, write and corruption rejection
+        run: node tools/previs/uvd_tiles.mjs --self-test
+
+      # uvd_tile_build checks the JS conservative builder against the C++ shape on tomes it writes; its retail byte-for-byte check needs the extracted corpus and runs by hand.
+      - name: Conservative tile builder
+        run: node tools/previs/uvd_tile_build.mjs --self-test
+
+      # measure_csg checks chunk size, row chaining and _OC addressing on a container it builds, and must report each violated property.
+      - name: CSG container property checks
+        run: node tools/previs/measure_csg.mjs --self-test
+
+  report:
+    name: Report to the private PR
+    needs: [previs]
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    environment: garden-tools-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Job durations
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+        run: python3 .github/scripts/ci_timings.py
+      - name: Recent waits
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+        run: python3 .github/scripts/ci_critical_path.py --workflow previs-tools-ci --limit 5
+
+      - name: Post the result as a commit status on the private commit
+        env:
+          GH_TOKEN: ${{ secrets.GT_PUBLIC_CI_TOKEN }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          source=$(git log -1 --format=%B | sed -n 's/^Source-Commit: \([0-9a-f]\{40\}\)$/\1/p')
+          [ -n "$source" ] || { echo "::error::no Source-Commit trailer"; exit 1; }
+          failed=$(jq -r 'to_entries | map(select(.value.result != "success" and .value.result != "skipped") | .key) | join(", ")' <<<"$NEEDS")
+          if [ -n "$failed" ]; then state=failure; description="failed: $failed"; else state=success; description="passed"; fi
+          gh api "repos/G-A-R-D-E-N/GardenTools/statuses/$source" -f state="$state" \
+            -f context="public-ci/previs-tools-ci" -f target_url="$RUN_URL" -f description="${description:0:140}" >/dev/null
+          echo "$state posted for previs-tools-ci ($description)"

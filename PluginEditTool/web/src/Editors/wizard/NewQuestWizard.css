@@ -1,0 +1,53 @@
+.wizard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 18px 18px;
+}
+
+.wizard-count {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.wizard-question {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wizard-input,
+.wizard-body select {
+  max-width: 420px;
+  font: inherit;
+}
+
+.wizard-answer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.wizard-review {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.wizard-review dt {
+  color: var(--text-secondary);
+}
+
+.wizard-review dd {
+  margin: 0;
+}
