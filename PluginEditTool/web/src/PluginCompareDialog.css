@@ -1,0 +1,15 @@
+.pcd-modal { width: 960px; max-width: 94vw; max-height: 86vh; display: flex; flex-direction: column; }
+.pcd-body { display: flex; gap: 10px; min-height: 0; flex: 1; overflow: hidden; padding: 8px 14px 14px; }
+.pcd-list { list-style: none; margin: 0; padding: 0; width: 300px; flex-shrink: 0; overflow-y: auto; }
+.pcd-row { width: 100%; text-align: left; background: transparent; border: 0; color: inherit; padding: 3px 6px; font-size: 12px; cursor: pointer; }
+.pcd-row:hover, .pcd-row.active { background: var(--hover-bg, rgba(255, 255, 255, 0.08)); }
+.pcd-change { display: inline-block; width: 56px; font-weight: 600; }
+.pcd-added { color: var(--ok-color, #4ec9b0); }
+.pcd-removed { color: var(--error-color, #f48771); }
+.pcd-changed { color: var(--warn-color, #dcdcaa); }
+.pcd-detail { flex: 1; overflow: auto; min-width: 0; }
+.pcd-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.pcd-table th, .pcd-table td { padding: 3px 6px; border-bottom: 1px solid var(--border-color, #2b2b2b); text-align: left; overflow-wrap: anywhere; vertical-align: top; }
+.pcd-table th:first-child, .pcd-table td:first-child { width: 56px; }
+.pcd-diff td { background: rgba(220, 220, 170, 0.12); }
+@media (max-width: 640px) { .pcd-body { flex-direction: column; } .pcd-list { width: auto; max-height: 30vh; } }
